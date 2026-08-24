@@ -7,12 +7,17 @@ class DelayedSerializedStore extends BackgroundJobsStore {
   /** @type {(() => void) | undefined} */
   beforeNextSerializedMutation
 
-  /** @param {import("../../src/database/drivers/base.js").default} db - Database. @param {Function} callback - Mutation callback. */
-  async _serializedCountMutation(db, callback) {
+  /**
+   * @template T
+   * @param {(db: import("../../src/database/drivers/base.js").default) => Promise<T>} callback - Mutation callback.
+   * @param {Parameters<BackgroundJobsStore["_serializedCountMutation"]>[1]} [options] - Serialization options.
+   * @returns {Promise<T>} - Mutation result.
+   */
+  async _serializedCountMutation(callback, options = {}) {
     const beforeMutation = this.beforeNextSerializedMutation
     this.beforeNextSerializedMutation = undefined
     beforeMutation?.()
-    return await super._serializedCountMutation(db, callback)
+    return await super._serializedCountMutation(callback, options)
   }
 }
 

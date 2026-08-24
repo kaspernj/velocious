@@ -48,7 +48,7 @@ describe("Background jobs - stable schedule store", {databaseCleaning: {transact
 
     const store = new LockOrderStore({configuration: dummyConfiguration})
 
-    await store._serializedCountMutation(/** @type {import("../../src/database/drivers/base.js").default} */ ({}), async () => {
+    await store._serializedCountMutation(async () => {
       calls.push("read")
     })
 

@@ -43,6 +43,12 @@ import {
  * @property {number | null} timeoutMs - Per-job timeout override, or null when omitted.
  */
 
+/**
+ * BackgroundJobTransactionSerializationOptions type.
+ * @typedef {object} BackgroundJobTransactionSerializationOptions
+ * @property {{failureMessage: string, name: string}} [advisoryLock] - Session lock held around the transaction.
+ */
+
 const MIGRATIONS_TABLE = "velocious_internal_migrations"
 const MIGRATION_SCOPE = "background_jobs"
 const MIGRATION_VERSION = "20250215000000"
@@ -241,7 +247,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
     /** @type {string} */
     let resultJobId = preparedJob.jobId
 
-    await this._withDb(async (db) => await this._serializedCountMutation(db, async () => {
+    await this._serializedCountMutation(async (db) => {
       if (options?.deduplicateWhileQueued) {
         // Dedupe on the job's identity (name + args + queue), NOT its concurrency key, so a job
         // keeps whatever concurrency it resolves to. Only an existing job scheduled no later than
@@ -266,7 +272,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
 
       await this._insertPreparedJob(db, {preparedJob, scheduleKey: null})
       await this._recordCountDelta(db, {all: 1, queued: 1})
-    }))
+    })
 
     return resultJobId
   }
@@ -303,7 +309,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
     // Reuse ordinary enqueue transaction admission because this path changes
     // the same durable count revision. The scope primary key remains the
     // cross-process convergence owner.
-    return await this._withDb(async (db) => await this._idempotentEnqueueTransaction(db, async () => {
+    return await this._idempotentEnqueueTransaction(async (db) => {
       const existing = await this._idempotencyOwnership(db, scopeDigest)
 
       if (existing) {
@@ -326,19 +332,18 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       await this._recordCountDelta(db, {all: 1, queued: 1})
 
       return preparedJob.jobId
-    }))
+    })
   }
 
   /**
    * Serializes one physical connection locally without taking ownership away
    * from the database uniqueness constraint shared by all processes.
    * @template T
-   * @param {import("../database/drivers/base.js").default} db - Database connection.
-   * @param {() => Promise<T>} callback - Transaction work.
+   * @param {(db: import("../database/drivers/base.js").default) => Promise<T>} callback - Transaction work.
    * @returns {Promise<T>} - Callback result.
    */
-  async _idempotentEnqueueTransaction(db, callback) {
-    return await this._serializedTransactionMutation(db, callback)
+  async _idempotentEnqueueTransaction(callback) {
+    return await this._serializedTransactionMutation(callback)
   }
 
   /**
@@ -564,63 +569,56 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
     const normalizedScheduleKey = this._normalizeScheduleKey(scheduleKey)
     const preparedJob = this._prepareJob({jobName, args, options})
 
-    return await this._withDb(async (db) => {
-      const lockName = this._scheduleKeyLockName(normalizedScheduleKey)
-      const acquired = await db.acquireAdvisoryLock(lockName)
+    return await this._serializedCountMutation(async (db) => {
+      const ownerRows = await db
+        .newQuery()
+        .from(SCHEDULE_KEYS_TABLE)
+        .where({schedule_key: normalizedScheduleKey})
+        .limit(1)
+        .results()
+      const ownerJobId = ownerRows[0] ? String(/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (ownerRows[0]).job_id) : null
+      const ownerJob = ownerJobId ? await this._getJobRowById(db, ownerJobId) : null
+      /** @type {import("./types.js").BackgroundJobReplacementPreviousStatus} */
+      let previousStatus = null
+      let previousJobId = null
 
-      if (!acquired) throw new Error("Failed to acquire background job schedule-key lock")
+      if (ownerJob?.status === "queued") {
+        const affectedRows = await this._updateAffectedRows(db, {
+          tableName: JOBS_TABLE,
+          data: {status: "cancelled"},
+          conditions: {id: ownerJob.id, status: "queued"}
+        })
 
-      try {
-        return await this._serializedCountMutation(db, async () => {
-          const ownerRows = await db
-            .newQuery()
-            .from(SCHEDULE_KEYS_TABLE)
-            .where({schedule_key: normalizedScheduleKey})
-            .limit(1)
-            .results()
-          const ownerJobId = ownerRows[0] ? String(/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (ownerRows[0]).job_id) : null
-          const ownerJob = ownerJobId ? await this._getJobRowById(db, ownerJobId) : null
-          /** @type {import("./types.js").BackgroundJobReplacementPreviousStatus} */
-          let previousStatus = null
-          let previousJobId = null
+        if (affectedRows === 1) {
+          previousJobId = ownerJob.id
+          previousStatus = "queued"
+        } else {
+          const currentOwnerJob = await this._getJobRowById(db, ownerJob.id)
 
-          if (ownerJob?.status === "queued") {
-            const affectedRows = await this._updateAffectedRows(db, {
-              tableName: JOBS_TABLE,
-              data: {status: "cancelled"},
-              conditions: {id: ownerJob.id, status: "queued"}
-            })
-
-            if (affectedRows === 1) {
-              previousJobId = ownerJob.id
-              previousStatus = "queued"
-            } else {
-              const currentOwnerJob = await this._getJobRowById(db, ownerJob.id)
-
-              if (currentOwnerJob?.status === "handed_off") {
-                previousJobId = currentOwnerJob.id
-                previousStatus = "handed_off"
-              }
-            }
-          } else if (ownerJob?.status === "handed_off") {
-            previousJobId = ownerJob.id
+          if (currentOwnerJob?.status === "handed_off") {
+            previousJobId = currentOwnerJob.id
             previousStatus = "handed_off"
           }
+        }
+      } else if (ownerJob?.status === "handed_off") {
+        previousJobId = ownerJob.id
+        previousStatus = "handed_off"
+      }
 
-          await this._insertPreparedJob(db, {preparedJob, scheduleKey: normalizedScheduleKey})
-          await db.upsert({
-            tableName: SCHEDULE_KEYS_TABLE,
-            data: {schedule_key: normalizedScheduleKey, job_id: preparedJob.jobId},
-            conflictColumns: ["schedule_key"],
-            updateColumns: ["job_id"]
-          })
+      await this._insertPreparedJob(db, {preparedJob, scheduleKey: normalizedScheduleKey})
+      await db.upsert({
+        tableName: SCHEDULE_KEYS_TABLE,
+        data: {schedule_key: normalizedScheduleKey, job_id: preparedJob.jobId},
+        conflictColumns: ["schedule_key"],
+        updateColumns: ["job_id"]
+      })
 
-          if (previousStatus !== "queued") await this._recordCountDelta(db, {all: 1, queued: 1})
-
-          return {jobId: preparedJob.jobId, previousJobId, previousStatus}
-        })
-      } finally {
-        await db.releaseAdvisoryLock(lockName)
+      if (previousStatus !== "queued") await this._recordCountDelta(db, {all: 1, queued: 1})
+      return {jobId: preparedJob.jobId, previousJobId, previousStatus}
+    }, {
+      advisoryLock: {
+        failureMessage: "Failed to acquire background job schedule-key lock",
+        name: this._scheduleKeyLockName(normalizedScheduleKey)
       }
     })
   }
@@ -636,51 +634,44 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
 
     const normalizedScheduleKey = this._normalizeScheduleKey(scheduleKey)
 
-    return await this._withDb(async (db) => {
-      const lockName = this._scheduleKeyLockName(normalizedScheduleKey)
-      const acquired = await db.acquireAdvisoryLock(lockName)
+    return await this._serializedCountMutation(async (db) => {
+      const ownerRows = await db
+        .newQuery()
+        .from(SCHEDULE_KEYS_TABLE)
+        .where({schedule_key: normalizedScheduleKey})
+        .limit(1)
+        .results()
 
-      if (!acquired) throw new Error("Failed to acquire background job schedule-key lock")
+      if (!ownerRows[0]) return {jobId: null, outcome: "not_found"}
 
-      try {
-        return await this._serializedCountMutation(db, async () => {
-          const ownerRows = await db
-            .newQuery()
-            .from(SCHEDULE_KEYS_TABLE)
-            .where({schedule_key: normalizedScheduleKey})
-            .limit(1)
-            .results()
+      const jobId = String(/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (ownerRows[0]).job_id)
+      const job = await this._getJobRowById(db, jobId)
 
-          if (!ownerRows[0]) return {jobId: null, outcome: "not_found"}
-
-          const jobId = String(/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (ownerRows[0]).job_id)
-          const job = await this._getJobRowById(db, jobId)
-
-          if (job?.status === "queued") {
-            const affectedRows = await this._updateAffectedRows(db, {
-              tableName: JOBS_TABLE,
-              data: {status: "cancelled"},
-              conditions: {id: job.id, status: "queued"}
-            })
-
-            if (affectedRows === 1) {
-              await this._releaseScheduleOwnership(db, {jobId, scheduleKey: normalizedScheduleKey})
-              await this._recordStatusTransition(db, "queued", "cancelled")
-
-              return {jobId, outcome: "cancelled"}
-            }
-          }
-
-          const currentJob = await this._getJobRowById(db, jobId)
-
-          await this._releaseScheduleOwnership(db, {jobId, scheduleKey: normalizedScheduleKey})
-
-          if (currentJob?.status === "handed_off") return {jobId, outcome: "handed_off"}
-
-          return {jobId: null, outcome: "not_found"}
+      if (job?.status === "queued") {
+        const affectedRows = await this._updateAffectedRows(db, {
+          tableName: JOBS_TABLE,
+          data: {status: "cancelled"},
+          conditions: {id: job.id, status: "queued"}
         })
-      } finally {
-        await db.releaseAdvisoryLock(lockName)
+
+        if (affectedRows === 1) {
+          await this._releaseScheduleOwnership(db, {jobId, scheduleKey: normalizedScheduleKey})
+          await this._recordStatusTransition(db, "queued", "cancelled")
+
+          return {jobId, outcome: "cancelled"}
+        }
+      }
+
+      const currentJob = await this._getJobRowById(db, jobId)
+
+      await this._releaseScheduleOwnership(db, {jobId, scheduleKey: normalizedScheduleKey})
+
+      if (currentJob?.status === "handed_off") return {jobId, outcome: "handed_off"}
+      return {jobId: null, outcome: "not_found"}
+    }, {
+      advisoryLock: {
+        failureMessage: "Failed to acquire background job schedule-key lock",
+        name: this._scheduleKeyLockName(normalizedScheduleKey)
       }
     })
   }
@@ -865,9 +856,9 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
   async countSnapshot() {
     await this.ensureReady()
 
-    return await this._withDb(async (db) => await this._serializedCountMutation(db, async () => {
+    return await this._serializedCountMutation(async (db) => {
       return await this._countSnapshotOnLockedConnection(db)
-    }))
+    })
   }
 
   /**
@@ -938,7 +929,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
 
     const handedOffAtMs = Date.now()
 
-    return await this._withDb(async (db) => await this._serializedCountMutation(db, async () => {
+    return await this._serializedCountMutation(async (db) => {
       const queuedJob = await this._getJobRowById(db, jobId)
       if (!queuedJob || queuedJob.status !== "queued") return null
       if (queuedJob.concurrencyKey && !(await this._reserveConcurrency(db, queuedJob.concurrencyKey))) return null
@@ -960,7 +951,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
 
       await this._recordStatusTransition(db, "queued", "handed_off")
       return {handedOffAtMs, handoffId}
-    }))
+    })
   }
 
   /**
@@ -975,7 +966,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
   async markCompleted({jobId, handoffId, workerId, handedOffAtMs}) {
     await this.ensureReady()
 
-    return await this._withDb(async (db) => await this._serializedCountMutation(db, async () => {
+    return await this._serializedCountMutation(async (db) => {
       const job = await this._getJobRowById(db, jobId)
 
       if (!job) return false
@@ -996,7 +987,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       await this._releaseConcurrency(db, job.concurrencyKey)
       await this._recordStatusTransition(db, "handed_off", "completed")
       return true
-    }))
+    })
   }
 
   /**
@@ -1014,7 +1005,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
     await this.ensureReady()
     this._validateRescheduleDelayMs(delayMs)
 
-    return await this._withDb(async (db) => await this._serializedCountMutation(db, async () => {
+    return await this._serializedCountMutation(async (db) => {
       const job = await this._getJobRowById(db, jobId)
 
       if (!job) return false
@@ -1038,7 +1029,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       await this._releaseConcurrency(db, job.concurrencyKey)
       await this._recordStatusTransition(db, "handed_off", "queued")
       return true
-    }))
+    })
   }
 
   /**
@@ -1051,7 +1042,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
   async markReturnedToQueue({jobId, handoffId}) {
     await this.ensureReady()
 
-    await this._withDb(async (db) => await this._serializedCountMutation(db, async () => {
+    await this._serializedCountMutation(async (db) => {
       const job = await this._getJobRowById(db, jobId)
       if (!job || job.handoffId !== handoffId || job.status !== "handed_off") return
       await this._lockConcurrencyRow(db, job.concurrencyKey)
@@ -1070,7 +1061,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
         await this._releaseConcurrency(db, job.concurrencyKey)
         await this._recordStatusTransition(db, "handed_off", "queued")
       }
-    }))
+    })
   }
 
   /**
@@ -1118,7 +1109,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
   async markFailed({jobId, error, handoffId, workerId, handedOffAtMs}) {
     await this.ensureReady()
 
-    return await this._withDb(async (db) => await this._serializedCountMutation(db, async () => {
+    return await this._serializedCountMutation(async (db) => {
       const job = await this._getJobRowById(db, jobId)
 
       if (!job) return null
@@ -1128,7 +1119,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
 
       if (updatedJob) await this._recordStatusTransition(db, job.status, updatedJob.status)
       return updatedJob
-    }))
+    })
   }
 
   /**
@@ -1140,7 +1131,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
   async markOrphanedJobs({orphanedAfterMs = ORPHANED_AFTER_MS} = {}) {
     await this.ensureReady()
 
-    return await this._withDb(async (db) => await this._serializedCountMutation(db, async () => {
+    return await this._serializedCountMutation(async (db) => {
       const cutoff = Date.now() - orphanedAfterMs
       const query = db
         .newQuery()
@@ -1190,7 +1181,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       await this._recordCountDelta(db, deltas)
 
       return orphanedJobs
-    }))
+    })
   }
 
   /**
@@ -1239,7 +1230,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
     let deleted = 0
 
     for (;;) {
-      const removed = await this._withDb(async (db) => await this._serializedCountMutation(db, async () => {
+      const removed = await this._serializedCountMutation(async (db) => {
         const rows = await db
           .newQuery()
           .from(JOBS_TABLE)
@@ -1260,7 +1251,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
         await this._recordCountDelta(db, {all: -removed, [status]: -removed})
 
         return removed
-      }))
+      })
 
       deleted += removed
       if (removed < batchSize) break
@@ -1276,7 +1267,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
   async clearAll() {
     await this.ensureReady()
 
-    await this._withDb(async (db) => await this._serializedCountMutation(db, async () => {
+    await this._serializedCountMutation(async (db) => {
       const snapshot = await this._countSnapshotOnLockedConnection(db)
       if (await db.tableExists(MAIL_DELIVERY_OPERATIONS_TABLE)) await db.query(`DELETE FROM ${db.quoteTable(MAIL_DELIVERY_OPERATIONS_TABLE)}`)
       if (await db.tableExists(IDEMPOTENCY_KEYS_TABLE)) await db.query(`DELETE FROM ${db.quoteTable(IDEMPOTENCY_KEYS_TABLE)}`)
@@ -1285,7 +1276,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       if (await db.tableExists(CONCURRENCY_TABLE)) await db.query(`DELETE FROM ${db.quoteTable(CONCURRENCY_TABLE)}`)
       const deltas = Object.fromEntries(Object.entries(snapshot.counts).map(([key, value]) => [key, -value]))
       await this._recordCountDelta(db, deltas)
-    }))
+    })
   }
 
   /**
@@ -1295,7 +1286,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
    */
   async cancel(jobId) {
     await this.ensureReady()
-    return await this._withDb(async (db) => await this._serializedCountMutation(db, async () => {
+    return await this._serializedCountMutation(async (db) => {
       const job = await this._getJobRowById(db, jobId)
       if (!job || (job.status !== "queued" && job.status !== "handed_off")) return false
       // Only a handed_off job holds a concurrency reservation, so only that case touches the
@@ -1307,7 +1298,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       if (job.status === "handed_off") await this._releaseConcurrency(db, job.concurrencyKey)
       await this._recordStatusTransition(db, job.status, "cancelled")
       return true
-    }))
+    })
   }
 
   /**
@@ -2798,33 +2789,33 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
   }
 
   /**
-   * Serializes count-changing transactions sharing a process-local connection.
+   * Serializes count-changing transactions before checking out their connection.
    * Database row locking still provides cross-process ordering; this guard
    * prevents concurrent callers on SQLite's shared connection from attempting
    * overlapping top-level transactions.
    * @template T
-   * @param {import("../database/drivers/base.js").default} db - Database connection.
-   * @param {() => Promise<T>} callback - Transaction callback.
+   * @param {(db: import("../database/drivers/base.js").default) => Promise<T>} callback - Transaction callback.
+   * @param {BackgroundJobTransactionSerializationOptions} [options] - Serialization options.
    * @returns {Promise<T>} Callback result.
    */
-  async _serializedCountMutation(db, callback) {
-    return await this._serializedTransactionMutation(db, async () => {
+  async _serializedCountMutation(callback, options = {}) {
+    return await this._serializedTransactionMutation(async (db) => {
       await this._lockCountRevision(db)
 
-      return await callback()
-    })
+      return await callback(db)
+    }, options)
   }
 
   /**
-   * Serializes transactions that may share one physical connection in this
-   * process. Cross-process ordering remains the responsibility of durable row
-   * locks and unique constraints acquired inside the callback.
+   * Admits transactions to the process-local FIFO before they check out a
+   * connection. Cross-process ordering remains the responsibility of durable
+   * row/advisory locks and unique constraints acquired around the callback.
    * @template T
-   * @param {import("../database/drivers/base.js").default} db - Database connection.
-   * @param {() => Promise<T>} callback - Transaction callback.
+   * @param {(db: import("../database/drivers/base.js").default) => Promise<T>} callback - Transaction callback.
+   * @param {BackgroundJobTransactionSerializationOptions} [options] - Serialization options.
    * @returns {Promise<T>} Callback result.
    */
-  async _serializedTransactionMutation(db, callback) {
+  async _serializedTransactionMutation(callback, options = {}) {
     const identifier = this.getDatabaseIdentifier() || "default"
     const previous = transactionMutationChains.get(identifier) || Promise.resolve()
     let resolveRun = () => {}
@@ -2838,7 +2829,21 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
     await previous
 
     try {
-      return await this._transactionResult(db, callback)
+      return await this._withDb(async (db) => {
+        const {advisoryLock} = options
+
+        if (advisoryLock) {
+          const acquired = await db.acquireAdvisoryLock(advisoryLock.name)
+
+          if (!acquired) throw new Error(advisoryLock.failureMessage)
+        }
+
+        try {
+          return await this._transactionResult(db, async () => await callback(db))
+        } finally {
+          if (advisoryLock) await db.releaseAdvisoryLock(advisoryLock.name)
+        }
+      })
     } finally {
       resolveRun()
       if (transactionMutationChains.get(identifier) === chain) transactionMutationChains.delete(identifier)
