@@ -170,6 +170,14 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
       this.parentPort.postMessage({command: "clientClose", clientCount, output})
     })
 
+    client.events.on("websocketSessionOwned", ({sessionId}) => {
+      this.parentPort.postMessage({command: "websocketSessionOwned", sessionId})
+    })
+
+    client.events.on("websocketSessionReleased", ({sessionId}) => {
+      this.parentPort.postMessage({command: "websocketSessionReleased", sessionId})
+    })
+
     this.clients[clientCount] = client
   }
 

@@ -22,7 +22,7 @@ The payload includes:
 
 * server runtime details such as environment, PID, uptime, Node version, platform, and memory usage
 * configuration flags relevant to debugging, including `debug`, `debugEndpoint`, `autoload`, and tenant database scope enforcement
-* database pool state for every active database identifier, including pool class, resolved non-secret database configuration, idle/in-use/pending connection counts, spawned connection count, and pending checkout snapshots with `checkoutName`, `enqueuedAt`, `waitingForMs`, `timeoutMillis`, `timeoutAt`, and `remainingTimeoutMs`
+* database pool state for every active database identifier, including pool class, resolved non-secret database configuration, idle/in-use/pending connection counts, spawned connection count, async checkout-drain active/requested state, `idleMatchingPendingCheckoutCount`, and pending checkout snapshots with `checkoutName`, `enqueuedAt`, `waitingForMs`, `timeoutMillis`, `timeoutAt`, and `remainingTimeoutMs`
 * live database connection snapshots, including driver class, checkout name, open transaction count, schema cache size, current pool state, reuse key, checkout/check-in timestamps (`checkedOutAt`/`checkedInAt`), elapsed checkout/idle durations (`checkedOutForMs`/`idleForMs`), and active query details when a query is running
 * WebSocket registration and subscription counts
 * background job configuration presence

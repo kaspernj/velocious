@@ -102,6 +102,7 @@ describe("HttpServer - listen errors", {databaseCleaning: {transaction: true}}, 
   it("rejects repeated starts without tearing down the active server", async () => {
     const stoppedWorkers = []
     const server = new HttpServer({
+      availableParallelism: () => 1,
       configuration: buildConfiguration(),
       host: "127.0.0.1",
       port: 0,
