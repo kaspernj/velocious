@@ -1054,7 +1054,9 @@ export default class BackgroundJobsWorker {
       configuration,
       JobClass,
       jobArgs: payload.args || [],
-      name: `Background job worker inline: ${payload.jobName}`
+      jobOptions: payload.options || {},
+      name: `Background job worker inline: ${payload.jobName}`,
+      payload
     })
   }
 

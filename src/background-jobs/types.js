@@ -72,6 +72,14 @@
  * @property {BackgroundJobOptions} [options] - Runtime options.
  */
 /**
+ * @typedef {object} BackgroundJobContext
+ * @property {typeof import("./platform-job.js").default} jobClass - Concrete job class.
+ * @property {string} jobName - Registered job name.
+ * @property {Array<ReturnType<typeof JSON.parse>>} args - Serialized job arguments.
+ * @property {BackgroundJobOptions} options - Resolved enqueue/runtime options.
+ * @property {BackgroundJobPayload} [payload] - Complete persisted runner payload when the job is performing.
+ */
+/**
  * @typedef {object} BackgroundJobRow
  * @property {string} id - Job id.
  * @property {string} jobName - Job class name.

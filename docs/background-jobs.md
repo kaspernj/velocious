@@ -190,6 +190,24 @@ The declaration applies to inline, forked, spawned, and pooled execution. Use `[
 
 Pass `concurrencyKey` and `maxConcurrency` together in `jobOptions` (or in `performLaterWithOptions`). The key is an opaque, non-empty string shared by jobs that use the same limit, and the cap is a positive integer. Omitting both preserves unlimited behavior. Once a key is registered, every enqueue for that key must use the same cap; a conflicting cap is rejected.
 
+A job may instead derive its key from its hydrated instance context. Override the synchronous, non-static `concurrencyKey()` method and read `this.backgroundJobContext()`, which exposes `jobClass`, `jobName`, serialized `args`, resolved `options`, and (while performing) the complete persisted `payload`. Constructors receive no context arguments.
+
+```js
+export default class RefreshDiskJob extends VelociousJob {
+  concurrencyKey() {
+    const [serverId] = this.backgroundJobContext().args
+    return `docker-server-available-disk-refresh:${serverId}`
+  }
+}
+
+await RefreshDiskJob.performLaterWithOptions({
+  args: [serverId],
+  options: {maxConcurrency: 1}
+})
+```
+
+The method is resolved before admission/persistence and its result uses the existing durable limiter. A derived key must therefore still be paired with `maxConcurrency`. An explicit enqueue `concurrencyKey` overrides the derived key (and skips the method); explicit `queue` likewise overrides `static queue`.
+
 Limits are enforced by durable database reservations shared by every main/worker process. Saturated keys do not prevent unrelated queued jobs from being dispatched. Reservations are released when work completes, fails terminally, is requeued for retry, is cancelled, or is recovered as orphaned; startup reconciliation repairs reservation counts after an unclean scheduler stop.
 
 ## Queues (per-queue concurrency caps)

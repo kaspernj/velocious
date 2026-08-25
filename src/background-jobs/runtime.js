@@ -52,9 +52,10 @@ export async function enqueueBackgroundJob({JobClass, jobArgs, jobOptions}) {
  * @returns {Promise<string>} - Durable job id or ephemeral inline performance id.
  */
 export async function enqueueBackgroundJobForConfiguration({configuration, JobClass, jobArgs, jobOptions}) {
+  const resolvedJobOptions = JobClass._withJobContext({jobArgs, jobOptions})
 
   if (configuration.getBackgroundJobsConfig().mode === "inline") {
-    validateInlineOptions(jobOptions)
+    validateInlineOptions(resolvedJobOptions)
     configuration.setCurrent()
     await configuration.initialize({type: "background-jobs-inline"})
 
@@ -63,6 +64,7 @@ export async function enqueueBackgroundJobForConfiguration({configuration, JobCl
         configuration,
         JobClass,
         jobArgs,
+        jobOptions: resolvedJobOptions,
         name: `Background job inline mode: ${JobClass.jobName()}`
       })
     } catch (error) {
@@ -81,7 +83,7 @@ export async function enqueueBackgroundJobForConfiguration({configuration, JobCl
   return await client.enqueue({
     jobName: JobClass.jobName(),
     args: jobArgs,
-    options: JobClass._withQueue(jobOptions)
+    options: resolvedJobOptions
   })
 }
 
@@ -117,12 +119,13 @@ export async function replaceScheduledBackgroundJobForConfiguration({configurati
   }
 
   const client = configuration.getEnvironmentHandler().backgroundJobsClient({configuration})
+  const resolvedJobOptions = JobClass._withJobContext({jobArgs, jobOptions})
 
   return await client.replaceScheduled({
     scheduleKey,
     jobName: JobClass.jobName(),
     args: jobArgs,
-    options: JobClass._withQueue(jobOptions)
+    options: resolvedJobOptions
   })
 }
 

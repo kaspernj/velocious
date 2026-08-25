@@ -223,10 +223,7 @@ export default class BackgroundJobsMain {
           await this.store.enqueue({
             jobName: jobClass.jobName(),
             args,
-            // Fold in the job class's static `queue` (as performLater* do) so a
-            // scheduled job with `static queue = "..."` lands on its queue and
-            // honors the configured cap without every schedule repeating it.
-            options: jobClass._withQueue(options)
+            options: jobClass._withJobContext({jobArgs: args, jobOptions: options})
           })
           this._notifyEnqueued()
           // Persistence is the scheduler enqueue boundary. Dispatch remains
@@ -1400,7 +1397,12 @@ export default class BackgroundJobsMain {
             workerId: worker.workerId,
             handedOffAtMs: handoff.handedOffAtMs,
             options: {
+              concurrencyKey: job.concurrencyKey || undefined,
               executionMode: job.executionMode,
+              maxConcurrency: job.maxConcurrency ?? undefined,
+              maxRetries: job.maxRetries ?? undefined,
+              queue: job.queue,
+              scheduledAtMs: job.scheduledAtMs ?? undefined,
               ...(job.timeoutMs === null ? {} : {timeoutMs: job.timeoutMs})
             }
           }

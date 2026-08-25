@@ -14,6 +14,11 @@ import {cancelScheduledBackgroundJob, enqueueBackgroundJob, replaceScheduledBack
  * @template {Array<ReturnType<typeof JSON.parse>>} [TArgs=[]]
  */
 export default class VelociousJob {
+  constructor() {
+    /** @type {import("./types.js").BackgroundJobContext | undefined} */
+    this._backgroundJobContext = undefined
+  }
+
   /**
    * Database identifiers checked out while this job performs. Set an explicit
    * list to avoid holding unrelated configured database connections, or `[]`
@@ -80,6 +85,63 @@ export default class VelociousJob {
     }
 
     return merged
+  }
+
+  /**
+   * Resolves class-derived enqueue options on a hydrated job instance. Explicit
+   * per-enqueue options take precedence over the instance concurrency key.
+   * @param {object} args - Job context.
+   * @param {Array<ReturnType<typeof JSON.parse>>} args.jobArgs - Job arguments.
+   * @param {import("./types.js").BackgroundJobOptions | undefined} args.jobOptions - Job options.
+   * @returns {import("./types.js").BackgroundJobOptions} - Resolved job options.
+   */
+  static _withJobContext({jobArgs, jobOptions}) {
+    const options = this._withQueue(jobOptions)
+
+    if (options.concurrencyKey !== undefined) return options
+
+    const jobInstance = new this()
+    jobInstance._setBackgroundJobContext({
+      args: jobArgs,
+      jobClass: this,
+      jobName: this.jobName(),
+      options
+    })
+    const concurrencyKey = jobInstance.concurrencyKey()
+
+    if (concurrencyKey !== undefined) options.concurrencyKey = concurrencyKey
+
+    return options
+  }
+
+  /**
+   * Sets the complete context available to this hydrated job instance.
+   * Framework enqueue/runner boundaries own this method.
+   * @param {import("./types.js").BackgroundJobContext} context - Job context.
+   * @returns {void}
+   */
+  _setBackgroundJobContext(context) {
+    this._backgroundJobContext = context
+  }
+
+  /**
+   * Returns this hydrated job's complete enqueue or runner context.
+   * @returns {import("./types.js").BackgroundJobContext} - Job context.
+   */
+  backgroundJobContext() {
+    if (!this._backgroundJobContext) throw new Error("Background job context is not hydrated")
+
+    return this._backgroundJobContext
+  }
+
+  /**
+   * Override to derive a durable concurrency key from `backgroundJobContext()`.
+   * Pair the derived key with `maxConcurrency` in enqueue options. An explicit
+   * per-enqueue `concurrencyKey` takes precedence and skips this method.
+   * @returns {string | undefined} - Derived concurrency key, or undefined for none.
+   */
+  concurrencyKey() {
+    return undefined
   }
 
   /**

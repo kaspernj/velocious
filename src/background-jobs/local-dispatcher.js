@@ -184,7 +184,29 @@ export default class LocalBackgroundJobsDispatcher {
         configuration: this.configuration,
         JobClass,
         jobArgs: job.args,
-        name: `Local background job: ${job.jobName}`
+        jobOptions: {
+          concurrencyKey: job.concurrencyKey || undefined,
+          executionMode: job.executionMode,
+          maxConcurrency: job.maxConcurrency ?? undefined,
+          maxRetries: job.maxRetries ?? undefined,
+          queue: job.queue,
+          scheduledAtMs: job.scheduledAtMs ?? undefined,
+          timeoutMs: job.timeoutMs ?? undefined
+        },
+        name: `Local background job: ${job.jobName}`,
+        payload: {
+          args: job.args,
+          handedOffAtMs: handoff.handedOffAtMs,
+          handoffId: handoff.handoffId,
+          id: job.id,
+          jobName: job.jobName,
+          options: {
+            concurrencyKey: job.concurrencyKey || undefined,
+            executionMode: job.executionMode,
+            maxConcurrency: job.maxConcurrency ?? undefined,
+            queue: job.queue
+          }
+        }
       })
     } catch (error) {
       if (error instanceof BackgroundJobRescheduleSignal) {

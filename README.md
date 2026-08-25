@@ -2310,7 +2310,7 @@ Create the file `src/routes/testing/another-action.ejs` and so something like th
 
 Velocious includes a simple background jobs system inspired by Sidekiq.
 
-Jobs can opt into cross-worker durable concurrency limits by pairing a non-empty `concurrencyKey` with a positive-integer `maxConcurrency` in their background-job options. The first cap registered for a key is stable; conflicting caps are rejected. See [durable concurrency limits](docs/background-jobs.md#durable-concurrency-limits).
+Jobs can opt into cross-worker durable concurrency limits by pairing a non-empty `concurrencyKey` with a positive-integer `maxConcurrency` in their background-job options, or by deriving the key in a hydrated job instance's non-static `concurrencyKey()` method. Explicit enqueue options win. The first cap registered for a key is stable; conflicting caps are rejected. See [durable concurrency limits](docs/background-jobs.md#durable-concurrency-limits).
 
 Production apps can listen for `background-job-failed` (or its `all-error` mirror) to report accepted failed attempts, including retry and terminal-state metadata, and for `background-job-orphaned` to react to a specific job the main process reclaimed after its worker died mid-run — e.g. enqueue a targeted recovery for the work it left behind, instead of only polling for the aftermath. Orphan handlers run before the sweep waits for reclaimed jobs to be dispatched, so a stalled dispatcher does not delay application recovery. See [docs/background-jobs.md](docs/background-jobs.md#failure-events).
 

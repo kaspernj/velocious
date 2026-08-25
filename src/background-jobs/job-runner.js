@@ -93,6 +93,14 @@ export default async function runJobPayload(payload, {closeConnections = true, m
   await registry.load()
   const JobClass = registry.getJobByName(payload.jobName)
   const jobInstance = new JobClass()
+  const jobArgs = payload.args || []
+  jobInstance._setBackgroundJobContext({
+    args: jobArgs,
+    jobClass: JobClass,
+    jobName: payload.jobName,
+    options: payload.options || {},
+    payload
+  })
   /**
    * Perform.
    * @type {(...args: Array<ReturnType<typeof JSON.parse>>) => Promise<void>} */
@@ -107,7 +115,7 @@ export default async function runJobPayload(payload, {closeConnections = true, m
   try {
     try {
       await configuration.withConnections({databaseIdentifiers: JobClass.databaseIdentifiers, name: `Background job runner: ${payload.jobName}`}, async () => {
-        await perform.apply(jobInstance, payload.args || [])
+        await perform.apply(jobInstance, jobArgs)
       })
     } catch (error) {
       if (error instanceof BackgroundJobRescheduleSignal) {
