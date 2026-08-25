@@ -333,9 +333,9 @@ Graceful draining is unchanged. A worker that announces `draining` keeps its soc
 
 The fenced protocol uses an explicit worker handshake capability. A main process that creates lease ids dispatches new jobs only to workers advertising handoff-id reporting; older workers remain connected so they can report legacy handoffs that have no lease id. During a rolling upgrade, upgrade workers before the main process to avoid pausing new dispatch while only legacy workers are connected.
 
-Restarting the **main** (every deploy) uses a bounded worker-reconnect generation. Before listening, the new main snapshots only complete lease-aware `handed_off` rows. A surviving worker reconnects with its stable id (`hello`) and the main immediately excludes that worker from startup reclaim while querying and adopting its still-active handoffs into the new socket's lease map. If the adopted worker later disconnects, those leases are released like any other; while it remains connected, they are untouched.
+Restarting the **main** (every deploy) uses a bounded worker-reconnect generation. Before listening, the new main snapshots only complete lease-aware `handed_off` rows. A surviving worker reconnects with its stable id (`hello`), and the main queries and adopts its still-active handoffs into the new socket's lease map. The worker id is excluded from startup reclaim only after that query succeeds while the same socket is still connected. A rejected query or a socket lost during the query remains eligible for the startup reclaim pass. If a successfully adopted worker later disconnects, those leases are released like any other; while it remains connected, they are untouched.
 
-After a 30-second reconnect grace, the main passes only snapshots belonging to worker ids it has not seen to the store's orphan transition. Every update is fenced on the exact startup `jobId`, `handoffId`, `workerId`, and `handedOffAtMs`. A lease completed or returned during the grace, re-handed-off under a newer lease, created after startup, or owned by any worker that reconnected cannot be reclaimed. Accepted rows use the ordinary orphan failure lifecycle: attempts and status counts update, retries keep their configured backoff, terminal rows become `orphaned`, concurrency reservations and schedule ownership are released correctly, `background-job-orphaned` events fire, and the queue is awakened so newly unblocked work can dispatch. Legacy rows without a complete exact lease identity remain under the two-hour age sweep. This is at-least-once recovery: a worker process that stayed alive but could not reconnect before the grace may still have performed external side effects, so jobs requiring exactly-once effects must use application-level idempotency.
+After a 30-second reconnect grace, the main passes only snapshots belonging to worker ids that did not successfully adopt through a still-live connection to the store's orphan transition. Every update is fenced on the exact startup `jobId`, `handoffId`, `workerId`, and `handedOffAtMs`. A lease completed or returned during the grace, re-handed-off under a newer lease, created after startup, or owned by any worker that successfully adopted cannot be reclaimed. Accepted rows use the ordinary orphan failure lifecycle: attempts and status counts update, retries keep their configured backoff, terminal rows become `orphaned`, concurrency reservations and schedule ownership are released correctly, `background-job-orphaned` events fire, and the queue is awakened so newly unblocked work can dispatch. Legacy rows without a complete exact lease identity remain under the two-hour age sweep. This is at-least-once recovery: a worker process that stayed alive but could not reconnect before the grace may still have performed external side effects, so jobs requiring exactly-once effects must use application-level idempotency.
 
 ## Worker Liveness
 
@@ -347,8 +347,10 @@ Disconnect recovery above depends on the worker's control socket firing a `close
 
 Heartbeat interval, stale timeout, liveness sweep interval, and the startup
 `workerReconnectGraceMs` are overridable via the worker/main constructors for
-tests and tuning. The reconnect grace defaults to 30 seconds; its timer is
-unrefed and is cleared during main shutdown.
+tests and tuning. The reconnect grace defaults to 30 seconds and must be an
+integer from 0 through Node's maximum timer delay of 2,147,483,647 ms; the main
+constructor throws for invalid values instead of allowing an overflowing timer
+to fire immediately. Its timer is unrefed and is cleared during main shutdown.
 
 ## Process titles
 

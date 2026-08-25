@@ -1,13 +1,37 @@
 // @ts-check
 
 import net from "node:net"
+import { deferred } from "awaitery"
 import timeout from "awaitery/build/timeout.js"
 import wait from "awaitery/build/wait.js"
 import BackgroundJobsMain from "../../src/background-jobs/main.js"
 import JsonSocket from "../../src/background-jobs/json-socket.js"
+import BackgroundJobsStore from "../../src/background-jobs/store.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import { clearBackgroundJobs } from "../helpers/background-jobs-helper.js"
 import { describe, expect, it } from "../../src/testing/test.js"
+
+class ControlledAdoptionStore extends BackgroundJobsStore {
+  /** @param {ConstructorParameters<typeof BackgroundJobsStore>[0]} args - Store options. */
+  constructor(args) {
+    super(args)
+    this.adoptionStarted = deferred()
+    this.adoptionCanFinish = deferred()
+    /** @type {Error | undefined} */
+    this.adoptionError = undefined
+  }
+
+  /** @param {{workerId: string}} args - Worker lookup. @returns {Promise<{jobId: string, handoffId: string}[]>} - Active worker handoffs. */
+  async handedOffJobsForWorker(args) {
+    const handoffs = await super.handedOffJobsForWorker(args)
+
+    this.adoptionStarted.resolve(undefined)
+    await this.adoptionCanFinish.promise
+    if (this.adoptionError) throw this.adoptionError
+
+    return handoffs
+  }
+}
 
 class ControllableWorkerSocket extends JsonSocket {
   constructor() {
@@ -29,6 +53,16 @@ class ControllableWorkerSocket extends JsonSocket {
 async function createStore() {
   await dummyConfiguration.closeBackgroundJobsAdapter()
   return await clearBackgroundJobs()
+}
+
+/** @returns {Promise<ControlledAdoptionStore>} - Empty store with a controlled adoption query. */
+async function createControlledAdoptionStore() {
+  await dummyConfiguration.closeBackgroundJobsAdapter()
+  dummyConfiguration.setCurrent()
+  const store = new ControlledAdoptionStore({configuration: dummyConfiguration})
+
+  await store.clearAll()
+  return store
 }
 
 /**
@@ -135,11 +169,11 @@ describe("Background jobs - main startup handoff reclaim", {databaseCleaning: {t
     }
   })
 
-  it("preserves and adopts a startup lease when the same worker reconnects within grace", async () => {
-    const store = await createStore()
+  it("preserves and adopts a startup lease only after the same worker successfully reconnects within grace", async () => {
+    const store = await createControlledAdoptionStore()
     const jobId = await store.enqueue({args: [], jobName: "SurvivingJob"})
     const handoff = await store.markHandedOff({jobId, workerId: "surviving-worker"})
-    const main = await startMain(store, 30)
+    const main = await startMain(store, 100)
     const worker = new ControllableWorkerSocket()
 
     try {
@@ -155,7 +189,12 @@ describe("Background jobs - main startup handoff reclaim", {databaseCleaning: {t
           workerId: "surviving-worker"
         }
       })).toEqual("worker")
+      await store.adoptionStarted.promise
+      expect(main.reconnectedWorkerIds.has("surviving-worker")).toEqual(false)
+
+      store.adoptionCanFinish.resolve(undefined)
       await main._drainWorkerHandoffAdoptions()
+      expect(main.reconnectedWorkerIds.has("surviving-worker")).toEqual(true)
       await waitForStartupReclaim(main)
 
       expect(main.workerHandoffs.get(worker)?.get(jobId)).toEqual(handoff.handoffId)
@@ -165,7 +204,101 @@ describe("Background jobs - main startup handoff reclaim", {databaseCleaning: {t
         status: "handed_off",
         workerId: "surviving-worker"
       })
+
+      await main._handleWorkerSocketClosed(worker)
+      expect(await store.getJob(jobId)).toMatchObject({
+        handoffId: null,
+        status: "queued",
+        workerId: null
+      })
     } finally {
+      store.adoptionCanFinish.resolve(undefined)
+      await main.stop()
+      await dummyConfiguration.closeBackgroundJobsAdapter()
+    }
+  })
+
+  it("reclaims a startup lease when the reconnect adoption query rejects", async () => {
+    const store = await createControlledAdoptionStore()
+    const jobId = await store.enqueue({args: [], jobName: "RejectedAdoptionJob", options: {maxRetries: 0}})
+    const handoff = await store.markHandedOff({jobId, workerId: "rejected-worker"})
+    const main = await startMain(store, 100)
+    const worker = new ControllableWorkerSocket()
+    const frameworkErrors = []
+    const onFrameworkError = (payload) => frameworkErrors.push(payload)
+
+    dummyConfiguration.getErrorEvents().on("framework-error", onFrameworkError)
+
+    try {
+      if (!handoff) throw new Error("Expected the rejected handoff")
+
+      store.adoptionError = new Error("Adoption query failed")
+      expect(main._handleRolelessSocketMessage({
+        jsonSocket: worker,
+        message: {
+          role: "worker",
+          supportsHandoffIdReporting: true,
+          supportsHeartbeat: true,
+          type: "hello",
+          workerId: "rejected-worker"
+        }
+      })).toEqual("worker")
+      await store.adoptionStarted.promise
+      store.adoptionCanFinish.resolve(undefined)
+      await main._drainWorkerHandoffAdoptions()
+
+      expect(main.reconnectedWorkerIds.has("rejected-worker")).toEqual(false)
+      expect(frameworkErrors).toMatchObject([{context: {stage: "background-job-handoff-adopt"}, error: {message: "Adoption query failed"}}])
+      await waitForStartupReclaim(main)
+      expect(await store.getJob(jobId)).toMatchObject({
+        attempts: 1,
+        handoffId: handoff.handoffId,
+        status: "orphaned",
+        workerId: null
+      })
+    } finally {
+      store.adoptionCanFinish.resolve(undefined)
+      dummyConfiguration.getErrorEvents().off("framework-error", onFrameworkError)
+      await main.stop()
+      await dummyConfiguration.closeBackgroundJobsAdapter()
+    }
+  })
+
+  it("reclaims a startup lease when the worker disconnects during adoption", async () => {
+    const store = await createControlledAdoptionStore()
+    const jobId = await store.enqueue({args: [], jobName: "DisconnectedAdoptionJob", options: {maxRetries: 0}})
+    const handoff = await store.markHandedOff({jobId, workerId: "disconnecting-worker"})
+    const main = await startMain(store, 100)
+    const worker = new ControllableWorkerSocket()
+
+    try {
+      if (!handoff) throw new Error("Expected the disconnecting handoff")
+
+      expect(main._handleRolelessSocketMessage({
+        jsonSocket: worker,
+        message: {
+          role: "worker",
+          supportsHandoffIdReporting: true,
+          supportsHeartbeat: true,
+          type: "hello",
+          workerId: "disconnecting-worker"
+        }
+      })).toEqual("worker")
+      await store.adoptionStarted.promise
+      await main._handleWorkerSocketClosed(worker)
+      store.adoptionCanFinish.resolve(undefined)
+      await main._drainWorkerHandoffAdoptions()
+
+      expect(main.reconnectedWorkerIds.has("disconnecting-worker")).toEqual(false)
+      await waitForStartupReclaim(main)
+      expect(await store.getJob(jobId)).toMatchObject({
+        attempts: 1,
+        handoffId: handoff.handoffId,
+        status: "orphaned",
+        workerId: null
+      })
+    } finally {
+      store.adoptionCanFinish.resolve(undefined)
       await main.stop()
       await dummyConfiguration.closeBackgroundJobsAdapter()
     }

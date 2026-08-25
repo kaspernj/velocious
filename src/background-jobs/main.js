@@ -36,6 +36,22 @@ const WORKER_STALE_TIMEOUT_MS = 60000
 const WORKER_LIVENESS_SWEEP_MS = 15000
 /** Grace for workers from the previous main generation to reconnect and adopt leases. */
 const WORKER_RECONNECT_GRACE_MS = 30000
+const WORKER_RECONNECT_GRACE_VALIDATION_MESSAGE = `workerReconnectGraceMs must be an integer between 0 and ${MAX_TIMER_MS}`
+
+/**
+ * Resolves a startup reconnect grace without allowing Node's timer overflow to
+ * turn an intentionally long grace into an immediate reclaim.
+ * @param {number | undefined} workerReconnectGraceMs - Requested reconnect grace.
+ * @returns {number} - Valid timer delay.
+ */
+function normalizeWorkerReconnectGraceMs(workerReconnectGraceMs) {
+  if (workerReconnectGraceMs === undefined) return WORKER_RECONNECT_GRACE_MS
+  if (!Number.isInteger(workerReconnectGraceMs) || workerReconnectGraceMs < 0 || workerReconnectGraceMs > MAX_TIMER_MS) {
+    throw new TypeError(WORKER_RECONNECT_GRACE_VALIDATION_MESSAGE)
+  }
+
+  return workerReconnectGraceMs
+}
 /**
  * Worker execution mode capabilities.
  * @type {WorkerExecutionModeCapability[]} */
@@ -63,7 +79,7 @@ export default class BackgroundJobsMain {
    * @param {number} [args.port] - Port.
    * @param {number} [args.workerStaleTimeoutMs] - Override how long a silent worker may go before being dropped (default 60000ms).
    * @param {number} [args.workerLivenessSweepMs] - Override how often stale workers are swept for (default 15000ms).
-   * @param {number} [args.workerReconnectGraceMs] - Override how long previous-generation workers may reconnect before exact startup leases are reclaimed (default 30000ms).
+   * @param {number} [args.workerReconnectGraceMs] - Integer from 0 through 2,147,483,647 overriding how long previous-generation workers may reconnect before exact startup leases are reclaimed (default 30000ms).
    * @param {boolean} [args.closeDatabaseConnectionsOnStop] - Whether stop owns closing the configuration's database pools (default true).
    * @param {() => void | Promise<void>} [args.onStopped] - Lifecycle hook invoked after the main process finishes stopping.
    */
@@ -81,9 +97,7 @@ export default class BackgroundJobsMain {
     // long is treated as wedged/dead: its leases are released and it is dropped.
     this.workerStaleTimeoutMs = typeof workerStaleTimeoutMs === "number" && workerStaleTimeoutMs >= 1 ? workerStaleTimeoutMs : WORKER_STALE_TIMEOUT_MS
     this.workerLivenessSweepMs = typeof workerLivenessSweepMs === "number" && workerLivenessSweepMs >= 1 ? workerLivenessSweepMs : WORKER_LIVENESS_SWEEP_MS
-    this.workerReconnectGraceMs = typeof workerReconnectGraceMs === "number" && Number.isFinite(workerReconnectGraceMs) && workerReconnectGraceMs >= 0
-      ? workerReconnectGraceMs
-      : WORKER_RECONNECT_GRACE_MS
+    this.workerReconnectGraceMs = normalizeWorkerReconnectGraceMs(workerReconnectGraceMs)
     /** @type {import("./adapter.js").default | undefined} */
     this.adapter = undefined
     this.logger = new Logger(this)
@@ -111,7 +125,8 @@ export default class BackgroundJobsMain {
      * @type {Set<Promise<void>>} */
     this.inflightWorkerHandoffAdoptions = new Set()
     /**
-     * Worker ids seen by this main generation, including during adoption.
+     * Worker ids whose handoffs were successfully adopted by a still-live
+     * connection in this main generation.
      * @type {Set<string>}
      */
     this.reconnectedWorkerIds = new Set()
@@ -640,9 +655,6 @@ export default class BackgroundJobsMain {
       jsonSocket.lastSeenAt = Date.now()
       this.workers.add(jsonSocket)
       this.workerHandoffs.set(jsonSocket, new Map())
-      if (typeof jsonSocket.workerId === "string" && jsonSocket.workerId.length > 0) {
-        this.reconnectedWorkerIds.add(jsonSocket.workerId)
-      }
       this._trackWorkerHandoffAdoption(jsonSocket)
     }
 
@@ -701,6 +713,7 @@ export default class BackgroundJobsMain {
       for (const {jobId, handoffId} of handoffs) {
         map.set(jobId, handoffId)
       }
+      this.reconnectedWorkerIds.add(workerId)
     } catch (error) {
       this._reportHandoffAdoptError(error)
     }
