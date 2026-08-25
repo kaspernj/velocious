@@ -6,6 +6,7 @@ import EventEmitter from "../utils/event-emitter.js"
 import InProcessHandler from "./worker-handler/in-process.js"
 import Logger from "../logger.js"
 import Net from "net"
+import os from "node:os"
 import ServerClient from "./server-client.js"
 import WorkerHandler from "./worker-handler/index.js"
 
@@ -14,17 +15,18 @@ import WorkerHandler from "./worker-handler/index.js"
  * @typedef {{start: () => Promise<void>, stop: () => Promise<void>}} DevelopmentReloaderLike */
 /**
  * Defines this typedef.
- * @typedef {(args: {configuration: import("../configuration.js").default, workerCount: number}) => (WorkerHandler | InProcessHandler)} WorkerHandlerFactory */
+ * @typedef {(args: {configuration: import("../configuration.js").default, onWebsocketSessionOwned: (args: {sessionId: string, workerHandler: WorkerHandler}) => void, onWebsocketSessionReleased: (args: {sessionId: string, workerHandler: WorkerHandler}) => void, onWorkerStopped: (args: {workerHandler: WorkerHandler}) => void, workerCount: number}) => (WorkerHandler | InProcessHandler)} WorkerHandlerFactory */
 
 /**
  * Runs normalize worker count.
  * @param {object} args - Options object.
  * @param {number} [args.maxWorkers] - Backward-compatible worker count alias.
  * @param {number} [args.workers] - Configured worker count.
+ * @param {number} args.defaultWorkerCount - Process-available CPU count.
  * @returns {number} - Normalized worker count.
  */
-function normalizeWorkerCount({maxWorkers, workers}) {
-  const workerCount = workers ?? maxWorkers ?? 1
+function normalizeWorkerCount({defaultWorkerCount, maxWorkers, workers}) {
+  const workerCount = workers ?? maxWorkers ?? defaultWorkerCount
 
   if (!Number.isInteger(workerCount) || workerCount < 1) {
     throw new Error("HTTP server workers must be a positive integer")
@@ -32,6 +34,9 @@ function normalizeWorkerCount({maxWorkers, workers}) {
 
   return workerCount
 }
+
+const MAX_INITIAL_REQUEST_HEADER_BYTES = 64 * 1024
+const WEBSOCKET_SESSION_ROUTING_PARAMETER = "velociousSessionId"
 
 export default class VelociousHttpServer {
   clientCount = 0
@@ -70,10 +75,8 @@ export default class VelociousHttpServer {
    * @type {Array<WorkerHandler | InProcessHandler>} */
   workerHandlers = []
   nextWorkerHandlerIndex = 0
-  /**
-   * Sticky worker handlers.
-   * @type {Map<string, WorkerHandler | InProcessHandler>} */
-  stickyWorkerHandlers = new Map()
+  /** Worker ownership for live or grace-paused resumable WebSocket sessions. */
+  websocketSessionOwners = new Map()
 
   /**
    * Runs constructor.
@@ -84,10 +87,11 @@ export default class VelociousHttpServer {
    * @param {number} [args.port] - Port.
    * @param {number} [args.maxWorkers] - Max workers.
    * @param {number} [args.workers] - Worker handlers to start.
+   * @param {() => number} [args.availableParallelism] - CPU availability owner seam.
    * @param {(args: {configuration: import("../configuration.js").default, onReload: (args: {changedPath: string}) => Promise<void>}) => {start: () => Promise<void>, stop: () => Promise<void>}} [args.developmentReloaderFactory] - Development reloader factory.
    * @param {WorkerHandlerFactory} [args.workerHandlerFactory] - Worker handler factory.
    */
-  constructor({configuration, developmentReloaderFactory, host, inProcess, maxWorkers, port, workerHandlerFactory, workers}) {
+  constructor({availableParallelism = os.availableParallelism, configuration, developmentReloaderFactory, host, inProcess, maxWorkers, port, workerHandlerFactory, workers}) {
     this.configuration = configuration
     this.developmentReloaderFactory = developmentReloaderFactory
     this.workerHandlerFactory = workerHandlerFactory
@@ -95,7 +99,8 @@ export default class VelociousHttpServer {
     this.logger = new Logger(this)
     this.host = host ?? "0.0.0.0"
     this.port = port ?? 3006
-    this.workers = normalizeWorkerCount({maxWorkers, workers})
+    this.workers = normalizeWorkerCount({defaultWorkerCount: availableParallelism(), maxWorkers, workers})
+    this.effectiveWorkers = this.inProcess && workers === undefined && maxWorkers === undefined ? 1 : this.workers
   }
 
   /**
@@ -167,7 +172,7 @@ export default class VelociousHttpServer {
     this.developmentReloader = startupState.developmentReloader
     this.netServer = startupState.netServer
     this.workerHandlers = startupState.workerHandlers
-    this.stickyWorkerHandlers.clear()
+    this.websocketSessionOwners.clear()
   }
 
   /**
@@ -205,7 +210,7 @@ export default class VelociousHttpServer {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async _ensureWorkers() {
-    while (this.workerHandlers.length < this.workers) {
+    while (this.workerHandlers.length < this.effectiveWorkers) {
       await this.spawnWorker()
     }
   }
@@ -232,6 +237,7 @@ export default class VelociousHttpServer {
       activeSocketCount: this._activeSockets.size,
       clientCount: Object.keys(this.clients).length,
       configuredWorkerCount: this.workers,
+      effectiveWorkerCount: this.effectiveWorkers,
       inProcess: this.inProcess,
       workerCount: this.workerHandlers.length,
       workers: await Promise.all(this.workerHandlers.map((handler) => this.workerDebugSnapshot(handler)))
@@ -327,7 +333,7 @@ export default class VelociousHttpServer {
     const stopTasks = this.workerHandlers.map((handler) => handler.stop())
     await Promise.all(stopTasks)
     this.workerHandlers = []
-    this.stickyWorkerHandlers.clear()
+    this.websocketSessionOwners.clear()
   }
 
   /**
@@ -367,9 +373,6 @@ export default class VelociousHttpServer {
     this.clientCount++
 
     try {
-      // Paused WebSocket sessions are worker-local, so reconnects from
-      // the same client address must return to the same worker.
-      const workerHandler = this.workerHandlerToUse({stickyKey: socket.remoteAddress})
       const client = new ServerClient({
         clientCount,
         configuration: this.configuration,
@@ -377,13 +380,153 @@ export default class VelociousHttpServer {
       })
 
       client.events.on("close", this.onClientClose)
-
-      this.logger.debug(`Gave client ${clientCount} to worker ${workerHandler.workerCount}`)
-      workerHandler.addSocketConnection(client)
       this.clients[clientCount] = client
+      this.routeClientAfterInitialHeaders(client)
     } catch (error) {
       this.logger.error(`Failed to initialize client ${clientCount} on new connection`, error)
       socket.destroy()
+    }
+  }
+
+  /**
+   * Buffers only the bounded initial HTTP headers needed to recognize a
+   * WebSocket resume routing hint, then replays them to the selected worker.
+   * @param {ServerClient} client - Unassigned socket client.
+   * @returns {void}
+   */
+  routeClientAfterInitialHeaders(client) {
+    const {socket} = client
+    /** @type {Buffer[]} */
+    const chunks = []
+    let byteLength = 0
+    const cleanup = () => {
+      socket.off("data", onData)
+      socket.off("close", cleanup)
+    }
+    const onData = (/** @type {Buffer} */ chunk) => {
+      chunks.push(chunk)
+      byteLength += chunk.length
+      const initialRequest = Buffer.concat(chunks, byteLength)
+
+      if (!this.initialRequestHeadersComplete(initialRequest) && byteLength < MAX_INITIAL_REQUEST_HEADER_BYTES) return
+
+      cleanup()
+      this.assignClientToWorker(client, initialRequest)
+    }
+
+    socket.on("data", onData)
+    socket.once("close", cleanup)
+  }
+
+  /**
+   * Checks whether the buffered initial HTTP headers are complete.
+   * @param {Buffer} initialRequest - Buffered initial request bytes.
+   * @returns {boolean} - Whether a header terminator is present.
+   */
+  initialRequestHeadersComplete(initialRequest) {
+    return initialRequest.includes("\r\n\r\n") || initialRequest.includes("\n\n")
+  }
+
+  /**
+   * Assigns a buffered client and replays the exact bytes into its worker.
+   * @param {ServerClient} client - Client awaiting assignment.
+   * @param {Buffer} initialRequest - Initial request bytes.
+   * @returns {void}
+   */
+  assignClientToWorker(client, initialRequest) {
+    if (client.socket.destroyed) return
+
+    try {
+      const workerHandler = this.workerHandlerForInitialRequest(initialRequest)
+
+      this.logger.debug(`Gave client ${client.clientCount} to worker ${workerHandler.workerCount}`)
+      workerHandler.addSocketConnection(client)
+      client.onSocketData(initialRequest)
+    } catch (error) {
+      this.logger.error(`Failed to assign client ${client.clientCount} to a worker`, error)
+      client.destroy(error instanceof Error ? error : new Error("Failed to assign HTTP client to worker", {cause: error}))
+    }
+  }
+
+  /**
+   * Selects the owner of a resumable WebSocket session or the next ordinary worker.
+   * @param {Buffer} initialRequest - Initial HTTP request headers.
+   * @returns {WorkerHandler | InProcessHandler} - Selected worker.
+   */
+  workerHandlerForInitialRequest(initialRequest) {
+    const sessionId = this.websocketResumeSessionId(initialRequest)
+
+    if (sessionId) {
+      const owner = this.websocketSessionOwners.get(sessionId)
+
+      if (owner && this.workerHandlers.includes(owner)) return owner
+      if (owner) this.websocketSessionOwners.delete(sessionId)
+    }
+
+    return this.workerHandlerToUse()
+  }
+
+  /**
+   * Reads the resumable WebSocket session routing hint from an upgrade request.
+   * @param {Buffer} initialRequest - Initial HTTP request headers.
+   * @returns {string | undefined} - Session identity, if present on a WebSocket upgrade.
+   */
+  websocketResumeSessionId(initialRequest) {
+    const headerEnd = initialRequest.indexOf("\r\n\r\n")
+    const fallbackHeaderEnd = headerEnd === -1 ? initialRequest.indexOf("\n\n") : headerEnd
+
+    if (fallbackHeaderEnd === -1) return
+
+    const lines = initialRequest.subarray(0, fallbackHeaderEnd).toString("latin1").split(/\r?\n/)
+    const [method, requestTarget] = lines[0]?.split(" ") || []
+
+    if (method !== "GET" || !requestTarget) return
+
+    /** @type {Map<string, string>} */
+    const headers = new Map()
+
+    for (const line of lines.slice(1)) {
+      const separatorIndex = line.indexOf(":")
+
+      if (separatorIndex === -1) continue
+
+      headers.set(line.slice(0, separatorIndex).trim().toLowerCase(), line.slice(separatorIndex + 1).trim().toLowerCase())
+    }
+
+    if (headers.get("upgrade") !== "websocket" || !headers.get("connection")?.split(",").map((value) => value.trim()).includes("upgrade")) return
+
+    const sessionId = new URL(requestTarget, "http://velocious.invalid").searchParams.get(WEBSOCKET_SESSION_ROUTING_PARAMETER)
+
+    return sessionId || undefined
+  }
+
+  /**
+   * Records the live worker owner for a resumable session.
+   * @param {{sessionId: string, workerHandler: WorkerHandler | InProcessHandler}} args - Ownership claim.
+   * @returns {void}
+   */
+  claimWebsocketSession({sessionId, workerHandler}) {
+    if (!this.workerHandlers.includes(workerHandler)) return
+    this.websocketSessionOwners.set(sessionId, workerHandler)
+  }
+
+  /**
+   * Releases a session only when the releasing worker still owns it.
+   * @param {{sessionId: string, workerHandler: WorkerHandler | InProcessHandler}} args - Ownership release.
+   * @returns {void}
+   */
+  releaseWebsocketSession({sessionId, workerHandler}) {
+    if (this.websocketSessionOwners.get(sessionId) === workerHandler) this.websocketSessionOwners.delete(sessionId)
+  }
+
+  /**
+   * Releases every session owned by a worker leaving service.
+   * @param {WorkerHandler | InProcessHandler} workerHandler - Worker leaving service.
+   * @returns {void}
+   */
+  releaseWebsocketSessionsForWorker(workerHandler) {
+    for (const [sessionId, owner] of this.websocketSessionOwners) {
+      if (owner === workerHandler) this.websocketSessionOwners.delete(sessionId)
     }
   }
 
@@ -425,7 +568,7 @@ export default class VelociousHttpServer {
      * @type {Array<WorkerHandler | InProcessHandler>} */
     const workerHandlers = []
 
-    for (let index = 0; index < this.workers; index += 1) {
+    for (let index = 0; index < this.effectiveWorkers; index += 1) {
       workerHandlers.push(await this._buildWorkerHandler())
     }
 
@@ -443,9 +586,18 @@ export default class VelociousHttpServer {
 
     const Handler = this.inProcess ? InProcessHandler : WorkerHandler
     const workerHandler = this.workerHandlerFactory
-      ? this.workerHandlerFactory({configuration: this.configuration, workerCount})
+      ? this.workerHandlerFactory({
+        configuration: this.configuration,
+        onWebsocketSessionOwned: ({sessionId, workerHandler}) => this.claimWebsocketSession({sessionId, workerHandler}),
+        onWebsocketSessionReleased: ({sessionId, workerHandler}) => this.releaseWebsocketSession({sessionId, workerHandler}),
+        onWorkerStopped: ({workerHandler}) => this.releaseWebsocketSessionsForWorker(workerHandler),
+        workerCount
+      })
       : new Handler({
         configuration: this.configuration,
+        onWebsocketSessionOwned: ({sessionId, workerHandler}) => this.claimWebsocketSession({sessionId, workerHandler}),
+        onWebsocketSessionReleased: ({sessionId, workerHandler}) => this.releaseWebsocketSession({sessionId, workerHandler}),
+        onWorkerStopped: ({workerHandler}) => this.releaseWebsocketSessionsForWorker(workerHandler),
         workerCount
       })
 
@@ -456,25 +608,9 @@ export default class VelociousHttpServer {
 
   /**
    * Runs worker handler to use.
-   * @param {object} [args] - Options object.
-   * @param {string} [args.stickyKey] - Stable key that must keep routing to the same worker.
    * @returns {WorkerHandler | InProcessHandler} - The worker handler to use.
    */
-  workerHandlerToUse({stickyKey} = {}) {
-    if (stickyKey) {
-      const stickyWorkerHandler = this.stickyWorkerHandlers.get(stickyKey)
-
-      if (stickyWorkerHandler && this.workerHandlers.includes(stickyWorkerHandler)) {
-        return stickyWorkerHandler
-      }
-
-      const workerHandler = this._nextRoundRobinWorkerHandler()
-
-      this.stickyWorkerHandlers.set(stickyKey, workerHandler)
-
-      return workerHandler
-    }
-
+  workerHandlerToUse() {
     return this._nextRoundRobinWorkerHandler()
   }
 
@@ -550,7 +686,7 @@ export default class VelociousHttpServer {
 
         this.workerHandlers = newWorkerHandlers
         this.nextWorkerHandlerIndex = 0
-        this.stickyWorkerHandlers.clear()
+        for (const workerHandler of oldWorkerHandlers) this.releaseWebsocketSessionsForWorker(workerHandler)
 
         await Promise.all(oldWorkerHandlers.map((workerHandler) => workerHandler.stop()))
       } while (this._reloadWorkersForDevelopmentQueued && !this._stopping)

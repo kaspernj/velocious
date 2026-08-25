@@ -215,6 +215,9 @@ export default class VelociousHttpServerClientWebsocketSession {
      */
     this._resumeIdentityPromise = undefined
 
+    /** @type {string | null} */
+    this._claimedSessionId = null
+
     /**
      * Accumulates payloads for a fragmented websocket message per
      * RFC 6455. Non-null while mid-fragment; cleared when the frame
@@ -266,6 +269,7 @@ export default class VelociousHttpServerClientWebsocketSession {
    * @returns {void}
    */
   sendSessionEstablished() {
+    this._claimOwnership()
     this.sendJson({
       type: "session-established",
       sessionId: this.sessionId,
@@ -313,6 +317,7 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   destroy() {
+    this._releaseOwnership()
     this._stopHeartbeat()
     this._resetFragmentBuffer()
     this._clearBufferedFrameChunks()
@@ -323,6 +328,25 @@ export default class VelociousHttpServerClientWebsocketSession {
     void this._teardownConnections("session_destroyed")
     void this._teardownChannelSubscriptions()
     this.events.removeAllListeners()
+  }
+
+  /** Claims this session id for host-side reconnect routing. */
+  _claimOwnership() {
+    if (this._claimedSessionId === this.sessionId) return
+    if (this._claimedSessionId) this._releaseOwnership()
+
+    this._claimedSessionId = this.sessionId
+    this.events.emit("ownershipClaimed", {sessionId: this.sessionId})
+  }
+
+  /** Releases the currently claimed session id exactly once. */
+  _releaseOwnership() {
+    const sessionId = this._claimedSessionId
+
+    if (!sessionId) return
+
+    this._claimedSessionId = null
+    this.events.emit("ownershipReleased", {sessionId})
   }
 
   /**
@@ -1339,6 +1363,7 @@ export default class VelociousHttpServerClientWebsocketSession {
     }
 
     this._stopHeartbeat()
+    this._releaseOwnership()
     this.configuration._websocketSessions.delete(this)
     void this._runMessageHandlerClose()
     void this._teardownChannel()
@@ -1355,6 +1380,7 @@ export default class VelociousHttpServerClientWebsocketSession {
    */
   _finalizeGraceExpiry() {
     this._stopHeartbeat()
+    this._releaseOwnership()
     this._resetFragmentBuffer()
     this._clearBufferedFrameChunks()
     this._abandonInboundMessages()
@@ -1499,6 +1525,9 @@ export default class VelociousHttpServerClientWebsocketSession {
 
     this.configuration._clearPausedWebsocketSession(resumeSessionId)
 
+    this._releaseOwnership()
+    paused._releaseOwnership()
+
     // Transfer resumable state onto this (live) session. The paused
     // session shell is discarded after the transfer.
     for (const [connectionId, connection] of paused._connections) {
@@ -1526,6 +1555,7 @@ export default class VelociousHttpServerClientWebsocketSession {
     paused._paused = false
     paused.destroy()
 
+    this._claimOwnership()
     this.sendJson({type: "session-resumed", sessionId: resumeSessionId})
     for (const body of queued) this.sendJson(body)
     await this._fireOnResume()

@@ -2,6 +2,7 @@
 
 import { AsyncLocalStorage } from "async_hooks"
 import BasePool, { POOL_CONFIGURATION_KEY } from "./base.js"
+import DatabasePoolCheckoutTimeoutError from "./checkout-timeout-error.js"
 import { currentTestProfileContext } from "../../testing/test-profile-context.js"
 
 /**
@@ -100,6 +101,9 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    * Pending checkout drain promise.
    * @type {Promise<void> | undefined} */
   pendingCheckoutDrainPromise = undefined
+
+  /** Whether a caller requested another pass through the pending checkout queue. */
+  pendingCheckoutDrainRequested = false
 
   /**
    * Idle connection reaper timer.
@@ -602,18 +606,45 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    * @returns {Promise<void>} - Resolves when pending checkouts have been drained as far as possible.
    */
   async drainPendingCheckouts() {
-    if (this.pendingCheckoutDrainPromise) {
-      await this.pendingCheckoutDrainPromise
+    this.pendingCheckoutDrainRequested = true
+
+    if (!this.pendingCheckoutDrainPromise) this.startPendingCheckoutDrain()
+    await this.pendingCheckoutDrainPromise
+  }
+
+  /**
+   * Starts the single checkout-drain owner. The shared promise is cleared before
+   * it settles, closing the resolved-promise/stale-field interval in which a new
+   * request could otherwise be lost.
+   * @returns {void}
+   */
+  startPendingCheckoutDrain() {
+    const {promise, reject, resolve} = Promise.withResolvers()
+
+    this.pendingCheckoutDrainPromise = promise
+    void this.runRequestedPendingCheckoutDrains({reject, resolve})
+  }
+
+  /**
+   * Runs drain passes until every request observed during the active pass has
+   * received a later pass.
+   * @param {{reject: (reason?: ReturnType<typeof JSON.parse>) => void, resolve: (value?: void) => void}} deferred - Shared drain settlement.
+   * @returns {Promise<void>}
+   */
+  async runRequestedPendingCheckoutDrains({reject, resolve}) {
+    try {
+      while (this.pendingCheckoutDrainRequested) {
+        this.pendingCheckoutDrainRequested = false
+        await this.drainPendingCheckoutsActual()
+      }
+    } catch (error) {
+      this.pendingCheckoutDrainPromise = undefined
+      reject(error)
       return
     }
 
-    this.pendingCheckoutDrainPromise = this.drainPendingCheckoutsActual()
-
-    try {
-      await this.pendingCheckoutDrainPromise
-    } finally {
-      this.pendingCheckoutDrainPromise = undefined
-    }
+    this.pendingCheckoutDrainPromise = undefined
+    resolve()
   }
 
   /**
@@ -726,13 +757,13 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   /**
    * Runs pending checkout timeout error.
    * @param {PendingCheckout} checkout - Timed-out checkout.
-   * @returns {Error} - Timeout error.
+   * @returns {DatabasePoolCheckoutTimeoutError} - Timeout error.
    */
   pendingCheckoutTimeoutError(checkout) {
     const checkoutName = checkout.options.name ? ` Checkout name: ${JSON.stringify(checkout.options.name)}.` : ""
     const diagnostics = this.pendingCheckoutTimeoutDiagnostics(checkout)
 
-    return new Error(`Timed out after ${checkout.timeoutMillis}ms waiting for database connection checkout from pool "${this.identifier}".${checkoutName} ${diagnostics}`)
+    return new DatabasePoolCheckoutTimeoutError(`Timed out after ${checkout.timeoutMillis}ms waiting for database connection checkout from pool "${this.identifier}".${checkoutName} ${diagnostics}`)
   }
 
   /**
@@ -1255,7 +1286,13 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
       connections,
       connectionsBeingSpawned: this.connectionsBeingSpawned,
       idleCount: this.connections.length + [...this.lifecycleRetainedConnections.values()].filter((connection) => connection.getIdSeq() === undefined).length,
+      idleMatchingPendingCheckoutCount: this.connections.filter((connection) => {
+        return !this.connectionHasOpenTransaction(connection)
+          && this.pendingCheckouts.some((checkout) => this.connectionMatchesReuseKey(connection, checkout.reuseKey))
+      }).length,
       inUseCount: Object.keys(this.connectionsInUse).length,
+      pendingCheckoutDrainActive: Boolean(this.pendingCheckoutDrainPromise),
+      pendingCheckoutDrainRequested: this.pendingCheckoutDrainRequested,
       pendingCheckouts: this.pendingCheckoutDebugSnapshots(now),
       pendingCheckoutCount: this.pendingCheckouts.length,
       telemetry: {...this.telemetry}

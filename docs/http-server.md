@@ -1,8 +1,10 @@
 # HTTP Server
 
-Velocious serves HTTP requests through worker handlers. The default is one
-worker, which keeps development and small deployments predictable. Applications
-that need more request or websocket throughput can opt into multiple workers.
+Velocious serves HTTP requests through worker handlers. A normal threaded server
+defaults to `os.availableParallelism()` workers, so it uses the CPU capacity Node
+reports as available to the process. An explicit `workers` value still overrides
+that default. In-process mode keeps one effective handler by default because it
+shares the caller's runtime state; an explicit in-process worker count is honored.
 
 ## File Responses
 
@@ -174,10 +176,12 @@ Start a server with a fixed worker count:
 npx velocious server --host 127.0.0.1 --port 3006 --workers 4
 ```
 
-`--workers` must be a positive integer. Each incoming socket is assigned to the
-next worker in round-robin order. Websocket broadcasts still use the configured
-cross-worker broadcast bus, so channels can publish from one worker and deliver
-to subscribers hosted by another worker.
+`--workers` must be a positive integer. Ordinary incoming sockets are assigned to
+the next worker in round-robin order, including when every connection has the
+same reverse-proxy source address. Resumable WebSocket upgrades carry their
+session identity and return to the worker that owns that session. WebSocket
+broadcasts still use the configured cross-worker broadcast bus, so channels can
+publish from one worker and deliver to subscribers hosted by another worker.
 
 CLI arguments override `configuration.httpServer` values. When neither the CLI
 nor the configuration supplies a value, the CLI defaults to `127.0.0.1:3006`.
@@ -219,6 +223,14 @@ const application = new Application({
 `maxWorkers` remains accepted as a compatibility alias when `workers` is not
 provided, but new code should use `workers` because it describes the actual
 number of handlers started.
+
+Each worker loads its own application configuration and owns its own database
+pools. Consequently, per-worker resources multiply with the effective worker
+count: for example, `workers: 4` and `pool.max: 10` permit up to 40 connections
+for that pool across the server process. Size database and other worker-local
+limits with that aggregate in mind. The server debug snapshot reports both
+`configuredWorkerCount` and `effectiveWorkerCount`; they differ for the default
+in-process test/runtime contract.
 
 ## Server Lock
 

@@ -1827,7 +1827,7 @@ database: {
 }
 ```
 
-`pool.max` caps live async-tracked connections for that pool and defaults to `10` when omitted. When the cap is reached, new checkouts wait until a matching checked-in connection can be handed over or capacity is freed. Set `pool.max` to `null` only when a process is deliberately allowed to open an unbounded number of database connections. The built-in debug endpoint reports each in-use connection's `checkedOutForMs`, each idle connection's `idleForMs`, and queued `pendingCheckouts[].waitingForMs` so production diagnostics can distinguish long-held checkouts from pool-capacity waits.
+`pool.max` caps live async-tracked connections for that pool and defaults to `10` when omitted. When the cap is reached, new checkouts wait until a matching checked-in connection can be handed over or capacity is freed. Set `pool.max` to `null` only when a process is deliberately allowed to open an unbounded number of database connections. The built-in debug endpoint reports each in-use connection's `checkedOutForMs`, each idle connection's `idleForMs`, queued `pendingCheckouts[].waitingForMs`, and matching idle capacity plus checkout-drain state so production diagnostics can distinguish long-held checkouts, pool-capacity waits, and an invariant violation where compatible capacity is unexpectedly idle.
 
 Debug snapshots also expose cumulative connection-creation, checkout-wait and
 timeout, idle-reap, and peak-live-connection telemetry. Opt-in test profiles can
@@ -2028,7 +2028,7 @@ await client.close()
 
 For long-lived Node clients, the constructor also accepts opt-in liveness options (all default off, so browser/Expo usage is unchanged): `webSocketImplementation` (inject Node's `ws`, since the global/undici WebSocket exposes neither protocol ping nor an unref-able socket), `heartbeatIntervalMs` (a ping heartbeat that drops a socket whose peer stops ponging, so a client notices a vanished server), and `unref` (unref the underlying socket so an idle connection can't keep the process alive on its own). See [docs/websocket-channels.md](docs/websocket-channels.md).
 
-`await client.close()` is a final graceful shutdown that releases resumable server-session state; unexpected transport drops first attempt to resume that state. A successful resume retains the existing server-side connection and channel instances. If the server instead rejects the old session with `session-gone`, SnapReq promotes the already-established fresh session, reopens still-live one-to-one connection handles, and re-subscribes still-live channel handles. Those public handles remain usable and channel readiness resolves on the fresh session; explicitly closed handles stay closed. See [the WebSocket channel lifecycle guarantees](docs/websocket-channels.md#lifecycle-guarantees-phase-1b).
+`await client.close()` is a final graceful shutdown that releases resumable server-session state; unexpected transport drops first attempt to resume that state. On a multi-worker server, the client automatically puts the prior session identity in the reconnect upgrade URL so the host can route it to its owning worker; routing is session-based and never source-IP-based. A successful resume retains the existing server-side connection and channel instances. If the server instead rejects the old session with `session-gone`, SnapReq promotes the already-established fresh session, reopens still-live one-to-one connection handles, and re-subscribes still-live channel handles. Those public handles remain usable and channel readiness resolves on the fresh session; explicitly closed handles stay closed. See [the WebSocket channel lifecycle guarantees](docs/websocket-channels.md#lifecycle-guarantees-phase-1b).
 
 ## Subscribe to events
 
@@ -2700,6 +2700,15 @@ It exposes `GET /api/stats`, `/api/jobs`, `/api/jobs/:id`, `/api/schedule` and `
 ```bash
 npx velocious server --host 0.0.0.0 --port 8082
 ```
+
+Threaded servers default to `os.availableParallelism()` HTTP workers. Pass
+`--workers` or configure `httpServer.workers` to override that count. Ordinary
+connections are distributed round-robin even behind a loopback reverse proxy,
+while resumable WebSockets return to their session's worker. Each worker owns a
+separate configuration and database pools, so per-worker limits multiply across
+the effective worker count (for example, four workers with `pool.max: 10` can
+open 40 connections for that pool). The debug snapshot exposes the configured
+and effective counts; default in-process mode uses one effective handler.
 
 When the server runs in the `development` environment, Velocious watches application `src/` trees and hot-reloads by recycling HTTP workers after `.js`/`.mjs`/`.cjs`/`.json`/`.ejs` changes. That picks up edited controllers, models, resources, routes, and views without a manual server restart while keeping production/test behavior unchanged.
 

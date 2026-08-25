@@ -4,6 +4,7 @@ import SnapReqWebSocketClient from "snapreq/websocket"
 import {deserializeFrontendModelTransportValue} from "../frontend-models/transport-serialization.js"
 
 const DEFAULT_URL = "ws://127.0.0.1:3006/websocket"
+const SESSION_ROUTING_PARAMETER = "velociousSessionId"
 
 /**
  * Velocious's WebSocket client. The cross-platform connection/session/channel
@@ -28,6 +29,57 @@ export default class VelociousWebsocketClient extends SnapReqWebSocketClient {
     this.runningReconnectTasks = new Set()
     /** @type {Promise<void> | null} */
     this.gracefulClosePromise = null
+    this.routingBaseUrl = this.url
+  }
+
+  /**
+   * Restores a persisted session before opening the socket so the host can route
+   * the HTTP upgrade to the worker that owns its paused state.
+   * @returns {Promise<void>}
+   */
+  async _restoreSessionIdForRouting() {
+    // SnapReq initializes these internal session fields in its constructor, but
+    // its declaration does not expose that definite-assignment lifecycle here.
+    const routingState = /** @type {{_sessionId: string | null, _sessionStore: {get: () => string | null | undefined | Promise<string | null | undefined>} | undefined, _sessionStoreRestored: boolean}} */ (/** @type {unknown} */ (this))
+
+    if (routingState._sessionId || routingState._sessionStoreRestored || !routingState._sessionStore) return
+
+    routingState._sessionStoreRestored = true
+
+    try {
+      const storedId = await routingState._sessionStore.get()
+
+      if (typeof storedId === "string" && storedId.length > 0) routingState._sessionId = storedId
+    } catch (error) {
+      this._debug("sessionStore.get failed", error)
+    }
+  }
+
+  /**
+   * Builds the WebSocket URL carrying only the current resumable session routing hint.
+   * @returns {string} - WebSocket URL.
+   */
+  _sessionRoutingUrl() {
+    const url = new URL(this.routingBaseUrl)
+
+    if (this._sessionId) {
+      url.searchParams.set(SESSION_ROUTING_PARAMETER, this._sessionId)
+    } else {
+      url.searchParams.delete(SESSION_ROUTING_PARAMETER)
+    }
+
+    return url.toString()
+  }
+
+  /**
+   * Restores routing state before delegating socket creation to SnapReq.
+   * @param {Parameters<SnapReqWebSocketClient["_connect"]>[0]} [options] - Connect options.
+   * @returns {Promise<void>} - Resolves when the session is ready.
+   */
+  async _connect(options) {
+    await this._restoreSessionIdForRouting()
+    this.url = this._sessionRoutingUrl()
+    await super._connect(options)
   }
 
   /**

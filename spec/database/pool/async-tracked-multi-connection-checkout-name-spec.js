@@ -181,6 +181,8 @@ describe("database - pool - async tracked multi connection checkout names", () =
         } catch (error) {
           const actualError = forcedError(error)
 
+          expect(actualError.name).toBe("DatabasePoolCheckoutTimeoutError")
+          expect(/** @type {Error & {code?: string}} */ (actualError).code).toBe("VELOCIOUS_DATABASE_POOL_CHECKOUT_TIMEOUT")
           expect(actualError.message).toContain("Timed out after 20ms waiting for database connection checkout from pool \"default\". Checkout name: \"waiting checkout\".")
           expect(actualError.message).toContain("Pool state: max=1, inUse=1, idle=0")
           expect(actualError.message).toContain("checkout=\"long checkout\"")

@@ -269,7 +269,7 @@ describe("HttpServer - worker handler", {databaseCleaning: {transaction: true}},
     expect(server.workerHandlerToUse().workerCount).toEqual(0)
   })
 
-  it("keeps sticky connections on the same worker", () => {
+  it("does not retain source-address stickiness between assignments", () => {
     const server = buildWorkerHandlerTestServer()
 
     server.workerHandlers = [
@@ -278,27 +278,10 @@ describe("HttpServer - worker handler", {databaseCleaning: {transaction: true}},
       {workerCount: 2}
     ]
 
-    expect(server.workerHandlerToUse({stickyKey: "client-a"}).workerCount).toEqual(0)
-    expect(server.workerHandlerToUse({stickyKey: "client-b"}).workerCount).toEqual(1)
-    expect(server.workerHandlerToUse({stickyKey: "client-a"}).workerCount).toEqual(0)
+    expect(server.workerHandlerToUse().workerCount).toEqual(0)
+    expect(server.workerHandlerToUse().workerCount).toEqual(1)
     expect(server.workerHandlerToUse().workerCount).toEqual(2)
-  })
-
-  it("drops stale sticky workers after replacement", () => {
-    const server = buildWorkerHandlerTestServer()
-
-    server.workerHandlers = [
-      {workerCount: 0}
-    ]
-
-    expect(server.workerHandlerToUse({stickyKey: "client-a"}).workerCount).toEqual(0)
-
-    server.workerHandlers = [
-      {workerCount: 1}
-    ]
-    server.nextWorkerHandlerIndex = 0
-
-    expect(server.workerHandlerToUse({stickyKey: "client-a"}).workerCount).toEqual(1)
+    expect(server.workerHandlerToUse().workerCount).toEqual(0)
   })
 
   it("closes client connections when the worker exits unexpectedly", () => {
@@ -751,24 +734,17 @@ describe("HttpServer - worker handler", {databaseCleaning: {transaction: true}},
     const stoppedHandlers = []
 
     const server = new HttpServer({
+      availableParallelism: () => 1,
       configuration: {
         debug: false,
         getEnvironment: () => "development"
-      }
+      },
+      workerHandlerFactory: ({workerCount}) => new FakeWorkerHandler({startedHandlers, stoppedHandlers, workerCount})
     })
 
     server.inProcess = false
     server.workerCount = 0
     server.workerHandlers = [new FakeWorkerHandler({stoppedHandlers, workerCount: 0})]
-
-    server._buildWorkerHandler = async function () {
-      const workerHandler = new FakeWorkerHandler({startedHandlers, stoppedHandlers, workerCount: this.workerCount})
-
-      this.workerCount++
-      await workerHandler.start()
-
-      return workerHandler
-    }
 
     await server.reloadWorkersForDevelopment()
 

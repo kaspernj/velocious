@@ -314,6 +314,12 @@ export default class VeoliciousHttpServerClient {
       this.websocketSession = undefined
       this.events.emit("close")
     })
+    this.websocketSession.events.on("ownershipClaimed", ({sessionId}) => {
+      this.events.emit("websocketSessionOwned", {sessionId})
+    })
+    this.websocketSession.events.on("ownershipReleased", ({sessionId}) => {
+      this.events.emit("websocketSessionReleased", {sessionId})
+    })
     this.state = "websocket"
     this.events.emit("output", response)
     void this.websocketSession.initializeChannel()

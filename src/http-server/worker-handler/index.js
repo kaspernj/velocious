@@ -41,8 +41,11 @@ export default class VelociousHttpServerWorker {
    * @param {object} args - Options object.
    * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
    * @param {number} args.workerCount - Worker count.
+   * @param {(args: {sessionId: string, workerHandler: VelociousHttpServerWorker}) => void} [args.onWebsocketSessionOwned] - Session ownership callback.
+   * @param {(args: {sessionId: string, workerHandler: VelociousHttpServerWorker}) => void} [args.onWebsocketSessionReleased] - Session ownership release callback.
+   * @param {(args: {workerHandler: VelociousHttpServerWorker}) => void} [args.onWorkerStopped] - Worker lifecycle callback.
    */
-  constructor({configuration, workerCount}) {
+  constructor({configuration, onWebsocketSessionOwned, onWebsocketSessionReleased, onWorkerStopped, workerCount}) {
     this.configuration = configuration
 
     /**
@@ -52,6 +55,9 @@ export default class VelociousHttpServerWorker {
 
     this.logger = new Logger(this)
     this.workerCount = workerCount
+    this.onWebsocketSessionOwned = onWebsocketSessionOwned
+    this.onWebsocketSessionReleased = onWebsocketSessionReleased
+    this.onWorkerStopped = onWorkerStopped
     this.workerStarted = false
     this._stopping = false
     this._debugRequestId = 0
@@ -152,6 +158,7 @@ export default class VelociousHttpServerWorker {
     }
 
     this.unregisterFromEventsHostIfNeeded()
+    if (this.onWorkerStopped) this.onWorkerStopped({workerHandler: this})
     if (this._stopResolve) {
       this._stopResolve()
     }
@@ -190,6 +197,7 @@ export default class VelociousHttpServerWorker {
    * @param {number} [data.transferId] - File transfer id.
    * @param {boolean} [data.websocketFrame] - Whether output is a completed WebSocket frame.
    * @param {string} [data.channel] - Channel name.
+   * @param {string} [data.sessionId] - WebSocket session identity.
    * @param {number} [data.requestId] - Debug request id.
    * @param {Record<string, ReturnType<typeof JSON.parse>>} [data.snapshot] - Worker debug snapshot.
    * @param {ReturnType<typeof JSON.parse>} [data.payload] - Payload data.
@@ -306,6 +314,12 @@ export default class VelociousHttpServerWorker {
         channel,
         configuration: this.configuration
       })
+    } else if (command == "websocketSessionOwned") {
+      if (typeof data.sessionId !== "string") throw new Error("Worker websocket session id must be a string")
+      if (this.onWebsocketSessionOwned) this.onWebsocketSessionOwned({sessionId: data.sessionId, workerHandler: this})
+    } else if (command == "websocketSessionReleased") {
+      if (typeof data.sessionId !== "string") throw new Error("Worker websocket session id must be a string")
+      if (this.onWebsocketSessionReleased) this.onWebsocketSessionReleased({sessionId: data.sessionId, workerHandler: this})
     } else {
       throw new Error(`Unknown command: ${command}`)
     }

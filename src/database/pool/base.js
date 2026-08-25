@@ -40,10 +40,13 @@ import sha256Hex from "../../utils/sha256-hex.js"
  * @property {Array<Record<string, ReturnType<typeof JSON.parse>>>} connections - Live connection snapshots.
  * @property {number} connectionsBeingSpawned - Number of in-progress connection spawns.
  * @property {number} idleCount - Number of idle connections.
+ * @property {number} [idleMatchingPendingCheckoutCount] - Idle connections that can satisfy at least one pending checkout.
  * @property {string} identifier - Database identifier.
  * @property {number} inUseCount - Number of checked-out connections.
  * @property {Array<DatabasePoolPendingCheckoutDebugSnapshot>} [pendingCheckouts] - Waiting checkout snapshots.
  * @property {number} pendingCheckoutCount - Number of queued checkout requests.
+ * @property {boolean} [pendingCheckoutDrainActive] - Whether a checkout drain pass is active.
+ * @property {boolean} [pendingCheckoutDrainRequested] - Whether another checkout drain pass was requested.
  * @property {string} poolClass - Pool class name.
  * @property {{connectionCreationCount: number, connectionCreationFailureCount: number, connectionCreationMaxMs: number, connectionCreationTotalMs: number, checkoutTimeoutCount: number, checkoutWaitCount: number, checkoutWaitMaxMs: number, checkoutWaitTotalMs: number, idleReapCount: number, idleReapDisposalCount: number, idleReapFailureCount: number, idleReapMaxMs: number, idleReapTotalMs: number, peakLiveConnections: number}} [telemetry] - Cumulative pool lifecycle telemetry.
  */
