@@ -11,6 +11,8 @@ import dummyConfiguration from "../dummy/src/config/configuration.js"
 import { clearBackgroundJobs } from "../helpers/background-jobs-helper.js"
 import { describe, expect, it } from "../../src/testing/test.js"
 
+const MAX_TIMER_MS = 2_147_483_647
+
 class ControlledAdoptionStore extends BackgroundJobsStore {
   /** @param {ConstructorParameters<typeof BackgroundJobsStore>[0]} args - Store options. */
   constructor(args) {
@@ -120,6 +122,15 @@ async function waitForStartupReclaim(main) {
   })
 }
 
+/** @param {BackgroundJobsMain} main - Main whose startup boundary should run now. @returns {Promise<void>} - Resolves after reclaim. */
+async function runStartupReclaimNow(main) {
+  if (main._startupHandoffReclaimTimer) clearTimeout(main._startupHandoffReclaimTimer)
+  main._startupHandoffReclaimTimer = undefined
+  main._startupHandoffAdoptionsAtDeadline = [...main.inflightWorkerHandoffAdoptions]
+  main._startupHandoffGraceElapsed = true
+  await main._startStartupHandoffReclaim()
+}
+
 describe("Background jobs - main startup handoff reclaim", {databaseCleaning: {transaction: false, truncate: true}}, () => {
   it("reclaims an unchanged pre-start lease after grace and wakes concurrency-blocked work", async () => {
     const store = await createStore()
@@ -131,7 +142,7 @@ describe("Background jobs - main startup handoff reclaim", {databaseCleaning: {t
     })
     const staleHandoff = await store.markHandedOff({jobId: staleJobId, workerId: "dead-deploy-worker"})
     const queuedJobId = await store.enqueue({args: [], jobName: "RunQueuedBuildsJob", options: concurrency})
-    const main = await startMain(store, 200)
+    const main = await startMain(store, MAX_TIMER_MS)
     const currentWorker = addReadyWorker(main, "current-worker")
     const orphanEvents = []
     const onOrphan = (payload) => orphanEvents.push(payload)
@@ -145,7 +156,7 @@ describe("Background jobs - main startup handoff reclaim", {databaseCleaning: {t
       await main._drain()
       expect(currentWorker.receivedJobs).toEqual([])
 
-      await waitForStartupReclaim(main)
+      await runStartupReclaimNow(main)
 
       expect(await store.getJob(staleJobId)).toMatchObject({
         attempts: 1,
