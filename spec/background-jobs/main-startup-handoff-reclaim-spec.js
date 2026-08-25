@@ -131,7 +131,7 @@ describe("Background jobs - main startup handoff reclaim", {databaseCleaning: {t
     })
     const staleHandoff = await store.markHandedOff({jobId: staleJobId, workerId: "dead-deploy-worker"})
     const queuedJobId = await store.enqueue({args: [], jobName: "RunQueuedBuildsJob", options: concurrency})
-    const main = await startMain(store, 20)
+    const main = await startMain(store, 200)
     const currentWorker = addReadyWorker(main, "current-worker")
     const orphanEvents = []
     const onOrphan = (payload) => orphanEvents.push(payload)
@@ -211,6 +211,99 @@ describe("Background jobs - main startup handoff reclaim", {databaseCleaning: {t
         status: "queued",
         workerId: null
       })
+    } finally {
+      store.adoptionCanFinish.resolve(undefined)
+      await main.stop()
+      await dummyConfiguration.closeBackgroundJobsAdapter()
+    }
+  })
+
+  it("waits for a live worker adoption begun before grace expires", async () => {
+    const store = await createControlledAdoptionStore()
+    const jobId = await store.enqueue({args: [], jobName: "SlowAdoptionJob"})
+    const handoff = await store.markHandedOff({jobId, workerId: "slow-adoption-worker"})
+    const main = await startMain(store, 200)
+    const worker = new ControllableWorkerSocket()
+
+    try {
+      if (!handoff) throw new Error("Expected the slow adoption handoff")
+
+      expect(main._handleRolelessSocketMessage({
+        jsonSocket: worker,
+        message: {
+          role: "worker",
+          supportsHandoffIdReporting: true,
+          supportsHeartbeat: true,
+          type: "hello",
+          workerId: "slow-adoption-worker"
+        }
+      })).toEqual("worker")
+      await store.adoptionStarted.promise
+      expect(main._startupHandoffGraceElapsed).toEqual(false)
+      await timeout({timeout: 1000}, async () => {
+        while (!main._startupHandoffGraceElapsed) await wait(1)
+      })
+      await wait(25)
+
+      expect(main._startupHandoffGraceElapsed).toEqual(true)
+      expect(await store.getJob(jobId)).toMatchObject({
+        attempts: 0,
+        handoffId: handoff.handoffId,
+        status: "handed_off",
+        workerId: "slow-adoption-worker"
+      })
+
+      store.adoptionCanFinish.resolve(undefined)
+      await main._drainWorkerHandoffAdoptions()
+      await waitForStartupReclaim(main)
+      expect(main.reconnectedWorkerIds.has("slow-adoption-worker")).toEqual(true)
+      expect(await store.getJob(jobId)).toMatchObject({
+        attempts: 0,
+        handoffId: handoff.handoffId,
+        status: "handed_off",
+        workerId: "slow-adoption-worker"
+      })
+    } finally {
+      store.adoptionCanFinish.resolve(undefined)
+      await main.stop()
+      await dummyConfiguration.closeBackgroundJobsAdapter()
+    }
+  })
+
+  it("bounds the deadline wait when an adoption query stays stuck", async () => {
+    const store = await createControlledAdoptionStore()
+    const jobId = await store.enqueue({args: [], jobName: "StuckAdoptionJob", options: {maxRetries: 0}})
+    const handoff = await store.markHandedOff({jobId, workerId: "stuck-adoption-worker"})
+    const main = await startMain(store, 20)
+    const worker = new ControllableWorkerSocket()
+
+    try {
+      if (!handoff) throw new Error("Expected the stuck adoption handoff")
+
+      expect(main._handleRolelessSocketMessage({
+        jsonSocket: worker,
+        message: {
+          role: "worker",
+          supportsHandoffIdReporting: true,
+          supportsHeartbeat: true,
+          type: "hello",
+          workerId: "stuck-adoption-worker"
+        }
+      })).toEqual("worker")
+      await store.adoptionStarted.promise
+      await waitForStartupReclaim(main)
+
+      expect(await store.getJob(jobId)).toMatchObject({
+        attempts: 1,
+        handoffId: handoff.handoffId,
+        status: "orphaned",
+        workerId: null
+      })
+
+      await main._handleWorkerSocketClosed(worker)
+      store.adoptionCanFinish.resolve(undefined)
+      await main._drainWorkerHandoffAdoptions()
+      expect(main.reconnectedWorkerIds.has("stuck-adoption-worker")).toEqual(false)
     } finally {
       store.adoptionCanFinish.resolve(undefined)
       await main.stop()

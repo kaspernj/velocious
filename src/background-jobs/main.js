@@ -132,6 +132,8 @@ export default class BackgroundJobsMain {
     this.reconnectedWorkerIds = new Set()
     /** @type {import("./types.js").BackgroundJobHandoffSnapshot[]} */
     this.startupHandoffSnapshot = []
+    /** @type {Promise<void>[]} */
+    this._startupHandoffAdoptionsAtDeadline = []
     this._startupHandoffGraceElapsed = false
     /**
      * Narrows the runtime value to the documented type.
@@ -213,6 +215,7 @@ export default class BackgroundJobsMain {
     this.stopPromise = undefined
     this.reconnectedWorkerIds.clear()
     this.startupHandoffSnapshot = []
+    this._startupHandoffAdoptionsAtDeadline = []
     this._startupHandoffGraceElapsed = false
     this._startupHandoffReclaimPromise = undefined
     this.configuration.setCurrent()
@@ -487,6 +490,7 @@ export default class BackgroundJobsMain {
 
     this._startupHandoffReclaimTimer = setTimeout(() => {
       this._startupHandoffReclaimTimer = undefined
+      this._startupHandoffAdoptionsAtDeadline = [...this.inflightWorkerHandoffAdoptions]
       this._startupHandoffGraceElapsed = true
       void this._startStartupHandoffReclaim()
     }, this.workerReconnectGraceMs)
@@ -534,6 +538,9 @@ export default class BackgroundJobsMain {
     if (this._stopped || !this._startupHandoffGraceElapsed) return
     if (this.startupHandoffSnapshot.length === 0) return
 
+    await this._waitForStartupHandoffAdoptionsAtDeadline()
+    if (this._stopped) return
+
     const handoffs = this.startupHandoffSnapshot.filter(({workerId}) => !this.reconnectedWorkerIds.has(workerId))
 
     if (handoffs.length === 0) {
@@ -559,6 +566,34 @@ export default class BackgroundJobsMain {
       jobs: orphanedJobs,
       warning: "Reclaimed background jobs from workers absent after main restart grace"
     })
+  }
+
+  /**
+   * Lets adoption queries already running at the reconnect deadline settle
+   * before worker ids are filtered. A second bounded grace prevents a stuck
+   * adapter query from deferring startup reclaim forever.
+   * @returns {Promise<void>} - Resolves when the deadline set settles or times out.
+   */
+  async _waitForStartupHandoffAdoptionsAtDeadline() {
+    const adoptions = this._startupHandoffAdoptionsAtDeadline
+
+    this._startupHandoffAdoptionsAtDeadline = []
+    if (adoptions.length === 0) return
+
+    /** @type {ReturnType<typeof setTimeout> | undefined} */
+    let timer
+    const waitLimit = new Promise((resolve) => {
+      // This lifecycle deadline must not keep the main process alive; the
+      // generic timeout helper intentionally uses a referenced timer.
+      timer = setTimeout(resolve, this.workerReconnectGraceMs)
+      timer.unref()
+    })
+
+    try {
+      await Promise.race([Promise.all(adoptions), waitLimit])
+    } finally {
+      if (timer) clearTimeout(timer)
+    }
   }
 
   /**
