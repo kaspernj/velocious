@@ -2709,6 +2709,9 @@ separate configuration and database pools, so per-worker limits multiply across
 the effective worker count (for example, four workers with `pool.max: 10` can
 open 40 connections for that pool). The debug snapshot exposes the configured
 and effective counts; default in-process mode uses one effective handler.
+Only requests carrying a resumable-session query wait for upgrade headers before
+worker assignment; ordinary and malformed requests continue directly to the
+request parser.
 
 When the server runs in the `development` environment, Velocious watches application `src/` trees and hot-reloads by recycling HTTP workers after `.js`/`.mjs`/`.cjs`/`.json`/`.ejs` changes. That picks up edited controllers, models, resources, routes, and views without a manual server restart while keeping production/test behavior unchanged.
 

@@ -182,6 +182,9 @@ same reverse-proxy source address. Resumable WebSocket upgrades carry their
 session identity and return to the worker that owns that session. WebSocket
 broadcasts still use the configured cross-worker broadcast bus, so channels can
 publish from one worker and deliver to subscribers hosted by another worker.
+Only requests carrying the resumable-session query wait for the upgrade headers
+needed to choose an owner; ordinary and malformed requests reach their assigned
+worker immediately, preserving normal parser errors and responses.
 
 CLI arguments override `configuration.httpServer` values. When neither the CLI
 nor the configuration supplies a value, the CLI defaults to `127.0.0.1:3006`.

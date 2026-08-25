@@ -1,1 +1,1 @@
-Default threaded HTTP servers to Node's available CPU count, distribute proxy-coincident HTTP sockets across workers, and route resumable WebSockets through bounded session ownership instead of unbounded source-address affinity.
+Default threaded HTTP servers to Node's available CPU count, distribute proxy-coincident HTTP sockets across workers, route resumable WebSockets through bounded session ownership instead of unbounded source-address affinity, and preserve immediate parser handling for ordinary or malformed requests.

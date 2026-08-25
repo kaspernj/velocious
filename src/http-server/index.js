@@ -381,7 +381,7 @@ export default class VelociousHttpServer {
 
       client.events.on("close", this.onClientClose)
       this.clients[clientCount] = client
-      this.routeClientAfterInitialHeaders(client)
+      this.routeClientAfterInitialRoutingData(client)
     } catch (error) {
       this.logger.error(`Failed to initialize client ${clientCount} on new connection`, error)
       socket.destroy()
@@ -389,12 +389,12 @@ export default class VelociousHttpServer {
   }
 
   /**
-   * Buffers only the bounded initial HTTP headers needed to recognize a
-   * WebSocket resume routing hint, then replays them to the selected worker.
+   * Buffers only the bounded initial request data needed to recognize a
+   * WebSocket resume routing hint, then replays it to the selected worker.
    * @param {ServerClient} client - Unassigned socket client.
    * @returns {void}
    */
-  routeClientAfterInitialHeaders(client) {
+  routeClientAfterInitialRoutingData(client) {
     const {socket} = client
     /** @type {Buffer[]} */
     const chunks = []
@@ -408,7 +408,7 @@ export default class VelociousHttpServer {
       byteLength += chunk.length
       const initialRequest = Buffer.concat(chunks, byteLength)
 
-      if (!this.initialRequestHeadersComplete(initialRequest) && byteLength < MAX_INITIAL_REQUEST_HEADER_BYTES) return
+      if (this.initialRequestNeedsMoreRoutingData(initialRequest) && byteLength < MAX_INITIAL_REQUEST_HEADER_BYTES) return
 
       cleanup()
       this.assignClientToWorker(client, initialRequest)
@@ -425,6 +425,34 @@ export default class VelociousHttpServer {
    */
   initialRequestHeadersComplete(initialRequest) {
     return initialRequest.includes("\r\n\r\n") || initialRequest.includes("\n\n")
+  }
+
+  /**
+   * Checks whether a possible resumable WebSocket request still needs headers.
+   * Ordinary and malformed requests can reach the existing request parser as
+   * soon as their first line is complete.
+   * @param {Buffer} initialRequest - Buffered initial request bytes.
+   * @returns {boolean} - Whether more routing data is required.
+   */
+  initialRequestNeedsMoreRoutingData(initialRequest) {
+    if (this.initialRequestHeadersComplete(initialRequest)) return false
+
+    const lineEnd = initialRequest.indexOf("\n")
+
+    if (lineEnd === -1) return true
+
+    const requestLine = initialRequest.subarray(0, lineEnd).toString("latin1").replace(/\r$/, "")
+    const requestLineMatch = requestLine.match(/^GET ([^ ]+) HTTP\/[^ ]+$/)
+
+    if (!requestLineMatch) return false
+
+    try {
+      const requestUrl = new URL(requestLineMatch[1], "http://velocious.invalid")
+
+      return requestUrl.searchParams.has(WEBSOCKET_SESSION_ROUTING_PARAMETER)
+    } catch {
+      return false
+    }
   }
 
   /**
