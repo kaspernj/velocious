@@ -11,8 +11,8 @@ export default class VelociousDatabaseRecordValidatorsPresence extends Base {
    * @param {string} args.attributeName - Attribute name.
    */
   async validate({model, attributeName}) {
-    const rawValue = /** @type {string | undefined} */ (model.readAttribute(attributeName))
-    const attributeValue = rawValue?.trim()
+    const rawValue = /** @type {unknown} */ (model.readAttribute(attributeName))
+    const attributeValue = typeof rawValue === "string" ? rawValue.trim() : rawValue
 
     if (!attributeValue) {
       if (!(attributeName in model._validationErrors)) model._validationErrors[attributeName] = []

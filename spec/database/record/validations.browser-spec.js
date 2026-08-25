@@ -1,3 +1,4 @@
+import PresenceValidator from "../../../src/database/record/validators/presence.js"
 import Task from "../../dummy/src/models/task.js"
 import User from "../../dummy/src/models/user.js"
 import {ValidationError} from "../../../src/database/record/index.js"
@@ -16,6 +17,65 @@ describe("Record - validations", {tags: ["dummy"]}, () => {
     const task = new Task({name: null, project})
 
     await expect(async () => task.save()).toThrowError(new ValidationError("Name can't be blank"))
+  })
+
+  it("fails presence validation for null and undefined values", async () => {
+    const project = await Project.create()
+
+    for (const [index, value] of [null, undefined].entries()) {
+      const task = await Task.create({name: `Task ${index}`, project})
+      const validator = new PresenceValidator({attributeName: "name", args: {}})
+
+      task.assign({name: value})
+      await validator.validate({model: task, attributeName: "name"})
+
+      expect(task._validationErrors.name?.map((error) => error.type)).toEqual(["presence"])
+    }
+  })
+
+  it("fails presence validation for blank and whitespace-only strings", async () => {
+    const project = await Project.create()
+
+    for (const [index, value] of ["", "   "].entries()) {
+      const task = await Task.create({name: `Task ${index}`, project})
+      const validator = new PresenceValidator({attributeName: "name", args: {}})
+
+      task.assign({name: value})
+      await validator.validate({model: task, attributeName: "name"})
+
+      expect(task._validationErrors.name?.map((error) => error.type)).toEqual(["presence"])
+    }
+  })
+
+  it("passes presence validation for a non-empty string", async () => {
+    const project = await Project.create()
+    const task = new Task({name: "Task", project})
+    const validator = new PresenceValidator({attributeName: "name", args: {}})
+
+    await validator.validate({model: task, attributeName: "name"})
+
+    expect(task._validationErrors.name).toBeUndefined()
+  })
+
+  it("passes presence validation for a Date value", async () => {
+    const project = await Project.create()
+    const task = new Task({createdAt: new Date("2026-08-25T10:00:00Z"), name: "Task", project})
+    const validator = new PresenceValidator({attributeName: "createdAt", args: {}})
+
+    await validator.validate({model: task, attributeName: "createdAt"})
+
+    expect(task._validationErrors.createdAt).toBeUndefined()
+  })
+
+  it("passes presence validation for truthy non-string values", async () => {
+    const project = await Project.create()
+    const task = new Task({name: "Task", project})
+    const validator = new PresenceValidator({attributeName: "isDone", args: {}})
+
+    task.assign({isDone: true})
+    await validator.validate({model: task, attributeName: "isDone"})
+
+    expect(task._validationErrors.isDone).toBeUndefined()
   })
 
   it("raises validations if trying to create an invalid record because of a uniqueness validation", async () => {
