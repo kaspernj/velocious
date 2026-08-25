@@ -34,6 +34,24 @@ const MAX_TIMER_MS = 2_147_483_647 // ~24.8 days
 const WORKER_STALE_TIMEOUT_MS = 60000
 /** How often the main scans workers for staleness. */
 const WORKER_LIVENESS_SWEEP_MS = 15000
+/** Grace for workers from the previous main generation to reconnect and adopt leases. */
+const WORKER_RECONNECT_GRACE_MS = 30000
+const WORKER_RECONNECT_GRACE_VALIDATION_MESSAGE = `workerReconnectGraceMs must be an integer between 0 and ${MAX_TIMER_MS}`
+
+/**
+ * Resolves a startup reconnect grace without allowing Node's timer overflow to
+ * turn an intentionally long grace into an immediate reclaim.
+ * @param {number | undefined} workerReconnectGraceMs - Requested reconnect grace.
+ * @returns {number} - Valid timer delay.
+ */
+function normalizeWorkerReconnectGraceMs(workerReconnectGraceMs) {
+  if (workerReconnectGraceMs === undefined) return WORKER_RECONNECT_GRACE_MS
+  if (!Number.isInteger(workerReconnectGraceMs) || workerReconnectGraceMs < 0 || workerReconnectGraceMs > MAX_TIMER_MS) {
+    throw new TypeError(WORKER_RECONNECT_GRACE_VALIDATION_MESSAGE)
+  }
+
+  return workerReconnectGraceMs
+}
 /**
  * Worker execution mode capabilities.
  * @type {WorkerExecutionModeCapability[]} */
@@ -61,10 +79,11 @@ export default class BackgroundJobsMain {
    * @param {number} [args.port] - Port.
    * @param {number} [args.workerStaleTimeoutMs] - Override how long a silent worker may go before being dropped (default 60000ms).
    * @param {number} [args.workerLivenessSweepMs] - Override how often stale workers are swept for (default 15000ms).
+   * @param {number} [args.workerReconnectGraceMs] - Integer from 0 through 2,147,483,647 overriding how long previous-generation workers may reconnect before exact startup leases are reclaimed (default 30000ms).
    * @param {boolean} [args.closeDatabaseConnectionsOnStop] - Whether stop owns closing the configuration's database pools (default true).
    * @param {() => void | Promise<void>} [args.onStopped] - Lifecycle hook invoked after the main process finishes stopping.
    */
-  constructor({configuration, host, port, workerStaleTimeoutMs, workerLivenessSweepMs, closeDatabaseConnectionsOnStop = true, onStopped}) {
+  constructor({configuration, host, port, workerStaleTimeoutMs, workerLivenessSweepMs, workerReconnectGraceMs, closeDatabaseConnectionsOnStop = true, onStopped}) {
     this.configuration = configuration
     this.closeDatabaseConnectionsOnStop = closeDatabaseConnectionsOnStop
     this.onStopped = onStopped
@@ -78,6 +97,7 @@ export default class BackgroundJobsMain {
     // long is treated as wedged/dead: its leases are released and it is dropped.
     this.workerStaleTimeoutMs = typeof workerStaleTimeoutMs === "number" && workerStaleTimeoutMs >= 1 ? workerStaleTimeoutMs : WORKER_STALE_TIMEOUT_MS
     this.workerLivenessSweepMs = typeof workerLivenessSweepMs === "number" && workerLivenessSweepMs >= 1 ? workerLivenessSweepMs : WORKER_LIVENESS_SWEEP_MS
+    this.workerReconnectGraceMs = normalizeWorkerReconnectGraceMs(workerReconnectGraceMs)
     /** @type {import("./adapter.js").default | undefined} */
     this.adapter = undefined
     this.logger = new Logger(this)
@@ -105,6 +125,17 @@ export default class BackgroundJobsMain {
      * @type {Set<Promise<void>>} */
     this.inflightWorkerHandoffAdoptions = new Set()
     /**
+     * Worker ids whose handoffs were successfully adopted by a still-live
+     * connection in this main generation.
+     * @type {Set<string>}
+     */
+    this.reconnectedWorkerIds = new Set()
+    /** @type {import("./types.js").BackgroundJobHandoffSnapshot[]} */
+    this.startupHandoffSnapshot = []
+    /** @type {Promise<void>[]} */
+    this._startupHandoffAdoptionsAtDeadline = []
+    this._startupHandoffGraceElapsed = false
+    /**
      * Narrows the runtime value to the documented type.
      * @type {net.Server | undefined} */
     this.server = undefined
@@ -128,6 +159,10 @@ export default class BackgroundJobsMain {
      * Narrows the runtime value to the documented type.
      * @type {ReturnType<typeof setInterval> | undefined} */
     this._workerStaleTimer = undefined
+    /** @type {ReturnType<typeof setTimeout> | undefined} */
+    this._startupHandoffReclaimTimer = undefined
+    /** @type {Promise<void> | undefined} */
+    this._startupHandoffReclaimPromise = undefined
     /**
      * Narrows the runtime value to the documented type.
      * @type {BackgroundJobsScheduler | undefined} */
@@ -178,6 +213,11 @@ export default class BackgroundJobsMain {
   async start() {
     this._stopped = false
     this.stopPromise = undefined
+    this.reconnectedWorkerIds.clear()
+    this.startupHandoffSnapshot = []
+    this._startupHandoffAdoptionsAtDeadline = []
+    this._startupHandoffGraceElapsed = false
+    this._startupHandoffReclaimPromise = undefined
     this.configuration.setCurrent()
 
     try {
@@ -194,6 +234,7 @@ export default class BackgroundJobsMain {
       // across processes with a database advisory lock, so concurrently started
       // mains cannot interleave them.
       await this.store.reconcileQueueConcurrency()
+      this.startupHandoffSnapshot = await this.store.snapshotHandedOffJobs()
       const server = net.createServer((socket) => this._handleConnection(socket))
       this.server = server
 
@@ -208,6 +249,7 @@ export default class BackgroundJobsMain {
       }
 
       this._setupDispatchTriggers()
+      this._setupStartupHandoffReclaim()
 
       this._orphanTimer = setInterval(() => {
         void this._sweepOrphans()
@@ -297,7 +339,11 @@ export default class BackgroundJobsMain {
             try {
               await this._drainWorkerHandoffAdoptions()
             } finally {
-              await this._stopBeaconAndServer()
+              try {
+                await this._drainStartupHandoffReclaim()
+              } finally {
+                await this._stopBeaconAndServer()
+              }
             }
           }
         }
@@ -325,11 +371,13 @@ export default class BackgroundJobsMain {
     if (this._errorRetryTimer) clearTimeout(this._errorRetryTimer)
     if (this._orphanTimer) clearInterval(this._orphanTimer)
     if (this._workerStaleTimer) clearInterval(this._workerStaleTimer)
+    if (this._startupHandoffReclaimTimer) clearTimeout(this._startupHandoffReclaimTimer)
     this._pollTimer = undefined
     this._scheduledTimer = undefined
     this._errorRetryTimer = undefined
     this._orphanTimer = undefined
     this._workerStaleTimer = undefined
+    this._startupHandoffReclaimTimer = undefined
   }
 
   /**
@@ -429,6 +477,123 @@ export default class BackgroundJobsMain {
       void this._drain()
     }
     beaconClient.on("connect", this._beaconConnectHandler)
+  }
+
+  /**
+   * Arms the bounded adoption grace only when startup found exact persisted
+   * handoffs. The timer is unrefed so an otherwise-finished process is never
+   * retained solely to perform this cleanup.
+   * @returns {void}
+   */
+  _setupStartupHandoffReclaim() {
+    if (this.startupHandoffSnapshot.length === 0) return
+
+    this._startupHandoffReclaimTimer = setTimeout(() => {
+      this._startupHandoffReclaimTimer = undefined
+      this._startupHandoffAdoptionsAtDeadline = [...this.inflightWorkerHandoffAdoptions]
+      this._startupHandoffGraceElapsed = true
+      void this._startStartupHandoffReclaim()
+    }, this.workerReconnectGraceMs)
+    this._startupHandoffReclaimTimer.unref()
+  }
+
+  /**
+   * Starts one tracked startup-reclaim pass, coalescing lifecycle and retry
+   * callers so shutdown can wait for durable mutation before closing pools.
+   * @returns {Promise<void>} - Resolves after this pass settles.
+   */
+  _startStartupHandoffReclaim() {
+    if (this._startupHandoffReclaimPromise) return this._startupHandoffReclaimPromise
+
+    const reclaim = this._reclaimDisconnectedStartupHandoffs()
+
+    this._startupHandoffReclaimPromise = reclaim
+    const clearReclaim = () => {
+      if (this._startupHandoffReclaimPromise === reclaim) {
+        this._startupHandoffReclaimPromise = undefined
+      }
+    }
+    void reclaim.then(clearReclaim, clearReclaim)
+
+    return reclaim
+  }
+
+  /**
+   * Waits for an already-started startup reclaim before adapter shutdown.
+   * @returns {Promise<void>} - Resolves when no pass remains.
+   */
+  async _drainStartupHandoffReclaim() {
+    while (this._startupHandoffReclaimPromise) {
+      await this._startupHandoffReclaimPromise
+    }
+  }
+
+  /**
+   * Orphans only startup-snapshotted leases whose stable worker id has not been
+   * observed by this main generation. Store fencing rejects completed,
+   * returned, replaced, and re-handed-off rows.
+   * @returns {Promise<void>} - Resolves after reclaim or retained retry state.
+   */
+  async _reclaimDisconnectedStartupHandoffs() {
+    if (this._stopped || !this._startupHandoffGraceElapsed) return
+    if (this.startupHandoffSnapshot.length === 0) return
+
+    await this._waitForStartupHandoffAdoptionsAtDeadline()
+    if (this._stopped) return
+
+    const handoffs = this.startupHandoffSnapshot.filter(({workerId}) => !this.reconnectedWorkerIds.has(workerId))
+
+    if (handoffs.length === 0) {
+      this.startupHandoffSnapshot = []
+      return
+    }
+
+    let orphanedJobs
+
+    try {
+      orphanedJobs = await this.store.markOrphanedHandoffs({
+        error: "Job orphaned after its pre-restart worker did not reconnect",
+        handoffs
+      })
+    } catch (error) {
+      this._reportStartupHandoffReclaimError(error)
+      this._scheduleErrorRetry()
+      return
+    }
+
+    this.startupHandoffSnapshot = []
+    await this._handleOrphanedJobs({
+      jobs: orphanedJobs,
+      warning: "Reclaimed background jobs from workers absent after main restart grace"
+    })
+  }
+
+  /**
+   * Lets adoption queries already running at the reconnect deadline settle
+   * before worker ids are filtered. A second bounded grace prevents a stuck
+   * adapter query from deferring startup reclaim forever.
+   * @returns {Promise<void>} - Resolves when the deadline set settles or times out.
+   */
+  async _waitForStartupHandoffAdoptionsAtDeadline() {
+    const adoptions = this._startupHandoffAdoptionsAtDeadline
+
+    this._startupHandoffAdoptionsAtDeadline = []
+    if (adoptions.length === 0) return
+
+    /** @type {ReturnType<typeof setTimeout> | undefined} */
+    let timer
+    const waitLimit = new Promise((resolve) => {
+      // This lifecycle deadline must not keep the main process alive; the
+      // generic timeout helper intentionally uses a referenced timer.
+      timer = setTimeout(resolve, this.workerReconnectGraceMs)
+      timer.unref()
+    })
+
+    try {
+      await Promise.race([Promise.all(adoptions), waitLimit])
+    } finally {
+      if (timer) clearTimeout(timer)
+    }
   }
 
   /**
@@ -583,6 +748,7 @@ export default class BackgroundJobsMain {
       for (const {jobId, handoffId} of handoffs) {
         map.set(jobId, handoffId)
       }
+      this.reconnectedWorkerIds.add(workerId)
     } catch (error) {
       this._reportHandoffAdoptError(error)
     }
@@ -816,6 +982,22 @@ export default class BackgroundJobsMain {
     const errorEvents = this.configuration.getErrorEvents()
 
     this.logger.error(() => ["Failed to adopt reconnected worker handoffs:", normalizedError])
+    errorEvents.emit("framework-error", payload)
+    errorEvents.emit("all-error", {...payload, errorType: "framework-error"})
+  }
+
+  /**
+   * Reports an unexpected startup-snapshot reclaim failure while retaining the
+   * snapshot for the dispatcher's existing transient-error retry lifecycle.
+   * @param {ReturnType<typeof JSON.parse>} error - Reclaim failure.
+   * @returns {void}
+   */
+  _reportStartupHandoffReclaimError(error) {
+    const normalizedError = error instanceof Error ? error : new Error(String(error))
+    const payload = {context: {stage: "background-job-startup-handoff-reclaim"}, error: normalizedError}
+    const errorEvents = this.configuration.getErrorEvents()
+
+    this.logger.error(() => ["Failed to reclaim disconnected startup handoffs:", normalizedError])
     errorEvents.emit("framework-error", payload)
     errorEvents.emit("all-error", {...payload, errorType: "framework-error"})
   }
@@ -1237,6 +1419,7 @@ export default class BackgroundJobsMain {
    * @returns {void} */
   _clearErrorRetryTimer() {
     if (this.pendingHandoffRecoveries.size > 0) return
+    if (this._startupHandoffGraceElapsed && this.startupHandoffSnapshot.length > 0) return
 
     for (const worker of this.workerHandoffs.keys()) {
       if (!this.workers.has(worker)) return
@@ -1310,6 +1493,11 @@ export default class BackgroundJobsMain {
    */
   async _retryAfterError() {
     if (this._stopped) return
+
+    if (this._startupHandoffGraceElapsed && this.startupHandoffSnapshot.length > 0) {
+      await this._startStartupHandoffReclaim()
+      if (this.startupHandoffSnapshot.length > 0) return
+    }
 
     try {
       await this._retryPendingHandoffRecoveries()
@@ -1650,29 +1838,38 @@ export default class BackgroundJobsMain {
     try {
       const orphanedJobs = await this.store.markOrphanedJobs()
 
-      if (orphanedJobs.length > 0) {
-        this.logger.warn(() => ["Marked orphaned background jobs", orphanedJobs.length])
-        // Reclaimed orphans become `queued` again — wake the dispatcher first so
-        // an application event handler that throws below cannot strand them
-        // queued until the next external enqueue/reconnect.
-        this._notifyEnqueued()
-        // Emit an event per orphaned job so applications can react to a dead
-        // worker's specific job (e.g. targeted recovery) instead of only polling
-        // for its aftermath. Emit before awaiting the drain so a blocked
-        // dispatcher cannot delay application recovery. Isolate each so one
-        // throwing handler can't suppress the events for the rest.
-        for (const job of orphanedJobs) {
-          try {
-            this._emitBackgroundJobOrphaned({job})
-          } catch (error) {
-            this.logger.error(() => ["A background-job-orphaned event handler threw:", error])
-          }
-        }
-        await this._drain()
-      }
+      await this._handleOrphanedJobs({jobs: orphanedJobs, warning: "Marked orphaned background jobs"})
     } catch (error) {
       this.logger.error(() => ["Failed to mark orphaned jobs:", error])
     }
+  }
+
+  /**
+   * Publishes the common post-orphan lifecycle: wake queued retries, emit one
+   * isolated event per accepted transition, and drain so released concurrency
+   * can immediately admit other work.
+   * @param {object} args - Options.
+   * @param {import("./types.js").BackgroundJobRow[]} args.jobs - Accepted orphan transitions.
+   * @param {string} args.warning - Lifecycle log message.
+   * @returns {Promise<void>} - Resolves after the resulting drain.
+   */
+  async _handleOrphanedJobs({jobs, warning}) {
+    if (jobs.length === 0) return
+
+    this.logger.warn(() => [warning, jobs.length])
+    // Reclaimed orphans can become `queued` again — wake the dispatcher first
+    // so an application event handler that throws below cannot strand them.
+    this._notifyEnqueued()
+    // Emit before awaiting the drain so a blocked dispatcher cannot delay
+    // application recovery. Isolate handlers so one cannot suppress the rest.
+    for (const job of jobs) {
+      try {
+        this._emitBackgroundJobOrphaned({job})
+      } catch (error) {
+        this.logger.error(() => ["A background-job-orphaned event handler threw:", error])
+      }
+    }
+    await this._drain()
   }
 
   /**

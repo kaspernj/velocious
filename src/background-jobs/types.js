@@ -44,6 +44,13 @@
  * @property {number} handedOffAtMs - Time handed to a worker in ms.
  */
 /**
+ * @typedef {object} BackgroundJobHandoffSnapshot
+ * @property {string} jobId - Job holding the lease.
+ * @property {string} handoffId - Exact durable lease id.
+ * @property {string} workerId - Stable worker id that received the lease.
+ * @property {number} handedOffAtMs - Time handed to the worker in ms.
+ */
+/**
  * @typedef {object} BackgroundJobHandoffRequest
  * @property {string} jobId - Job to claim.
  * @property {string} [handoffId] - Exact caller-selected lease id. Adapters must persist and return this id when supplied; built-in adapters generate one when omitted for legacy direct callers.

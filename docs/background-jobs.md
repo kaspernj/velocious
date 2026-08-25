@@ -80,8 +80,9 @@ The current main/worker architecture requires these adapter operations:
   `cancelScheduled`;
 - dequeue and timing: `nextAvailableJob`, `nextScheduledJob`, and
   `reconcileQueueConcurrency`;
-- start/handoff state: `markHandedOff`, `markReturnedToQueue`, and
-  `handedOffJobsForWorker`;
+- start/handoff state: `markHandedOff`, `markReturnedToQueue`,
+  `handedOffJobsForWorker`, `snapshotHandedOffJobs`, and
+  `markOrphanedHandoffs`;
 - success/failure state: `markCompleted`, `markRescheduled`, `markFailed`, and
   `markOrphanedJobs`;
 - built-in maintenance: `getJob` and `pruneTerminalJobs`.
@@ -102,6 +103,17 @@ and local adapters still generate an id when legacy direct callers omit it, but
 a custom adapter used by the main must honor a supplied id. Upgrade that adapter
 implementation together with the Velocious main; the worker wire protocol is
 unchanged.
+
+Main-generation recovery uses `snapshotHandedOffJobs()` before the new TCP
+listener accepts worker reconnects. A custom adapter that persists worker leases
+must return only complete exact identities (`jobId`, `handoffId`, `workerId`, and
+`handedOffAtMs`) and implement `markOrphanedHandoffs({handoffs, error})` as an
+atomic fenced orphan/failure transition. That transition must preserve normal
+retry attempts, terminal orphan status, count updates, concurrency release, and
+schedule ownership. The base implementations return no snapshots and perform no
+transitions, which preserves compatibility for adapters that do not persist
+worker handoffs; overriding snapshot collection without its matching fenced
+transition is invalid.
 
 The built-in adapter is available at
 `velocious/build/src/background-jobs/sql-adapter.js`. It subclasses the existing
@@ -321,7 +333,9 @@ Graceful draining is unchanged. A worker that announces `draining` keeps its soc
 
 The fenced protocol uses an explicit worker handshake capability. A main process that creates lease ids dispatches new jobs only to workers advertising handoff-id reporting; older workers remain connected so they can report legacy handoffs that have no lease id. During a rolling upgrade, upgrade workers before the main process to avoid pausing new dispatch while only legacy workers are connected.
 
-Restarting the **main** (every deploy) is handled by adopting handoffs on reconnect. A fresh main holds no in-memory leases, so from its perspective every pre-existing `handed_off` row is unowned — and disconnect recovery only fires on a worker socket `close`, which the old main's sockets do on it, not the new one. When a worker reconnects with its stable id (its `hello`), the new main queries the store for that worker's still-active handoffs and adopts them into the reconnected socket's lease map. If that worker later disconnects, those adopted leases are released like any other; while it keeps running, its in-flight jobs are untouched. The main deliberately does **not** time-reclaim handoffs whose worker hasn't reconnected: a gracefully-draining worker from the old release keeps executing its jobs (and reports them over the status-reporter's own connection) without ever reconnecting its control socket, so requeuing on a timer would double-run it. Handoffs of a worker that never returns (a crash) are left to the age-based orphan sweep, which is long enough to be sure the worker is truly gone.
+Restarting the **main** (every deploy) uses a bounded worker-reconnect generation. Before listening, the new main snapshots only complete lease-aware `handed_off` rows. A surviving worker reconnects with its stable id (`hello`), and the main queries and adopts its still-active handoffs into the new socket's lease map. When reconnect grace expires, reclaim first waits for the fixed set of adoption queries already in flight at that deadline. That wait is capped at one additional reconnect-grace interval, so an ordinary slow query can finish without racing reclaim while a stuck adapter query cannot block startup cleanup forever. The worker id is excluded from startup reclaim only after its adoption query succeeds while the same socket is still connected. A rejected query, a socket lost during the query, or a query still stuck after the bounded wait remains eligible for the startup reclaim pass. If a successfully adopted worker later disconnects, those leases are released like any other; while it remains connected, they are untouched.
+
+After a 30-second reconnect grace, the main passes only snapshots belonging to worker ids that did not successfully adopt through a still-live connection to the store's orphan transition. Every update is fenced on the exact startup `jobId`, `handoffId`, `workerId`, and `handedOffAtMs`. A lease completed or returned during the grace, re-handed-off under a newer lease, created after startup, or owned by any worker that successfully adopted cannot be reclaimed. Accepted rows use the ordinary orphan failure lifecycle: attempts and status counts update, retries keep their configured backoff, terminal rows become `orphaned`, concurrency reservations and schedule ownership are released correctly, `background-job-orphaned` events fire, and the queue is awakened so newly unblocked work can dispatch. Legacy rows without a complete exact lease identity remain under the two-hour age sweep. This is at-least-once recovery: a worker process that stayed alive but could not reconnect before the grace may still have performed external side effects, so jobs requiring exactly-once effects must use application-level idempotency.
 
 ## Worker Liveness
 
@@ -331,7 +345,12 @@ Disconnect recovery above depends on the worker's control socket firing a `close
 - **Decoupled, durable reporting.** Freeing a worker's job slot never waits on reporting the result to the main. When a job (inline or forked) finishes, its slot is released immediately and the completion/failure report is sent in the background and retried durably until it lands. A transient main/DB outage therefore can neither leak worker slots (which previously drove the worker to stop accepting jobs) nor lose a terminal report and re-run already-completed work. A graceful `stop()` drains in-flight reports before closing the socket.
 - **Readiness re-announcement.** Pooled workers advertise an exact available-slot count, which the main consumes once per durable handoff so a single readiness message can fill the configured concurrent pool without waiting for an earlier job to finish. The worker refreshes that count on every completion and immediately after an initialized child exits, even while its failure reports retry. Forked, spawned, and inline readiness remains edge-driven: the main removes a worker from its ready set on dispatch and the worker re-announces every freed slot. These advertisements correspond only to real capacity, so no polling timer or speculative handoff is required.
 
-Heartbeat interval, stale timeout, and sweep interval are overridable via the worker/main constructors for tests and tuning.
+Heartbeat interval, stale timeout, liveness sweep interval, and the startup
+`workerReconnectGraceMs` are overridable via the worker/main constructors for
+tests and tuning. The reconnect grace defaults to 30 seconds and must be an
+integer from 0 through Node's maximum timer delay of 2,147,483,647 ms; the main
+constructor throws for invalid values instead of allowing an overflowing timer
+to fire immediately. Its timer is unrefed and is cleared during main shutdown.
 
 ## Process titles
 
