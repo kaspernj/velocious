@@ -78,6 +78,28 @@ describe("Record - validations", {tags: ["dummy"]}, () => {
     expect(task._validationErrors.isDone).toBeUndefined()
   })
 
+  it("passes presence validation for numeric zero", async () => {
+    const project = await Project.create()
+    const task = await Task.create({name: "Task", project})
+    const validator = new PresenceValidator({attributeName: "projectId", args: {}})
+
+    task.assign({projectId: 0})
+    await validator.validate({model: task, attributeName: "projectId"})
+
+    expect(task._validationErrors.projectId).toBeUndefined()
+  })
+
+  it("passes presence validation for boolean false", async () => {
+    const project = await Project.create()
+    const task = new Task({name: "Task", project})
+    const validator = new PresenceValidator({attributeName: "isDone", args: {}})
+
+    task.assign({isDone: false})
+    await validator.validate({model: task, attributeName: "isDone"})
+
+    expect(task._validationErrors.isDone).toBeUndefined()
+  })
+
   it("raises validations if trying to create an invalid record because of a uniqueness validation", async () => {
     const project = await Project.create()
     await Task.create({name: "Task 1", project})

@@ -1009,6 +1009,8 @@ Task.validates("name", {presence: true, uniqueness: true})
 export default Task
 ```
 
+`presence: true` rejects only `null`, `undefined`, and trimmed-empty strings; non-string values are present as-is, so a `Date`, a number (including `0`), or a boolean (including `false`) never fails presence validation. See [docs/validations.md](docs/validations.md) for the full validator contract.
+
 Generated belongs-to setters synchronize the loaded relationship and foreign key before save, so `task.setProject(project)` updates `task.projectId()`, `task.changes()`, callbacks, and scoped features such as `actsAsList`. Custom relationship primary keys are also used after autosaving an assigned new or dirty related record. Generated backend write attributes accept belongs-to relationship names for `create` and `update` payloads. See [docs/relationships.md](docs/relationships.md#assigning-belongs-to-relationships).
 
 Translated models also get a `currentTranslation` `hasOne` relationship scoped to the first available row in the current locale fallback order. See [docs/translations.md](docs/translations.md) for preloading and frontend-model sorting behavior.
