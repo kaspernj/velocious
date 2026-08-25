@@ -44,6 +44,13 @@ import {
  */
 
 /**
+ * BackgroundJobOrphanSelection type.
+ * @typedef {object} BackgroundJobOrphanSelection
+ * @property {Record<string, ReturnType<typeof JSON.parse>>} conditions - Exact update fence.
+ * @property {import("./types.js").BackgroundJobRow} job - Selected active handoff.
+ */
+
+/**
  * BackgroundJobTransactionSerializationOptions type.
  * @typedef {object} BackgroundJobTransactionSerializationOptions
  * @property {{failureMessage: string, name: string}} [advisoryLock] - Session lock held around the transaction.
@@ -1097,6 +1104,81 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
   }
 
   /**
+   * Snapshots exact, lease-aware active handoffs before a new main generation
+   * starts accepting worker reconnects. Legacy rows without a complete worker,
+   * lease, and timestamp identity stay owned by the age-based orphan sweep.
+   * @returns {Promise<import("./types.js").BackgroundJobHandoffSnapshot[]>} - Exact startup handoffs.
+   */
+  async snapshotHandedOffJobs() {
+    await this.ensureReady()
+
+    const rows = await this._withDb(async (db) => await db
+      .newQuery()
+      .from(JOBS_TABLE)
+      .where({status: "handed_off"})
+      .order("created_at_ms ASC")
+      .order("id ASC")
+      .results())
+    /** @type {import("./types.js").BackgroundJobHandoffSnapshot[]} */
+    const handoffs = []
+
+    for (const row of rows) {
+      const job = this._normalizeJobRow(row)
+
+      if (!job.handoffId || !job.workerId || typeof job.handedOffAtMs !== "number") continue
+
+      handoffs.push({
+        handedOffAtMs: job.handedOffAtMs,
+        handoffId: job.handoffId,
+        jobId: job.id,
+        workerId: job.workerId
+      })
+    }
+
+    return handoffs
+  }
+
+  /**
+   * Reclaims only unchanged exact handoffs selected by a main-generation startup
+   * snapshot. The ordinary orphan failure path owns retries, terminal status,
+   * count transitions, schedule ownership, and concurrency release.
+   * @param {object} args - Options.
+   * @param {import("./types.js").BackgroundJobHandoffSnapshot[]} args.handoffs - Exact startup snapshots.
+   * @param {ReturnType<typeof JSON.parse>} args.error - Orphan reason.
+   * @returns {Promise<import("./types.js").BackgroundJobRow[]>} - Accepted transitions.
+   */
+  async markOrphanedHandoffs({handoffs, error}) {
+    await this.ensureReady()
+
+    return await this._serializedCountMutation(async (db) => {
+      /** @type {BackgroundJobOrphanSelection[]} */
+      const selections = []
+
+      for (const handoff of handoffs) {
+        const job = await this._getJobRowById(db, handoff.jobId)
+
+        if (!job || job.status !== "handed_off") continue
+        if (job.handoffId !== handoff.handoffId) continue
+        if (job.workerId !== handoff.workerId) continue
+        if (job.handedOffAtMs !== handoff.handedOffAtMs) continue
+
+        selections.push({
+          conditions: {
+            handed_off_at_ms: handoff.handedOffAtMs,
+            handoff_id: handoff.handoffId,
+            id: handoff.jobId,
+            status: "handed_off",
+            worker_id: handoff.workerId
+          },
+          job
+        })
+      }
+
+      return await this._markOrphanSelections({db, error, selections})
+    })
+  }
+
+  /**
    * Runs mark failed.
    * @param {object} args - Options.
    * @param {string} args.jobId - Job id.
@@ -1141,8 +1223,8 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
 
       const rows = await query.results()
 
-      /** @type {import("./types.js").BackgroundJobRow[]} */
-      const orphanedJobs = []
+      /** @type {BackgroundJobOrphanSelection[]} */
+      const selections = []
 
       for (const row of rows) {
         const job = this._normalizeJobRow(row)
@@ -1160,28 +1242,55 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
         //      wrongly release the concurrency reservation of — that new lease.
         // `handed_off_at_ms` is always set on a handed-off row (and the SELECT
         // required it `<= cutoff`), so it is a reliable null-safe lease pin.
-        const orphanedJob = await this._applyFailure({
-          db,
-          job,
-          error: "Job orphaned after timeout",
-          markOrphaned: true,
-          conditions: {id: job.id, status: "handed_off", handed_off_at_ms: job.handedOffAtMs}
+        selections.push({
+          conditions: {id: job.id, status: "handed_off", handed_off_at_ms: job.handedOffAtMs},
+          job
         })
-
-        if (orphanedJob) orphanedJobs.push(orphanedJob)
       }
 
-      const statusCounts = this._statusCounts(orphanedJobs)
-      const deltas = this._emptyCountBuckets()
-
-      for (const [status, count] of Object.entries(statusCounts)) {
-        deltas.handed_off -= count
-        deltas[status] += count
-      }
-      await this._recordCountDelta(db, deltas)
-
-      return orphanedJobs
+      return await this._markOrphanSelections({
+        db,
+        error: "Job orphaned after timeout",
+        selections
+      })
     })
+  }
+
+  /**
+   * Applies the common fenced orphan transition and records one aggregate count
+   * delta for the accepted rows.
+   * @param {object} args - Options.
+   * @param {import("../database/drivers/base.js").default} args.db - Transaction connection.
+   * @param {ReturnType<typeof JSON.parse>} args.error - Orphan reason.
+   * @param {BackgroundJobOrphanSelection[]} args.selections - Selected handoffs and exact fences.
+   * @returns {Promise<import("./types.js").BackgroundJobRow[]>} - Accepted transitions.
+   */
+  async _markOrphanSelections({db, error, selections}) {
+    /** @type {import("./types.js").BackgroundJobRow[]} */
+    const orphanedJobs = []
+
+    for (const {conditions, job} of selections) {
+      const orphanedJob = await this._applyFailure({
+        conditions,
+        db,
+        error,
+        job,
+        markOrphaned: true
+      })
+
+      if (orphanedJob) orphanedJobs.push(orphanedJob)
+    }
+
+    const statusCounts = this._statusCounts(orphanedJobs)
+    const deltas = this._emptyCountBuckets()
+
+    for (const [status, count] of Object.entries(statusCounts)) {
+      deltas.handed_off -= count
+      deltas[status] += count
+    }
+    await this._recordCountDelta(db, deltas)
+
+    return orphanedJobs
   }
 
   /**

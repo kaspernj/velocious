@@ -1,0 +1,1 @@
+Reclaim exact pre-start background-job handoffs whose workers do not reconnect within the new main generation's bounded adoption grace, using the existing orphan retry/count/concurrency/event lifecycle while fencing reconnecting workers, post-start leases, and newer re-handoffs.

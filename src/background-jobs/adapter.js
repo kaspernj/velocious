@@ -119,6 +119,22 @@ export default class BackgroundJobsAdapter {
   async handedOffJobsForWorker(_args) { throw new Error("BackgroundJobsAdapter#handedOffJobsForWorker is not implemented") }
 
   /**
+   * Snapshots exact active handoffs before a new main generation accepts worker
+   * reconnects. Adapters that do not persist worker leases may return none.
+   * @returns {Promise<import("./types.js").BackgroundJobHandoffSnapshot[]>} - Exact active handoffs.
+   */
+  async snapshotHandedOffJobs() { return [] }
+
+  /**
+   * Applies orphan failure semantics to unchanged exact handoff snapshots.
+   * Adapters that return startup snapshots must implement the matching fenced
+   * transition.
+   * @param {{handoffs: import("./types.js").BackgroundJobHandoffSnapshot[], error: ReturnType<typeof JSON.parse>}} _args - Exact leases and orphan reason.
+   * @returns {Promise<import("./types.js").BackgroundJobRow[]>} - Accepted transitions.
+   */
+  async markOrphanedHandoffs(_args) { return [] }
+
+  /**
    * Marks a handed-off job failed or retryable.
    * @param {{jobId: string, error: ReturnType<typeof JSON.parse>, handoffId?: string, workerId?: string, handedOffAtMs?: number}} _args - Failure report.
    * @returns {Promise<import("./types.js").BackgroundJobRow | null>} - Updated job when accepted.
