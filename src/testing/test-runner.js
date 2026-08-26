@@ -4,8 +4,10 @@ import {addTrackedStackToError} from "../utils/with-tracked-stack.js"
 import fs from "node:fs/promises"
 import path from "path"
 import {format} from "node:util"
+import {AsyncLocalStorage} from "node:async_hooks"
 import Application from "../../src/application.js"
 import BacktraceCleaner from "../utils/backtrace-cleaner-node.js"
+import {TestDatabaseAccessRevokedError} from "../environment-handlers/base.js"
 import RequestClient from "./request-client.js"
 import picocolors from "picocolors"
 import restArgsError from "../utils/rest-args-error.js"
@@ -40,6 +42,16 @@ import { SHARED_TRANSACTION_BROKER_ENV } from "./shared-transaction-proxy-driver
  * @property {number} [timeoutSeconds] - Timeout in seconds for the test.
  * @property {string} [type] - Test type identifier.
  * @property {(args: {databaseIdentifier: string, tenant: object}) => Promise<void>} [registerTransactionalTenant] - Registers one resolved tenant database transaction for this attempt.
+ */
+/**
+ * BrowserDummyConnectionRegistration type.
+ * @typedef {object} BrowserDummyConnectionRegistration
+ * @property {import("../database/drivers/base.js").default} db - Attempt-owned connection.
+ * @property {string} databaseIdentifier - Configured database identifier.
+ * @property {Promise<void>} [quarantinePromise] - Shared connection-discard promise.
+ * @property {boolean} quarantined - Whether the connection is unsafe to reuse.
+ * @property {Promise<void>} [rollbackPromise] - Shared rollback promise.
+ * @property {Promise<void>} [startPromise] - Transaction startup promise when transaction cleaning is enabled.
  */
 /**
  * TestData type.
@@ -166,8 +178,8 @@ function runWithTimeout(promise, timeoutMs, testDescription) {
 /**
  * Waits for an abandoned (timed-out) test lifecycle to settle, bounded by a
  * grace period, so its afterEach database cleanup runs on the shared connection
- * before the next test reuses it. Resolves early the moment the lifecycle
- * settles; otherwise resolves once the grace elapses (never rejects).
+ * before the next test reuses it. Returns the fulfillment/rejection outcome if
+ * the lifecycle settles, or a pending outcome once the grace elapses.
  *
  * The grace timer is kept ref'd so it cannot let Node exit with an unsettled
  * top-level await when the timed-out lifecycle has no ref'd handles of its own
@@ -175,7 +187,7 @@ function runWithTimeout(promise, timeoutMs, testDescription) {
  * await, the timer has already resolved and no longer anchors the event loop.
  * @param {Promise<ReturnType<typeof JSON.parse>>} lifecycle - The abandoned per-test lifecycle promise.
  * @param {number} graceMs - Maximum time to wait for the lifecycle to settle.
- * @returns {Promise<boolean>} - Whether the lifecycle settled within the grace period.
+ * @returns {Promise<{settled: false} | {settled: true, status: "fulfilled"} | {settled: true, status: "rejected", reason: unknown}>} - Settlement outcome.
  */
 function awaitSettledOrGrace(lifecycle, graceMs) {
   return new Promise((resolve) => {
@@ -184,17 +196,40 @@ function awaitSettledOrGrace(lifecycle, graceMs) {
       if (settled) return
 
       settled = true
-      resolve(false)
+      resolve({settled: false})
     }, graceMs)
 
-    Promise.resolve(lifecycle).then(() => {}, () => {}).then(() => {
-      if (settled) return
+    Promise.resolve(lifecycle).then(
+      () => {
+        if (settled) return
 
-      settled = true
-      clearTimeout(graceTimer)
-      resolve(true)
-    })
+        settled = true
+        clearTimeout(graceTimer)
+        resolve({settled: true, status: "fulfilled"})
+      },
+      (reason) => {
+        if (settled) return
+
+        settled = true
+        clearTimeout(graceTimer)
+        resolve({settled: true, status: "rejected", reason})
+      }
+    )
   })
+}
+
+/**
+ * Checks whether a late lifecycle stopped only because its test access was revoked.
+ * @param {unknown} error - Lifecycle rejection.
+ * @returns {boolean} - Whether every contained error is expected revocation.
+ */
+function isTestDatabaseAccessRevocation(error) {
+  if (error instanceof TestDatabaseAccessRevokedError) return true
+  if (error instanceof AggregateError) {
+    return error.errors.length > 0 && error.errors.every((nestedError) => isTestDatabaseAccessRevocation(nestedError))
+  }
+
+  return false
 }
 
 /**
@@ -243,6 +278,7 @@ export default class TestRunner {
     if (!configuration) throw new Error("configuration is required")
 
     this._configuration = configuration
+    this._testDatabaseAccessScopeStorage = new AsyncLocalStorage()
     this._excludeTags = this.normalizeTags(excludeTags)
     this._excludeTagSet = new Set(this._excludeTags)
     this._includeTags = this.normalizeTags(includeTags)
@@ -251,6 +287,7 @@ export default class TestRunner {
     this._lineFilters = lineFilters || {}
     this._examplePatterns = examplePatterns || []
     this._profiler = profiler
+    this._abortRemainingTests = false
 
     this._failedTests = 0
     this._successfulTests = 0
@@ -370,16 +407,17 @@ export default class TestRunner {
    * Runs run with dummy if needed.
    * @param {TestArgs} testArgs - Test args.
    * @param {() => Promise<void>} callback - Callback to run.
+   * @param {BrowserDummyConnectionRegistration[]} [browserDummyConnectionRegistrations] - Attempt-owned browser connections.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async runWithDummyIfNeeded(testArgs, callback) {
+  async runWithDummyIfNeeded(testArgs, callback, browserDummyConnectionRegistrations = []) {
     if (!this.hasTag(testArgs, "dummy")) {
       await callback()
       return
     }
 
     if (this.isBrowserTestMode()) {
-      await this.runBrowserDummy(callback)
+      await this.runBrowserDummy(testArgs, callback, browserDummyConnectionRegistrations)
       return
     }
 
@@ -402,6 +440,7 @@ export default class TestRunner {
 
     // Release Dummy.run's bootstrap checkout before test hooks and callbacks begin.
     await Dummy.run(async () => {})
+    this.getConfiguration().assertDatabaseAccessAllowed()
     await callback()
   }
 
@@ -422,19 +461,181 @@ export default class TestRunner {
 
   /**
    * Runs run browser dummy.
+   * @param {TestArgs} testArgs - Test args.
    * @param {() => Promise<void>} callback - Callback to run.
+   * @param {BrowserDummyConnectionRegistration[]} connectionRegistrations - Attempt-owned browser connections.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async runBrowserDummy(callback) {
-    await this.getConfiguration().ensureConnections({name: "Test runner browser dummy"}, async (dbs) => {
-      await this.truncateDatabases(dbs)
+  async runBrowserDummy(testArgs, callback, connectionRegistrations) {
+    const useTransaction = testArgs.databaseCleaning?.transaction === true
+    const truncate = testArgs.databaseCleaning?.truncate
+    const shouldTruncate = truncate === undefined ? !useTransaction : truncate
 
-      try {
-        await callback()
-      } finally {
+    if (!useTransaction && !shouldTruncate) {
+      await callback()
+      return
+    }
+
+    await this.getConfiguration().ensureConnections({name: "Test runner browser dummy"}, async (dbs) => {
+      const newRegistrations = Object.entries(dbs).map(([databaseIdentifier, db]) => {
+        /** @type {BrowserDummyConnectionRegistration} */
+        const registration = {
+          databaseIdentifier,
+          db,
+          quarantined: false
+        }
+
+        connectionRegistrations.push(registration)
+
+        return registration
+      })
+
+      if (shouldTruncate) {
+        this.getConfiguration().assertDatabaseAccessAllowed()
         await this.truncateDatabases(dbs)
       }
+      /** @type {unknown[]} */
+      const lifecycleErrors = []
+
+      try {
+        if (useTransaction) {
+          const startPromises = newRegistrations.map((registration) => {
+            const startPromise = registration.db.startTransaction()
+
+            registration.startPromise = startPromise
+            return startPromise
+          })
+          const startResults = await Promise.allSettled(startPromises)
+          const startErrors = startResults
+            .filter((result) => result.status === "rejected")
+            .map((result) => result.reason)
+
+          if (startErrors.length == 1) throw startErrors[0]
+          if (startErrors.length > 1) {
+            throw new AggregateError(startErrors, "Browser dummy transaction startup failed", {cause: startErrors[0]})
+          }
+        }
+
+        this.getConfiguration().assertDatabaseAccessAllowed()
+        await callback()
+      } catch (error) {
+        lifecycleErrors.push(error)
+      }
+
+      try {
+        await this.rollbackBrowserDummyTransactions(connectionRegistrations)
+      } catch (error) {
+        if (error instanceof AggregateError) {
+          lifecycleErrors.push(...error.errors)
+        } else {
+          lifecycleErrors.push(error)
+        }
+      }
+
+      try {
+        if (shouldTruncate) {
+          this.getConfiguration().assertDatabaseAccessAllowed()
+          await this.truncateDatabases(dbs)
+        }
+      } catch (error) {
+        lifecycleErrors.push(error)
+      }
+
+      if (lifecycleErrors.length == 1) throw lifecycleErrors[0]
+      if (lifecycleErrors.length > 1) {
+        throw new AggregateError(lifecycleErrors, "Browser dummy lifecycle and cleanup failed", {cause: lifecycleErrors[0]})
+      }
     })
+  }
+
+  /**
+   * Rolls back every attempt-owned browser transaction exactly once.
+   * @param {BrowserDummyConnectionRegistration[]} registrations - Browser connections.
+   * @returns {Promise<void>} - Resolves after all rollbacks settle.
+   */
+  async rollbackBrowserDummyTransactions(registrations) {
+    const rollbackResults = await Promise.allSettled([...registrations].reverse().map((registration) => {
+      const startPromise = registration.startPromise
+
+      if (!startPromise) return
+
+      registration.rollbackPromise ??= (async () => {
+        if (registration.quarantined) return
+
+        try {
+          await startPromise
+        } catch {
+          try {
+            await this.quarantineBrowserDummyConnection(registration)
+          } catch (quarantineError) {
+            throw new Error(`Failed to quarantine browser dummy database after transaction startup failed: ${registration.databaseIdentifier}`, {cause: quarantineError})
+          }
+          return
+        }
+        if (registration.quarantined) return
+
+        try {
+          await registration.db.rollbackTransaction()
+        } catch (rollbackError) {
+          try {
+            await this.quarantineBrowserDummyConnection(registration)
+          } catch (quarantineError) {
+            throw new AggregateError(
+              [rollbackError, quarantineError],
+              `Failed to roll back and quarantine browser dummy database: ${registration.databaseIdentifier}`,
+              {cause: quarantineError}
+            )
+          }
+          throw rollbackError
+        }
+      })()
+
+      return registration.rollbackPromise
+    }))
+    const errors = rollbackResults
+      .filter((result) => result.status === "rejected")
+      .map((result) => result.reason)
+
+    if (errors.length == 1) throw errors[0]
+    if (errors.length > 1) throw new AggregateError(errors, "Browser dummy transaction cleanup failed", {cause: errors[0]})
+  }
+
+  /**
+   * Permanently removes one browser connection that cannot be shared safely.
+   * @param {BrowserDummyConnectionRegistration} registration - Browser connection registration.
+   * @returns {Promise<void>} - Resolves after the connection is discarded.
+   */
+  async quarantineBrowserDummyConnection(registration) {
+    registration.quarantined = true
+    registration.quarantinePromise ??= this.discardBrowserDummyConnection(registration.databaseIdentifier, registration.db)
+    await registration.quarantinePromise
+  }
+
+  /**
+   * Discards one browser dummy connection through its owning pool.
+   * @param {string} databaseIdentifier - Configured database identifier.
+   * @param {import("../database/drivers/base.js").default} db - Unsafe connection.
+   * @returns {Promise<void>} - Resolves after discard.
+   */
+  async discardBrowserDummyConnection(databaseIdentifier, db) {
+    await this.getConfiguration().getDatabasePool(databaseIdentifier).discard(db)
+  }
+
+  /**
+   * Quarantines all browser connections concurrently.
+   * @param {BrowserDummyConnectionRegistration[]} registrations - Browser connection registrations.
+   * @returns {Promise<void>} - Resolves after every connection is discarded.
+   */
+  async quarantineBrowserDummyConnections(registrations) {
+    const quarantineResults = await Promise.allSettled(registrations.map(async (registration) => {
+      await this.quarantineBrowserDummyConnection(registration)
+    }))
+    const errors = quarantineResults
+      .filter((result) => result.status === "rejected")
+      .map((result) => result.reason)
+
+    if (errors.length == 1) throw errors[0]
+    if (errors.length > 1) throw new AggregateError(errors, "Browser dummy connection quarantine failed", {cause: errors[0]})
   }
 
   /**
@@ -1095,6 +1296,7 @@ export default class TestRunner {
     this._failedTests = 0
     this._successfulTests = 0
     this._testsCount = 0
+    this._abortRemainingTests = false
     this._failedTestDetails = []
     this._testDurations = []
     const testingConfigPath = this.getConfiguration().getTesting()
@@ -1162,25 +1364,26 @@ export default class TestRunner {
   }
 
   /**
-   * Records a rollback/discard failure that settled after timeout cleanup moved on.
+   * Records a cleanup failure after timeout handling has begun.
    * @param {unknown} reason - Detached cleanup rejection.
+   * @param {string} cleanupName - Cleanup operation name.
    * @returns {void}
    */
-  recordTransactionalTenantCleanupFailure(reason) {
-    const error = reason instanceof Error ? reason : new Error(`Transactional tenant cleanup failed: ${String(reason)}`)
+  recordTimeoutCleanupFailure(reason, cleanupName) {
+    const error = reason instanceof Error ? reason : new Error(`${cleanupName} cleanup failed: ${String(reason)}`)
     const near = this._lastTestContext
     const attribution = near ? `, near test: ${near.fullDescription} (${near.filePath}:${near.line})` : ""
 
     this._failedTests = (this._failedTests || 0) + 1
     this._failedTestDetails.push({
-      fullDescription: `<transactional tenant emergency cleanup failure${attribution}>`,
+      fullDescription: `<${cleanupName} emergency cleanup failure${attribution}>`,
       filePath: near ? near.filePath : "<test runner>",
       line: near ? near.line : 0,
       error,
       consoleOutput: undefined
     })
 
-    console.error(picocolors.red(`\n[test-runner] transactional tenant emergency cleanup failed after the bounded timeout grace.${attribution}`))
+    console.error(picocolors.red(`\n[test-runner] ${cleanupName} cleanup failed after timeout handling began.${attribution}`))
     console.error(error)
   }
 
@@ -1350,6 +1553,7 @@ export default class TestRunner {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async runTests({afterEaches, beforeEaches, tests, descriptions, indentLevel, lineMatchedInScope = false, parentProfileScopeId}) {
+    this.getConfiguration().getEnvironmentHandler().installTestDatabaseAccessScopeStorage(this._testDatabaseAccessScopeStorage)
     const leftPadding = " ".repeat(indentLevel * 2)
     const scopeOwnerFilePath = tests.ownerFilePath ?? tests.filePath
     const profileScopeId = this._profiler?.scopeId(tests, {
@@ -1450,6 +1654,9 @@ export default class TestRunner {
           let sharedTransactionBrokerPreparation
           /** @type {TransactionalTenantRegistration[]} */
           const transactionalTenantRegistrations = []
+          /** @type {BrowserDummyConnectionRegistration[]} */
+          const browserDummyConnectionRegistrations = []
+          const testDatabaseAccessScope = {revoked: false}
           testArgs.registerTransactionalTenant = async (args) => {
             await this.registerTransactionalTenant(args, transactionalTenantRegistrations)
           }
@@ -1469,7 +1676,7 @@ export default class TestRunner {
             // Run the whole per-test lifecycle (dummy/server startup, connection
             // acquisition, beforeEach hooks, the test body and afterEach hooks) as
             // one promise so the timeout below can cover all of it.
-            const lifecycleCallback = async () => await this.runWithDummyIfNeeded(testArgs, async () => {
+            const runLifecycleCallback = async () => await this.runWithDummyIfNeeded(testArgs, async () => {
               const useSharedTestConnections = testArgs.databaseCleaning?.transaction === true || testArgs.type == "request"
               const runTestAttempt = async () => {
                 // Register dynamic candidates before hooks so transaction state changes
@@ -1596,7 +1803,8 @@ export default class TestRunner {
               } else {
                 await runTestAttempt()
               }
-            })
+            }, browserDummyConnectionRegistrations)
+            const lifecycleCallback = async () => await this.getConfiguration().runWithTestDatabaseAccessScope(testDatabaseAccessScope, runLifecycleCallback)
             testLifecycle = profileAttempt && profiler
               ? profiler.runAttempt(profileAttempt, lifecycleCallback)
               : lifecycleCallback()
@@ -1627,46 +1835,100 @@ export default class TestRunner {
             // the timed-out test's rows on the shared connection, poisoning every
             // later test in the shard (duplicate-key / foreign-key cascades from
             // leaked fixtures). Wait — bounded — for the abandoned lifecycle to
-            // settle so its cleanup lands first. Bounded so a genuinely hung test
-            // still can't stall the whole run: if it will not settle within the
-            // grace, we proceed exactly as before (no worse than today).
+            // settle so its cleanup lands first. If it remains active after the
+            // bounded grace, quarantine its browser connections and stop running
+            // tests rather than sharing unsafe state.
             const timedOut = Boolean(/** @type {TestTimeoutError} */ (error)?.velociousTestTimeout)
             attemptTimedOut = timedOut
 
             if (timedOut && testLifecycle) {
+              const emergencyCleanupErrors = []
+
               if (profileAttempt && profiler) profiler.finishAttempt(profileAttempt, "timed-out")
-              await awaitSettledOrGrace(testLifecycle, timeoutMs ?? 60000)
+              const lifecycleOutcome = await awaitSettledOrGrace(testLifecycle, timeoutMs ?? 60000)
+
+              if (lifecycleOutcome.settled && lifecycleOutcome.status === "rejected") {
+                emergencyCleanupErrors.push(lifecycleOutcome.reason)
+              }
 
               // If the abandoned lifecycle never settled within the grace, its
-              // `finally` (which clears the shared connections) has not run, so
-              // this test's shared connection — sitting on a still-open, timed-out
-              // transaction — would otherwise be reused by the next test's outer
-              // ensureConnections before activateTestSharedConnections() replaces
-              // it. Clear it here so the next test checks out a fresh connection.
-              // Idempotent when the lifecycle did settle and already cleared.
-              if (testSharedConnectionsActive) {
-                this.clearTestSharedConnections(testSharedConnectionRegistrations)
-                testSharedConnectionRegistrations = []
-                testSharedConnectionsActive = false
+              // cleanup has not completed. Quarantine browser-owned connections
+              // before any scope cleanup can race the abandoned callback.
+              if (!lifecycleOutcome.settled) {
+                testDatabaseAccessScope.revoked = true
+                void testLifecycle.catch((cleanupError) => {
+                  if (isTestDatabaseAccessRevocation(cleanupError)) return
+                  this.recordTimeoutCleanupFailure(cleanupError, "test lifecycle")
+                })
+                const quarantine = this.quarantineBrowserDummyConnections(browserDummyConnectionRegistrations)
+                const quarantineOutcome = await awaitSettledOrGrace(quarantine, timeoutMs ?? 60000)
+                const usesBrowserTransactions = testArgs.databaseCleaning?.transaction === true
+                const usesBrowserTruncation = testArgs.databaseCleaning?.truncate ?? !usesBrowserTransactions
+
+                this._abortRemainingTests = this.isBrowserTestMode()
+                  && this.hasTag(testArgs, "dummy")
+                  && (usesBrowserTransactions || usesBrowserTruncation)
+
+                if (quarantineOutcome.settled && quarantineOutcome.status === "rejected") {
+                  emergencyCleanupErrors.push(quarantineOutcome.reason)
+                } else if (!quarantineOutcome.settled) {
+                  void quarantine.catch((cleanupError) => {
+                    this.recordTimeoutCleanupFailure(cleanupError, "browser dummy connection quarantine")
+                  })
+                }
               }
-              await this.stopSharedTransactionBroker(sharedTransactionBrokerRegistration || sharedTransactionBrokerPreparation)
+
+              try {
+                if (testSharedConnectionsActive) {
+                  this.clearTestSharedConnections(testSharedConnectionRegistrations)
+                  testSharedConnectionRegistrations = []
+                  testSharedConnectionsActive = false
+                }
+              } catch (cleanupError) {
+                emergencyCleanupErrors.push(cleanupError)
+              }
+
+              const brokerCleanup = this.stopSharedTransactionBroker(sharedTransactionBrokerRegistration || sharedTransactionBrokerPreparation)
+              const brokerCleanupOutcome = await awaitSettledOrGrace(brokerCleanup, timeoutMs ?? 60000)
+
+              if (brokerCleanupOutcome.settled && brokerCleanupOutcome.status === "rejected") {
+                emergencyCleanupErrors.push(brokerCleanupOutcome.reason)
+              } else if (!brokerCleanupOutcome.settled) {
+                void brokerCleanup.catch((cleanupError) => {
+                  this.recordTimeoutCleanupFailure(cleanupError, "shared transaction broker")
+                })
+              }
               sharedTransactionBrokerRegistration = undefined
               sharedTransactionBrokerPreparation = undefined
               const emergencyCleanup = this.cleanupTransactionalTenants(transactionalTenantRegistrations, {discard: true})
-              const emergencyCleanupSettled = await awaitSettledOrGrace(emergencyCleanup, timeoutMs ?? 60000)
+              const emergencyCleanupOutcome = await awaitSettledOrGrace(emergencyCleanup, timeoutMs ?? 60000)
 
-              if (emergencyCleanupSettled) {
-                await emergencyCleanup
-              } else {
+              if (emergencyCleanupOutcome.settled && emergencyCleanupOutcome.status === "rejected") {
+                emergencyCleanupErrors.push(emergencyCleanupOutcome.reason)
+              } else if (!emergencyCleanupOutcome.settled) {
                 // The timed-out attempt must not block the runner indefinitely, but a
                 // later rollback/discard failure still becomes a visible test failure.
                 void emergencyCleanup.catch((cleanupError) => {
-                  this.recordTransactionalTenantCleanupFailure(cleanupError)
+                  this.recordTimeoutCleanupFailure(cleanupError, "transactional tenant")
                 })
+              }
+
+              if (emergencyCleanupErrors.length > 0) {
+                caughtError = new AggregateError(
+                  [caughtError, ...emergencyCleanupErrors],
+                  "Test timeout and emergency cleanup failed",
+                  {cause: caughtError}
+                )
+                lastError = caughtError
               }
             }
 
-            willRetry = retriesUsed < retryCount
+            if (browserDummyConnectionRegistrations.some((registration) => registration.quarantined)) {
+              testDatabaseAccessScope.revoked = true
+              this._abortRemainingTests = true
+            }
+
+            willRetry = !this._abortRemainingTests && retriesUsed < retryCount
 
             if (willRetry) {
               retriesUsed++
@@ -1675,9 +1937,10 @@ export default class TestRunner {
             if (willRetry) {
               shouldRetry = true
             } else {
-              failedError = error
+              failedError = caughtError
             }
           } finally {
+            testDatabaseAccessScope.revoked = true
             const consoleOutput = stopConsoleCapture()
 
             if (profileAttempt && profiler) {
@@ -1795,9 +2058,13 @@ export default class TestRunner {
           line: testData.line ?? 0,
           durationMs: Date.now() - testStartMs
         })
+
+        if (this._abortRemainingTests) break
       }
 
       for (const subDescription in tests.subs) {
+        if (this._abortRemainingTests) break
+
         const subTest = tests.subs[subDescription]
         const newDecriptions = descriptions.concat([subDescription])
         const childScopeLineMatch = scopeLineMatch || this.matchesLineFilter(subTest)
@@ -1830,10 +2097,16 @@ export default class TestRunner {
       this._activeAfterAllScopes.splice(scopeIndex, 1)
     }
 
-    if (scopeErrors.length == 1) throw scopeErrors[0]
-    if (scopeErrors.length > 1) {
-      throw new AggregateError(scopeErrors, "Test scope and afterAll cleanup failed", {cause: scopeErrors[0]})
+    if (scopeErrors.length > 0 && this._abortRemainingTests) {
+      const error = scopeErrors.length == 1
+        ? scopeErrors[0]
+        : new AggregateError(scopeErrors, "Test scope and afterAll cleanup failed", {cause: scopeErrors[0]})
+
+      this.recordTimeoutCleanupFailure(error, "afterAll")
+      return
     }
+    if (scopeErrors.length == 1) throw scopeErrors[0]
+    if (scopeErrors.length > 1) throw new AggregateError(scopeErrors, "Test scope and afterAll cleanup failed", {cause: scopeErrors[0]})
   }
 
   /**

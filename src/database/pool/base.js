@@ -120,6 +120,11 @@ class VelociousDatabasePoolBase {
     this.logger = new Logger(this)
   }
 
+  /** Throws when a revoked test attempt tries to acquire database access. */
+  assertDatabaseAccessAllowed() {
+    this.configuration.assertDatabaseAccessAllowed()
+  }
+
   /**
    * Runs checkin.
    * @abstract

@@ -118,6 +118,7 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
    * @returns {Promise<import("../drivers/base.js").default>} - Checked-out connection.
    */
   async checkoutForConfiguration(databaseConfiguration, options = {}, {retain} = {retain: false}) {
+    this.assertDatabaseAccessAllowed()
     const reuseKey = this.getConfigurationReuseKey(databaseConfiguration)
     let entry = this.connectionEntries.get(reuseKey)
 
@@ -156,6 +157,22 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
       }
     }
     if (!entry) throw new Error("Database connection entry was not created")
+    if (this.connectionEntries.get(reuseKey) !== entry) {
+      return await this.checkoutForConfiguration(databaseConfiguration, options, {retain})
+    }
+
+    try {
+      this.assertDatabaseAccessAllowed()
+    } catch (error) {
+      if (entry.activeCheckoutCount === 0 && this.capacityWaiters.size > 0) {
+        try {
+          await this.removeAndCloseEntry(entry)
+        } catch (closeError) {
+          throw new AggregateError([error, closeError], "Database access revocation and connection close both failed", {cause: closeError})
+        }
+      }
+      throw error
+    }
 
     if (retain) {
       const previousConnection = this.connection
@@ -177,6 +194,17 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
     await entry.connection.setConnectionCheckoutName(options.name)
     entry.activeCheckoutCount++
     this.activeCheckoutCount++
+
+    try {
+      this.assertDatabaseAccessAllowed()
+    } catch (error) {
+      try {
+        await this.checkin(entry.connection)
+      } catch (checkinError) {
+        throw new AggregateError([error, checkinError], "Database access revocation and connection check-in both failed", {cause: checkinError})
+      }
+      throw error
+    }
 
     return entry.connection
   }
@@ -492,6 +520,7 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
    * @returns {import("../drivers/base.js").default} - Mutable ambient fallback connection.
    */
   getCurrentConnection() {
+    this.assertDatabaseAccessAllowed()
     if (!this.connection) throw new Error("A connection hasn't been made yet")
 
     return this.connection

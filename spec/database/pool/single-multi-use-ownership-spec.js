@@ -21,6 +21,7 @@ let controlledConnectCount = 0
 let controlledCheckoutCleanupError
 /** @type {Error | undefined} */
 let controlledCloseError
+let controlledCloseCount = 0
 
 class ControlledSinglePoolDriver extends DatabaseDriver {
   /** @returns {Promise<void>} - Runs a deterministic controlled connect. */
@@ -44,6 +45,7 @@ class ControlledSinglePoolDriver extends DatabaseDriver {
 
   /** @returns {Promise<void>} - Runs deterministic physical close. */
   async _close() {
+    controlledCloseCount++
     if (controlledCloseError) throw controlledCloseError
   }
 }
@@ -71,6 +73,7 @@ describe("SingleMultiUsePool captured ownership", () => {
     controlledConnects = []
     controlledCheckoutCleanupError = undefined
     controlledCloseError = undefined
+    controlledCloseCount = 0
   }
 
   it("atomically reserves capacity before different physical databases spawn", async () => {
@@ -122,6 +125,120 @@ describe("SingleMultiUsePool captured ownership", () => {
       for (const result of results) {
         if (result.status === "fulfilled") await pool.checkin(result.value)
       }
+      await pool.closeAll()
+      resetControlledConnects()
+    }
+  })
+
+  it("keeps a shared spawned entry for a valid caller when another caller is revoked", async () => {
+    const pool = new SingleMultiUsePool({configuration: dummyConfiguration, identifier: "default"})
+    const canFinish = deferred()
+    const started = deferred()
+    const accessScope = {revoked: false}
+
+    controlledConnects = [{canFinish: canFinish.promise, started: () => started.resolve(undefined)}]
+
+    const revokedCheckout = dummyConfiguration.runWithTestDatabaseAccessScope(accessScope, async () => {
+      return await pool.checkoutForConfiguration(databaseConfiguration("shared-spawn"), {name: "revoked"}, {retain: false})
+    })
+    const revokedOutcome = revokedCheckout.then(
+      () => { throw new Error("Revoked shared checkout unexpectedly resolved") },
+      (error) => error
+    )
+
+    try {
+      await started.promise
+      const validCheckout = pool.checkoutForConfiguration(databaseConfiguration("shared-spawn"), {name: "valid"}, {retain: false})
+
+      accessScope.revoked = true
+      canFinish.resolve(undefined)
+
+      const rejectionError = await revokedOutcome
+      const validConnection = await validCheckout
+
+      expect(rejectionError.message).toEqual("Database access is no longer allowed for this test attempt")
+      expect(controlledCloseCount).toEqual(0)
+      expect(pool.getDebugSnapshot().connections).toHaveLength(1)
+
+      await pool.checkin(validConnection)
+    } finally {
+      canFinish.resolve(undefined)
+      await pool.closeAll()
+      resetControlledConnects()
+    }
+  })
+
+  it("releases an unused revoked spawn to a different-key capacity waiter", async () => {
+    const pool = new SingleMultiUsePool({configuration: dummyConfiguration, identifier: "default"})
+    const firstCanFinish = deferred()
+    const firstStarted = deferred()
+    const accessScope = {revoked: false}
+    const firstConfiguration = databaseConfiguration("revoked-spawn")
+    const validConfiguration = databaseConfiguration("valid-waiter")
+
+    firstConfiguration.pool = {checkoutTimeoutMillis: 100, max: 1}
+    validConfiguration.pool = {checkoutTimeoutMillis: 100, max: 1}
+    controlledConnects = [
+      {canFinish: firstCanFinish.promise, started: () => firstStarted.resolve(undefined)},
+      {canFinish: Promise.resolve(), started: () => {}}
+    ]
+
+    const revokedCheckout = dummyConfiguration.runWithTestDatabaseAccessScope(accessScope, async () => {
+      return await pool.checkoutForConfiguration(firstConfiguration, {name: "revoked"}, {retain: false})
+    })
+    const revokedOutcome = revokedCheckout.then(
+      () => { throw new Error("Revoked spawning checkout unexpectedly resolved") },
+      (error) => error
+    )
+
+    try {
+      await firstStarted.promise
+      const validCheckout = pool.checkoutForConfiguration(validConfiguration, {name: "valid"}, {retain: false})
+
+      await waitFor({wait: 1}, () => {
+        if (pool.getDebugSnapshot().pendingCheckoutCount === 1) return
+        throw new Error("Valid checkout has not reached capacity admission")
+      })
+
+      accessScope.revoked = true
+      firstCanFinish.resolve(undefined)
+
+      const rejectionError = await revokedOutcome
+      const validConnection = await validCheckout
+
+      expect(rejectionError.message).toEqual("Database access is no longer allowed for this test attempt")
+      expect(controlledConnectCount).toEqual(2)
+      expect(pool.getDebugSnapshot().pendingCheckoutCount).toEqual(0)
+
+      await pool.checkin(validConnection)
+    } finally {
+      firstCanFinish.resolve(undefined)
+      await pool.closeAll()
+      resetControlledConnects()
+    }
+  })
+
+  it("rejects operations through an existing current connection after access is revoked", async () => {
+    const pool = new SingleMultiUsePool({configuration: dummyConfiguration, identifier: "default"})
+    const accessScope = {revoked: false}
+    const connection = await pool.checkoutForConfiguration(databaseConfiguration("revoked-current"), {}, {retain: true})
+    let caughtError
+
+    try {
+      await dummyConfiguration.runWithTestDatabaseAccessScope(accessScope, async () => {
+        accessScope.revoked = true
+
+        try {
+          await pool.query("SELECT 1")
+        } catch (error) {
+          caughtError = error
+        }
+      })
+
+      expect(caughtError).toBeInstanceOf(Error)
+      expect(caughtError.message).toEqual("Database access is no longer allowed for this test attempt")
+    } finally {
+      await pool.checkin(connection)
       await pool.closeAll()
       resetControlledConnects()
     }

@@ -6,7 +6,7 @@ import dummyDirectory from "../../../dummy/dummy-directory.js"
 import EnvironmentHandlerNode from "../../../../src/environment-handlers/node.js"
 
 describe("Cli - Commands - db:migrate framework schema", () => {
-  it("creates framework schema during db:migrate instead of waiting for runtime stores", {databaseCleaning: {transaction: false}}, async () => {
+  it("creates framework schema during db:migrate instead of waiting for runtime stores", {databaseCleaning: {transaction: false, truncate: true}}, async () => {
     const directory = dummyDirectory()
     const cli = new Cli({
       configuration: dummyConfiguration,
@@ -59,7 +59,7 @@ describe("Cli - Commands - db:migrate framework schema", () => {
     })
   })
 
-  it("creates attachment schema for each migrated database while leaving background-job database selection to its adapter", {databaseCleaning: {transaction: false}}, async () => {
+  it("creates attachment schema for each migrated database while leaving background-job database selection to its adapter", {databaseCleaning: {transaction: false, truncate: true}}, async () => {
     const handler = new EnvironmentHandlerNode()
 
     handler.setConfiguration(dummyConfiguration)
@@ -90,7 +90,7 @@ describe("Cli - Commands - db:migrate framework schema", () => {
     })
   })
 
-  it("does not create framework schema on databases with migrations disabled", {databaseCleaning: {transaction: false}}, async () => {
+  it("does not create framework schema on databases with migrations disabled", {databaseCleaning: {transaction: false, truncate: true}}, async () => {
     const directory = dummyDirectory()
     const cli = new Cli({
       configuration: dummyConfiguration,

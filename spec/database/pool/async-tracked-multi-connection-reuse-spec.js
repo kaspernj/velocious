@@ -9,6 +9,7 @@ import os from "os"
 import path from "path"
 import SqliteDriver from "../../../src/database/drivers/sqlite/index.js"
 import wait from "awaitery/build/wait.js"
+import {AsyncLocalStorage} from "node:async_hooks"
 import {createTenantTestConfiguration} from "../../helpers/tenant-test-helpers.js"
 import dummyConfiguration from "../../dummy/src/config/configuration.js"
 import {describe, expect, it} from "../../../src/testing/test.js"
@@ -24,6 +25,17 @@ class CloseTrackingSqliteDriver extends SqliteDriver {
     if (typeof name === "string") CloseTrackingSqliteDriver.closedConnectionNames.push(name)
 
     await super.close()
+  }
+}
+
+class RevokingTransactionSqliteDriver extends CloseTrackingSqliteDriver {
+  /** @type {{revoked: boolean} | undefined} */
+  static accessScope
+
+  async _startTransactionAction(options = {}) {
+    await super._startTransactionAction(options)
+    if (!RevokingTransactionSqliteDriver.accessScope) throw new Error("Missing test database access scope")
+    RevokingTransactionSqliteDriver.accessScope.revoked = true
   }
 }
 
@@ -91,20 +103,20 @@ class FailingRollbackSqliteDriver extends SqliteDriver {
  * @param {string} prefix - Temp-path prefix.
  * @returns {Promise<{cleanup: () => Promise<void>, configuration: Configuration}>} - Test configuration and cleanup.
  */
-async function createCloseTrackingConfiguration(prefix) {
+async function createCloseTrackingConfiguration(prefix, DriverClass = CloseTrackingSqliteDriver) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), `${prefix}-`))
   const configuration = new Configuration({
     database: {
       test: {
         default: {
-          driver: CloseTrackingSqliteDriver,
+          driver: DriverClass,
           migrations: false,
           name: `${prefix}-default`,
           poolType: AsyncTrackedMultiConnection,
           type: "sqlite"
         },
         projectTenant: {
-          driver: CloseTrackingSqliteDriver,
+          driver: DriverClass,
           migrations: false,
           name: `${prefix}-project-tenant-default`,
           poolType: AsyncTrackedMultiConnection,
@@ -840,6 +852,189 @@ describe("database - pool - async tracked multi connection reuse", {databaseClea
       expect(pendingConnection).not.toBe(connection)
 
       await pool.checkin(pendingConnection)
+    } finally {
+      await cleanup()
+    }
+  })
+
+  it("allows an owning connection scope to finish after its connection is discarded", async () => {
+    const {cleanup, configuration} = await createCloseTrackingConfiguration("velocious-pool-discard-owned-connection")
+
+    try {
+      const pool = configuration.getDatabasePool("default")
+
+      if (!(pool instanceof AsyncTrackedMultiConnection)) throw new Error("Expected an AsyncTrackedMultiConnection pool")
+
+      await pool.withConnection(async (connection) => {
+        await pool.discard(connection)
+      })
+
+      expect(Object.keys(pool.connectionsInUse)).toEqual([])
+      expect(pool.connections).toEqual([])
+      expect(CloseTrackingSqliteDriver.closedConnectionNames).toEqual(["velocious-pool-discard-owned-connection-default"])
+    } finally {
+      await cleanup()
+    }
+  })
+
+  it("rejects direct pool checkout after a test database access scope is revoked", async () => {
+    const {cleanup, configuration} = await createCloseTrackingConfiguration("velocious-pool-revoked-checkout")
+
+    try {
+      const pool = configuration.getDatabasePool("default")
+      const accessScope = {revoked: false}
+      let caughtError
+
+      await configuration.runWithTestDatabaseAccessScope(accessScope, async () => {
+        accessScope.revoked = true
+
+        try {
+          await pool.withConnection(async () => {})
+        } catch (error) {
+          caughtError = error
+        }
+      })
+
+      expect(caughtError).toBeInstanceOf(Error)
+      expect(caughtError.message).toEqual("Database access is no longer allowed for this test attempt")
+      expect(Object.keys(pool.connectionsInUse)).toEqual([])
+    } finally {
+      await cleanup()
+    }
+  })
+
+  it("rejects operations through an existing current connection after access is revoked", async () => {
+    const {cleanup, configuration} = await createCloseTrackingConfiguration("velocious-pool-revoked-current-connection")
+
+    try {
+      const pool = configuration.getDatabasePool("default")
+      const accessScope = {revoked: false}
+      let caughtError
+      let currentConnectionsError
+      let sharedConnectionRegistration
+
+      await pool.withConnection(async (connection) => {
+        sharedConnectionRegistration = pool.setTestSharedConnection(connection)
+      })
+      try {
+        await configuration.runWithTestDatabaseAccessScope(accessScope, async () => {
+          accessScope.revoked = true
+
+          try {
+            await pool.query("SELECT 1")
+          } catch (error) {
+            caughtError = error
+          }
+
+          try {
+            configuration.getCurrentConnections()
+          } catch (error) {
+            currentConnectionsError = error
+          }
+        })
+      } finally {
+        pool.clearTestSharedConnection(sharedConnectionRegistration)
+      }
+
+      expect(caughtError).toBeInstanceOf(Error)
+      expect(caughtError.message).toEqual("Database access is no longer allowed for this test attempt")
+      expect(currentConnectionsError).toBeInstanceOf(Error)
+      expect(currentConnectionsError.message).toEqual("Database access is no longer allowed for this test attempt")
+    } finally {
+      await cleanup()
+    }
+  })
+
+  it("does not enter a transaction callback when access is revoked during startup", async () => {
+    const {cleanup, configuration} = await createCloseTrackingConfiguration(
+      "velocious-pool-revoked-transaction-start",
+      RevokingTransactionSqliteDriver
+    )
+    const accessScope = {revoked: false}
+    let callbackCalls = 0
+    let caughtError
+
+    RevokingTransactionSqliteDriver.accessScope = accessScope
+
+    try {
+      await configuration.runWithTestDatabaseAccessScope(accessScope, async () => {
+        try {
+          await configuration.withTransaction({databaseIdentifier: "default"}, async () => { callbackCalls++ })
+        } catch (error) {
+          caughtError = error
+        }
+      })
+
+      expect(caughtError).toBeInstanceOf(Error)
+      expect(caughtError.message).toEqual("Database access is no longer allowed for this test attempt")
+      expect(callbackCalls).toEqual(0)
+    } finally {
+      RevokingTransactionSqliteDriver.accessScope = undefined
+      await cleanup()
+    }
+  })
+
+  it("rejects a queued checkout in its originating revoked access scope", async () => {
+    await withIsolatedPool(async (pool) => {
+      pool.getConfiguration().pool = {max: 1}
+
+      const firstConnection = await pool.checkout()
+      const accessScope = {revoked: false}
+      const queuedCheckout = pool.configuration.runWithTestDatabaseAccessScope(accessScope, async () => await pool.checkout())
+      const queuedOutcome = queuedCheckout.then(
+        () => { throw new Error("Revoked queued checkout unexpectedly resolved") },
+        (error) => error
+      )
+
+      await wait(0.02)
+      accessScope.revoked = true
+      await pool.checkin(firstConnection)
+
+      const rejectionError = await queuedOutcome
+
+      expect(rejectionError.message).toEqual("Database access is no longer allowed for this test attempt")
+      expect(pool.pendingCheckouts).toEqual([])
+
+      const validConnection = await pool.checkout()
+
+      await pool.checkin(validConnection)
+    })
+  })
+
+  it("drains a valid queued checkout after a spawning checkout is revoked", async () => {
+    const {cleanup, configuration} = await createSpawnBlockingConfiguration("velocious-pool-revoked-spawn")
+    const accessScope = {revoked: false}
+
+    try {
+      const pool = configuration.getDatabasePool("default")
+
+      if (!(pool instanceof AsyncTrackedMultiConnection)) throw new Error("Expected an AsyncTrackedMultiConnection pool")
+
+      configuration.getEnvironmentHandler().installTestDatabaseAccessScopeStorage(new AsyncLocalStorage())
+      pool.getConfiguration().pool = {checkoutTimeoutMillis: 100, max: 1}
+      const revokedCheckout = configuration.runWithTestDatabaseAccessScope(accessScope, async () => await pool.checkout())
+      const revokedOutcome = revokedCheckout.then(
+        () => { throw new Error("Revoked spawning checkout unexpectedly resolved") },
+        (error) => error
+      )
+
+      await wait(0.02)
+      expect(SpawnBlockingSqliteDriver.connectionAttempts).toEqual(1)
+
+      const validCheckout = pool.checkout()
+
+      await wait(0.02)
+      expect(pool.pendingCheckouts).toHaveLength(1)
+      accessScope.revoked = true
+      SpawnBlockingSqliteDriver.releaseConnectionAttempts()
+
+      const rejectionError = await revokedOutcome
+      const validConnection = await validCheckout
+
+      expect(rejectionError.message).toEqual("Database access is no longer allowed for this test attempt")
+      expect(pool.pendingCheckouts).toEqual([])
+
+      await pool.checkin(validConnection)
     } finally {
       await cleanup()
     }

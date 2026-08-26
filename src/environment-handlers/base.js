@@ -18,6 +18,14 @@ import {validateTimeZone} from "../time-zone.js"
  * @property {string} migrationClassName - Exported migration class name.
  * @property {string} file - Migration filename.
  */
+/**
+ * TestDatabaseAccessScopeStorage type.
+ * @typedef {object} TestDatabaseAccessScopeStorage
+ * @property {() => ({revoked: boolean} | undefined)} getStore - Gets the inherited scope.
+ * @property {(scope: {revoked: boolean} | undefined, callback: () => ReturnType<typeof JSON.parse>) => ReturnType<typeof JSON.parse>} run - Runs in the scope.
+ */
+
+export class TestDatabaseAccessRevokedError extends Error {}
 
 export default class VelociousEnvironmentHandlerBase {
   /**
@@ -86,6 +94,75 @@ export default class VelociousEnvironmentHandlerBase {
    * @returns {import("../testing/test-profiler.js").TestProfileAsyncContext | undefined} - Active context.
    */
   getCurrentTestProfileContext() { return undefined }
+
+  /**
+   * Runs work in a revocable test database-access scope.
+   * @template T
+   * @param {{revoked: boolean}} scope - Attempt-owned access scope.
+   * @param {() => T | Promise<T>} callback - Attempt work.
+   * @returns {Promise<T>} - Callback result.
+   */
+  async runWithTestDatabaseAccessScope(scope, callback) {
+    return await this.runWithCapturedTestDatabaseAccessScope(scope, callback)
+  }
+
+  /**
+   * Runs work with an explicitly captured test database-access scope.
+   * @template T
+   * @param {{revoked: boolean} | undefined} scope - Captured access scope.
+   * @param {() => T | Promise<T>} callback - Work to run.
+   * @returns {Promise<T>} - Callback result.
+   */
+  async runWithCapturedTestDatabaseAccessScope(scope, callback) {
+    if (this._testDatabaseAccessScopeStorage) {
+      return await this._testDatabaseAccessScopeStorage.run(scope, callback)
+    }
+
+    const entry = {owner: Symbol("test-database-access-scope"), scope}
+
+    this._testDatabaseAccessScopes.push(entry)
+
+    try {
+      return await callback()
+    } finally {
+      const index = this._testDatabaseAccessScopes.findIndex((candidate) => candidate.owner === entry.owner)
+
+      if (index !== -1) this._testDatabaseAccessScopes.splice(index, 1)
+    }
+  }
+
+  /**
+   * Gets the current test database-access scope.
+   * @returns {{revoked: boolean} | undefined} - Current scope.
+   */
+  currentTestDatabaseAccessScope() {
+    if (this._testDatabaseAccessScopeStorage) return this._testDatabaseAccessScopeStorage.getStore()
+
+    return this._testDatabaseAccessScopes[this._testDatabaseAccessScopes.length - 1]?.scope
+  }
+
+  /** Throws when the current test attempt no longer owns database access. */
+  assertTestDatabaseAccessAllowed() {
+    const scope = this.currentTestDatabaseAccessScope()
+
+    if (scope?.revoked) {
+      throw new TestDatabaseAccessRevokedError("Database access is no longer allowed for this test attempt")
+    }
+  }
+
+  /**
+   * Installs async-context storage owned by the first Node test runner.
+   * @param {TestDatabaseAccessScopeStorage} storage - Scope storage.
+   */
+  installTestDatabaseAccessScopeStorage(storage) {
+    this._testDatabaseAccessScopeStorage ??= storage
+  }
+
+  /** @type {Array<{owner: symbol, scope: {revoked: boolean} | undefined}>} */
+  _testDatabaseAccessScopes = []
+
+  /** @type {TestDatabaseAccessScopeStorage | undefined} */
+  _testDatabaseAccessScopeStorage = undefined
 
   /**
    * Mutable ambient tenant used by runtimes without async-context storage.

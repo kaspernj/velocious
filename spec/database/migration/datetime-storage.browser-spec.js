@@ -6,7 +6,7 @@ import MysqlDriver from "../../../src/database/drivers/mysql/index.js"
 import TableColumn from "../../../src/database/table-data/table-column.js"
 
 describe("database - migration - datetime storage", {tags: ["dummy"]}, () => {
-  it("converts legacy local SQLite datetime rows to UTC storage", {databaseCleaning: {transaction: false, truncate: true}}, async () => {
+  it("converts legacy local SQLite datetime rows to UTC storage", async () => {
     await Configuration.current().ensureConnections(async (dbs) => {
       const db = dbs.default
       const tableName = "legacy_datetime_storage_records"

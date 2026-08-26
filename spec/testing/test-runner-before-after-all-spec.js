@@ -5,7 +5,7 @@ import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 import TestRunner from "../../src/testing/test-runner.js"
 
-describe("TestRunner beforeAll/afterAll", {databaseCleaning: {transaction: true}}, () => {
+describe("TestRunner beforeAll/afterAll", () => {
   it("does not hold a database lease around the whole suite", async () => {
     const environmentHandler = new EnvironmentHandlerNode()
 
