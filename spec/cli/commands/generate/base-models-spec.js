@@ -120,6 +120,7 @@ describe("Cli - generate - base-models", () => {
       import Task from "${dummyDirectory()}/src/models/task.js"
       import Project from "${dummyDirectory()}/src/models/project.js"
       import Comment from "${dummyDirectory()}/src/models/comment.js"
+      import Interaction from "${dummyDirectory()}/src/models/interaction.js"
 
       async function checkWrites() {
         const project = await Project.create({})
@@ -146,6 +147,9 @@ describe("Cli - generate - base-models", () => {
         project.buildPrimaryInteraction({kind: "Generated polymorphic relationship build typing works"})
         project.interactions().build({kind: "Generated polymorphic collection build typing works"})
         await project.interactions().create({kind: "Generated polymorphic collection create typing works"})
+
+        const interaction = new Interaction()
+        interaction.buildSubject({typo: "Targetless polymorphic belongs-to attributes remain generic"})
         // @ts-expect-error generated singular relationship builders reject unknown attributes
         comment.buildTask({typo: "Generated relationship build typing works"})
         // @ts-expect-error generated singular relationship builders require the related model

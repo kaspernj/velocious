@@ -46,7 +46,7 @@ After `setProject(project)`, `task.projectId()`, `task.changes().project_id`, li
 
 ## Building related records
 
-Backend relationship helpers build target records from the target model's generated write-attribute type:
+Backend relationship helpers with a concrete target build records from that model's generated write-attribute type:
 
 ```js
 const project = await Project.find(1)
@@ -56,7 +56,7 @@ const persistedTask = await project.tasks().create({name: "Implement", reviewPro
 const replacementProject = task.buildProject({name: "Launch"})
 ```
 
-Model-valued relationship attributes such as `reviewProject` are accepted. Type checking rejects unknown attributes and values that do not match the related model contract for collection `build(...)` / `create(...)` and generated singular builders such as `buildProject(...)`.
+Model-valued relationship attributes such as `reviewProject` are accepted. Type checking rejects unknown attributes and values that do not match the related model contract for collection `build(...)` / `create(...)` and generated singular builders such as `buildProject(...)`. Targetless polymorphic `belongsTo` builders remain generic because no single target write contract exists.
 
 ### Common options
 
