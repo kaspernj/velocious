@@ -13,7 +13,16 @@ import TestRunner from "../../src/testing/test-runner.js"
  * @returns {Promise<string[]>} - Observed lifecycle order.
  */
 async function transactionCoordinationOrder(testArgs) {
-  const configuration = new Configuration({
+  const order = []
+
+  class ObservedConfiguration extends Configuration {
+    async ensureConnections(_args, callback) {
+      order.push("connections")
+      return await callback({})
+    }
+  }
+
+  const configuration = new ObservedConfiguration({
     database: {test: {}},
     directory: process.cwd(),
     environment: "test",
@@ -23,8 +32,6 @@ async function transactionCoordinationOrder(testArgs) {
     localeFallbacks: {en: ["en"]},
     locales: ["en"]
   })
-  const order = []
-
   class ObservedTestRunner extends TestRunner {
     async application() {
       return new Application({configuration, type: "test-runner-observation"})
@@ -206,56 +213,16 @@ describe("TestRunner shared connection activation order", {databaseCleaning: {tr
     ])
   })
 
-  it("activates dynamic providers before non-request beforeEach hooks", async () => {
-    const configuration = new Configuration({
-      database: {test: {}},
-      directory: process.cwd(),
-      environment: "test",
-      environmentHandler: new EnvironmentHandlerNode(),
-      initializeModels: async () => {},
-      locale: "en",
-      localeFallbacks: {en: ["en"]},
-      locales: ["en"]
-    })
-    const order = []
+  it("does not activate dynamic providers for transaction-disabled non-request tests", async () => {
+    const order = await transactionCoordinationOrder({databaseCleaning: {transaction: false, truncate: false}})
 
-    class ObservedTestRunner extends TestRunner {
-      activateTestSharedConnections() {
-        order.push("activate")
-        return []
-      }
-
-      async startSharedTransactionBroker() {
-        order.push("broker")
-        return undefined
-      }
-    }
-
-    const testRunner = new ObservedTestRunner({configuration, testFiles: []})
-    const tests = {
-      args: {},
-      afterAlls: [],
-      afterEaches: [],
-      beforeAlls: [],
-      beforeEaches: [{callback: async () => { order.push("beforeEach") }}],
-      subs: {},
-      tests: {
-        "runs outside request mode": {
-          args: {},
-          function: async () => { order.push("test") }
-        }
-      }
-    }
-
-    await testRunner.runTests({afterEaches: [], beforeEaches: [], tests, descriptions: [], indentLevel: 0})
-
-    expect(order[0]).toEqual("activate")
+    expect(order).toEqual(["beforeEach", "test"])
   })
 
   it("installs transaction coordination before a transaction-opening hook exposes the shared connection", async () => {
     const order = await transactionCoordinationOrder({databaseCleaning: {transaction: true}})
 
-    expect(order).toEqual(["activate", "coordinate", "beforeEach", "publish", "test"])
+    expect(order).toEqual(["connections", "activate", "coordinate", "beforeEach", "publish", "test"])
   })
 
   it("installs request coordination before a hook can open a manual transaction", async () => {
@@ -264,7 +231,7 @@ describe("TestRunner shared connection activation order", {databaseCleaning: {tr
       type: "request"
     })
 
-    expect(order).toEqual(["activate", "coordinate", "beforeEach", "publish", "test"])
+    expect(order).toEqual(["connections", "activate", "coordinate", "beforeEach", "publish", "test"])
   })
 
   it("revokes shared access before broker shutdown and transaction cleanup", async () => {

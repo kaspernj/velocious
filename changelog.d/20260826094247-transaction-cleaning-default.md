@@ -1,1 +1,1 @@
-Default test database-cleaning metadata to transaction rollback across setup, test, and teardown hooks while preserving explicit truncation and no-cleaning opt-outs.
+Default test database-cleaning metadata to transaction rollback across setup, test, and teardown hooks while preserving explicit truncation and no-cleaning opt-outs, and leave transaction-disabled non-request tests on independently owned connections.

@@ -1468,24 +1468,22 @@ export default class TestRunner {
             // acquisition, beforeEach hooks, the test body and afterEach hooks) as
             // one promise so the timeout below can cover all of it.
             const lifecycleCallback = async () => await this.runWithDummyIfNeeded(testArgs, async () => {
-              // Pin one connection per test so beforeEach, the test body and afterEach
-              // all run on the SAME connection. This is required for transaction-based
-              // database cleaning (beforeEach starts a transaction, afterEach rolls it
-              // back). Releasing the lease after each lifecycle also runs the pool's
-              // session cleanup before another test can reuse the connection.
-              await this.getConfiguration().ensureConnections({name: `Test: ${testDescription}`}, async () => {
+              const useSharedTestConnections = testArgs.databaseCleaning?.transaction === true || testArgs.type == "request"
+              const runTestAttempt = async () => {
                 // Register dynamic candidates before hooks so transaction state changes
                 // made during a hook are immediately visible to any in-process work.
                 // Prepare transaction sharing before hooks so long-lived services cannot
                 // use the shared connection while its coordinator is still missing.
-                testSharedConnectionRegistrations = this.activateTestSharedConnections()
-                testSharedConnectionsActive = true
+                if (useSharedTestConnections) {
+                  testSharedConnectionRegistrations = this.activateTestSharedConnections()
+                  testSharedConnectionsActive = true
+                }
                 /** @type {unknown[]} */
                 const lifecycleErrors = []
                 let runCleanupHooks = false
 
                 try {
-                  if (testArgs.databaseCleaning?.transaction === true || testArgs.type == "request") {
+                  if (useSharedTestConnections) {
                     sharedTransactionBrokerPreparation = await this.prepareSharedTransactionBroker()
                   }
                   runCleanupHooks = true
@@ -1502,18 +1500,20 @@ export default class TestRunner {
                     })
                   }
 
-                  const activeSharedTransactionConnections = this.sharedTransactionConnections({transactionsOnly: true})
-                  if (sharedTransactionBrokerPreparation && !this.sharedTransactionBrokerMatchesConnections(sharedTransactionBrokerPreparation, activeSharedTransactionConnections)) {
-                    this.clearTestSharedConnections(testSharedConnectionRegistrations)
-                    testSharedConnectionRegistrations = []
-                    testSharedConnectionsActive = false
-                  }
+                  if (useSharedTestConnections) {
+                    const activeSharedTransactionConnections = this.sharedTransactionConnections({transactionsOnly: true})
+                    if (sharedTransactionBrokerPreparation && !this.sharedTransactionBrokerMatchesConnections(sharedTransactionBrokerPreparation, activeSharedTransactionConnections)) {
+                      this.clearTestSharedConnections(testSharedConnectionRegistrations)
+                      testSharedConnectionRegistrations = []
+                      testSharedConnectionsActive = false
+                    }
 
-                  sharedTransactionBrokerRegistration = await this.startSharedTransactionBroker(sharedTransactionBrokerPreparation, activeSharedTransactionConnections)
-                  sharedTransactionBrokerPreparation = undefined
-                  if (sharedTransactionBrokerRegistration && !testSharedConnectionsActive) {
-                    testSharedConnectionRegistrations = this.activateTestSharedConnections()
-                    testSharedConnectionsActive = true
+                    sharedTransactionBrokerRegistration = await this.startSharedTransactionBroker(sharedTransactionBrokerPreparation, activeSharedTransactionConnections)
+                    sharedTransactionBrokerPreparation = undefined
+                    if (sharedTransactionBrokerRegistration && !testSharedConnectionsActive) {
+                      testSharedConnectionRegistrations = this.activateTestSharedConnections()
+                      testSharedConnectionsActive = true
+                    }
                   }
 
                   // Record which test is running so an async crash (an unhandled
@@ -1585,7 +1585,15 @@ export default class TestRunner {
                 if (lifecycleErrors.length > 1) {
                   throw new AggregateError(lifecycleErrors, "Test lifecycle and cleanup failed", {cause: lifecycleErrors[0]})
                 }
-              })
+              }
+
+              if (useSharedTestConnections) {
+                // Transaction cleaning and request sharing require one connection for
+                // beforeEach, the test body and afterEach. Other tests own their checkouts.
+                await this.getConfiguration().ensureConnections({name: `Test: ${testDescription}`}, runTestAttempt)
+              } else {
+                await runTestAttempt()
+              }
             })
             testLifecycle = profileAttempt && profiler
               ? profiler.runAttempt(profileAttempt, lifecycleCallback)
