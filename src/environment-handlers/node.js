@@ -37,6 +37,7 @@ import {timingSafeEqual} from "node:crypto"
 import requireContext from "require-context"
 import AsyncTrackedMultiConnectionPool from "../database/pool/async-tracked-multi-connection.js"
 import InitializerFromRequireContext from "../database/initializer-from-require-context.js"
+import RecordAttachmentsStore from "../database/record/attachments/store.js"
 import toImportSpecifier from "../utils/to-import-specifier.js"
 import {validateTimeZone} from "../time-zone.js"
 import AttachmentPathSource from "./node/attachment-path-source.js"
@@ -1193,21 +1194,26 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
-   * Ensures velocious' background-jobs schema exists on its configured database
-   * as part of `db:migrate`, so the framework's own tables (background_jobs +
-   * background_job_concurrency, execution_mode etc.) are created deterministically
-   * alongside app migrations and captured in the dumped structure SQL — rather than
-   * only appearing once a runtime store boots. Reuses the store's idempotent
-   * `_ensureSchema`, so it's safe to re-run against DBs that already have it.
+   * Ensures Velocious framework schema exists as part of `db:migrate`, so internal
+   * tables are created deterministically alongside app migrations and captured in
+   * the dumped structure SQL instead of appearing only when runtime stores boot.
    * @param {object} args - Options object.
    * @param {Record<string, import("../database/drivers/base.js").default>} args.dbs - Dbs being migrated.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async ensureFrameworkSchema({dbs}) {
     // Migration passes its already checked-out DB into the adapter hook. Do not
-    // run runtime readiness here: SQL readiness would open a nested checkout and
-    // can deadlock a single-connection migration pool.
-    const adapter = this.getConfiguration().getBackgroundJobsAdapter()
+    // run runtime readiness here: it would open a nested checkout and can deadlock
+    // a single-connection migration pool.
+    const configuration = this.getConfiguration()
+
+    for (const [databaseIdentifier, db] of Object.entries(dbs)) {
+      const attachmentStore = new RecordAttachmentsStore({configuration, databaseIdentifier})
+
+      await attachmentStore.ensureSchema(db)
+    }
+
+    const adapter = configuration.getBackgroundJobsAdapter()
 
     await adapter.ensureFrameworkSchema({dbs})
   }

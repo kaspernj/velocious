@@ -7,6 +7,7 @@
 - Database-cleaning metadata is transactional by default. Omit `databaseCleaning` for ordinary model and in-process request coverage so the configured testing hook keeps setup, application work, and cleanup on one rollback-owned connection.
 - Use `{transaction: false, truncate: true}` only when behavior genuinely requires independent committed sessions, DDL that auto-commits or cannot run inside the wrapper transaction, or lock contention. Truncation disables and restores constraints around every example and is substantially slower, especially on SQL Server; never use it as a timeout or isolation workaround.
 - Pool-lifecycle tests that restart or directly own their connections, and tests that never touch configured databases, can opt out without truncation using `{transaction: false, truncate: false}`. Transaction-disabled non-request tests own their checkouts; the runner does not pin or expose a shared connection for them.
+- Node tests tagged `dummy` bootstrap the shared dummy application in a short connection scope, release it, and then run the test lifecycle. Transaction-cleaned tests receive the runner-owned connection afterward; transaction-disabled tests retain independent callback checkouts.
 
 ## Browser test runner hardening
 - Ensure backend app startup/shutdown is guarded with `try/finally`.

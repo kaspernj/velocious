@@ -400,7 +400,9 @@ export default class TestRunner {
       throw new Error(`Dummy helper not found at ${dummyPath}`)
     }
 
-    await Dummy.run(callback)
+    // Release Dummy.run's bootstrap checkout before test hooks and callbacks begin.
+    await Dummy.run(async () => {})
+    await callback()
   }
 
   /**

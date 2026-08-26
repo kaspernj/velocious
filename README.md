@@ -675,8 +675,9 @@ Task.hasOneAttachment("descriptionFile")
 Task.hasOneAttachment("archivedPdf", {driver: "s3"})
 ```
 
-See [Backend record attachments](docs/attachments.md) for the complete input,
-storage-driver, lifecycle, and path-security contracts.
+`db:migrate` provisions the framework-owned attachment table before runtime
+attachment work begins. See [Backend record attachments](docs/attachments.md)
+for the complete input, storage-driver, lifecycle, and path-security contracts.
 
 You can also pass a driver class or instance directly on the attachment:
 

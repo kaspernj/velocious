@@ -265,15 +265,18 @@ export default class VelociousDatabaseMigrator {
     const environmentHandler = this.configuration.getEnvironmentHandler()
     const dbs = await this.configuration.getCurrentConnections()
     const filteredDbs = Object.fromEntries(
-      Object.entries(dbs).filter(([dbIdentifier]) => this.handlesDatabaseIdentifier(dbIdentifier))
+      Object.entries(dbs).filter(([dbIdentifier]) => {
+        if (!this.handlesDatabaseIdentifier(dbIdentifier)) return false
+
+        return Boolean(this.configuration.getDatabaseIdentifier(dbIdentifier).migrations)
+      })
     )
 
     if (!environmentHandler || Object.keys(filteredDbs).length == 0) return
 
-    // Ensure velocious' own framework schema (background jobs) before the structure
-    // dump, and unconditionally — the dump is gated to enabled environments but the
-    // framework schema must exist after every migrate so `db:migrate` (and thus
-    // schema:load of the dumped SQL) produces a complete DB in every environment.
+    // Ensure Velocious' own framework schema before the structure dump. The dump is
+    // gated to enabled environments, but migration-enabled databases must include
+    // framework tables so `db:migrate` and schema:load produce a complete database.
     await environmentHandler.ensureFrameworkSchema({dbs: filteredDbs})
     await environmentHandler.afterMigrations({dbs: filteredDbs})
   }

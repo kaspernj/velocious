@@ -119,7 +119,7 @@ async function createTaskWithProject({projectName, taskName, creatingUserReferen
   }))
 }
 
-describe("Frontend models - authorization http integration", {databaseCleaning: {transaction: false, truncate: true}}, () => {
+describe("Frontend models - authorization http integration", () => {
   it("returns no rows from toArray when read ability denies access", async () => {
     await withDeniedTaskAbilityAction("read", async () => {
       await Dummy.run(async () => {
