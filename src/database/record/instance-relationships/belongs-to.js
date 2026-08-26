@@ -19,7 +19,7 @@ export default class VelociousDatabaseRecordBelongsToInstanceRelationship extend
 
   /**
    * Runs build.
-   * @param {Record<string, ReturnType<typeof JSON.parse>>} data - Data payload.
+   * @param {ConstructorParameters<TMC>[0]} data - Target model write attributes.
    * @returns {InstanceType<TMC>} - The build.
    */
   build(data) {

@@ -353,18 +353,17 @@ export default class DbGenerateModel extends BaseCommand {
 
       for (const relationship of modelClass.getRelationships()) {
         let baseFilePath, baseFullFilePath, fileName, fullFilePath
+        const targetModelClass = relationship.getTargetModelClass()
 
-        if (relationship.getPolymorphic()) {
-          fileName = "velocious/build/src/database/record/index.js"
-        } else {
-          const targetModelClass = relationship.getTargetModelClass()
-
-          if (!targetModelClass) throw new Error(`Relationship '${relationship.getRelationshipName()}' on '${modelClass.getModelName()}' has no target model class`)
-
+        if (targetModelClass) {
           fileName = inflection.dasherize(inflection.underscore(targetModelClass.getModelName()))
           fullFilePath = `src/models/${fileName}.js`
           baseFilePath = `../model-bases/${fileName}.js`
           baseFullFilePath = `src/model-bases/${fileName}.js`
+        } else if (relationship.getPolymorphic()) {
+          fileName = "velocious/build/src/database/record/index.js"
+        } else {
+          throw new Error(`Relationship '${relationship.getRelationshipName()}' on '${modelClass.getModelName()}' has no target model class`)
         }
 
         if (methodsCount > 0) {
@@ -390,7 +389,7 @@ export default class DbGenerateModel extends BaseCommand {
           fileContent += "\n"
           fileContent += "  /**\n"
           fileContent += "   * @abstract\n"
-          fileContent += "   * @param {Record<string, ReturnType<typeof JSON.parse>>} [attributes]\n"
+          fileContent += `   * @param {ConstructorParameters<typeof import("${modelFilePath}").default>[0]} [attributes]\n`
           fileContent += `   * @returns {import("${modelFilePath}").default}\n`
           fileContent += "   */\n"
           fileContent += `  build${inflection.camelize(relationship.getRelationshipName())}(attributes) { void attributes; throw new Error("Not implemented") }\n`

@@ -1,0 +1,1 @@
+Type backend relationship `build(...)` and `create(...)` attributes from the target model's generated write contract, preserving model-valued relationship attributes while rejecting unknown or invalid attributes during type checking.

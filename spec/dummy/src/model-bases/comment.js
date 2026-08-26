@@ -87,7 +87,7 @@ export default class CommentBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @param {Record<string, ReturnType<typeof JSON.parse>>} [attributes]
+   * @param {ConstructorParameters<typeof import("../models/task.js").default>[0]} [attributes]
    * @returns {import("../models/task.js").default}
    */
   buildTask(attributes) { void attributes; throw new Error("Not implemented") }
@@ -117,7 +117,7 @@ export default class CommentBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @param {Record<string, ReturnType<typeof JSON.parse>>} [attributes]
+   * @param {ConstructorParameters<typeof import("../models/task.js").default>[0]} [attributes]
    * @returns {import("../models/task.js").default}
    */
   buildDoneTask(attributes) { void attributes; throw new Error("Not implemented") }

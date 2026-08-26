@@ -59,6 +59,8 @@ await Project.create({
 })
 ```
 
+Backend relationship `build(...)` and `create(...)` arguments use the target model's generated write-attribute type. This accepts model-valued relationship attributes while type checking rejects unknown attributes and values that do not match the related model contract.
+
 ## Two-layer opt-in
 
 ### 1. Model — `acceptsNestedAttributesFor` (Rails-style)
