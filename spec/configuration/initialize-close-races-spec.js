@@ -8,7 +8,7 @@ import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 import repoRoot from "../helpers/repo-root.js"
 
-describe("Configuration - initialize close races", {databaseCleaning: {transaction: false, truncate: false}}, () => {
+describe("Configuration - initialize close races", () => {
   it("retries the current generation after a stale model phase finishes", async () => {
     const directory = path.join(repoRoot(), "tmp", `initialize-model-close-race-${Date.now()}-${Math.random().toString(36).slice(2)}`)
     await fs.mkdir(path.join(directory, "src", "jobs"), {recursive: true})

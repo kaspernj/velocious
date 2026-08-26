@@ -80,7 +80,7 @@ function buildConfiguration(databaseConfig) {
   return configuration
 }
 
-describe("Database drivers - schema cache", {databaseCleaning: {truncate: false}}, () => {
+describe("Database drivers - schema cache", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("clears schema caches across live async-tracked pool connections", async () => {
     const pool = new AsyncTrackedMultiConnection({
       configuration: buildConfiguration({driver: SchemaCacheTestDriver, name: "schema-cache-test", type: "sqlite"}),

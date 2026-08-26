@@ -219,14 +219,14 @@ async function expectUuidColumn(driver, tableName, columnName) {
 }
 
 describe("Record - auditing", {tags: ["dummy"]}, () => {
-  it("registers audit relationships during model initialization", async () => {
+  it("registers audit relationships during model initialization", {databaseCleaning: {transaction: false, truncate: true}}, async () => {
     await withAuditScratchTables(async ({SharedAuditWidget, Widget}) => {
       expect("audits" in SharedAuditWidget.getRelationshipsMap()).toEqual(true)
       expect("audits" in Widget.getRelationshipsMap()).toEqual(true)
     })
   })
 
-  it("finalizes initialized audited models after hook-owned connection scopes close", async () => {
+  it("finalizes initialized audited models after hook-owned connection scopes close", {databaseCleaning: {transaction: false, truncate: false}}, async () => {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-audit-finalization-"))
 
     class ScopedAuditWidget extends DatabaseRecord {
@@ -278,7 +278,7 @@ describe("Record - auditing", {tags: ["dummy"]}, () => {
     }
   })
 
-  it("uses a consumer Audit model registered after an audited model initializes", async () => {
+  it("uses a consumer Audit model registered after an audited model initializes", {databaseCleaning: {transaction: false, truncate: true}}, async () => {
     await Configuration.current().ensureConnections(async (dbs) => {
       const configuration = Configuration.current()
       const driver = dbs.default
@@ -321,7 +321,7 @@ describe("Record - auditing", {tags: ["dummy"]}, () => {
     })
   })
 
-  it("does not cache shared audits for tenant-switched models initialized outside tenant scope", async () => {
+  it("does not cache shared audits for tenant-switched models initialized outside tenant scope", {databaseCleaning: {transaction: false, truncate: false}}, async () => {
     const {cleanup, configuration} = await createTenantTestConfiguration("velocious-audit-tenant")
     const tenant = {slug: "alpha"}
     const modelClasses = configuration.getModelClasses()
@@ -389,7 +389,7 @@ describe("Record - auditing", {tags: ["dummy"]}, () => {
     }
   })
 
-  it("records automatic and manual audits for audited models", async () => {
+  it("records automatic and manual audits for audited models", {databaseCleaning: {transaction: false, truncate: true}}, async () => {
     await withAuditScratchTables(async ({driver, SharedAuditWidget}) => {
       /** @type {Array<{action: string, recordId: number | string}>} */
       const events = []
@@ -445,7 +445,7 @@ describe("Record - auditing", {tags: ["dummy"]}, () => {
     })
   })
 
-  it("records audits in a dedicated widget_audits table", async () => {
+  it("records audits in a dedicated widget_audits table", {databaseCleaning: {transaction: false, truncate: true}}, async () => {
     await withAuditScratchTables(async ({driver, Widget}) => {
       await expectUuidColumn(driver, "widget_audits", "widget_id")
       await expectUuidColumn(driver, "widget_audits", "audit_action_id")
@@ -468,7 +468,7 @@ describe("Record - auditing", {tags: ["dummy"]}, () => {
     })
   })
 
-  it("auto-registers audits relationship on dedicated-table model", async () => {
+  it("auto-registers audits relationship on dedicated-table model", {databaseCleaning: {transaction: false, truncate: true}}, async () => {
     await withAuditScratchTables(async ({Widget}) => {
       const widget = await Widget.create({name: "Relationship widget"})
 
@@ -479,7 +479,7 @@ describe("Record - auditing", {tags: ["dummy"]}, () => {
     })
   })
 
-  it("calls global audit events on audit creation", async () => {
+  it("calls global audit events on audit creation", {databaseCleaning: {transaction: false, truncate: true}}, async () => {
     await withAuditScratchTables(async ({SharedAuditWidget}) => {
       let called = false
       /** @type {import("../../../src/database/record/auditing.js").AuditEventPayload | null} */

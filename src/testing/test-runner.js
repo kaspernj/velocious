@@ -94,7 +94,7 @@ import { SHARED_TRANSACTION_BROKER_ENV } from "./shared-transaction-proxy-driver
 /**
  * TestsArgument type.
  * @typedef {object} TestsArgument
- * @property {Record<string, TestData>} args - Arguments keyed by test description.
+ * @property {TestArgs} args - Arguments inherited by tests in this scope.
  * @property {boolean} [anyTestsFocussed] - Whether any tests in the tree are focused.
  * @property {AfterBeforeEachCallbackObjectType[]} afterEaches - After-each hooks for this scope.
  * @property {BeforeAfterAllCallbackObjectType[]} afterAlls - After-all hooks for this scope.
@@ -1095,10 +1095,6 @@ export default class TestRunner {
     this._testsCount = 0
     this._failedTestDetails = []
     this._testDurations = []
-    await this.importTestFiles()
-    await this.analyzeTests(tests)
-    this._onlyFocussed = this.anyTestsFocussed
-
     const testingConfigPath = this.getConfiguration().getTesting()
 
     if (testingConfigPath) {
@@ -1106,6 +1102,10 @@ export default class TestRunner {
         await this.getConfiguration().getEnvironmentHandler().importTestingConfigPath()
       })
     }
+
+    await this.importTestFiles()
+    await this.analyzeTests(tests)
+    this._onlyFocussed = this.anyTestsFocussed
   }
 
   /**
@@ -1249,12 +1249,23 @@ export default class TestRunner {
    */
   async runAfterAllsForActiveScopes() {
     const scopes = [...this._activeAfterAllScopes].reverse()
+    /** @type {unknown[]} */
+    const afterAllErrors = []
 
     for (const scope of scopes) {
-      await this.runAfterAllsForScope(scope)
+      try {
+        await this.runAfterAllsForScope(scope)
+      } catch (error) {
+        afterAllErrors.push(error)
+      }
     }
 
     this._activeAfterAllScopes = []
+
+    if (afterAllErrors.length == 1) throw afterAllErrors[0]
+    if (afterAllErrors.length > 1) {
+      throw new AggregateError(afterAllErrors, "Multiple active afterAll scopes failed", {cause: afterAllErrors[0]})
+    }
   }
 
   /**
@@ -1292,6 +1303,39 @@ export default class TestRunner {
   }
 
   /**
+   * Runs every after-each hook while preserving the first failure.
+   * @param {object} args - Hook execution arguments.
+   * @param {AfterBeforeEachCallbackObjectType[]} args.afterEaches - Hooks to run.
+   * @param {TestArgs} args.testArgs - Current test arguments.
+   * @param {TestData} args.testData - Current test data.
+   * @returns {Promise<void>} - Resolves after every hook runs.
+   */
+  async runAfterEaches({afterEaches, testArgs, testData}) {
+    /** @type {unknown[]} */
+    const afterEachErrors = []
+
+    for (const afterEachData of afterEaches) {
+      try {
+        await this.runProfileSpan({
+          phase: "afterEach",
+          declarationIndex: afterEachData.declarationIndex,
+          declarationScopeId: afterEachData.declarationScopeId,
+          filePath: afterEachData.ownerFilePath
+        }, async () => {
+          await afterEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
+        })
+      } catch (error) {
+        afterEachErrors.push(error)
+      }
+    }
+
+    if (afterEachErrors.length == 1) throw afterEachErrors[0]
+    if (afterEachErrors.length > 1) {
+      throw new AggregateError(afterEachErrors, "Multiple afterEach hooks failed", {cause: afterEachErrors[0]})
+    }
+  }
+
+  /**
    * Runs run tests.
    * @param {object} args - Options object.
    * @param {Array<AfterBeforeEachCallbackObjectType>} args.afterEaches - After eaches.
@@ -1312,9 +1356,9 @@ export default class TestRunner {
       line: tests.line,
       parentId: parentProfileScopeId
     })
-    const ownAfterEaches = this.profileHookEntries(tests.afterEaches, profileScopeId, scopeOwnerFilePath)
+    const ownAfterEaches = [...this.profileHookEntries(tests.afterEaches, profileScopeId, scopeOwnerFilePath)].reverse()
     const ownBeforeEaches = this.profileHookEntries(tests.beforeEaches, profileScopeId, scopeOwnerFilePath)
-    const newAfterEaches = [...afterEaches, ...ownAfterEaches]
+    const newAfterEaches = [...ownAfterEaches, ...afterEaches]
     const newBeforeEaches = [...beforeEaches, ...ownBeforeEaches]
     const scopeLineMatch = lineMatchedInScope || this.matchesLineFilter(tests)
     const shouldRunAnyTests = this.hasRunnableTests(tests, descriptions, scopeLineMatch)
@@ -1324,6 +1368,8 @@ export default class TestRunner {
     /** @type {ActiveAfterAllScopeEntry} */
     const scopeEntry = {tests, afterAllsRun: false, profileScopeId}
     this._activeAfterAllScopes.push(scopeEntry)
+    /** @type {unknown[]} */
+    const scopeErrors = []
 
     try {
       const beforeAlls = this.profileHookEntries(tests.beforeAlls || [], profileScopeId, scopeOwnerFilePath)
@@ -1434,92 +1480,110 @@ export default class TestRunner {
                 // use the shared connection while its coordinator is still missing.
                 testSharedConnectionRegistrations = this.activateTestSharedConnections()
                 testSharedConnectionsActive = true
+                /** @type {unknown[]} */
+                const lifecycleErrors = []
+                let runCleanupHooks = false
 
                 try {
                   if (testArgs.databaseCleaning?.transaction === true || testArgs.type == "request") {
                     sharedTransactionBrokerPreparation = await this.prepareSharedTransactionBroker()
                   }
+                  runCleanupHooks = true
+
+                  clearDeliveries()
+                  for (const beforeEachData of newBeforeEaches) {
+                    await this.runProfileSpan({
+                      phase: "beforeEach",
+                      declarationIndex: beforeEachData.declarationIndex,
+                      declarationScopeId: beforeEachData.declarationScopeId,
+                      filePath: beforeEachData.ownerFilePath
+                    }, async () => {
+                      await beforeEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
+                    })
+                  }
+
+                  const activeSharedTransactionConnections = this.sharedTransactionConnections({transactionsOnly: true})
+                  if (sharedTransactionBrokerPreparation && !this.sharedTransactionBrokerMatchesConnections(sharedTransactionBrokerPreparation, activeSharedTransactionConnections)) {
+                    this.clearTestSharedConnections(testSharedConnectionRegistrations)
+                    testSharedConnectionRegistrations = []
+                    testSharedConnectionsActive = false
+                  }
+
+                  sharedTransactionBrokerRegistration = await this.startSharedTransactionBroker(sharedTransactionBrokerPreparation, activeSharedTransactionConnections)
+                  sharedTransactionBrokerPreparation = undefined
+                  if (sharedTransactionBrokerRegistration && !testSharedConnectionsActive) {
+                    testSharedConnectionRegistrations = this.activateTestSharedConnections()
+                    testSharedConnectionsActive = true
+                  }
+
+                  // Record which test is running so an async crash (an unhandled
+                  // rejection detached from any await) that fires during or shortly
+                  // after this test can be attributed to it in run()'s handler.
+                  this._lastTestContext = {
+                    fullDescription: this.buildFullDescription(descriptions, testDescription),
+                    filePath: testData.filePath ?? "<unknown>",
+                    line: testData.line ?? 0
+                  }
+                  await this.runProfileSpan({phase: "test body", filePath: testData.ownerFilePath ?? testData.filePath}, async () => {
+                    await testData.function(testArgs)
+                  })
+                } catch (error) {
+                  lifecycleErrors.push(error)
+                }
+
+                if (runCleanupHooks) {
+                  try {
+                    // Framework-owned post-commit broadcasts are intentionally
+                    // detached; drain them before test cleanup so their DB
+                    // checkouts cannot leak into the next test's lifecycle.
+                    await this.getConfiguration().awaitPendingBroadcasts()
+                  } catch (error) {
+                    lifecycleErrors.push(error)
+                  }
 
                   try {
-                    clearDeliveries()
-                    for (const beforeEachData of newBeforeEaches) {
-                      await this.runProfileSpan({
-                        phase: "beforeEach",
-                        declarationIndex: beforeEachData.declarationIndex,
-                        declarationScopeId: beforeEachData.declarationScopeId,
-                        filePath: beforeEachData.ownerFilePath
-                      }, async () => {
-                        await beforeEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
-                      })
-                    }
-
-                    const activeSharedTransactionConnections = this.sharedTransactionConnections({transactionsOnly: true})
-                    if (sharedTransactionBrokerPreparation && !this.sharedTransactionBrokerMatchesConnections(sharedTransactionBrokerPreparation, activeSharedTransactionConnections)) {
+                    if (testSharedConnectionsActive) {
                       this.clearTestSharedConnections(testSharedConnectionRegistrations)
                       testSharedConnectionRegistrations = []
                       testSharedConnectionsActive = false
                     }
+                  } catch (error) {
+                    lifecycleErrors.push(error)
+                  }
 
-                    sharedTransactionBrokerRegistration = await this.startSharedTransactionBroker(sharedTransactionBrokerPreparation, activeSharedTransactionConnections)
+                  try {
+                    await this.stopSharedTransactionBroker(sharedTransactionBrokerRegistration || sharedTransactionBrokerPreparation)
+                    sharedTransactionBrokerRegistration = undefined
                     sharedTransactionBrokerPreparation = undefined
-                    if (sharedTransactionBrokerRegistration && !testSharedConnectionsActive) {
-                      testSharedConnectionRegistrations = this.activateTestSharedConnections()
-                      testSharedConnectionsActive = true
-                    }
+                  } catch (error) {
+                    lifecycleErrors.push(error)
+                  }
 
-                    // Record which test is running so an async crash (an unhandled
-                    // rejection detached from any await) that fires during or shortly
-                    // after this test can be attributed to it in run()'s handler.
-                    this._lastTestContext = {
-                      fullDescription: this.buildFullDescription(descriptions, testDescription),
-                      filePath: testData.filePath ?? "<unknown>",
-                      line: testData.line ?? 0
-                    }
-                    await this.runProfileSpan({phase: "test body", filePath: testData.ownerFilePath ?? testData.filePath}, async () => {
-                      await testData.function(testArgs)
-                    })
-                  } finally {
-                    try {
-                      // Framework-owned post-commit broadcasts are intentionally
-                      // detached; drain them before test cleanup so their DB
-                      // checkouts cannot leak into the next test's lifecycle.
-                      await this.getConfiguration().awaitPendingBroadcasts()
-                    } finally {
-                      try {
-                        if (testSharedConnectionsActive) {
-                          this.clearTestSharedConnections(testSharedConnectionRegistrations)
-                          testSharedConnectionRegistrations = []
-                          testSharedConnectionsActive = false
-                        }
-                      } finally {
-                        try {
-                          await this.stopSharedTransactionBroker(sharedTransactionBrokerRegistration || sharedTransactionBrokerPreparation)
-                          sharedTransactionBrokerRegistration = undefined
-                          sharedTransactionBrokerPreparation = undefined
-                        } finally {
-                          try {
-                            for (const afterEachData of newAfterEaches) {
-                              await this.runProfileSpan({
-                                phase: "afterEach",
-                                declarationIndex: afterEachData.declarationIndex,
-                                declarationScopeId: afterEachData.declarationScopeId,
-                                filePath: afterEachData.ownerFilePath
-                              }, async () => {
-                                await afterEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
-                              })
-                            }
-                          } finally {
-                            await this.cleanupTransactionalTenants(transactionalTenantRegistrations)
-                          }
-                        }
-                      }
-                    }
+                  try {
+                    await this.runAfterEaches({afterEaches: newAfterEaches, testArgs, testData})
+                  } catch (error) {
+                    lifecycleErrors.push(error)
                   }
-                } finally {
-                  if (testSharedConnectionsActive) {
+
+                  try {
+                    await this.cleanupTransactionalTenants(transactionalTenantRegistrations)
+                  } catch (error) {
+                    lifecycleErrors.push(error)
+                  }
+                }
+
+                if (testSharedConnectionsActive) {
+                  try {
                     this.clearTestSharedConnections(testSharedConnectionRegistrations)
-                    testSharedConnectionsActive = false
+                  } catch (error) {
+                    lifecycleErrors.push(error)
                   }
+                  testSharedConnectionsActive = false
+                }
+
+                if (lifecycleErrors.length == 1) throw lifecycleErrors[0]
+                if (lifecycleErrors.length > 1) {
+                  throw new AggregateError(lifecycleErrors, "Test lifecycle and cleanup failed", {cause: lifecycleErrors[0]})
                 }
               })
             })
@@ -1741,13 +1805,24 @@ export default class TestRunner {
           })
         }
       }
-    } finally {
-      await this.runAfterAllsForScope(scopeEntry)
-      const scopeIndex = this._activeAfterAllScopes.indexOf(scopeEntry)
+    } catch (error) {
+      scopeErrors.push(error)
+    }
 
-      if (scopeIndex >= 0) {
-        this._activeAfterAllScopes.splice(scopeIndex, 1)
-      }
+    try {
+      await this.runAfterAllsForScope(scopeEntry)
+    } catch (error) {
+      scopeErrors.push(error)
+    }
+    const scopeIndex = this._activeAfterAllScopes.indexOf(scopeEntry)
+
+    if (scopeIndex >= 0) {
+      this._activeAfterAllScopes.splice(scopeIndex, 1)
+    }
+
+    if (scopeErrors.length == 1) throw scopeErrors[0]
+    if (scopeErrors.length > 1) {
+      throw new AggregateError(scopeErrors, "Test scope and afterAll cleanup failed", {cause: scopeErrors[0]})
     }
   }
 
@@ -1762,21 +1837,32 @@ export default class TestRunner {
     scopeEntry.afterAllsRun = true
 
     const scopeOwnerFilePath = scopeEntry.tests.ownerFilePath ?? scopeEntry.tests.filePath
-    const afterAlls = this.profileHookEntries(
+    const afterAlls = [...this.profileHookEntries(
       scopeEntry.tests.afterAlls || [],
       scopeEntry.profileScopeId,
       scopeOwnerFilePath
-    )
+    )].reverse()
+    /** @type {unknown[]} */
+    const afterAllErrors = []
 
     for (const afterAllData of afterAlls) {
-      await this.runProfileSpan({
-        phase: "afterAll",
-        declarationIndex: afterAllData.declarationIndex,
-        declarationScopeId: afterAllData.declarationScopeId,
-        filePath: afterAllData.ownerFilePath
-      }, async () => {
-        await afterAllData.callback({configuration: this.getConfiguration()})
-      })
+      try {
+        await this.runProfileSpan({
+          phase: "afterAll",
+          declarationIndex: afterAllData.declarationIndex,
+          declarationScopeId: afterAllData.declarationScopeId,
+          filePath: afterAllData.ownerFilePath
+        }, async () => {
+          await afterAllData.callback({configuration: this.getConfiguration()})
+        })
+      } catch (error) {
+        afterAllErrors.push(error)
+      }
+    }
+
+    if (afterAllErrors.length == 1) throw afterAllErrors[0]
+    if (afterAllErrors.length > 1) {
+      throw new AggregateError(afterAllErrors, "Multiple afterAll hooks failed", {cause: afterAllErrors[0]})
     }
   }
 

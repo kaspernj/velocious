@@ -18,7 +18,7 @@ import Migration from "../../../src/database/migration/index.js"
  * formed") because its default id type is BIGINT.
  */
 describe("database - migration - addForeignKey options", {tags: ["dummy"]}, () => {
-  it("derives column / referenced-table / constraint name from the reference name when no options given", async () => {
+  it("derives column / referenced-table / constraint name from the reference name when no options given", {databaseCleaning: {transaction: false, truncate: true}}, async () => {
     const configuration = Configuration.current()
 
     await configuration.ensureConnections(async (dbs) => {
@@ -48,7 +48,7 @@ describe("database - migration - addForeignKey options", {tags: ["dummy"]}, () =
     })
   })
 
-  it("accepts a columnName override when the FK column does not follow the <reference>_id convention", async () => {
+  it("accepts a columnName override when the FK column does not follow the <reference>_id convention", {databaseCleaning: {transaction: false, truncate: true}}, async () => {
     const configuration = Configuration.current()
 
     await configuration.ensureConnections(async (dbs) => {
@@ -80,7 +80,7 @@ describe("database - migration - addForeignKey options", {tags: ["dummy"]}, () =
     })
   })
 
-  it("accepts referencedTableName + referencedColumnName overrides when the referenced row does not follow the convention", async () => {
+  it("accepts referencedTableName + referencedColumnName overrides when the referenced row does not follow the convention", {databaseCleaning: {transaction: false, truncate: true}}, async () => {
     const configuration = Configuration.current()
 
     await configuration.ensureConnections(async (dbs) => {

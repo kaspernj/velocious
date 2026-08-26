@@ -27,7 +27,7 @@ const tests = {
    * Narrows the runtime value to the documented type.
    * @type {import("./test-runner.js").BeforeAfterAllCallbackObjectType[]} */
   afterAlls: [],
-  args: {},
+  args: {databaseCleaning: {transaction: true}},
 
   /**
    * Narrows the runtime value to the documented type.

@@ -6,7 +6,7 @@ import MysqlDriver from "../../../src/database/drivers/mysql/index.js"
 import TableColumn from "../../../src/database/table-data/table-column.js"
 
 describe("database - migration - datetime storage", {tags: ["dummy"]}, () => {
-  it("converts legacy local SQLite datetime rows to UTC storage", async () => {
+  it("converts legacy local SQLite datetime rows to UTC storage", {databaseCleaning: {transaction: false, truncate: true}}, async () => {
     await Configuration.current().ensureConnections(async (dbs) => {
       const db = dbs.default
       const tableName = "legacy_datetime_storage_records"
@@ -52,7 +52,7 @@ describe("database - migration - datetime storage", {tags: ["dummy"]}, () => {
     })
   })
 
-  it("defaults MySQL datetime columns to millisecond precision while preserving explicit precision", async () => {
+  it("defaults MySQL datetime columns to millisecond precision while preserving explicit precision", {databaseCleaning: {transaction: false, truncate: true}}, async () => {
     const mysqlDriver = new MysqlDriver({type: "mysql"}, Configuration.current())
     const defaultPrecisionColumn = new TableColumn("recorded_at", {isNewColumn: true, type: "datetime"})
     const explicitPrecisionColumn = new TableColumn("precise_at", {isNewColumn: true, precision: 6, type: "datetime"})

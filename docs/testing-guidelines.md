@@ -4,6 +4,9 @@
 - Prefer end-to-end/browser integration tests over stub-only tests for frontend-model behavior.
 - Validate actual browser-to-backend HTTP behavior using Velocious browser test runner.
 - Use the [Factory framework](factories.md) to build/create test data instead of repeating direct `Model.create(...)` setup; cover its persistence/association behavior with real dummy-app models in `*.browser-spec.js` files.
+- Database-cleaning metadata is transactional by default. Omit `databaseCleaning` for ordinary model and in-process request coverage so the configured testing hook keeps setup, application work, and cleanup on one rollback-owned connection.
+- Use `{transaction: false, truncate: true}` only when behavior genuinely requires independent committed sessions, DDL that auto-commits or cannot run inside the wrapper transaction, or lock contention. Truncation disables and restores constraints around every example and is substantially slower, especially on SQL Server; never use it as a timeout or isolation workaround.
+- Pool-lifecycle tests that restart or directly own their connections, and tests that never touch configured databases, can opt out without truncation using `{transaction: false, truncate: false}`.
 
 ## Browser test runner hardening
 - Ensure backend app startup/shutdown is guarded with `try/finally`.

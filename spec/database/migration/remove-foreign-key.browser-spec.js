@@ -4,7 +4,7 @@ import Configuration from "../../../src/configuration.js"
 import { describe, expect, it } from "../../../src/testing/test.js"
 import Migration from "../../../src/database/migration/index.js"
 
-describe("database - migration - removeForeignKey", {tags: ["dummy"]}, () => {
+describe("database - migration - removeForeignKey", {databaseCleaning: {transaction: false, truncate: true}, tags: ["dummy"]}, () => {
   it("removes the requested foreign key without removing its column or ordinary index", async () => {
     const configuration = Configuration.current()
 

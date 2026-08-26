@@ -335,7 +335,7 @@ class AllColumnsPluckTaskFrontendResource extends FrontendModelBaseResource {
   static builtInCollectionCommands = ["index"]
 }
 
-describe("Controller frontend model actions", {databaseCleaning: {transaction: true}}, () => {
+describe("Controller frontend model actions", () => {
   it("does not override scoped distinct when distinct param is omitted", async () => {
     await withTaskReadDistinctAbilityScope(async () => {
       await Dummy.run(async () => {
@@ -411,16 +411,20 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: t
     })
   })
 
-  it("checks shared frontend-model API controller action connections back in", {databaseCleaning: {transaction: false, truncate: true}}, async () => {
+  it("checks shared frontend-model API controller action connections back in", async () => {
     await Dummy.run(async () => {
-      await createTask("Connection checkout release")
+      const defaultPool = dummyConfiguration.getDatabasePool("default")
+
+      // This assertion covers production-style pool checkout rather than the test transaction reuse path.
+      defaultPool.clearTestSharedConnection()
+      expect(defaultPool.testSharedConnection()).toBeUndefined()
 
       const successPayload = await postFrontendModel("/frontend-models", {
         requests: [
           {
             commandType: "index",
             model: "Task",
-            payload: {where: {name: "Connection checkout release"}},
+            payload: {where: {name: "Missing connection checkout record"}},
             requestId: "request-1"
           }
         ]

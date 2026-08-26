@@ -292,7 +292,7 @@ async function withIsolatedPool(callback) {
 
 // Mutates `pool.connections` and asserts on a snapshot of `connectionsInUse`,
 // so run against a freshly restarted Dummy to isolate from other pool specs.
-describe("database - pool - async tracked multi connection reuse", () => {
+describe("database - pool - async tracked multi connection reuse", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("checks connections back in and reuses them", async () => {
     await Dummy.run(async () => {
       const pool = getPool()

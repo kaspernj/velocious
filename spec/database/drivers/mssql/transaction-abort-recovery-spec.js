@@ -3,7 +3,7 @@
 import Configuration from "../../../../src/configuration.js"
 import {describe, expect, it} from "../../../../src/testing/test.js"
 
-describe("Database - drivers - mssql transaction abort recovery", {tags: ["dummy"]}, () => {
+describe("Database - drivers - mssql transaction abort recovery", {databaseCleaning: {transaction: false, truncate: true}, tags: ["dummy"]}, () => {
   it("recovers after SQL Server aborts a transaction via XACT_ABORT", async () => {
     await Configuration.current().ensureConnections(async (dbs) => {
       const db = dbs.mssql

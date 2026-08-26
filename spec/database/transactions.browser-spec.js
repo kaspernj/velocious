@@ -5,7 +5,7 @@ import Task from "../dummy/src/models/task.js"
 import Configuration from "../../src/configuration.js"
 import {ValidationError} from "../../src/database/record/index.js"
 
-describe("database - transactions", {tags: ["dummy"]}, () => {
+describe("database - transactions", {databaseCleaning: {transaction: false, truncate: true}, tags: ["dummy"]}, () => {
   it("supports transactions and savepoints", async () => {
     await Configuration.current().ensureConnections(async (dbs) => {
       const db = dbs.default

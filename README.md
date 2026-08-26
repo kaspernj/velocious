@@ -2169,6 +2169,8 @@ If you are developing on Velocious, you can run the tests with:
 
 Tests default to a 60-second timeout. Override per test with `{timeoutSeconds: 5}` or set a suite-wide default via `configureTests({defaultTimeoutSeconds: 30})`.
 
+Database-backed tests default `testArgs.databaseCleaning` to transaction rollback. The configured testing hook uses this metadata to cover `beforeEach`, the test body, and `afterEach` hooks on one pinned connection. Use `{databaseCleaning: {transaction: false, truncate: true}}` only for behavior that requires physical root transactions, independent commits, DDL that auto-commits or cannot run inside the wrapper transaction, lock contention, or genuine concurrency. Tests that own their pool lifecycle or use only private databases can disable configured cleaning with `{databaseCleaning: {transaction: false, truncate: false}}`. See [database cleanup guidance](docs/testing-guidelines.md#preferred-strategy).
+
 Truncation-based test cleanup batches eligible tables into one request on PostgreSQL,
 SQL Server, and SQLite while preserving each driver's existing identity behavior,
 foreign-key restoration, stale-schema retry, and SQL.js persistence guarantees.
