@@ -20,7 +20,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
 
   /**
    * Runs build.
-   * @param {Record<string, ReturnType<typeof JSON.parse>>} data - Data payload.
+   * @param {ConstructorParameters<TMC>[0]} data - Target model write attributes.
    * @returns {InstanceType<TMC>} - The build.
    */
   build(data) {
@@ -84,7 +84,7 @@ export default class VelociousDatabaseRecordHasManyInstanceRelationship extends 
 
   /**
    * Runs create.
-   * @param {Record<string, ReturnType<typeof JSON.parse>>} data - Data payload.
+   * @param {ConstructorParameters<TMC>[0]} data - Target model write attributes.
    * @returns {Promise<InstanceType<TMC>>} - Resolves with the create.
    */
   async create(data) {

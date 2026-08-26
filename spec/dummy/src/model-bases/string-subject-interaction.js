@@ -98,7 +98,7 @@ export default class StringSubjectInteractionBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @param {Record<string, ReturnType<typeof JSON.parse>>} [attributes]
+   * @param {ConstructorParameters<typeof import("velocious/build/src/database/record/index.js").default>[0]} [attributes]
    * @returns {import("velocious/build/src/database/record/index.js").default}
    */
   buildSubject(attributes) { void attributes; throw new Error("Not implemented") }

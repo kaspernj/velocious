@@ -1,0 +1,1 @@
+Type backend relationship `build(...)` and `create(...)` attributes from concrete target models' generated write contracts, preserving model-valued relationship attributes while rejecting unknown or invalid attributes during type checking. Targetless polymorphic `belongsTo` builders remain generic because they have no single target write contract.

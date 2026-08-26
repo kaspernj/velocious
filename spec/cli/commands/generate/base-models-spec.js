@@ -119,6 +119,8 @@ describe("Cli - generate - base-models", () => {
     const sourceText = `
       import Task from "${dummyDirectory()}/src/models/task.js"
       import Project from "${dummyDirectory()}/src/models/project.js"
+      import Comment from "${dummyDirectory()}/src/models/comment.js"
+      import Interaction from "${dummyDirectory()}/src/models/interaction.js"
 
       async function checkWrites() {
         const project = await Project.create({})
@@ -137,6 +139,35 @@ describe("Cli - generate - base-models", () => {
         await task.update({typo: "Generated typing works"})
         // @ts-expect-error belongs-to write attributes require the related model
         await task.update({project: "wrong"})
+
+        const comment = new Comment()
+        comment.buildTask({name: "Generated relationship build typing works", project})
+        project.tasks().build({name: "Generated collection build typing works", project})
+        await project.tasks().create({name: "Generated collection create typing works", project})
+        project.buildPrimaryInteraction({kind: "Generated polymorphic relationship build typing works"})
+        project.interactions().build({kind: "Generated polymorphic collection build typing works"})
+        await project.interactions().create({kind: "Generated polymorphic collection create typing works"})
+
+        const interaction = new Interaction()
+        interaction.buildSubject({typo: "Targetless polymorphic belongs-to attributes remain generic"})
+        // @ts-expect-error generated singular relationship builders reject unknown attributes
+        comment.buildTask({typo: "Generated relationship build typing works"})
+        // @ts-expect-error generated singular relationship builders require the related model
+        comment.buildTask({name: "Generated relationship build typing works", project: "wrong"})
+        // @ts-expect-error relationship collection builders reject unknown attributes
+        project.tasks().build({typo: "Generated collection build typing works"})
+        // @ts-expect-error relationship collection builders require the related model
+        project.tasks().build({name: "Generated collection build typing works", project: "wrong"})
+        // @ts-expect-error relationship collection creators reject unknown attributes
+        await project.tasks().create({typo: "Generated collection create typing works"})
+        // @ts-expect-error relationship collection creators require the related model
+        await project.tasks().create({name: "Generated collection create typing works", project: "wrong"})
+        // @ts-expect-error generated polymorphic singular builders reject unknown attributes
+        project.buildPrimaryInteraction({typo: "Generated polymorphic relationship build typing works"})
+        // @ts-expect-error polymorphic relationship collection builders reject unknown attributes
+        project.interactions().build({typo: "Generated polymorphic collection build typing works"})
+        // @ts-expect-error polymorphic relationship collection creators reject unknown attributes
+        await project.interactions().create({typo: "Generated polymorphic collection create typing works"})
       }
 
       checkWrites()

@@ -1133,6 +1133,8 @@ FrontendModelBase.setAutoload(false)
 
 Scoped frontend queries (e.g. `Task.where(...).preload([name]).toArray()` from user code) bypass cohort batching by design, same as the backend. Siblings with locally set state from `.setRelationship()` / `.build()` are preserved across cohort batches.
 
+Backend relationship `build(...)` / `create(...)` helpers and generated singular builders with a concrete target use that model's generated write-attribute type. Model-valued relationship attributes are accepted, while unknown and invalid attributes fail type checking. Targetless polymorphic `belongsTo` builders remain generic because no single target write contract exists. See [docs/relationships.md](docs/relationships.md#building-related-records).
+
 ## Through relationships
 
 Use the `through` option on `hasMany` to define a relationship that traverses an intermediate (join) table:

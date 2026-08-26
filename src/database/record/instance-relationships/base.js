@@ -55,7 +55,7 @@ export default class VelociousDatabaseRecordBaseInstanceRelationship {
   /**
    * Runs build.
    * @abstract
-   * @param {Record<string, ReturnType<typeof JSON.parse>>} attributes - Attributes.
+   * @param {ConstructorParameters<TMC>[0]} attributes - Target model write attributes.
    * @returns {InstanceType<TMC>} - The build.
    */
   build(attributes) { // eslint-disable-line no-unused-vars
