@@ -448,13 +448,16 @@ required:
    recurring schedule ownership, dispatch of ordinary queued work, and new worker
    handoffs. Workers stop accepting handoffs.
 3. Keep the old main running on its old endpoint with its old workers. It
-   continues owning worker connections and heartbeats, completion/failure
-   acknowledgements, durable report retries, per-job timeouts, child reaping, and
-   durable state transitions for every handoff it made.
-4. Work returned or retried to the shared queue becomes eligible for the new
+   continues owning worker connections and heartbeats, lease fencing, terminal-
+   report acceptance and acknowledgement, and durable store transitions for
+   every handoff it made.
+4. Keep the old workers and their reporting paths bound to that endpoint. They
+   continue owning durable terminal-report retry and report-promise draining,
+   per-job timeout execution, and child-runner reaping until their work settles.
+5. Work returned or retried to the shared queue becomes eligible for the new
    active generation; the retired main never dispatches it again. Old workers do
    not reconnect or transfer handoffs to the new main.
-5. Exit the old main only after all of its handoffs settle and all of its workers
+6. Exit the old main only after all of its handoffs settle and all of its workers
    drain and exit. The supervisor may then reap the generation and release the
    old release's cleanup pin.
 
@@ -472,12 +475,15 @@ draining jobs generation. Runtime-owner/version replacement likewise preserves
 or transfers durable supervision and returns after the replacement is healthy;
 it is not a full synchronous shutdown.
 
-Velocious supplies the worker/main protocol duties, including handoff fencing,
-reports, per-job timeouts, and child reaping. The supervisor supplies generation
-process/endpoint ownership and durable recovery. The deployment tool supplies
-activation, deploy locking, and release cleanup pins. Current main startup
-adoption support alone does not provide this topology; do not claim compliance
-until the retirement quiescence and durable supervision paths exist end to end.
+Within the Velocious worker/main protocol, jobs-main owns worker connections,
+lease fencing, report acceptance/acknowledgement, and durable store transitions;
+the worker/reporting side owns durable terminal-report retry, report-promise
+draining, per-job timeout execution, and child-runner reaping. The supervisor
+supplies generation process/endpoint ownership and durable recovery. The
+deployment tool supplies activation, deploy locking, and release cleanup pins.
+Current main startup adoption support alone does not provide this topology; do
+not claim compliance until the retirement quiescence and durable supervision
+paths exist end to end.
 
 ## Worker shutdown and process-job draining
 
