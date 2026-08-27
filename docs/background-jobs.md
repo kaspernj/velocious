@@ -443,11 +443,18 @@ In a release-directory production topology, a runtime generation consists of one
 release-scoped `background-jobs-main` plus its worker pool. This behavior is
 required:
 
-1. Start the complete candidate jobs generation before candidate activation.
-2. After activation, retire the old main and workers as one unit. The main stops
-   recurring schedule ownership, dispatch of ordinary queued work, and new worker
-   handoffs. Workers stop accepting handoffs.
-3. Keep the old main running on its old endpoint with its old workers. It
+1. Start the complete candidate jobs generation before candidate activation in a
+   pre-activation quiescent state. Its main and workers may initialize, connect,
+   and prove health, but the candidate main does not own recurring schedules,
+   dispatch queued work, or issue handoffs, and its workers do not accept
+   handoffs.
+2. As part of the fenced activation transition, revoke the old main’s recurring
+   schedule ownership, queued-work dispatch, and new handoffs before the
+   candidate main acquires those responsibilities. Only the active generation
+   may own scheduling and dispatch. The old workers stop accepting handoffs in
+   the same transition.
+3. After activation, retire the old main and workers as one unit. Keep the old
+   main running on its old endpoint with its old workers. It
    continues owning worker connections and heartbeats, lease fencing, terminal-
    report acceptance and acknowledgement, and durable store transitions for
    every handoff it made.
