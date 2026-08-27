@@ -10,6 +10,14 @@ database scopes, and framework error events.
 This integration does not add a `Configuration.rampway` setting or restore the
 former Velocious-owned deployment controllers and stores.
 
+For background jobs, the ownership boundary extends beyond API mounting:
+Velocious owns the jobs-main/worker protocol and handoff durability, Rollbridge
+owns release-scoped generation processes and their asynchronous supervision, and
+Rampway owns activation, the deploy lock, release-retention metadata, and cleanup
+pins. A successful deployment must return after candidate activation and health,
+without waiting for retired jobs generations or HTTP/WebSocket connections.
+See [release-generation draining](background-jobs.md#release-generation-draining).
+
 ## Install and mount
 
 Install Rampway in the consuming application. Rampway 0.4.0 declares Velocious
