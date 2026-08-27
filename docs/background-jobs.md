@@ -333,7 +333,14 @@ Graceful draining is unchanged. A worker that announces `draining` keeps its soc
 
 The fenced protocol uses an explicit worker handshake capability. A main process that creates lease ids dispatches new jobs only to workers advertising handoff-id reporting; older workers remain connected so they can report legacy handoffs that have no lease id. During a rolling upgrade, upgrade workers before the main process to avoid pausing new dispatch while only legacy workers are connected.
 
-Restarting the **main** (every deploy) uses a bounded worker-reconnect generation. Before listening, the new main snapshots only complete lease-aware `handed_off` rows. A surviving worker reconnects with its stable id (`hello`), and the main queries and adopts its still-active handoffs into the new socket's lease map. When reconnect grace expires, reclaim first waits for the fixed set of adoption queries already in flight at that deadline. That wait is capped at one additional reconnect-grace interval, so an ordinary slow query can finish without racing reclaim while a stuck adapter query cannot block startup cleanup forever. The worker id is excluded from startup reclaim only after its adoption query succeeds while the same socket is still connected. A rejected query, a socket lost during the query, or a query still stuck after the bounded wait remains eligible for the startup reclaim pass. If a successfully adopted worker later disconnects, those leases are released like any other; while it remains connected, they are untouched.
+An unexpected **main** restart can use a bounded worker-reconnect recovery. Before listening, the replacement main snapshots only complete lease-aware `handed_off` rows. A surviving worker reconnects with its stable id (`hello`), and the main queries and adopts its still-active handoffs into the new socket's lease map. When reconnect grace expires, reclaim first waits for the fixed set of adoption queries already in flight at that deadline. That wait is capped at one additional reconnect-grace interval, so an ordinary slow query can finish without racing reclaim while a stuck adapter query cannot block startup cleanup forever. The worker id is excluded from startup reclaim only after its adoption query succeeds while the same socket is still connected. A rejected query, a socket lost during the query, or a query still stuck after the bounded wait remains eligible for the startup reclaim pass. If a successfully adopted worker later disconnects, those leases are released like any other; while it remains connected, they are untouched.
+
+This adoption path is crash/legacy recovery, not normal deployment draining. A
+normal release deploy must keep the old main alive on its old endpoint with the
+workers and handoffs it already owns. Old workers must not reconnect to or be
+handed over to the candidate main. An integration that restarts jobs-main on
+every deploy and relies on this adoption path does not implement the required
+release-generation contract below.
 
 After a 30-second reconnect grace, the main passes only snapshots belonging to worker ids that did not successfully adopt through a still-live connection to the store's orphan transition. Every update is fenced on the exact startup `jobId`, `handoffId`, `workerId`, and `handedOffAtMs`. A lease completed or returned during the grace, re-handed-off under a newer lease, created after startup, or owned by any worker that successfully adopted cannot be reclaimed. Accepted rows use the ordinary orphan failure lifecycle: attempts and status counts update, retries keep their configured backoff, terminal rows become `orphaned`, concurrency reservations and schedule ownership are released correctly, `background-job-orphaned` events fire, and the queue is awakened so newly unblocked work can dispatch. Legacy rows without a complete exact lease identity remain under the two-hour age sweep. This is at-least-once recovery: a worker process that stayed alive but could not reconnect before the grace may still have performed external side effects, so jobs requiring exactly-once effects must use application-level idempotency.
 
@@ -430,7 +437,62 @@ configuration.getErrorEvents().on("background-job-orphaned", ({error, context}) 
 
 The `background-job-orphaned` payload mirrors `background-job-failed`: `error` (the orphan reason as an `Error`) and `context` with `attempts`, `jobArgs`, `jobId`, `jobName`, `maxRetries`, `status`, `terminal`, `willRetry`, and `stage: "background-job-orphaned"`. `willRetry` is `true` when the reclaim returned the job to the queue for another attempt (retries remaining) and `false` when it was exhausted into a terminal `orphaned` state.
 
-## Worker Shutdown And Process-Job Draining
+## Release-generation draining
+
+In a release-directory production topology, a runtime generation consists of one
+release-scoped `background-jobs-main` plus its worker pool. This behavior is
+required:
+
+1. Start the complete candidate jobs generation before candidate activation in a
+   pre-activation quiescent state. Its main and workers may initialize, connect,
+   and prove health, but the candidate main does not own recurring schedules,
+   dispatch queued work, or issue handoffs, and its workers do not accept
+   handoffs.
+2. As part of the fenced activation transition, revoke the old main’s recurring
+   schedule ownership, queued-work dispatch, and new handoffs before the
+   candidate main acquires those responsibilities. Only the active generation
+   may own scheduling and dispatch. The old workers stop accepting handoffs in
+   the same transition.
+3. After activation, retire the old main and workers as one unit. Keep the old
+   main running on its old endpoint with its old workers. It
+   continues owning worker connections and heartbeats, lease fencing, terminal-
+   report acceptance and acknowledgement, and durable store transitions for
+   every handoff it made.
+4. Keep the old workers and their reporting paths bound to that endpoint. They
+   continue owning durable terminal-report retry and report-promise draining,
+   per-job timeout execution, and child-runner reaping until their work settles.
+5. Work returned or retried to the shared queue becomes eligible for the new
+   active generation; the retired main never dispatches it again. Old workers do
+   not reconnect or transfer handoffs to the new main.
+6. Exit the old main only after all of its handoffs settle and all of its workers
+   drain and exit. The supervisor may then reap the generation and release the
+   old release's cleanup pin.
+
+Generations may overlap for hours and use different jobs-main endpoints while
+sharing durable queue storage and, optionally, Beacon. Multiple retired
+generations may drain concurrently. The process supervisor must durably preserve
+their identities, endpoints, owned processes, and release references across
+later deploys and supervisor/host recovery.
+
+Deployment succeeds after the candidate release is activated and healthy. The
+deploy command and deploy lock do not wait for retired jobs generations, jobs,
+workers, HTTP/WebSocket connections, or other retained services. HTTP/WebSocket
+drain is independent: completing or timing it out must never kill a still-
+draining jobs generation. Runtime-owner/version replacement likewise preserves
+or transfers durable supervision and returns after the replacement is healthy;
+it is not a full synchronous shutdown.
+
+Within the Velocious worker/main protocol, jobs-main owns worker connections,
+lease fencing, report acceptance/acknowledgement, and durable store transitions;
+the worker/reporting side owns durable terminal-report retry, report-promise
+draining, per-job timeout execution, and child-runner reaping. The supervisor
+supplies generation process/endpoint ownership and durable recovery. The
+deployment tool supplies activation, deploy locking, and release cleanup pins.
+Current main startup adoption support alone does not provide this topology; do
+not claim compliance until the retirement quiescence and durable supervision
+paths exist end to end.
+
+## Worker shutdown and process-job draining
 
 When a `background-jobs-worker` receives `SIGTERM`/`SIGINT` it stops accepting new
 work, drains in-flight jobs, and exits. Out-of-process jobs include
@@ -477,6 +539,11 @@ window, set this timeout shorter than that window so the worker reaps its proces
 runners itself before the supervisor's `SIGKILL` (which would orphan them). With
 the indefinite default, give the supervisor a graceful-stop window at least as
 long as your longest job instead.
+
+This worker-local setting does not bound deployment completion. Normal deploy
+retirement is asynchronous, and an hours-long legitimate job makes an hours-long
+generation drain valid. Use per-job timeout for a genuinely hung job; do not set
+a short normal shutdown timeout merely to make deploy return.
 
 ## Job Timeout (hung-runner backstop)
 
