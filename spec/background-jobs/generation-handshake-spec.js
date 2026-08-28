@@ -1,11 +1,115 @@
 // @ts-check
 
 import timeout from "awaitery/build/timeout.js"
+import BackgroundJobsClient from "../../src/background-jobs/client.js"
+import BackgroundJobsStatusReporter from "../../src/background-jobs/status-reporter.js"
+import BackgroundJobsWorker from "../../src/background-jobs/worker.js"
+import Configuration from "../../src/configuration.js"
+import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
 import { startBackgroundJobsMain } from "../helpers/background-jobs-helper.js"
 import { connectGenerationPeer } from "../helpers/background-jobs-generation-harness.js"
+import stalledSocketServer from "../helpers/stalled-socket-server.js"
+import dummyConfiguration from "../dummy/src/config/configuration.js"
 import { describe, expect, it } from "../../src/testing/test.js"
 
+/**
+ * Captures an expected request failure within a test-only deadlock guard.
+ * @param {() => Promise<void>} callback - Request expected to reject.
+ * @returns {Promise<Error>} - Captured failure.
+ */
+async function requestError(callback) {
+  try {
+    await timeout({errorMessage: "Test guard expired before generation handshake failure", timeout: 250}, callback)
+  } catch (error) {
+    if (error instanceof Error) return error
+    throw error
+  }
+
+  throw new Error("Expected generation handshake to fail")
+}
+
+/**
+ * Builds an isolated socket-only configuration.
+ * @param {{host: string, port: number}} endpoint - Stalled peer endpoint.
+ * @returns {Configuration} - Isolated configuration.
+ */
+function socketConfiguration(endpoint) {
+  return new Configuration({
+    backgroundJobs: endpoint,
+    directory: process.cwd(),
+    environment: "test",
+    environmentHandler: new EnvironmentHandlerNode(),
+    initializeModels: async () => {},
+    locale: "en",
+    localeFallbacks: {en: ["en"]}
+  })
+}
+
 describe("Background jobs generation handshake", () => {
+  it("bounds worker acknowledgement and closes a stalled real socket before readiness", async () => {
+    const stalled = await stalledSocketServer()
+    const worker = new BackgroundJobsWorker({
+      closeDatabaseConnectionsOnStop: false,
+      configuration: dummyConfiguration,
+      generationHandshakeTimeoutMs: 25,
+      generationId: "release-stalled-worker",
+      host: stalled.host,
+      port: stalled.port
+    })
+
+    try {
+      const error = await requestError(async () => await worker.start())
+
+      expect(error.name).toEqual("BackgroundJobsGenerationHandshakeTimeoutError")
+      expect(error.message).toMatch(/worker.*release-stalled-worker.*25ms.*127\.0\.0\.1/)
+      await stalled.requestReceived
+      await timeout({errorMessage: "Timed-out worker socket stayed open", timeout: 250}, async () => await stalled.connectionClosed)
+      expect(stalled.requestCount()).toEqual(1)
+      expect(stalled.requests()[0]).toMatchObject({type: "hello", role: "worker", generationId: "release-stalled-worker"})
+      expect(worker._generationAccepted).toEqual(false)
+    } finally {
+      await worker.stop()
+      await stalled.close()
+    }
+  })
+
+  it("bounds client and reporter handshakes before either sends a mutation", async () => {
+    for (const role of ["client", "reporter"]) {
+      const stalled = await stalledSocketServer()
+
+      try {
+        let error
+        if (role === "client") {
+          const client = new BackgroundJobsClient({
+            configuration: socketConfiguration({host: stalled.host, port: stalled.port}),
+            generationHandshakeTimeoutMs: 25,
+            generationId: "release-stalled-request"
+          })
+          error = await requestError(async () => { await client.replaceScheduled({scheduleKey: "stalled", jobName: "NeverSent", args: []}) })
+        } else {
+          const reporter = new BackgroundJobsStatusReporter({
+            attemptTimeoutMs: 200,
+            configuration: dummyConfiguration,
+            generationHandshakeTimeoutMs: 25,
+            generationId: "release-stalled-request",
+            host: stalled.host,
+            port: stalled.port
+          })
+          error = await requestError(async () => { await reporter.report({jobId: "never-mutated", status: "completed"}) })
+        }
+
+        expect(error.name).toEqual("BackgroundJobsGenerationHandshakeTimeoutError")
+        expect(error.message).toMatch(new RegExp(`${role}.*release-stalled-request.*25ms`))
+        await stalled.requestReceived
+        await timeout({errorMessage: `Timed-out ${role} socket stayed open`, timeout: 250}, async () => await stalled.connectionClosed)
+        expect(stalled.requestCount()).toEqual(1)
+        expect(stalled.requests()[0]).toMatchObject({type: "hello", role, generationId: "release-stalled-request"})
+      } finally {
+        await stalled.close()
+      }
+    }
+  })
+
   it("acknowledges same-generation worker, client, and reporter peers", async () => {
     const {main} = await startBackgroundJobsMain({
       backgroundJobsConfig: {generationId: "release-a", initialGenerationState: "active"}

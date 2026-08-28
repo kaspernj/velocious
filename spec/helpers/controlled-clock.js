@@ -3,7 +3,7 @@
 /**
  * Creates a deterministic wall clock for generation grace boundaries.
  * @param {number} [nowMs] - Initial epoch time.
- * @returns {{clearTimeout: (timerId: number | ReturnType<typeof setTimeout>) => void, now: () => number, pendingCount: () => number, runAll: () => void, setTimeout: (callback: () => void, delayMs: number) => number}} - Clock controls.
+ * @returns {{advance: (milliseconds: number) => void, clearTimeout: (timerId: number | ReturnType<typeof setTimeout>) => void, now: () => number, pendingCount: () => number, runAll: () => void, setTimeout: (callback: () => void, delayMs: number) => number}} - Clock controls.
  */
 export default function controlledClock(nowMs = Date.now()) {
   let nextTimerId = 0
@@ -11,6 +11,7 @@ export default function controlledClock(nowMs = Date.now()) {
   const callbacks = new Map()
 
   return {
+    advance: (milliseconds) => { nowMs += milliseconds },
     clearTimeout: (timerId) => {
       if (typeof timerId === "number") callbacks.delete(timerId)
     },

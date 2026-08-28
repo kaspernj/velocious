@@ -10,6 +10,87 @@ const WORKER_A_OTHER_ID = "release-a:ad5497b6-f91c-4216-bdbb-ea54c7bb4136"
 const WORKER_B_ID = "release-b:22705b08-65e6-4815-951b-2dd486ad295f"
 
 describe("Background jobs generation disconnect grace", () => {
+  it("admits only an exact recoverable worker during the retiring fence", async () => {
+    const secondClaim = promiseBarrier()
+    const disconnected = promiseBarrier()
+    let claimCount = 0
+    let readyCount = 0
+    const {main, store} = await startGenerationMain({
+      afterHandoffClaim: async () => {
+        claimCount += 1
+        if (claimCount === 2) {
+          secondClaim.entered()
+          await secondClaim.blocked
+        }
+      },
+      generationId: "release-a",
+      initialGenerationState: "active",
+      onWorkerDisconnected: disconnected.entered,
+      onWorkerReady: () => { readyCount += 1 },
+      workerReconnectGraceMs: 2_147_483_647
+    })
+    const firstPeer = await connectGenerationPeer(main.getPort())
+    const reconnectingPeer = await connectGenerationPeer(main.getPort())
+    const newPeer = await connectGenerationPeer(main.getPort())
+
+    try {
+      await registerGenerationWorker(firstPeer, "release-a", WORKER_A_ID, true)
+      const firstDelivery = firstPeer.nextMessage()
+      const firstJobId = await store.enqueue({jobName: "RetiringReconnectJob", args: [], options: {executionMode: "inline"}})
+      await main._drain()
+      const firstLease = await firstDelivery
+      if (firstLease.type !== "job") throw new Error("Expected first retiring handoff")
+
+      firstPeer.jsonSocket.send({type: "ready", acceptsInline: true, acceptsForked: false, acceptsPooled: false, acceptsSpawned: false})
+      const secondJobId = await store.enqueue({jobName: "RetiringFenceJob", args: [], options: {executionMode: "inline"}})
+      const crossingDrain = main._drain()
+      await secondClaim.waiting
+      const retirement = main.retire()
+      expect(main.getLifecycleState()).toEqual("retiring")
+      const readyCountAtRetirement = readyCount
+
+      await firstPeer.close()
+      await disconnected.waiting
+      expect(await registerGenerationWorker(newPeer, "release-a", WORKER_A_OTHER_ID)).toEqual({
+        type: "generation-rejected",
+        reason: "worker-has-no-recoverable-handoffs"
+      })
+      expect(await registerGenerationWorker(reconnectingPeer, "release-a", WORKER_A_ID)).toMatchObject({
+        type: "generation-accepted",
+        lifecycleState: "retiring"
+      })
+      expect(await reconnectingPeer.nextMessage()).toEqual({type: "retire", generationId: "release-a"})
+
+      reconnectingPeer.jsonSocket.send({type: "ready", acceptsInline: true, acceptsForked: false, acceptsPooled: false, acceptsSpawned: false})
+      const reportResult = reconnectingPeer.nextMessage()
+      reconnectingPeer.jsonSocket.send({
+        type: "job-complete",
+        jobId: firstJobId,
+        handoffId: firstLease.payload.handoffId,
+        handedOffAtMs: firstLease.payload.handedOffAtMs,
+        workerId: WORKER_A_ID
+      })
+      expect(await reportResult).toEqual({type: "job-updated", jobId: firstJobId})
+      expect(main.readyWorkers.size).toEqual(0)
+      expect(main.candidateReadyWorkers.size).toEqual(0)
+      expect(readyCount).toEqual(readyCountAtRetirement)
+
+      secondClaim.release()
+      await crossingDrain
+      await retirement
+      expect((await store.getJob(firstJobId))?.status).toEqual("completed")
+      expect((await store.getJob(secondJobId))?.status).toEqual("queued")
+      await reconnectingPeer.close()
+      await main.waitUntilStopped()
+    } finally {
+      secondClaim.release()
+      await firstPeer.close()
+      await reconnectingPeer.close()
+      await newPeer.close()
+      await main.stop()
+    }
+  })
+
   it("preserves a live handoff through an exact same-worker reconnect", async () => {
     const disconnected = promiseBarrier()
     const {main, store} = await startGenerationMain({

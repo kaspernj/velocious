@@ -35,17 +35,19 @@ describe("Background jobs retired-main recovery", () => {
   })
 
   it("recovers only exact same-generation durable handoffs without dispatch", async () => {
-    const released = promiseBarrier()
     const clock = controlledClock()
     const store = await emptyGenerationStore()
     const jobId = await store.enqueue({jobName: "RetiredRecoveryJob", args: [], options: {executionMode: "inline"}})
     const handoff = await store.markHandedOff({jobId, workerId: WORKER_A_ID})
     if (!handoff) throw new Error("Expected retired generation handoff")
+    let readyCount = 0
+    const heartbeat = promiseBarrier()
     const {main} = await startGenerationMain({
       clock,
       generationId: "release-a",
       initialGenerationState: "retired",
-      onWorkerHandoffsReleased: released.entered,
+      onWorkerHeartbeat: heartbeat.entered,
+      onWorkerReady: () => { readyCount += 1 },
       store,
       workerReconnectGraceMs: 0
     })
@@ -62,13 +64,27 @@ describe("Background jobs retired-main recovery", () => {
         lifecycleState: "retired"
       })
       expect(await recoveringPeer.nextMessage()).toEqual({type: "retire", generationId: "release-a"})
-      expect((await store.getJob(jobId))?.status).toEqual("handed_off")
-
-      await recoveringPeer.close()
+      const reportResult = recoveringPeer.nextMessage()
+      recoveringPeer.jsonSocket.send({
+        type: "job-complete",
+        jobId,
+        handoffId: handoff.handoffId,
+        handedOffAtMs: handoff.handedOffAtMs,
+        workerId: WORKER_A_ID
+      })
+      expect(await reportResult).toEqual({type: "job-updated", jobId})
+      recoveringPeer.jsonSocket.send({type: "ready", acceptsInline: true, acceptsForked: false, acceptsPooled: false, acceptsSpawned: false})
+      recoveringPeer.jsonSocket.send({type: "heartbeat", workerId: WORKER_A_ID})
+      await heartbeat.waiting
+      expect(readyCount).toEqual(0)
+      expect(main.readyWorkers.size).toEqual(0)
+      expect(main.candidateReadyWorkers.size).toEqual(0)
       clock.runAll()
-      await released.waiting
+      expect((await store.getJob(jobId))?.status).toEqual("completed")
+      expect(clock.pendingCount()).toEqual(0)
+      await recoveringPeer.close()
       await main.waitUntilStopped()
-      expect((await store.getJob(jobId))?.status).toEqual("queued")
+      expect((await store.getJob(jobId))?.status).toEqual("completed")
     } finally {
       await wrongPeer.close()
       await recoveringPeer.close()

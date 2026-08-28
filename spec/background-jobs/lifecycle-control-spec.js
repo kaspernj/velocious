@@ -3,13 +3,46 @@
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import timeout, { TimeoutError } from "awaitery/build/timeout.js"
 import BackgroundJobsLifecycleClient from "../../src/background-jobs/lifecycle-client.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import { connectGenerationPeer, startGenerationMain } from "../helpers/background-jobs-generation-harness.js"
 import releaseLifecyclePaths from "../helpers/release-lifecycle-paths.js"
+import stalledSocketServer from "../helpers/stalled-socket-server.js"
 import { describe, expect, it } from "../../src/testing/test.js"
 
 describe("Background jobs lifecycle control", () => {
+  it("times out one stalled lifecycle request and destroys its Unix socket connection", async () => {
+    const paths = await releaseLifecyclePaths()
+    const stalled = await stalledSocketServer({socketPath: paths.socketPath})
+    const client = new BackgroundJobsLifecycleClient({
+      configuration: dummyConfiguration,
+      generationId: "release-stalled-control",
+      requestTimeoutMs: 25,
+      socketPath: paths.socketPath
+    })
+
+    try {
+      let requestError
+      try {
+        await timeout({errorMessage: "Test guard expired before lifecycle timeout", timeout: 250}, async () => await client.retire())
+      } catch (error) {
+        requestError = error
+      }
+      if (!(requestError instanceof Error)) throw new Error("Expected lifecycle timeout error")
+
+      expect(requestError instanceof TimeoutError).toEqual(true)
+      expect(requestError.message).toMatch(/retire.*release-stalled-control.*25ms/)
+      expect(requestError.message).toMatch(new RegExp(paths.socketPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))
+      await stalled.requestReceived
+      await timeout({errorMessage: "Timed-out lifecycle socket stayed open", timeout: 250}, async () => await stalled.connectionClosed)
+      expect(stalled.requestCount()).toEqual(1)
+    } finally {
+      await stalled.close()
+      await fs.rm(paths.directory, {recursive: true})
+    }
+  })
+
   it("acknowledges activation and retirement fences over a mode-0600 Unix socket", async () => {
     const paths = await releaseLifecyclePaths()
     const {main} = await startGenerationMain({

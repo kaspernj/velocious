@@ -26,14 +26,16 @@ import { waitForEvent } from "../../src/testing/test.js"
  * @param {string} [args.lifecycleSocketPath] - Release-local lifecycle socket.
  * @param {ConstructorParameters<typeof BackgroundJobsMain>[0]["afterHandoffClaim"]} [args.afterHandoffClaim] - Handoff hook.
  * @param {ConstructorParameters<typeof BackgroundJobsMain>[0]["onWorkerReady"]} [args.onWorkerReady] - Readiness hook.
+ * @param {ConstructorParameters<typeof BackgroundJobsMain>[0]["onWorkerHeartbeat"]} [args.onWorkerHeartbeat] - Heartbeat hook.
  * @param {ConstructorParameters<typeof BackgroundJobsMain>[0]["onWorkerDisconnected"]} [args.onWorkerDisconnected] - Disconnect hook.
  * @param {ConstructorParameters<typeof BackgroundJobsMain>[0]["onWorkerHandoffsReleased"]} [args.onWorkerHandoffsReleased] - Grace-expiry hook.
  * @param {ConstructorParameters<typeof BackgroundJobsMain>[0]["onStartupHandoffsReclaimed"]} [args.onStartupHandoffsReclaimed] - Startup reclaim hook.
  * @param {ConstructorParameters<typeof BackgroundJobsMain>[0]["onJobUpdated"]} [args.onJobUpdated] - Durable report hook.
  * @param {ConstructorParameters<typeof BackgroundJobsMain>[0]["clock"]} [args.clock] - Main clock.
+ * @param {number} [args.workerStaleTimeoutMs] - Worker stale timeout.
  * @returns {Promise<{main: BackgroundJobsMain, store: import("../../src/background-jobs/store.js").default}>} - Started main and store.
  */
-export async function startGenerationMain({generationId, initialGenerationState, store, workerReconnectGraceMs, lifecycleSocketPath, afterHandoffClaim, onWorkerReady, onWorkerDisconnected, onWorkerHandoffsReleased, onStartupHandoffsReclaimed, onJobUpdated, clock}) {
+export async function startGenerationMain({generationId, initialGenerationState, store, workerReconnectGraceMs, workerStaleTimeoutMs, lifecycleSocketPath, afterHandoffClaim, onWorkerReady, onWorkerHeartbeat, onWorkerDisconnected, onWorkerHandoffsReleased, onStartupHandoffsReclaimed, onJobUpdated, clock}) {
   dummyConfiguration.setBackgroundJobsConfig({
     generationId: undefined,
     initialGenerationState: undefined,
@@ -51,12 +53,14 @@ export async function startGenerationMain({generationId, initialGenerationState,
     initialGenerationState,
     lifecycleSocketPath,
     onWorkerReady,
+    onWorkerHeartbeat,
     onWorkerDisconnected,
     onWorkerHandoffsReleased,
     onStartupHandoffsReclaimed,
     onJobUpdated,
     port: 0,
-    workerReconnectGraceMs
+    workerReconnectGraceMs,
+    workerStaleTimeoutMs
   })
   main.store = resolvedStore
   await main.start()

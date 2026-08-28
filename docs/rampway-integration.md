@@ -32,6 +32,13 @@ another application integration) must pass one identical generation id,
 endpoint, and release-local socket to the complete main/worker pool. Until those
 downstream pieces land, do not describe the production stack as fully compliant.
 
+Lifecycle commands make one acknowledged request and default to a hard
+10-second timeout (with a maximum configurable 25 seconds), below Rollbridge's
+30-second hook deadline. During a retained generation's drain, a transient jobs
+TCP disconnect is recovered only by that exact generation-qualified worker on
+the unchanged release endpoint; this does not permit discovery of or handoff to
+the candidate endpoint.
+
 ## Install and mount
 
 Install Rampway in the consuming application. Rampway 0.4.0 declares Velocious

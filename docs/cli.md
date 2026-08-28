@@ -14,8 +14,8 @@ Release supervisors activate and retire an opt-in background-jobs generation
 through its release-local Unix control socket:
 
 ```sh
-npx velocious background-jobs:activate --generation release-20260828.1 --socket /srv/app/releases/20260828.1/run/background-jobs.sock
-npx velocious background-jobs:retire --generation release-20260828.1 --socket /srv/app/releases/20260828.1/run/background-jobs.sock
+npx velocious background-jobs:activate --generation release-20260828.1 --socket /srv/app/releases/20260828.1/run/background-jobs.sock --timeout-ms 10000
+npx velocious background-jobs:retire --generation release-20260828.1 --socket /srv/app/releases/20260828.1/run/background-jobs.sock --timeout-ms 10000
 ```
 
 Each command opens the socket once, sends one generation-fenced request, waits
@@ -25,12 +25,22 @@ unacknowledged requests exit nonzero with the original server stack. Repeating
 an already completed activation or retirement while that generation socket is
 still available is idempotent.
 
+The request deadline defaults to 10000ms. `--timeout-ms` accepts an integer from
+1 through 25000 so the acknowledged one-shot command always remains below a
+30-second supervisor hook deadline. A timeout destroys the connection and exits
+nonzero; it never polls or retries the request.
+
 Start release-local processes with matching identity and endpoint values:
 
 ```sh
 npx velocious background-jobs-main --generation release-20260828.1 --initial-generation-state candidate --lifecycle-socket /srv/app/releases/20260828.1/run/background-jobs.sock
 npx velocious background-jobs-worker --generation release-20260828.1
 ```
+
+When only the generation id is configured, `candidate` is a derived default and
+does not conflict with an explicit `--initial-generation-state active` or
+`retired` recovery start. Multiple actual config/environment/CLI values must
+still agree.
 
 See [release-generation draining](background-jobs.md#release-generation-draining)
 for the state machine, socket security, and supervisor obligations.

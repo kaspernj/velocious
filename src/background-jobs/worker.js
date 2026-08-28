@@ -11,7 +11,8 @@ import { fileURLToPath } from "node:url"
 import shutdownLifecycle from "../utils/shutdown-lifecycle.js"
 import BackgroundJobRescheduleSignal from "./reschedule-signal.js"
 import performBackgroundJob from "./perform-job.js"
-import { createGenerationWorkerId, resolveGenerationId } from "./generation-identity.js"
+import { createGenerationWorkerId } from "./generation-identity.js"
+import BackgroundJobsGenerationHandshakeTimeoutError, { DEFAULT_GENERATION_HANDSHAKE_TIMEOUT_MS, validateGenerationHandshakeTimeoutMs } from "./generation-handshake-timeout-error.js"
 
 /**
  * Per-forked-child timeout bookkeeping.
@@ -77,11 +78,15 @@ export default class BackgroundJobsWorker {
    * @param {number} [args.pooledRunnerMaxLifetimeMs] - Override the per-runner recycle lifetime.
    * @param {number} [args.forkedChildSigkillGraceMs] - Override the grace period between SIGTERM and SIGKILL when reaping lingering process runners on stop.
    * @param {number} [args.heartbeatIntervalMs] - Override the liveness heartbeat interval (default 15000ms).
+   * @param {number} [args.generationHandshakeTimeoutMs] - Maximum time to wait for generation acknowledgement (default: 4000).
+   * @param {number} [args.reconnectDelayMs] - Delay before reconnecting an established worker connection (default: 1000).
    * @param {number} [args.jobTimeoutMs] - Override the wall-clock timeout for forked and pooled jobs from `configuration.getBackgroundJobsConfig()`. `0` disables it.
    * @param {boolean} [args.closeDatabaseConnectionsOnStop] - Whether stop owns closing the configuration's database pools (default true).
    * @param {() => void | Promise<void>} [args.onStopped] - Lifecycle hook invoked after the worker finishes stopping.
+   * @param {() => void} [args.onGenerationAccepted] - Explicit generation-acceptance observation hook.
+   * @param {() => void} [args.onRetireMessage] - Explicit retire-message observation hook.
    */
-  constructor({configuration, host, port, generationId, workerInstanceId, maxConcurrentForkedJobs, maxConcurrentInlineJobs, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, forkedChildSigkillGraceMs, heartbeatIntervalMs, jobTimeoutMs, closeDatabaseConnectionsOnStop = true, onStopped} = {}) {
+  constructor({configuration, host, port, generationId, workerInstanceId, maxConcurrentForkedJobs, maxConcurrentInlineJobs, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, forkedChildSigkillGraceMs, heartbeatIntervalMs, generationHandshakeTimeoutMs = DEFAULT_GENERATION_HANDSHAKE_TIMEOUT_MS, reconnectDelayMs = 1000, jobTimeoutMs, closeDatabaseConnectionsOnStop = true, onStopped, onGenerationAccepted, onRetireMessage} = {}) {
     /**
      * Narrows the runtime value to the documented type.
      * @type {Promise<import("../configuration.js").default>} */
@@ -98,6 +103,8 @@ export default class BackgroundJobsWorker {
     this.generationId = undefined
     this.closeDatabaseConnectionsOnStop = closeDatabaseConnectionsOnStop
     this.onStopped = onStopped
+    this.onGenerationAccepted = onGenerationAccepted
+    this.onRetireMessage = onRetireMessage
     /**
      * Constructor override for the inline-job concurrency cap. When unset
      * the cap is read from `configuration.getBackgroundJobsConfig()` in
@@ -149,6 +156,7 @@ export default class BackgroundJobsWorker {
      */
     this.jobTimeoutMsOverride = typeof jobTimeoutMs === "number" ? jobTimeoutMs : undefined
     this.shouldStop = false
+    this.isRetiring = false
     /** @type {Promise<void> | undefined} */
     this.stopPromise = undefined
     /**
@@ -166,6 +174,13 @@ export default class BackgroundJobsWorker {
     this._resetStoppedPromise()
     this.workerId = this.workerInstanceId
     this._generationAccepted = false
+    this.generationHandshakeTimeoutMs = validateGenerationHandshakeTimeoutMs(generationHandshakeTimeoutMs)
+    if (!Number.isInteger(reconnectDelayMs) || reconnectDelayMs < 0 || reconnectDelayMs > MAX_FORKED_JOB_TIMEOUT_MS) {
+      throw new TypeError("reconnectDelayMs must be an integer between 0 and 2147483647")
+    }
+    this.reconnectDelayMs = reconnectDelayMs
+    /** @type {ReturnType<typeof setTimeout> | undefined} */
+    this._reconnectTimer = undefined
     this.heartbeatIntervalMs = typeof heartbeatIntervalMs === "number" && heartbeatIntervalMs >= 1
       ? heartbeatIntervalMs
       : HEARTBEAT_INTERVAL_MS
@@ -234,15 +249,16 @@ export default class BackgroundJobsWorker {
    */
   async start() {
     this.shouldStop = false
+    this.isRetiring = false
     this.stopPromise = undefined
     this._resetStoppedPromise()
     this.configuration = await this.configurationPromise
     this.configuration.setCurrent()
     const resolvedConfig = this.configuration.getBackgroundJobsConfig()
-    this.generationId = resolveGenerationId([
-      {name: "backgroundJobs.generationId", present: resolvedConfig.generationId !== undefined, value: resolvedConfig.generationId},
-      {name: "BackgroundJobsWorker generationId", present: this.explicitGenerationId !== undefined, value: this.explicitGenerationId}
-    ])
+    this.generationId = this.configuration.resolveBackgroundJobsGenerationConfig({
+      generationId: this.explicitGenerationId,
+      sourceName: "BackgroundJobsWorker"
+    }).generationId
     this.workerId = this.generationId
       ? createGenerationWorkerId({generationId: this.generationId, workerInstanceId: this.workerInstanceId})
       : this.workerInstanceId
@@ -273,10 +289,11 @@ export default class BackgroundJobsWorker {
       configuration: this.configuration,
       host: this.host,
       port: this.port,
+      generationHandshakeTimeoutMs: this.generationHandshakeTimeoutMs,
       generationId: this.generationId
     })
     try {
-      await this._connect()
+      await this._connect({allowReconnect: false})
     } catch (error) {
       try {
         await this.stop()
@@ -343,7 +360,12 @@ export default class BackgroundJobsWorker {
    */
   async _stop({timeoutMs} = {}) {
     this.shouldStop = true
+    this.isRetiring = true
     this._stopHeartbeat()
+    if (this._reconnectTimer) {
+      clearTimeout(this._reconnectTimer)
+      this._reconnectTimer = undefined
+    }
 
     await shutdownLifecycle({
       onStopped: this.onStopped,
@@ -366,6 +388,63 @@ export default class BackgroundJobsWorker {
         // chance to land before the socket closes.
         await this._drainInflight(this.inflightReports, timeoutMs)
 
+        if (this.jsonSocket) this.jsonSocket.close()
+        if (!this.configuration) return
+
+        try {
+          await this.configuration.disconnectBeacon()
+        } finally {
+          if (this.closeDatabaseConnectionsOnStop) await this.configuration.closeDatabaseConnections()
+        }
+      }
+    })
+  }
+
+  /** Begins generation retirement without revoking liveness during the drain. */
+  _beginGenerationRetirement() {
+    if (this.stopPromise) return
+
+    this.isRetiring = true
+    const stopPromise = this._stopAfterGenerationDrain()
+    this.stopPromise = stopPromise
+    void stopPromise.then(this._resolveStopped, (error) => {
+      const normalizedError = error instanceof Error ? error : new Error(String(error))
+
+      this._rejectStopped(normalizedError)
+      this._reportLifecycleError(normalizedError)
+    })
+  }
+
+  /**
+   * Drains accepted generation work while retaining the exact connection and
+   * heartbeat, then performs the final terminating stop.
+   * @returns {Promise<void>} - Resolves after the worker has fully closed.
+   */
+  async _stopAfterGenerationDrain() {
+    if (this.jsonSocket) {
+      try {
+        this.jsonSocket.send({type: "draining"})
+      } catch {
+        // The close handler owns exact same-generation reconnect.
+      }
+    }
+
+    await this._drainInflight(this.inflightInlineJobs)
+    await this._drainInflight(this.inflightPooledJobs)
+    await this._drainInflight(this.inflightProcessJobs)
+    await this._drainInflight(this.inflightReports)
+
+    this.shouldStop = true
+    this._stopHeartbeat()
+    if (this._reconnectTimer) {
+      clearTimeout(this._reconnectTimer)
+      this._reconnectTimer = undefined
+    }
+    await this._terminateProcessChildren()
+
+    await shutdownLifecycle({
+      onStopped: this.onStopped,
+      shutdown: async () => {
         if (this.jsonSocket) this.jsonSocket.close()
         if (!this.configuration) return
 
@@ -429,7 +508,13 @@ export default class BackgroundJobsWorker {
     }
   }
 
-  async _connect() {
+  /**
+   * Connects to the worker's resolved endpoint and completes its hello fence.
+   * @param {object} args - Reconnect policy.
+   * @param {boolean} args.allowReconnect - Whether a failed attempt may schedule another connection.
+   * @returns {Promise<void>} - Resolves after generation acknowledgement.
+   */
+  async _connect({allowReconnect}) {
     const configuration = this.configuration
     if (!configuration) throw new Error("Background jobs worker configuration not initialized")
 
@@ -451,6 +536,9 @@ export default class BackgroundJobsWorker {
      * @type {(error: Error) => void}
      */
     let rejectHandshake = () => {}
+    let connectionAccepted = false
+    /** @type {ReturnType<typeof setTimeout> | undefined} */
+    let handshakeTimer
     const handshake = new Promise((/** @type {(value: void) => void} */ resolve, reject) => {
       resolveHandshake = resolve
       rejectHandshake = reject
@@ -469,6 +557,13 @@ export default class BackgroundJobsWorker {
         }
 
         this._generationAccepted = true
+        connectionAccepted = true
+        if (handshakeTimer) {
+          clearTimeout(handshakeTimer)
+          handshakeTimer = undefined
+        }
+        if (message.lifecycleState === "retiring" || message.lifecycleState === "retired") this.isRetiring = true
+        this.onGenerationAccepted?.()
         this._sendReadyIfRunning()
         this._startHeartbeat()
         resolveHandshake()
@@ -477,6 +572,7 @@ export default class BackgroundJobsWorker {
 
       if (message?.type === "generation-rejected") {
         this.shouldStop = true
+        if (handshakeTimer) clearTimeout(handshakeTimer)
         rejectHandshake(new Error(`Background jobs generation rejected: ${message.reason}`))
         jsonSocket.destroy()
         return
@@ -484,7 +580,8 @@ export default class BackgroundJobsWorker {
 
       if (message?.type === "retire") {
         if (this.generationId && message.generationId === this.generationId) {
-          void this.stop().catch((error) => this._reportLifecycleError(error))
+          this.onRetireMessage?.()
+          this._beginGenerationRetirement()
         }
         return
       }
@@ -500,19 +597,33 @@ export default class BackgroundJobsWorker {
     })
 
     jsonSocket.on("close", () => {
+      if (handshakeTimer) clearTimeout(handshakeTimer)
       this._stopHeartbeat()
+      if (this.jsonSocket === jsonSocket) this.jsonSocket = undefined
       if (this.generationId && !this._generationAccepted) {
         rejectHandshake(new Error("Background jobs socket closed before generation acknowledgement"))
       }
       if (this.shouldStop) return
-      setTimeout(() => {
-        void this._connect().catch((error) => console.error("Background jobs worker reconnect failed:", error))
-      }, 1000)
+      if (connectionAccepted || allowReconnect || !this.generationId) this._scheduleReconnect()
     })
+
+    if (this.generationId) {
+      handshakeTimer = setTimeout(() => {
+        const error = new BackgroundJobsGenerationHandshakeTimeoutError({
+          endpoint: `${host}:${port}`,
+          generationId: this.generationId || "",
+          role: "worker",
+          timeoutMs: this.generationHandshakeTimeoutMs
+        })
+        rejectHandshake(error)
+        jsonSocket.destroy()
+      }, this.generationHandshakeTimeoutMs)
+    }
 
     socket.on("connect", () => {
       jsonSocket.send({type: "hello", role: "worker", ...(this.generationId ? {generationId: this.generationId} : {}), supportsHandoffIdReporting: true, supportsHeartbeat: true, supportsPooled: true, workerId: this.workerId})
       if (!this.generationId) {
+        connectionAccepted = true
         this._sendReadyIfRunning()
         this._startHeartbeat()
         resolveHandshake()
@@ -520,6 +631,20 @@ export default class BackgroundJobsWorker {
     })
 
     if (this.generationId) await handshake
+  }
+
+  /** Schedules one fenced reconnect to the worker's unchanged endpoint. */
+  _scheduleReconnect() {
+    if (this.shouldStop || this._reconnectTimer) return
+
+    this._reconnectTimer = setTimeout(() => {
+      this._reconnectTimer = undefined
+      if (this.shouldStop) return
+      void this._connect({allowReconnect: true}).catch((error) => {
+        if (!this.shouldStop) console.error("Background jobs worker reconnect failed:", error)
+      })
+    }, this.reconnectDelayMs)
+    if (typeof this._reconnectTimer.unref === "function") this._reconnectTimer.unref()
   }
 
   /**
@@ -547,17 +672,20 @@ export default class BackgroundJobsWorker {
   _startHeartbeat() {
     this._stopHeartbeat()
 
-    this._heartbeatTimer = setInterval(() => {
-      if (this.shouldStop || !this.jsonSocket) return
-
-      try {
-        this.jsonSocket.send({type: "heartbeat", workerId: this.workerId})
-      } catch {
-        // Socket is closing/closed; the close handler drives reconnect.
-      }
-    }, this.heartbeatIntervalMs)
+    this._heartbeatTimer = setInterval(() => this._sendHeartbeat(), this.heartbeatIntervalMs)
 
     if (typeof this._heartbeatTimer.unref === "function") this._heartbeatTimer.unref()
+  }
+
+  /** Sends one liveness heartbeat while the worker has not finally stopped. */
+  _sendHeartbeat() {
+    if (this.shouldStop || !this.jsonSocket) return
+
+    try {
+      this.jsonSocket.send({type: "heartbeat", workerId: this.workerId})
+    } catch {
+      // Socket is closing/closed; the close handler drives reconnect.
+    }
   }
 
   /**
@@ -751,7 +879,7 @@ export default class BackgroundJobsWorker {
    * @returns {void}
    */
   _sendReadyIfRunning({revokePooledAdmission = false} = {}) {
-    if (this.shouldStop) return
+    if (this.shouldStop || this.isRetiring) return
     if (!this.jsonSocket) return
     if (this.generationId && !this._generationAccepted) return
 

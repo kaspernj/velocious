@@ -6,10 +6,11 @@ import BackgroundJobsLifecycleClient from "../../../../background-jobs/lifecycle
 
 export default class BackgroundJobsActivateCommand extends BaseCommand {
   async execute() {
-    const args = commandArguments({definition: {valueOptions: ["--generation", "--socket"]}, processArgs: this.processArgs || []})
+    const args = commandArguments({definition: {valueOptions: ["--generation", "--socket", "--timeout-ms"]}, processArgs: this.processArgs || []})
     const client = new BackgroundJobsLifecycleClient({
       configuration: this.getConfiguration(),
       generationId: typeof args.generation === "string" ? args.generation : undefined,
+      requestTimeoutMs: typeof args["timeout-ms"] === "string" ? Number(args["timeout-ms"]) : undefined,
       socketPath: typeof args.socket === "string" ? args.socket : undefined
     })
 

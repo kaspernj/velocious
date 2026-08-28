@@ -5,7 +5,7 @@ import wait from "awaitery/build/wait.js"
 import Logger from "../logger.js"
 import normalizeBackgroundJobError from "./normalize-error.js"
 import BackgroundJobsSocketRequest from "./socket-request.js"
-import { resolveGenerationId } from "./generation-identity.js"
+import { DEFAULT_GENERATION_HANDSHAKE_TIMEOUT_MS, validateGenerationHandshakeTimeoutMs } from "./generation-handshake-timeout-error.js"
 
 class BackgroundJobUpdateError extends Error {}
 
@@ -18,12 +18,14 @@ export default class BackgroundJobsStatusReporter {
    * @param {number} [args.port] - Port.
    * @param {number} [args.attemptTimeoutMs] - Per-attempt socket-request timeout in milliseconds (default: 5000).
    * @param {string} [args.generationId] - Explicit release generation identity.
+   * @param {number} [args.generationHandshakeTimeoutMs] - Maximum time to wait for generation acknowledgement (default: 4000).
    */
-  constructor({configuration, host, port, attemptTimeoutMs = 5000, generationId}) {
+  constructor({configuration, host, port, attemptTimeoutMs = 5000, generationHandshakeTimeoutMs = DEFAULT_GENERATION_HANDSHAKE_TIMEOUT_MS, generationId}) {
     this.configuration = configuration
     this.host = host
     this.port = port
     this.attemptTimeoutMs = attemptTimeoutMs
+    this.generationHandshakeTimeoutMs = validateGenerationHandshakeTimeoutMs(generationHandshakeTimeoutMs)
     this.explicitGenerationId = generationId
     /**
      * Internal test-only observability state — NOT public API. References the most
@@ -51,13 +53,13 @@ export default class BackgroundJobsStatusReporter {
     const config = this.configuration.getBackgroundJobsConfig()
     const host = this.host || config.host
     const port = typeof this.port === "number" ? this.port : config.port
-    const generationId = resolveGenerationId([
-      {name: "backgroundJobs.generationId", present: config.generationId !== undefined, value: config.generationId},
-      {name: "BackgroundJobsStatusReporter generationId", present: this.explicitGenerationId !== undefined, value: this.explicitGenerationId}
-    ])
+    const {generationId} = this.configuration.resolveBackgroundJobsGenerationConfig({
+      generationId: this.explicitGenerationId,
+      sourceName: "BackgroundJobsStatusReporter"
+    })
 
     await timeout({timeout: this.attemptTimeoutMs}, async ({control}) => {
-      const request = new BackgroundJobsSocketRequest({host, port, role: "reporter", generationId})
+      const request = new BackgroundJobsSocketRequest({host, port, role: "reporter", generationHandshakeTimeoutMs: this.generationHandshakeTimeoutMs, generationId})
 
       this._lastRequest = request
 

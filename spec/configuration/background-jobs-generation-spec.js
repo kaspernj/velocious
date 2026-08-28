@@ -3,6 +3,7 @@
 import path from "node:path"
 import Configuration from "../../src/configuration.js"
 import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
+import BackgroundJobsMain from "../../src/background-jobs/main.js"
 import { createGenerationWorkerId, parseGenerationWorkerId, resolveGenerationId } from "../../src/background-jobs/generation-identity.js"
 import { describe, expect, it } from "../../src/testing/test.js"
 
@@ -87,6 +88,31 @@ describe("Background jobs generation configuration", {databaseCleaning: {transac
     await withGenerationEnvironment({}, () => {
       expect(buildConfiguration({generationId: "release-a", initialGenerationState: "active"}).getBackgroundJobsConfig().initialGenerationState).toEqual("active")
       expect(buildConfiguration({generationId: "release-a", initialGenerationState: "retired"}).getBackgroundJobsConfig().initialGenerationState).toEqual("retired")
+    })
+  })
+
+  it("does not treat the implicit candidate default as an explicit API source", async () => {
+    await withGenerationEnvironment({}, () => {
+      const configuration = buildConfiguration({generationId: "release-api"})
+
+      expect(new BackgroundJobsMain({configuration, initialGenerationState: "active"}).initialGenerationState).toEqual("active")
+      expect(new BackgroundJobsMain({configuration, initialGenerationState: "retired"}).initialGenerationState).toEqual("retired")
+    })
+  })
+
+  it("requires actual config, environment, and API recovery-state sources to agree", async () => {
+    await withGenerationEnvironment({
+      VELOCIOUS_BACKGROUND_JOBS_GENERATION_ID: "release-api",
+      VELOCIOUS_BACKGROUND_JOBS_INITIAL_GENERATION_STATE: "active"
+    }, async () => {
+      const agreeing = buildConfiguration({generationId: "release-api", initialGenerationState: "active"})
+      expect(new BackgroundJobsMain({configuration: agreeing, generationId: "release-api", initialGenerationState: "active"}).initialGenerationState).toEqual("active")
+
+      await expect(() => new BackgroundJobsMain({
+        configuration: agreeing,
+        generationId: "release-api",
+        initialGenerationState: "retired"
+      })).toThrow(/conflict/i)
     })
   })
 

@@ -337,7 +337,16 @@ authoritative, so pooled capacity is not double-credited.
 
 Disconnect recovery provides at-least-once delivery: a disconnected worker may already have started external side effects before the replacement attempt begins. Completion and failure reports carry the lease id and update the database only while that exact handoff is still active, so a late report from the disconnected attempt cannot complete or fail a newer attempt.
 
-Graceful draining is unchanged. A worker that announces `draining` keeps its socket open while its in-flight jobs finish, and those jobs are not reclaimed unless that socket is subsequently lost before their reports are accepted.
+An explicitly stopped legacy worker preserves the established terminating-stop
+behavior. Release-generation retirement instead revokes readiness immediately
+while keeping the worker heartbeat and old endpoint connection alive until its
+accepted jobs, child runners, durable report retries, and acknowledgements have
+settled. If that connection is lost during the drain, only the same qualified
+worker identity may reconnect to the unchanged old endpoint during reconnect
+grace; a retiring or recovered retired main reasserts `retire`, grants no
+readiness, and keeps the exact handoffs owned. A new or mismatched worker is
+rejected. The worker finally stops heartbeat/reconnect only after the exact
+drain completes.
 
 The fenced protocol uses an explicit worker handshake capability. A main process that creates lease ids dispatches new jobs only to workers advertising handoff-id reporting; older workers remain connected so they can report legacy handoffs that have no lease id. During a rolling upgrade, upgrade workers before the main process to avoid pausing new dispatch while only legacy workers are connected.
 
@@ -515,6 +524,11 @@ abort before the generation main listens. When the id is unset, the established
 legacy endpoint, worker ids, handshake, immediate disconnect recovery, and
 third-party adapter behavior remain unchanged.
 
+An ID without an explicit initial state defaults to `candidate`. That derived
+default is not an explicit source: an API or CLI recovery start may supply
+`active` or `retired`. Actual config, environment, API, and CLI state values are
+still fail-loud and must agree when more than one is supplied.
+
 ```js
 backgroundJobs: {
   generationId: "release-20260828.1",
@@ -538,6 +552,11 @@ VELOCIOUS_BACKGROUND_JOBS_LIFECYCLE_SOCKET_PATH=/srv/my-app/releases/20260828.1/
 The main command also accepts `--generation`, `--initial-generation-state`, and
 `--lifecycle-socket`; the worker accepts `--generation`. Spawned, forked, and
 pooled runners inherit the exact endpoint and generation from their worker.
+Generation-aware workers, clients, and status reporters require the hello
+acknowledgement before readiness or mutation and destroy an unacknowledged
+connection after 4000ms by default. The initiating APIs accept
+`generationHandshakeTimeoutMs` for a shorter operational deadline or focused
+testing; each connection sends exactly one hello.
 
 `candidate` is quiescent: it performs no schedule ownership, concurrency
 reconciliation, dispatch, reclaim, or orphan sweep. Activation transitions it
@@ -565,11 +584,13 @@ Unix socket with exactly one acknowledged request:
 ```sh
 npx velocious background-jobs:activate \
   --generation release-20260828.1 \
-  --socket /srv/my-app/releases/20260828.1/run/background-jobs.sock
+  --socket /srv/my-app/releases/20260828.1/run/background-jobs.sock \
+  --timeout-ms 10000
 
 npx velocious background-jobs:retire \
   --generation release-20260828.1 \
-  --socket /srv/my-app/releases/20260828.1/run/background-jobs.sock
+  --socket /srv/my-app/releases/20260828.1/run/background-jobs.sock \
+  --timeout-ms 10000
 ```
 
 There is no polling, retry, PID guessing, marker file, or remote control
@@ -581,6 +602,9 @@ check, and removes its own path on shutdown only if the inode is still the one
 it created. Requests and acknowledgements carry the exact generation and a UUID;
 server errors preserve their name/message/stack and are also emitted on
 `framework-error` and `all-error` for supervisors whose hooks ignore stdio.
+The client issues one request with no retry and defaults to a hard 10000ms
+deadline (configurable from 1 through 25000ms, deliberately below Rollbridge's
+30-second hook deadline); timeout destroys the socket and exits the CLI nonzero.
 
 ## Worker shutdown and process-job draining
 

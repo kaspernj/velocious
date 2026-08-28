@@ -8,7 +8,7 @@ import Logger from "../logger.js"
 import PruneTerminalBackgroundJobsJob from "../jobs/prune-terminal-background-jobs.js"
 import VelociousError from "../velocious-error.js"
 import shutdownLifecycle from "../utils/shutdown-lifecycle.js"
-import { resolveGenerationId, resolveInitialGenerationState, resolveLifecycleSocketPath, validateGenerationId, workerIdBelongsToGeneration } from "./generation-identity.js"
+import { validateGenerationId, workerIdBelongsToGeneration } from "./generation-identity.js"
 import BackgroundJobsLifecycleControlServer from "./lifecycle-control-server.js"
 
 /**
@@ -90,18 +90,20 @@ export default class BackgroundJobsMain {
    * @param {() => void | Promise<void>} [args.onStopped] - Lifecycle hook invoked after the main process finishes stopping.
    * @param {(args: {handoff: import("./types.js").BackgroundJobHandoff, job: import("./types.js").BackgroundJobRow}) => void | Promise<void>} [args.afterHandoffClaim] - Explicit handoff-claim observation hook.
    * @param {(worker: JsonSocket) => void} [args.onWorkerReady] - Explicit readiness observation hook.
+   * @param {(worker: JsonSocket) => void} [args.onWorkerHeartbeat] - Explicit heartbeat observation hook.
    * @param {(workerId: string) => void} [args.onWorkerDisconnected] - Explicit generation disconnect observation hook.
    * @param {(workerId: string) => void} [args.onWorkerHandoffsReleased] - Explicit grace-expiry observation hook.
    * @param {(jobs: import("./types.js").BackgroundJobRow[]) => void} [args.onStartupHandoffsReclaimed] - Explicit startup reclaim observation hook.
    * @param {(args: {accepted: boolean, jobId: string, status: "completed" | "failed" | "rescheduled"}) => void} [args.onJobUpdated] - Explicit durable report observation hook.
    * @param {{now: () => number, setTimeout?: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout> | number, clearTimeout?: (timerId: ReturnType<typeof setTimeout> | number) => void}} [args.clock] - Injectable wall clock for deterministic lifecycle tests.
    */
-  constructor({configuration, host, port, generationId: explicitGenerationId, initialGenerationState: explicitInitialGenerationState, lifecycleSocketPath: explicitLifecycleSocketPath, workerStaleTimeoutMs, workerLivenessSweepMs, workerReconnectGraceMs, closeDatabaseConnectionsOnStop = true, onStopped, afterHandoffClaim, onWorkerReady, onWorkerDisconnected, onWorkerHandoffsReleased, onStartupHandoffsReclaimed, onJobUpdated, clock}) {
+  constructor({configuration, host, port, generationId: explicitGenerationId, initialGenerationState: explicitInitialGenerationState, lifecycleSocketPath: explicitLifecycleSocketPath, workerStaleTimeoutMs, workerLivenessSweepMs, workerReconnectGraceMs, closeDatabaseConnectionsOnStop = true, onStopped, afterHandoffClaim, onWorkerReady, onWorkerHeartbeat, onWorkerDisconnected, onWorkerHandoffsReleased, onStartupHandoffsReclaimed, onJobUpdated, clock}) {
     this.configuration = configuration
     this.closeDatabaseConnectionsOnStop = closeDatabaseConnectionsOnStop
     this.onStopped = onStopped
     this.afterHandoffClaim = afterHandoffClaim
     this.onWorkerReady = onWorkerReady
+    this.onWorkerHeartbeat = onWorkerHeartbeat
     this.onWorkerDisconnected = onWorkerDisconnected
     this.onWorkerHandoffsReleased = onWorkerHandoffsReleased
     this.onStartupHandoffsReclaimed = onStartupHandoffsReclaimed
@@ -112,18 +114,15 @@ export default class BackgroundJobsMain {
       setTimeout: clock?.setTimeout || ((callback, delayMs) => setTimeout(callback, delayMs))
     }
     const config = configuration.getBackgroundJobsConfig()
-    this.generationId = resolveGenerationId([
-      {name: "backgroundJobs.generationId", present: config.generationId !== undefined, value: config.generationId},
-      {name: "BackgroundJobsMain generationId", present: explicitGenerationId !== undefined, value: explicitGenerationId}
-    ])
-    this.initialGenerationState = resolveInitialGenerationState([
-      {name: "backgroundJobs.initialGenerationState", present: config.generationId !== undefined, value: config.initialGenerationState},
-      {name: "BackgroundJobsMain initialGenerationState", present: explicitInitialGenerationState !== undefined, value: explicitInitialGenerationState}
-    ], this.generationId)
-    this.lifecycleSocketPath = resolveLifecycleSocketPath([
-      {name: "backgroundJobs.lifecycleSocketPath", present: config.lifecycleSocketPath !== undefined, value: config.lifecycleSocketPath},
-      {name: "BackgroundJobsMain lifecycleSocketPath", present: explicitLifecycleSocketPath !== undefined, value: explicitLifecycleSocketPath}
-    ], this.generationId)
+    const generationConfig = configuration.resolveBackgroundJobsGenerationConfig({
+      generationId: explicitGenerationId,
+      initialGenerationState: explicitInitialGenerationState,
+      lifecycleSocketPath: explicitLifecycleSocketPath,
+      sourceName: "BackgroundJobsMain"
+    })
+    this.generationId = generationConfig.generationId
+    this.initialGenerationState = generationConfig.initialGenerationState
+    this.lifecycleSocketPath = generationConfig.lifecycleSocketPath
     /** @type {import("./types.js").BackgroundJobsGenerationLifecycleState} */
     this.lifecycleState = "starting"
     this._activeOwnershipReady = false
@@ -977,7 +976,7 @@ export default class BackgroundJobsMain {
         generationId: this.generationId,
         lifecycleState: this.lifecycleState
       })
-      if (message.role === "worker" && this.lifecycleState === "retired") {
+      if (message.role === "worker" && (this.lifecycleState === "retiring" || this.lifecycleState === "retired")) {
         jsonSocket.send({type: "retire", generationId: this.generationId})
       }
     }
@@ -1007,10 +1006,6 @@ export default class BackgroundJobsMain {
       return "generation-mismatch"
     }
 
-    if (message.role === "worker" && this.lifecycleState === "retiring") {
-      return "worker-admission-retired"
-    }
-
     return null
   }
 
@@ -1030,14 +1025,9 @@ export default class BackgroundJobsMain {
     const workerId = jsonSocket.workerId
     const disconnected = workerId ? this.disconnectedWorkers.get(workerId) : undefined
     let handoffs = disconnected ? this.workerHandoffs.get(disconnected.worker) : undefined
+    const recoveryOnly = this.lifecycleState === "retiring" || this.lifecycleState === "retired"
 
-    if (disconnected) {
-      this.clock.clearTimeout(disconnected.timer)
-      if (workerId) this.disconnectedWorkers.delete(workerId)
-      this.workerHandoffs.delete(disconnected.worker)
-    }
-
-    if (this.lifecycleState === "retired" && !handoffs) {
+    if (recoveryOnly && (!handoffs || handoffs.size === 0)) {
       if (!workerId) return false
       const durableHandoffs = await this.store.handedOffJobsForWorker({workerId})
 
@@ -1051,8 +1041,15 @@ export default class BackgroundJobsMain {
       this.reconnectedWorkerIds.add(workerId)
     }
 
+    if (disconnected) {
+      this.clock.clearTimeout(disconnected.timer)
+      if (workerId) this.disconnectedWorkers.delete(workerId)
+      this.workerHandoffs.delete(disconnected.worker)
+    }
+
     this.workers.add(jsonSocket)
     this.workerHandoffs.set(jsonSocket, handoffs || new Map())
+    if (recoveryOnly) jsonSocket.isDraining = true
     if (!handoffs && this.lifecycleState === "active") this._trackWorkerHandoffAdoption(jsonSocket)
 
     return true
@@ -1162,6 +1159,7 @@ export default class BackgroundJobsMain {
     jsonSocket.lastSeenAt = this.clock.now()
 
     if (message?.type === "heartbeat") {
+      this.onWorkerHeartbeat?.(jsonSocket)
       return
     }
 
@@ -1231,6 +1229,12 @@ export default class BackgroundJobsMain {
    * @returns {void}
    */
   _handleWorkerReady({jsonSocket, message}) {
+    if (this.lifecycleState === "retiring" || this.lifecycleState === "retired") {
+      this.readyWorkers.delete(jsonSocket)
+      this.candidateReadyWorkers.delete(jsonSocket)
+      return
+    }
+
     jsonSocket.readinessVersion += 1
     jsonSocket.acceptsSpawnedJobs = message.acceptsSpawned !== false && message.acceptsForked !== false
     jsonSocket.acceptsForkedJobs = message.acceptsForked !== false
@@ -1241,13 +1245,14 @@ export default class BackgroundJobsMain {
       ? availablePooledSlots
       : 0
     jsonSocket.acceptsInlineJobs = message.acceptsInline !== false
-    if (this.lifecycleState !== "active" || !this._activeOwnershipReady) {
+    if (this.lifecycleState === "candidate") {
       this.readyWorkers.delete(jsonSocket)
       if (!jsonSocket.isDraining) this.candidateReadyWorkers.add(jsonSocket)
-    } else if (jsonSocket.supportsHandoffIdReporting && !jsonSocket.isDraining) {
+    } else if (this.lifecycleState === "active" && this._activeOwnershipReady && jsonSocket.supportsHandoffIdReporting && !jsonSocket.isDraining) {
       this.readyWorkers.add(jsonSocket)
     } else {
       this.readyWorkers.delete(jsonSocket)
+      this.candidateReadyWorkers.delete(jsonSocket)
     }
     this.onWorkerReady?.(jsonSocket)
     void this._drain()
