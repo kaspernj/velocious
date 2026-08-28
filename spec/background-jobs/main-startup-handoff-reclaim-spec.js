@@ -190,7 +190,7 @@ describe("Background jobs - main startup handoff reclaim", {databaseCleaning: {t
     try {
       if (!handoff) throw new Error("Expected the surviving handoff")
 
-      expect(main._handleRolelessSocketMessage({
+      expect(await main._handleRolelessSocketMessage({
         jsonSocket: worker,
         message: {
           role: "worker",
@@ -239,7 +239,7 @@ describe("Background jobs - main startup handoff reclaim", {databaseCleaning: {t
     try {
       if (!handoff) throw new Error("Expected the slow adoption handoff")
 
-      expect(main._handleRolelessSocketMessage({
+      expect(await main._handleRolelessSocketMessage({
         jsonSocket: worker,
         message: {
           role: "worker",
@@ -291,7 +291,7 @@ describe("Background jobs - main startup handoff reclaim", {databaseCleaning: {t
     try {
       if (!handoff) throw new Error("Expected the stuck adoption handoff")
 
-      expect(main._handleRolelessSocketMessage({
+      expect(await main._handleRolelessSocketMessage({
         jsonSocket: worker,
         message: {
           role: "worker",
@@ -337,7 +337,7 @@ describe("Background jobs - main startup handoff reclaim", {databaseCleaning: {t
       if (!handoff) throw new Error("Expected the rejected handoff")
 
       store.adoptionError = new Error("Adoption query failed")
-      expect(main._handleRolelessSocketMessage({
+      expect(await main._handleRolelessSocketMessage({
         jsonSocket: worker,
         message: {
           role: "worker",
@@ -378,7 +378,7 @@ describe("Background jobs - main startup handoff reclaim", {databaseCleaning: {t
     try {
       if (!handoff) throw new Error("Expected the disconnecting handoff")
 
-      expect(main._handleRolelessSocketMessage({
+      expect(await main._handleRolelessSocketMessage({
         jsonSocket: worker,
         message: {
           role: "worker",

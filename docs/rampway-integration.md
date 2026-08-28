@@ -18,6 +18,27 @@ pins. A successful deployment must return after candidate activation and health,
 without waiting for retired jobs generations or HTTP/WebSocket connections.
 See [release-generation draining](background-jobs.md#release-generation-draining).
 
+Velocious now provides the opt-in generation identity, fenced main/worker/report
+protocol, candidate/active/retiring/retired lifecycle, retired-main recovery,
+and acknowledged release-local Unix lifecycle commands. This is the framework
+half of the contract, not a claim that current production orchestration is
+already end-to-end compliant. Rollbridge must consume those commands in its
+quiet/activation hooks, allocate a distinct jobs-main endpoint per release,
+retain old mains and workers under durable supervision across later deploys and
+runtime-owner recovery, and pin their releases. Rampway must order retirement
+before activation and return deploy success/release its lock after healthy
+candidate activation without waiting for any retired generation. TensorBuzz (or
+another application integration) must pass one identical generation id,
+endpoint, and release-local socket to the complete main/worker pool. Until those
+downstream pieces land, do not describe the production stack as fully compliant.
+
+Lifecycle commands make one acknowledged request and default to a hard
+10-second timeout (with a maximum configurable 25 seconds), below Rollbridge's
+30-second hook deadline. During a retained generation's drain, a transient jobs
+TCP disconnect is recovered only by that exact generation-qualified worker on
+the unchanged release endpoint; this does not permit discovery of or handoff to
+the candidate endpoint.
+
 ## Install and mount
 
 Install Rampway in the consuming application. Rampway 0.4.0 declares Velocious

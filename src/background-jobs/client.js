@@ -3,6 +3,7 @@
 import timeout from "awaitery/build/timeout.js"
 import configurationResolver from "../configuration-resolver.js"
 import BackgroundJobsSocketRequest from "./socket-request.js"
+import { DEFAULT_GENERATION_HANDSHAKE_TIMEOUT_MS, validateGenerationHandshakeTimeoutMs } from "./generation-handshake-timeout-error.js"
 
 const DEFAULT_ENQUEUE_TIMEOUT_MS = 5000
 
@@ -12,10 +13,14 @@ export default class BackgroundJobsClient {
    * @param {object} [args] - Options.
    * @param {import("../configuration.js").default} [args.configuration] - Configuration.
    * @param {number} [args.enqueueTimeoutMs] - Maximum time to wait for an enqueue acknowledgement in milliseconds (default: 5000).
+   * @param {number} [args.generationHandshakeTimeoutMs] - Maximum time to wait for generation acknowledgement (default: 4000).
+   * @param {string} [args.generationId] - Explicit release generation identity.
    */
-  constructor({configuration, enqueueTimeoutMs = DEFAULT_ENQUEUE_TIMEOUT_MS} = {}) {
+  constructor({configuration, enqueueTimeoutMs = DEFAULT_ENQUEUE_TIMEOUT_MS, generationHandshakeTimeoutMs = DEFAULT_GENERATION_HANDSHAKE_TIMEOUT_MS, generationId} = {}) {
     this.configurationPromise = configuration ? Promise.resolve(configuration) : configurationResolver()
     this.enqueueTimeoutMs = enqueueTimeoutMs
+    this.generationHandshakeTimeoutMs = validateGenerationHandshakeTimeoutMs(generationHandshakeTimeoutMs)
+    this.explicitGenerationId = generationId
   }
 
   /**
@@ -25,8 +30,12 @@ export default class BackgroundJobsClient {
   async _request() {
     const configuration = await this.configurationPromise
     const {host, port} = configuration.getBackgroundJobsConfig()
+    const {generationId} = configuration.resolveBackgroundJobsGenerationConfig({
+      generationId: this.explicitGenerationId,
+      sourceName: "BackgroundJobsClient"
+    })
 
-    return new BackgroundJobsSocketRequest({host, port, role: "client"})
+    return new BackgroundJobsSocketRequest({host, port, role: "client", generationHandshakeTimeoutMs: this.generationHandshakeTimeoutMs, generationId})
   }
 
   /**

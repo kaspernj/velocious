@@ -8,6 +8,8 @@ import Logger from "../logger.js"
 import PruneTerminalBackgroundJobsJob from "../jobs/prune-terminal-background-jobs.js"
 import VelociousError from "../velocious-error.js"
 import shutdownLifecycle from "../utils/shutdown-lifecycle.js"
+import { validateGenerationId, workerIdBelongsToGeneration } from "./generation-identity.js"
+import BackgroundJobsLifecycleControlServer from "./lifecycle-control-server.js"
 
 /**
  * WorkerExecutionModeCapability type.
@@ -36,6 +38,7 @@ const WORKER_STALE_TIMEOUT_MS = 60000
 const WORKER_LIVENESS_SWEEP_MS = 15000
 /** Grace for workers from the previous main generation to reconnect and adopt leases. */
 const WORKER_RECONNECT_GRACE_MS = 30000
+const GENERATION_ORPHANED_AFTER_MS = 60 * 60 * 1000
 const WORKER_RECONNECT_GRACE_VALIDATION_MESSAGE = `workerReconnectGraceMs must be an integer between 0 and ${MAX_TIMER_MS}`
 
 /**
@@ -77,17 +80,68 @@ export default class BackgroundJobsMain {
    * @param {import("../configuration.js").default} args.configuration - Configuration.
    * @param {string} [args.host] - Hostname.
    * @param {number} [args.port] - Port.
+   * @param {string} [args.generationId] - Explicit release generation identity.
+   * @param {import("./types.js").BackgroundJobsGenerationInitialState} [args.initialGenerationState] - Explicit generation boot state.
+   * @param {string} [args.lifecycleSocketPath] - Explicit lifecycle socket path.
    * @param {number} [args.workerStaleTimeoutMs] - Override how long a silent worker may go before being dropped (default 60000ms).
    * @param {number} [args.workerLivenessSweepMs] - Override how often stale workers are swept for (default 15000ms).
    * @param {number} [args.workerReconnectGraceMs] - Integer from 0 through 2,147,483,647 overriding how long previous-generation workers may reconnect before exact startup leases are reclaimed (default 30000ms).
    * @param {boolean} [args.closeDatabaseConnectionsOnStop] - Whether stop owns closing the configuration's database pools (default true).
    * @param {() => void | Promise<void>} [args.onStopped] - Lifecycle hook invoked after the main process finishes stopping.
+   * @param {(args: {handoff: import("./types.js").BackgroundJobHandoff, job: import("./types.js").BackgroundJobRow}) => void | Promise<void>} [args.afterHandoffClaim] - Explicit handoff-claim observation hook.
+   * @param {(worker: JsonSocket) => void} [args.onWorkerReady] - Explicit readiness observation hook.
+   * @param {(worker: JsonSocket) => void} [args.onWorkerHeartbeat] - Explicit heartbeat observation hook.
+   * @param {(workerId: string) => void} [args.onWorkerDisconnected] - Explicit generation disconnect observation hook.
+   * @param {(workerId: string) => void} [args.onWorkerHandoffsReleased] - Explicit grace-expiry observation hook.
+   * @param {(jobs: import("./types.js").BackgroundJobRow[]) => void} [args.onStartupHandoffsReclaimed] - Explicit startup reclaim observation hook.
+   * @param {(args: {accepted: boolean, jobId: string, status: "completed" | "failed" | "rescheduled"}) => void} [args.onJobUpdated] - Explicit durable report observation hook.
+   * @param {{now: () => number, setTimeout?: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout> | number, clearTimeout?: (timerId: ReturnType<typeof setTimeout> | number) => void}} [args.clock] - Injectable wall clock for deterministic lifecycle tests.
    */
-  constructor({configuration, host, port, workerStaleTimeoutMs, workerLivenessSweepMs, workerReconnectGraceMs, closeDatabaseConnectionsOnStop = true, onStopped}) {
+  constructor({configuration, host, port, generationId: explicitGenerationId, initialGenerationState: explicitInitialGenerationState, lifecycleSocketPath: explicitLifecycleSocketPath, workerStaleTimeoutMs, workerLivenessSweepMs, workerReconnectGraceMs, closeDatabaseConnectionsOnStop = true, onStopped, afterHandoffClaim, onWorkerReady, onWorkerHeartbeat, onWorkerDisconnected, onWorkerHandoffsReleased, onStartupHandoffsReclaimed, onJobUpdated, clock}) {
     this.configuration = configuration
     this.closeDatabaseConnectionsOnStop = closeDatabaseConnectionsOnStop
     this.onStopped = onStopped
+    this.afterHandoffClaim = afterHandoffClaim
+    this.onWorkerReady = onWorkerReady
+    this.onWorkerHeartbeat = onWorkerHeartbeat
+    this.onWorkerDisconnected = onWorkerDisconnected
+    this.onWorkerHandoffsReleased = onWorkerHandoffsReleased
+    this.onStartupHandoffsReclaimed = onStartupHandoffsReclaimed
+    this.onJobUpdated = onJobUpdated
+    this.clock = {
+      clearTimeout: clock?.clearTimeout || ((timerId) => clearTimeout(timerId)),
+      now: clock?.now || (() => Date.now()),
+      setTimeout: clock?.setTimeout || ((callback, delayMs) => setTimeout(callback, delayMs))
+    }
     const config = configuration.getBackgroundJobsConfig()
+    const generationConfig = configuration.resolveBackgroundJobsGenerationConfig({
+      generationId: explicitGenerationId,
+      initialGenerationState: explicitInitialGenerationState,
+      lifecycleSocketPath: explicitLifecycleSocketPath,
+      sourceName: "BackgroundJobsMain"
+    })
+    this.generationId = generationConfig.generationId
+    this.initialGenerationState = generationConfig.initialGenerationState
+    this.lifecycleSocketPath = generationConfig.lifecycleSocketPath
+    /** @type {import("./types.js").BackgroundJobsGenerationLifecycleState} */
+    this.lifecycleState = "starting"
+    this._activeOwnershipReady = false
+    /** @type {Promise<void> | undefined} */
+    this._activationPromise = undefined
+    /** @type {Promise<void> | undefined} */
+    this._retirementPromise = undefined
+    /** @type {Set<JsonSocket>} */
+    this.candidateReadyWorkers = new Set()
+    /** @type {Map<string, {worker: JsonSocket, timer: ReturnType<typeof setTimeout> | number}>} */
+    this.disconnectedWorkers = new Map()
+    this._lifecycleRequestLeases = 0
+    this._activeNonWorkerRequests = 0
+    /**
+     * Resolves stop observation.
+     * @type {() => void}
+     */
+    this._resolveStopped = () => {}
+    this._stoppedPromise = new Promise((/** @type {(value: void) => void} */ resolve) => { this._resolveStopped = resolve })
     this.host = host || config.host
     this.port = typeof port === "number" ? port : config.port
     this.dispatchStrategy = config.dispatchStrategy
@@ -105,6 +159,8 @@ export default class BackgroundJobsMain {
      * Narrows the runtime value to the documented type.
      * @type {Set<JsonSocket>} */
     this.workers = new Set()
+    /** @type {Set<JsonSocket>} */
+    this.connections = new Set()
     /**
      * Narrows the runtime value to the documented type.
      * @type {Set<JsonSocket>} */
@@ -159,7 +215,7 @@ export default class BackgroundJobsMain {
      * Narrows the runtime value to the documented type.
      * @type {ReturnType<typeof setInterval> | undefined} */
     this._workerStaleTimer = undefined
-    /** @type {ReturnType<typeof setTimeout> | undefined} */
+    /** @type {ReturnType<typeof setTimeout> | number | undefined} */
     this._startupHandoffReclaimTimer = undefined
     /** @type {Promise<void> | undefined} */
     this._startupHandoffReclaimPromise = undefined
@@ -186,6 +242,8 @@ export default class BackgroundJobsMain {
      * Narrows the runtime value to the documented type.
      * @type {import("../beacon/client.js").default | import("../beacon/in-process-client.js").default | undefined} */
     this._beaconClient = undefined
+    /** @type {BackgroundJobsLifecycleControlServer | undefined} */
+    this.lifecycleControlServer = undefined
   }
 
   /**
@@ -213,6 +271,9 @@ export default class BackgroundJobsMain {
   async start() {
     this._stopped = false
     this.stopPromise = undefined
+    this._activeOwnershipReady = false
+    this.lifecycleState = "starting"
+    this._stoppedPromise = new Promise((/** @type {(value: void) => void} */ resolve) => { this._resolveStopped = resolve })
     this.reconnectedWorkerIds.clear()
     this.startupHandoffSnapshot = []
     this._startupHandoffAdoptionsAtDeadline = []
@@ -227,14 +288,13 @@ export default class BackgroundJobsMain {
       if (!this.adapter) {
         this.adapter = await this.configuration.acquireReadyBackgroundJobsAdapter()
       }
+      if (this.generationId && !this.adapter.supportsReleaseScopedGenerations()) {
+        throw new Error("The configured background jobs adapter does not support release-scoped generations")
+      }
 
-      // Queue-cap changes are reconciled against the persisted backlog here, at
-      // main-process startup — the explicit lifecycle for applying queue
-      // configuration changes. The store serializes the adoption/release UPDATEs
-      // across processes with a database advisory lock, so concurrently started
-      // mains cannot interleave them.
-      await this.store.reconcileQueueConcurrency()
-      this.startupHandoffSnapshot = await this.store.snapshotHandedOffJobs()
+      if (!this.generationId || this.initialGenerationState !== "candidate") {
+        this.startupHandoffSnapshot = await this._generationOwnedHandoffSnapshot()
+      }
       const server = net.createServer((socket) => this._handleConnection(socket))
       this.server = server
 
@@ -248,51 +308,27 @@ export default class BackgroundJobsMain {
         this.port = address.port
       }
 
-      this._setupDispatchTriggers()
-      this._setupStartupHandoffReclaim()
+      this.lifecycleState = this.generationId ? this.initialGenerationState : "active"
 
-      this._orphanTimer = setInterval(() => {
-        void this._sweepOrphans()
-      }, 60000)
+      if (this.generationId && this.lifecycleSocketPath) {
+        this.lifecycleControlServer = new BackgroundJobsLifecycleControlServer({
+          configuration: this.configuration,
+          generationId: this.generationId,
+          main: this,
+          socketPath: this.lifecycleSocketPath
+        })
+        await this.lifecycleControlServer.start()
+      }
 
       this._workerStaleTimer = setInterval(() => {
         void this._sweepStaleWorkers()
       }, this.workerLivenessSweepMs)
 
-      this.scheduler = new BackgroundJobsScheduler({
-        configuration: this.configuration,
-        enqueueJob: async ({args, jobClass, options}) => {
-          await this.store.enqueue({
-            jobName: jobClass.jobName(),
-            args,
-            options: jobClass._withJobContext({jobArgs: args, jobOptions: options})
-          })
-          this._notifyEnqueued()
-          // Persistence is the scheduler enqueue boundary. Dispatch remains
-          // coalesced, but a slow active drain must not make the recurring
-          // scheduler treat this job key as still being enqueued and suppress
-          // later timer occurrences.
-          void this._drain()
-        }
-      })
-      await this.scheduler.start()
-
-      // Retention pruning runs as an ordinary scheduled job on the normal
-      // scheduler (so it is visible in the job tables and dispatched to a
-      // worker), rather than a hidden in-process timer. Skipped when retention
-      // is disabled. The scheduler owns the timer, so scheduler.stop() clears it.
-      const retentionSchedule = PruneTerminalBackgroundJobsJob.scheduleConfiguration(this.retention)
-
-      if (retentionSchedule) {
-        this.scheduler.scheduleJob({jobConfiguration: retentionSchedule, jobKey: "velociousPruneTerminalBackgroundJobs"})
+      if (this.lifecycleState === "active") {
+        await this._startActiveOwnership()
+      } else if (this.lifecycleState === "retired") {
+        this._startGenerationRecoveryOwnership()
       }
-
-      // Startup catch-up: drain anything that was waiting before this
-      // process came up. In beacon mode this is also the safety net for
-      // races between attaching the connect listener and the initial
-      // connect firing (the listener could miss the very first connect,
-      // but this drain covers it).
-      await this._drain()
     } catch (error) {
       try {
         await this.stop()
@@ -350,6 +386,8 @@ export default class BackgroundJobsMain {
       })
     } finally {
       this.adapter = undefined
+      this.lifecycleState = "stopped"
+      this._resolveStopped()
     }
   }
 
@@ -357,8 +395,8 @@ export default class BackgroundJobsMain {
    * Runs close workers.
    * @returns {void} */
   _closeWorkers() {
-    for (const worker of this.workers) {
-      worker.close()
+    for (const connection of this.connections) {
+      connection.close()
     }
   }
 
@@ -371,7 +409,9 @@ export default class BackgroundJobsMain {
     if (this._errorRetryTimer) clearTimeout(this._errorRetryTimer)
     if (this._orphanTimer) clearInterval(this._orphanTimer)
     if (this._workerStaleTimer) clearInterval(this._workerStaleTimer)
-    if (this._startupHandoffReclaimTimer) clearTimeout(this._startupHandoffReclaimTimer)
+    if (this._startupHandoffReclaimTimer) this.clock.clearTimeout(this._startupHandoffReclaimTimer)
+    for (const {timer} of this.disconnectedWorkers.values()) this.clock.clearTimeout(timer)
+    this.disconnectedWorkers.clear()
     this._pollTimer = undefined
     this._scheduledTimer = undefined
     this._errorRetryTimer = undefined
@@ -401,9 +441,14 @@ export default class BackgroundJobsMain {
    * @returns {Promise<void>} */
   async _stopBeaconAndServer() {
     try {
-      await this.configuration.disconnectBeacon()
+      await this.lifecycleControlServer?.close()
+      this.lifecycleControlServer = undefined
     } finally {
-      await this._closeServerAndDatabaseConnections()
+      try {
+        await this.configuration.disconnectBeacon()
+      } finally {
+        await this._closeServerAndDatabaseConnections()
+      }
     }
   }
 
@@ -439,6 +484,196 @@ export default class BackgroundJobsMain {
    */
   getPort() {
     return this.port
+  }
+
+  /**
+   * Gets the lifecycle state.
+   * @returns {import("./types.js").BackgroundJobsGenerationLifecycleState} - Current lifecycle state.
+   */
+  getLifecycleState() { return this.lifecycleState }
+
+  /**
+   * Returns a promise that settles only after the main has fully stopped.
+   * @returns {Promise<void>} - Stop completion.
+   */
+  async waitUntilStopped() { await this._stoppedPromise }
+
+  /**
+   * Snapshots only exact durable owners from this release generation.
+   * Legacy mode intentionally retains its historical global snapshot.
+   * @returns {Promise<import("./types.js").BackgroundJobHandoffSnapshot[]>} - Owned snapshot.
+   */
+  async _generationOwnedHandoffSnapshot() {
+    const handoffs = await this.store.snapshotHandedOffJobs()
+
+    if (!this.generationId) return handoffs
+    const generationId = this.generationId
+
+    return handoffs.filter(({workerId}) => workerIdBelongsToGeneration({generationId, workerId}))
+  }
+
+  /**
+   * Acquires scheduling and dispatch ownership for an active generation.
+   * @returns {Promise<void>} - Resolves after active ownership is established.
+   */
+  async _startActiveOwnership() {
+    await this.store.reconcileQueueConcurrency()
+    this._setupDispatchTriggers()
+    this._setupStartupHandoffReclaim()
+    this._startOrphanSweep()
+    await this._startScheduler()
+    this._activeOwnershipReady = true
+    this._creditReadyWorkers()
+    await this._drain()
+  }
+
+  /** Starts exact recovery duties without acquiring global dispatch ownership. */
+  _startGenerationRecoveryOwnership() {
+    this._setupStartupHandoffReclaim()
+    this._startOrphanSweep()
+    this._maybeStopRetired()
+  }
+
+  /** Starts the generation-fenced orphan sweep. */
+  _startOrphanSweep() {
+    if (this._orphanTimer) return
+
+    this._orphanTimer = setInterval(() => { void this._sweepOrphans() }, 60000)
+  }
+
+  /**
+   * Starts schedule ownership exactly once.
+   * @returns {Promise<void>} - Resolves after schedules are loaded.
+   */
+  async _startScheduler() {
+    if (this.scheduler) return
+
+    this.scheduler = new BackgroundJobsScheduler({
+      configuration: this.configuration,
+      enqueueJob: async ({args, jobClass, options}) => {
+        await this.store.enqueue({
+          jobName: jobClass.jobName(),
+          args,
+          options: jobClass._withJobContext({jobArgs: args, jobOptions: options})
+        })
+        this._notifyEnqueued()
+        void this._drain()
+      }
+    })
+    await this.scheduler.start()
+
+    const retentionSchedule = PruneTerminalBackgroundJobsJob.scheduleConfiguration(this.retention)
+
+    if (retentionSchedule) {
+      this.scheduler.scheduleJob({jobConfiguration: retentionSchedule, jobKey: "velociousPruneTerminalBackgroundJobs"})
+    }
+  }
+
+  /** Credits readiness advertisements recorded while dispatch was fenced. */
+  _creditReadyWorkers() {
+    for (const worker of this.candidateReadyWorkers) {
+      if (this.workers.has(worker) && !worker.isDraining && worker.supportsHandoffIdReporting) {
+        this.readyWorkers.add(worker)
+      }
+    }
+    this.candidateReadyWorkers.clear()
+  }
+
+  /**
+   * Activates a candidate after its supervisor has retired the old generation.
+   * @returns {Promise<void>} - Resolves after scheduling and dispatch are active.
+   */
+  activate() {
+    if (!this.generationId) throw new Error("Background jobs generation activation requires generation mode")
+    if (this.lifecycleState === "active") return Promise.resolve()
+    if (this.lifecycleState !== "candidate") throw new Error(`Cannot activate background jobs generation from ${this.lifecycleState}`)
+    if (!this._activationPromise) this._activationPromise = this._activate()
+
+    return this._activationPromise
+  }
+
+  /**
+   * Runs activation.
+   * @returns {Promise<void>} - Activation completion.
+   */
+  async _activate() {
+    await this._startActiveOwnership()
+    this.lifecycleState = "active"
+    this._creditReadyWorkers()
+    await this._drain()
+  }
+
+  /**
+   * Establishes the synchronous retirement fence and then drains ownership setup.
+   * @returns {Promise<void>} - Resolves after the retirement fence is durable in memory.
+   */
+  retire() {
+    if (!this.generationId) throw new Error("Background jobs generation retirement requires generation mode")
+    if (this.lifecycleState === "retiring" || this.lifecycleState === "retired") return this._retirementPromise || Promise.resolve()
+    if (this.lifecycleState !== "active") throw new Error(`Cannot retire background jobs generation from ${this.lifecycleState}`)
+
+    this.lifecycleState = "retiring"
+    this._activeOwnershipReady = false
+    this.readyWorkers.clear()
+    this.candidateReadyWorkers.clear()
+    this._clearDispatchTimers()
+    this._disconnectBeaconHandlers()
+    this._retirementPromise = this._retire()
+
+    return this._retirementPromise
+  }
+
+  /**
+   * Runs retirement after its synchronous fence.
+   * @returns {Promise<void>} - Retirement fence completion.
+   */
+  async _retire() {
+    await this.scheduler?.stop()
+    this.scheduler = undefined
+    if (this._drainPromise) await this._drainPromise
+
+    for (const worker of this.workers) {
+      worker.isDraining = true
+      worker.send({type: "retire", generationId: this.generationId})
+    }
+
+    this.lifecycleState = "retired"
+    this._startGenerationRecoveryOwnership()
+  }
+
+  /** Clears timers that can initiate new global dispatch or schedule work. */
+  _clearDispatchTimers() {
+    if (this._pollTimer) clearInterval(this._pollTimer)
+    if (this._scheduledTimer) clearTimeout(this._scheduledTimer)
+    if (this._errorRetryTimer) clearTimeout(this._errorRetryTimer)
+    this._pollTimer = undefined
+    this._scheduledTimer = undefined
+    this._errorRetryTimer = undefined
+  }
+
+  /** Holds the main open until a lifecycle response has flushed. */
+  acquireLifecycleRequestLease() { this._lifecycleRequestLeases += 1 }
+
+  /** Releases one lifecycle-response lease after its socket write callback. */
+  releaseLifecycleRequestLease() {
+    if (this._lifecycleRequestLeases < 1) throw new Error("No background jobs lifecycle request lease to release")
+    this._lifecycleRequestLeases -= 1
+    this._maybeStopRetired()
+  }
+
+  /** Stops a retired generation only after its exact ownership has drained. */
+  _maybeStopRetired() {
+    if (this.lifecycleState !== "retired" || this._stopped || this.stopPromise) return
+    if (this._lifecycleRequestLeases > 0 || this._activeNonWorkerRequests > 0 || this.workers.size > 0 || this.disconnectedWorkers.size > 0) return
+    if (this.inflightWorkerHandoffAdoptions.size > 0 || this.pendingHandoffRecoveries.size > 0) return
+    if (this._drainPromise || this._startupHandoffReclaimPromise || this._startupHandoffReclaimTimer) return
+    if (this.startupHandoffSnapshot.length > 0) return
+
+    for (const handoffs of this.workerHandoffs.values()) {
+      if (handoffs.size > 0) return
+    }
+
+    void this.stop().catch((error) => this._reportConnectionHandlerError(error))
   }
 
   /**
@@ -487,14 +722,15 @@ export default class BackgroundJobsMain {
    */
   _setupStartupHandoffReclaim() {
     if (this.startupHandoffSnapshot.length === 0) return
+    if (this._startupHandoffReclaimTimer || this._startupHandoffReclaimPromise || this._startupHandoffGraceElapsed) return
 
-    this._startupHandoffReclaimTimer = setTimeout(() => {
+    this._startupHandoffReclaimTimer = this.clock.setTimeout(() => {
       this._startupHandoffReclaimTimer = undefined
       this._startupHandoffAdoptionsAtDeadline = [...this.inflightWorkerHandoffAdoptions]
       this._startupHandoffGraceElapsed = true
       void this._startStartupHandoffReclaim()
     }, this.workerReconnectGraceMs)
-    this._startupHandoffReclaimTimer.unref()
+    if (typeof this._startupHandoffReclaimTimer === "object") this._startupHandoffReclaimTimer.unref()
   }
 
   /**
@@ -545,6 +781,7 @@ export default class BackgroundJobsMain {
 
     if (handoffs.length === 0) {
       this.startupHandoffSnapshot = []
+      this._maybeStopRetired()
       return
     }
 
@@ -566,6 +803,8 @@ export default class BackgroundJobsMain {
       jobs: orphanedJobs,
       warning: "Reclaimed background jobs from workers absent after main restart grace"
     })
+    this.onStartupHandoffsReclaimed?.(orphanedJobs)
+    this._maybeStopRetired()
   }
 
   /**
@@ -627,6 +866,7 @@ export default class BackgroundJobsMain {
    */
   _handleConnection(socket) {
     const jsonSocket = new JsonSocket(socket)
+    this.connections.add(jsonSocket)
     /**
      * Role.
      * @type {import("./types.js").BackgroundJobSocketRole | null} */
@@ -636,8 +876,10 @@ export default class BackgroundJobsMain {
     const cleanup = () => {
       if (cleanedUp) return
       cleanedUp = true
+      this.connections.delete(jsonSocket)
 
       if (role === "worker") void this._handleWorkerSocketClosed(jsonSocket)
+      this._maybeStopRetired()
     }
 
     jsonSocket.on("close", cleanup)
@@ -646,9 +888,32 @@ export default class BackgroundJobsMain {
       cleanup()
     })
 
+    let messageHandling = Promise.resolve()
     jsonSocket.on("message", (message) => {
-      role = this._handleSocketMessage({jsonSocket, message, role})
+      messageHandling = messageHandling.then(async () => {
+        const existingRole = role
+        role = await this._handleSocketMessage({jsonSocket, message, role})
+        if (existingRole === "client" || existingRole === "reporter") jsonSocket.close()
+      }).catch((error) => {
+        this._reportConnectionHandlerError(error)
+        jsonSocket.close()
+      })
     })
+  }
+
+  /**
+   * Surfaces an unexpected protocol-handler failure.
+   * @param {ReturnType<typeof JSON.parse>} error - Handler failure.
+   * @returns {void}
+   */
+  _reportConnectionHandlerError(error) {
+    const normalizedError = error instanceof Error ? error : new Error(String(error))
+    const payload = {context: {stage: "background-jobs-socket-handler"}, error: normalizedError}
+    const errorEvents = this.configuration.getErrorEvents()
+
+    this.logger.error(() => ["Background jobs socket handler failed:", normalizedError])
+    errorEvents.emit("framework-error", payload)
+    errorEvents.emit("all-error", {...payload, errorType: "framework-error"})
   }
 
   /**
@@ -657,13 +922,23 @@ export default class BackgroundJobsMain {
    * @param {JsonSocket} args.jsonSocket - JSON socket.
    * @param {import("./types.js").BackgroundJobSocketMessage} args.message - Socket message.
    * @param {import("./types.js").BackgroundJobSocketRole | null} args.role - Current socket role.
-   * @returns {import("./types.js").BackgroundJobSocketRole | null} - Updated socket role.
+   * @returns {Promise<import("./types.js").BackgroundJobSocketRole | null>} - Updated socket role.
    */
-  _handleSocketMessage({jsonSocket, message, role}) {
-    if (!role) return this._handleRolelessSocketMessage({jsonSocket, message})
-    if (role === "client") this._handleClientSocketMessage({jsonSocket, message})
-    if (role === "worker") this._handleWorkerSocketMessage({jsonSocket, message})
-    if (role === "reporter") this._handleReporterSocketMessage({jsonSocket, message})
+  async _handleSocketMessage({jsonSocket, message, role}) {
+    if (!role) return await this._handleRolelessSocketMessage({jsonSocket, message})
+    if (role === "worker") {
+      await this._handleWorkerSocketMessage({jsonSocket, message})
+      return role
+    }
+
+    this._activeNonWorkerRequests += 1
+    try {
+      if (role === "client") await this._handleClientSocketMessage({jsonSocket, message})
+      if (role === "reporter") await this._handleReporterSocketMessage({jsonSocket, message})
+    } finally {
+      this._activeNonWorkerRequests -= 1
+      this._maybeStopRetired()
+    }
 
     return role
   }
@@ -673,10 +948,18 @@ export default class BackgroundJobsMain {
    * @param {object} args - Options.
    * @param {JsonSocket} args.jsonSocket - JSON socket.
    * @param {import("./types.js").BackgroundJobSocketMessage} args.message - Socket message.
-   * @returns {import("./types.js").BackgroundJobSocketRole | null} - New socket role.
+   * @returns {Promise<import("./types.js").BackgroundJobSocketRole | null>} - New socket role.
    */
-  _handleRolelessSocketMessage({jsonSocket, message}) {
+  async _handleRolelessSocketMessage({jsonSocket, message}) {
     if (message?.type !== "hello") return null
+
+    const rejectionReason = this._generationHelloRejectionReason(message)
+
+    if (rejectionReason) {
+      jsonSocket.send({type: "generation-rejected", reason: rejectionReason})
+      jsonSocket.close()
+      return null
+    }
 
     if (message.role === "worker") {
       if (this._stopped) {
@@ -684,16 +967,92 @@ export default class BackgroundJobsMain {
         return message.role
       }
 
-      jsonSocket.workerId = message.workerId
-      jsonSocket.supportsHandoffIdReporting = message.supportsHandoffIdReporting === true
-      jsonSocket.supportsHeartbeat = message.supportsHeartbeat === true
-      jsonSocket.lastSeenAt = Date.now()
-      this.workers.add(jsonSocket)
-      this.workerHandoffs.set(jsonSocket, new Map())
-      this._trackWorkerHandoffAdoption(jsonSocket)
+      if (!(await this._registerWorker({jsonSocket, message}))) return null
+    }
+
+    if (this.generationId) {
+      jsonSocket.send({
+        type: "generation-accepted",
+        generationId: this.generationId,
+        lifecycleState: this.lifecycleState
+      })
+      if (message.role === "worker" && (this.lifecycleState === "retiring" || this.lifecycleState === "retired")) {
+        jsonSocket.send({type: "retire", generationId: this.generationId})
+      }
     }
 
     return message.role
+  }
+
+  /**
+   * Validates the generation fence before assigning a socket role.
+   * @param {import("./types.js").BackgroundJobHelloMessage} message - Hello message.
+   * @returns {import("./types.js").BackgroundJobsGenerationRejectionReason | null} - Rejection reason.
+   */
+  _generationHelloRejectionReason(message) {
+    const messageHasGeneration = Object.hasOwn(message, "generationId")
+
+    if (!this.generationId) return messageHasGeneration ? "unexpected-generation" : null
+    if (!messageHasGeneration) return "missing-generation"
+
+    try {
+      validateGenerationId(message.generationId, "hello generationId")
+    } catch {
+      return "malformed-generation"
+    }
+
+    if (message.generationId !== this.generationId) return "generation-mismatch"
+    if (message.role === "worker" && !workerIdBelongsToGeneration({generationId: this.generationId, workerId: message.workerId})) {
+      return "generation-mismatch"
+    }
+
+    return null
+  }
+
+  /**
+   * Registers a generation-fenced worker and transfers only its exact ownership.
+   * @param {object} args - Worker hello.
+   * @param {JsonSocket} args.jsonSocket - New socket.
+   * @param {import("./types.js").BackgroundJobHelloMessage} args.message - Hello.
+   * @returns {Promise<boolean>} - Whether the worker was admitted.
+   */
+  async _registerWorker({jsonSocket, message}) {
+    jsonSocket.workerId = message.workerId
+    jsonSocket.supportsHandoffIdReporting = message.supportsHandoffIdReporting === true
+    jsonSocket.supportsHeartbeat = message.supportsHeartbeat === true
+    jsonSocket.lastSeenAt = this.clock.now()
+
+    const workerId = jsonSocket.workerId
+    const disconnected = workerId ? this.disconnectedWorkers.get(workerId) : undefined
+    let handoffs = disconnected ? this.workerHandoffs.get(disconnected.worker) : undefined
+    const recoveryOnly = this.lifecycleState === "retiring" || this.lifecycleState === "retired"
+
+    if (recoveryOnly && (!handoffs || handoffs.size === 0)) {
+      if (!workerId) return false
+      const durableHandoffs = await this.store.handedOffJobsForWorker({workerId})
+
+      if (durableHandoffs.length === 0) {
+        jsonSocket.send({type: "generation-rejected", reason: "worker-has-no-recoverable-handoffs"})
+        jsonSocket.close()
+        return false
+      }
+
+      handoffs = new Map(durableHandoffs.map(({jobId, handoffId}) => [jobId, handoffId]))
+      this.reconnectedWorkerIds.add(workerId)
+    }
+
+    if (disconnected) {
+      this.clock.clearTimeout(disconnected.timer)
+      if (workerId) this.disconnectedWorkers.delete(workerId)
+      this.workerHandoffs.delete(disconnected.worker)
+    }
+
+    this.workers.add(jsonSocket)
+    this.workerHandoffs.set(jsonSocket, handoffs || new Map())
+    if (recoveryOnly) jsonSocket.isDraining = true
+    if (!handoffs && this.lifecycleState === "active") this._trackWorkerHandoffAdoption(jsonSocket)
+
+    return true
   }
 
   /**
@@ -704,7 +1063,10 @@ export default class BackgroundJobsMain {
   _trackWorkerHandoffAdoption(jsonSocket) {
     const adoption = this._adoptWorkerHandoffs(jsonSocket)
     this.inflightWorkerHandoffAdoptions.add(adoption)
-    const removeAdoption = () => this.inflightWorkerHandoffAdoptions.delete(adoption)
+    const removeAdoption = () => {
+      this.inflightWorkerHandoffAdoptions.delete(adoption)
+      this._maybeStopRetired()
+    }
     void adoption.then(removeAdoption, removeAdoption)
   }
 
@@ -759,21 +1121,28 @@ export default class BackgroundJobsMain {
    * @param {object} args - Options.
    * @param {JsonSocket} args.jsonSocket - JSON socket.
    * @param {import("./types.js").BackgroundJobSocketMessage} args.message - Socket message.
-   * @returns {void}
+   * @returns {Promise<void>} - Resolves after the request is acknowledged.
    */
-  _handleClientSocketMessage({jsonSocket, message}) {
+  async _handleClientSocketMessage({jsonSocket, message}) {
+    if (this.generationId && (this.lifecycleState === "retiring" || this.lifecycleState === "retired")) {
+      if (message?.type === "enqueue") jsonSocket.send({type: "enqueue-error", error: "Background jobs generation is retired"})
+      if (message?.type === "replace-scheduled") jsonSocket.send({type: "replace-scheduled-error", error: "Background jobs generation is retired"})
+      if (message?.type === "cancel-scheduled") jsonSocket.send({type: "cancel-scheduled-error", error: "Background jobs generation is retired"})
+      return
+    }
+
     if (message?.type === "enqueue") {
-      this._handleEnqueue({jsonSocket, message})
+      await this._handleEnqueue({jsonSocket, message})
       return
     }
 
     if (message?.type === "replace-scheduled") {
-      this._handleReplaceScheduled({jsonSocket, message})
+      await this._handleReplaceScheduled({jsonSocket, message})
       return
     }
 
     if (message?.type === "cancel-scheduled") {
-      this._handleCancelScheduled({jsonSocket, message})
+      await this._handleCancelScheduled({jsonSocket, message})
     }
   }
 
@@ -782,14 +1151,15 @@ export default class BackgroundJobsMain {
    * @param {object} args - Options.
    * @param {JsonSocket} args.jsonSocket - JSON socket.
    * @param {import("./types.js").BackgroundJobSocketMessage} args.message - Socket message.
-   * @returns {void}
+   * @returns {Promise<void>} - Resolves after the worker message is handled.
    */
-  _handleWorkerSocketMessage({jsonSocket, message}) {
+  async _handleWorkerSocketMessage({jsonSocket, message}) {
     // Any message from the worker proves it is alive; the liveness sweep uses
     // this to detect a wedged/silent worker.
-    jsonSocket.lastSeenAt = Date.now()
+    jsonSocket.lastSeenAt = this.clock.now()
 
     if (message?.type === "heartbeat") {
+      this.onWorkerHeartbeat?.(jsonSocket)
       return
     }
 
@@ -803,7 +1173,7 @@ export default class BackgroundJobsMain {
       return
     }
 
-    this._handleReporterSocketMessage({jsonSocket, message})
+    await this._handleReporterSocketMessage({jsonSocket, message})
   }
 
   /**
@@ -811,22 +1181,44 @@ export default class BackgroundJobsMain {
    * @param {object} args - Options.
    * @param {JsonSocket} args.jsonSocket - JSON socket.
    * @param {import("./types.js").BackgroundJobSocketMessage} args.message - Socket message.
-   * @returns {void}
+   * @returns {Promise<void>} - Resolves after the report is acknowledged.
    */
-  _handleReporterSocketMessage({jsonSocket, message}) {
+  async _handleReporterSocketMessage({jsonSocket, message}) {
+    if (this.generationId && this._generationReportIsInvalid(message)) {
+      if ("jobId" in message && typeof message.jobId === "string") {
+        jsonSocket.send({type: "job-update-error", jobId: message.jobId, error: "Generation ownership rejected"})
+      }
+      return
+    }
     if (message?.type === "job-complete") {
-      this._handleJobComplete({jsonSocket, message})
+      await this._handleJobComplete({jsonSocket, message})
       return
     }
 
     if (message?.type === "job-failed") {
-      this._handleJobFailed({jsonSocket, message})
+      await this._handleJobFailed({jsonSocket, message})
       return
     }
 
     if (message?.type === "job-reschedule") {
-      this._handleJobReschedule({jsonSocket, message})
+      await this._handleJobReschedule({jsonSocket, message})
     }
+  }
+
+  /**
+   * Requires the complete durable lease identity before a generation-mode
+   * reporter can mutate a job. Legacy reporters keep their permissive protocol.
+   * @param {import("./types.js").BackgroundJobSocketMessage} message - Reporter message.
+   * @returns {boolean} - Whether the report lacks its exact generation lease.
+   */
+  _generationReportIsInvalid(message) {
+    if (message?.type !== "job-complete" && message?.type !== "job-failed" && message?.type !== "job-reschedule") return false
+    const generationId = this.generationId
+    if (!generationId) return false
+
+    return typeof message.handoffId !== "string"
+      || typeof message.handedOffAtMs !== "number"
+      || !workerIdBelongsToGeneration({generationId, workerId: message.workerId})
   }
 
   /**
@@ -837,6 +1229,12 @@ export default class BackgroundJobsMain {
    * @returns {void}
    */
   _handleWorkerReady({jsonSocket, message}) {
+    if (this.lifecycleState === "retiring" || this.lifecycleState === "retired") {
+      this.readyWorkers.delete(jsonSocket)
+      this.candidateReadyWorkers.delete(jsonSocket)
+      return
+    }
+
     jsonSocket.readinessVersion += 1
     jsonSocket.acceptsSpawnedJobs = message.acceptsSpawned !== false && message.acceptsForked !== false
     jsonSocket.acceptsForkedJobs = message.acceptsForked !== false
@@ -847,11 +1245,16 @@ export default class BackgroundJobsMain {
       ? availablePooledSlots
       : 0
     jsonSocket.acceptsInlineJobs = message.acceptsInline !== false
-    if (jsonSocket.supportsHandoffIdReporting && !jsonSocket.isDraining) {
+    if (this.lifecycleState === "candidate") {
+      this.readyWorkers.delete(jsonSocket)
+      if (!jsonSocket.isDraining) this.candidateReadyWorkers.add(jsonSocket)
+    } else if (this.lifecycleState === "active" && this._activeOwnershipReady && jsonSocket.supportsHandoffIdReporting && !jsonSocket.isDraining) {
       this.readyWorkers.add(jsonSocket)
     } else {
       this.readyWorkers.delete(jsonSocket)
+      this.candidateReadyWorkers.delete(jsonSocket)
     }
+    this.onWorkerReady?.(jsonSocket)
     void this._drain()
   }
 
@@ -867,6 +1270,7 @@ export default class BackgroundJobsMain {
     // it's still draining can report its result.
     jsonSocket.isDraining = true
     this.readyWorkers.delete(jsonSocket)
+    this.candidateReadyWorkers.delete(jsonSocket)
   }
 
   /**
@@ -879,9 +1283,31 @@ export default class BackgroundJobsMain {
   async _handleWorkerSocketClosed(worker, {queueRedrain = false} = {}) {
     this.workers.delete(worker)
     this.readyWorkers.delete(worker)
+    this.candidateReadyWorkers.delete(worker)
 
     if (this._stopped) {
       this.workerHandoffs.delete(worker)
+      return
+    }
+
+    const handoffs = this.workerHandoffs.get(worker)
+    if (this.generationId && worker.workerId && handoffs && handoffs.size > 0) {
+      const existing = this.disconnectedWorkers.get(worker.workerId)
+      if (existing?.worker === worker) return
+      if (existing) this.clock.clearTimeout(existing.timer)
+
+      const timer = this.clock.setTimeout(() => {
+        this.disconnectedWorkers.delete(worker.workerId || "")
+        void this._releaseWorkerHandoffs(worker).then(() => {
+          if (worker.workerId) this.onWorkerHandoffsReleased?.(worker.workerId)
+        }, (error) => {
+          this._reportHandoffReleaseError(error)
+          this._scheduleErrorRetry()
+        })
+      }, this.workerReconnectGraceMs)
+      if (typeof timer === "object") timer.unref()
+      this.disconnectedWorkers.set(worker.workerId, {worker, timer})
+      this.onWorkerDisconnected?.(worker.workerId)
       return
     }
 
@@ -891,6 +1317,7 @@ export default class BackgroundJobsMain {
       this._reportHandoffReleaseError(error)
       this._scheduleErrorRetry()
     }
+    this._maybeStopRetired()
   }
 
   /**
@@ -917,8 +1344,9 @@ export default class BackgroundJobsMain {
     if (queueRedrain) {
       this._redrainQueued = true
     } else {
-      await this._drain()
+      if (this.lifecycleState === "active") await this._drain()
     }
+    this._maybeStopRetired()
   }
 
   /**
@@ -950,6 +1378,14 @@ export default class BackgroundJobsMain {
 
       handoffs.delete(jobId)
       if (handoffs.size === 0 && !this.workers.has(worker)) this.workerHandoffs.delete(worker)
+      if (handoffs.size === 0 && worker.workerId) {
+        const disconnected = this.disconnectedWorkers.get(worker.workerId)
+        if (disconnected?.worker === worker) {
+          this.clock.clearTimeout(disconnected.timer)
+          this.disconnectedWorkers.delete(worker.workerId)
+        }
+      }
+      this._maybeStopRetired()
       return
     }
   }
@@ -1134,11 +1570,30 @@ export default class BackgroundJobsMain {
       if (accepted && message.handoffId) {
         this._forgetHandoff({handoffId: message.handoffId, jobId: message.jobId})
       }
+      this.onJobUpdated?.({accepted, jobId: message.jobId, status: "completed"})
       jsonSocket.send({type: "job-updated", jobId: message.jobId})
     } catch (error) {
-      this.logger.error(() => ["Failed to update job completion:", error])
+      this._reportJobUpdateFailure({error, jobId: message.jobId, stage: "background-job-complete"})
       jsonSocket.send({type: "job-update-error", jobId: message.jobId, error: "Failed to update job"})
     }
+  }
+
+  /**
+   * Surfaces an unexpected durable report failure without exposing it to the
+   * reporting peer.
+   * @param {object} args - Failure context.
+   * @param {ReturnType<typeof JSON.parse>} args.error - Adapter failure.
+   * @param {string} args.jobId - Durable job id.
+   * @param {string} args.stage - Mutation stage.
+   */
+  _reportJobUpdateFailure({error, jobId, stage}) {
+    const normalizedError = error instanceof Error ? error : new Error(String(error))
+    const payload = {context: {generationId: this.generationId, jobId, stage}, error: normalizedError}
+    const errorEvents = this.configuration.getErrorEvents()
+
+    this.logger.error(() => ["Failed to update background job:", normalizedError])
+    errorEvents.emit("framework-error", payload)
+    errorEvents.emit("all-error", {...payload, errorType: "framework-error"})
   }
 
   /**
@@ -1160,6 +1615,7 @@ export default class BackgroundJobsMain {
       if (accepted && message.handoffId) {
         this._forgetHandoff({handoffId: message.handoffId, jobId: message.jobId})
       }
+      this.onJobUpdated?.({accepted, jobId: message.jobId, status: "rescheduled"})
       jsonSocket.send({type: "job-updated", jobId: message.jobId})
       this._notifyEnqueued()
       await this._drain()
@@ -1205,6 +1661,7 @@ export default class BackgroundJobsMain {
         })
       }
 
+      this.onJobUpdated?.({accepted: Boolean(failedJob), jobId: message.jobId, status: "failed"})
       jsonSocket.send({type: "job-updated", jobId: message.jobId})
       // A failed job may have been re-queued (with backoff) for retry —
       // poke the dispatcher so the retry timer is armed.
@@ -1351,7 +1808,7 @@ export default class BackgroundJobsMain {
    * @returns {Promise<void>}
    */
   async _drain() {
-    if (this._stopped) return
+    if (this._stopped || this.lifecycleState !== "active" || !this._activeOwnershipReady) return
 
     if (this._drainPromise) {
       this._redrainQueued = true
@@ -1378,7 +1835,7 @@ export default class BackgroundJobsMain {
       do {
         errored = await this._drainUntilIdle()
         await this._finishDrain({errored})
-      } while (!errored && this._redrainQueued && !this._stopped)
+      } while (!errored && this._redrainQueued && !this._stopped && this.lifecycleState === "active")
     } finally {
       this._draining = false
       this._drainPromise = undefined
@@ -1392,7 +1849,7 @@ export default class BackgroundJobsMain {
    * @returns {Promise<void>} - Resolves after follow-up timers are handled.
    */
   async _finishDrain({errored}) {
-    if (this._stopped) return
+    if (this._stopped || this.lifecycleState !== "active") return
     if (errored) return this._scheduleErrorRetry()
 
     await this._armScheduledTimerOrRetry()
@@ -1478,7 +1935,7 @@ export default class BackgroundJobsMain {
   _scheduleErrorRetry() {
     if (this._stopped) return
     if (this._errorRetryTimer) return
-    if (this.dispatchStrategy === "polling") return
+    if (this.dispatchStrategy === "polling" && this.lifecycleState === "active") return
 
     this._errorRetryTimer = setTimeout(() => {
       this._errorRetryTimer = undefined
@@ -1516,7 +1973,8 @@ export default class BackgroundJobsMain {
       return
     }
 
-    await this._drain()
+    if (this.lifecycleState === "active") await this._drain()
+    this._maybeStopRetired()
   }
 
   /**
@@ -1525,7 +1983,7 @@ export default class BackgroundJobsMain {
    * @returns {Promise<void>}
    */
   async _drainOnce() {
-    while (this.readyWorkers.size > 0 && !this._stopped) {
+    while (this.readyWorkers.size > 0 && !this._stopped && this.lifecycleState === "active" && this._activeOwnershipReady) {
       const job = await this.nextAvailableJobForReadyWorkers()
       if (!job) return
 
@@ -1556,9 +2014,11 @@ export default class BackgroundJobsMain {
         continue
       }
 
+      await this.afterHandoffClaim?.({handoff, job})
+
       const handoffs = this.workerHandoffs.get(worker)
 
-      if (!handoffs || !this.workers.has(worker) || worker.isDraining) {
+      if (!handoffs || !this.workers.has(worker) || worker.isDraining || this.lifecycleState !== "active" || !this._activeOwnershipReady) {
         this._rememberHandoffRecovery({handoffId: handoff.handoffId, jobId: job.id})
         try {
           await this._recoverHandoff({handoffId: handoff.handoffId, jobId: job.id})
@@ -1638,7 +2098,7 @@ export default class BackgroundJobsMain {
    * @returns {void}
    */
   _restoreWorkerAdmission({pooledCreditConsumed, readinessVersion, worker}) {
-    if (this._stopped || !this.workers.has(worker) || worker.isDraining) return
+    if (this._stopped || this.lifecycleState !== "active" || !this._activeOwnershipReady || !this.workers.has(worker) || worker.isDraining) return
 
     if (pooledCreditConsumed && worker.readinessVersion === readinessVersion) {
       worker.availablePooledSlots += 1
@@ -1809,14 +2269,14 @@ export default class BackgroundJobsMain {
       this._scheduledTimer = undefined
     }
 
-    if (this._stopped) return
+    if (this._stopped || this.lifecycleState !== "active" || !this._activeOwnershipReady) return
     if (this.dispatchStrategy === "polling") return
 
     const next = await this.store.nextScheduledJob()
     let delay
 
     if (next && typeof next.scheduledAtMs === "number") {
-      delay = Math.max(0, Math.min(next.scheduledAtMs - Date.now(), MAX_TIMER_MS))
+      delay = Math.max(0, Math.min(next.scheduledAtMs - this.clock.now(), MAX_TIMER_MS))
     }
 
     // `nextScheduledJob` only returns future jobs, so a job that became
@@ -1836,11 +2296,35 @@ export default class BackgroundJobsMain {
 
   async _sweepOrphans() {
     try {
-      const orphanedJobs = await this.store.markOrphanedJobs()
+      let orphanedJobs
+
+      if (this.generationId) {
+        const connectedWorkerIds = new Set()
+        for (const worker of this.workers) {
+          if (worker.workerId) connectedWorkerIds.add(worker.workerId)
+        }
+        for (const workerId of this.disconnectedWorkers.keys()) connectedWorkerIds.add(workerId)
+
+        const cutoff = this.clock.now() - GENERATION_ORPHANED_AFTER_MS
+        const handoffs = (await this._generationOwnedHandoffSnapshot()).filter((handoff) => {
+          return handoff.handedOffAtMs <= cutoff && !connectedWorkerIds.has(handoff.workerId)
+        })
+        orphanedJobs = handoffs.length === 0
+          ? []
+          : await this.store.markOrphanedHandoffs({handoffs, error: "Job orphaned after its generation owner disappeared"})
+      } else {
+        orphanedJobs = await this.store.markOrphanedJobs()
+      }
 
       await this._handleOrphanedJobs({jobs: orphanedJobs, warning: "Marked orphaned background jobs"})
     } catch (error) {
-      this.logger.error(() => ["Failed to mark orphaned jobs:", error])
+      const normalizedError = error instanceof Error ? error : new Error(String(error))
+      const payload = {context: {generationId: this.generationId, stage: "background-job-orphan-sweep"}, error: normalizedError}
+      const errorEvents = this.configuration.getErrorEvents()
+
+      this.logger.error(() => ["Failed to mark orphaned jobs:", normalizedError])
+      errorEvents.emit("framework-error", payload)
+      errorEvents.emit("all-error", {...payload, errorType: "framework-error"})
     }
   }
 
@@ -1854,7 +2338,10 @@ export default class BackgroundJobsMain {
    * @returns {Promise<void>} - Resolves after the resulting drain.
    */
   async _handleOrphanedJobs({jobs, warning}) {
-    if (jobs.length === 0) return
+    if (jobs.length === 0) {
+      this._maybeStopRetired()
+      return
+    }
 
     this.logger.warn(() => [warning, jobs.length])
     // Reclaimed orphans can become `queued` again — wake the dispatcher first
@@ -1870,6 +2357,7 @@ export default class BackgroundJobsMain {
       }
     }
     await this._drain()
+    this._maybeStopRetired()
   }
 
   /**
@@ -1884,7 +2372,7 @@ export default class BackgroundJobsMain {
   async _sweepStaleWorkers() {
     if (this._stopped) return
 
-    const cutoff = Date.now() - this.workerStaleTimeoutMs
+    const cutoff = this.clock.now() - this.workerStaleTimeoutMs
     /** @type {JsonSocket[]} */
     const stale = []
 

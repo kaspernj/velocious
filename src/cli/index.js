@@ -1,6 +1,6 @@
 // @ts-check
 
-const COMMAND_VALUE_OPTIONS = new Set(["--tenant"])
+const COMMAND_VALUE_OPTIONS = new Set(["--generation", "--initial-generation-state", "--lifecycle-socket", "--socket", "--tenant"])
 
 export default class VelociousCli {
   /**

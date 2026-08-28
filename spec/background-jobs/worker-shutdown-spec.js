@@ -27,6 +27,11 @@ function deferred() {
   return {promise, resolve}
 }
 
+/** @returns {{generationId: undefined, initialGenerationState: "active", lifecycleSocketPath: undefined}} - Legacy generation configuration. */
+function legacyGenerationConfig() {
+  return {generationId: undefined, initialGenerationState: "active", lifecycleSocketPath: undefined}
+}
+
 /**
  * @param {Promise<void>} promise - Promise expected to reject.
  * @returns {Promise<Error>} - Captured rejection.
@@ -595,9 +600,7 @@ describe("Background jobs worker - shutdown", () => {
       await cleanup()
     }
   })
-})
-
-describe("Background jobs main - shutdown", () => {
+  describe("Background jobs main - shutdown", () => {
   it("closes database connections after disconnecting beacon", async () => {
     /** @type {string[]} */
     const events = []
@@ -605,6 +608,7 @@ describe("Background jobs main - shutdown", () => {
       configuration: /** @type {import("../../src/configuration.js").default} */ ({
         closeDatabaseConnections: async () => { events.push("close-db") },
         disconnectBeacon: async () => { events.push("disconnect-beacon") },
+        resolveBackgroundJobsGenerationConfig: legacyGenerationConfig,
         getBackgroundJobsConfig: () => ({
           databaseIdentifier: "default",
           dispatchStrategy: "beacon",
@@ -635,6 +639,7 @@ describe("Background jobs main - shutdown", () => {
         closeBackgroundJobsAdapter: async () => { events.push("close-adapter") },
         closeDatabaseConnections: async () => { events.push("close-db") },
         disconnectBeacon: async () => { events.push("disconnect-beacon") },
+        resolveBackgroundJobsGenerationConfig: legacyGenerationConfig,
         getBackgroundJobsConfig: () => ({
           databaseIdentifier: "default",
           dispatchStrategy: "beacon",
@@ -664,6 +669,7 @@ describe("Background jobs main - shutdown", () => {
       configuration: /** @type {import("../../src/configuration.js").default} */ ({
         closeBackgroundJobsAdapter: async () => { events.push("close-adapter") },
         disconnectBeacon: async () => { events.push("disconnect-beacon") },
+        resolveBackgroundJobsGenerationConfig: legacyGenerationConfig,
         getBackgroundJobsConfig: () => ({
           databaseIdentifier: "default",
           dispatchStrategy: "beacon",
@@ -689,6 +695,7 @@ describe("Background jobs main - shutdown", () => {
       configuration: /** @type {import("../../src/configuration.js").default} */ ({
         closeBackgroundJobsAdapter: async () => { adapterCloseCount += 1 },
         disconnectBeacon: async () => await disconnect.promise,
+        resolveBackgroundJobsGenerationConfig: legacyGenerationConfig,
         getBackgroundJobsConfig: () => ({
           databaseIdentifier: "default",
           dispatchStrategy: "beacon",
@@ -724,6 +731,7 @@ describe("Background jobs main - shutdown", () => {
       configuration: /** @type {import("../../src/configuration.js").default} */ ({
         closeBackgroundJobsAdapter: async () => { adapterCloseCount += 1 },
         disconnectBeacon: async () => {},
+        resolveBackgroundJobsGenerationConfig: legacyGenerationConfig,
         getBackgroundJobsConfig: () => ({
           databaseIdentifier: "default",
           dispatchStrategy: "beacon",
@@ -754,6 +762,7 @@ describe("Background jobs main - shutdown", () => {
       configuration: /** @type {import("../../src/configuration.js").default} */ ({
         closeBackgroundJobsAdapter: async () => { adapterCloseCount += 1 },
         disconnectBeacon: async () => {},
+        resolveBackgroundJobsGenerationConfig: legacyGenerationConfig,
         getBackgroundJobsConfig: () => ({
           databaseIdentifier: "default",
           dispatchStrategy: "beacon",
@@ -775,4 +784,5 @@ describe("Background jobs main - shutdown", () => {
     expect(error.cause).toBe(shutdownError)
     expect(adapterCloseCount).toBe(1)
   })
+})
 })

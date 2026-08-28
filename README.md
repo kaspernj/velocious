@@ -34,7 +34,7 @@
 * Cross-process broadcast bus for `broadcastToChannel` via `velocious beacon`, including background job runner processes (see [docs/beacon.md](docs/beacon.md))
 * Configurable HTTP server worker handlers plus backpressured, descriptor-only file responses with completion callbacks (see [docs/http-server.md](docs/http-server.md))
 * Default-on buffered HTTP response compression with Brotli/gzip content negotiation, global and per-response opt-outs, and HEAD-correct representation headers (see [docs/http-server.md](docs/http-server.md#response-compression))
-* Background jobs with Node SQL/TCP workers plus a Browser/Expo local SQLite store and in-process dispatcher, including failure events and authorized database-scoped dashboard count snapshots/deltas. Release-directory integrations have a required release-scoped jobs-main/worker generation and asynchronous retirement compliance target that current startup adoption does not implement end to end (see [docs/background-jobs.md](docs/background-jobs.md), [docs/local-background-jobs.md](docs/local-background-jobs.md), and [docs/background-jobs-dashboard.md](docs/background-jobs-dashboard.md))
+* Background jobs with Node SQL/TCP workers plus a Browser/Expo local SQLite store and in-process dispatcher, including failure events, authorized database-scoped dashboard counts, and an opt-in release-scoped main/worker generation protocol with acknowledged activation, asynchronous retirement, and retired-main recovery. Production compliance additionally requires downstream supervisor retention/activation ordering and release pins (see [docs/background-jobs.md](docs/background-jobs.md), [docs/local-background-jobs.md](docs/local-background-jobs.md), and [docs/background-jobs-dashboard.md](docs/background-jobs-dashboard.md))
 * Durable one-off background-job scheduling with exact epoch timestamps (see [docs/scheduled-background-job-enqueue.md](docs/scheduled-background-job-enqueue.md))
 * Rails-style request and database query logging (see [docs/logging.md](docs/logging.md))
 * EJS-backed mailers with delivery, queueing, and payload rendering support (see [docs/mailers.md](docs/mailers.md))
@@ -2321,6 +2321,11 @@ the new main. Deploy and HTTP/WebSocket drain completion are independent of this
 potentially hours-long lifecycle. See [release-generation
 draining](docs/background-jobs.md#release-generation-draining).
 
+Velocious provides the opt-in generation protocol; production still requires a
+supervisor that preserves old generation units and release pins, and a deploy
+coordinator that retires the old generation before activating the healthy
+candidate without waiting for retired work to finish.
+
 Jobs can opt into cross-worker durable concurrency limits by pairing a non-empty `concurrencyKey` with a positive-integer `maxConcurrency` in their background-job options, or by deriving the key in a hydrated job instance's non-static `concurrencyKey()` method. Explicit enqueue options win. The first cap registered for a key is stable; conflicting caps are rejected. See [durable concurrency limits](docs/background-jobs.md#durable-concurrency-limits).
 
 Production apps can listen for `background-job-failed` (or its `all-error` mirror) to report accepted failed attempts, including retry and terminal-state metadata, and for `background-job-orphaned` to react to a specific job the main process reclaimed after its worker died mid-run — e.g. enqueue a targeted recovery for the work it left behind, instead of only polling for the aftermath. Orphan handlers run before the sweep waits for reclaimed jobs to be dispatched, so a stalled dispatcher does not delay application recovery. See [docs/background-jobs.md](docs/background-jobs.md#failure-events).
@@ -2365,7 +2370,11 @@ export default new Configuration({
     pooledRunnerMaxRssBytes: 536870912,
     pooledRunnerMaxLifetimeMs: 3600000,
     dispatchStrategy: "beacon",
-    jobTimeoutMs: null
+    jobTimeoutMs: null,
+    // Release-directory deployments opt in with one exact id and local socket:
+    generationId: "release-20260828.1",
+    initialGenerationState: "candidate",
+    lifecycleSocketPath: "/srv/app/releases/20260828.1/run/background-jobs.sock"
   }
 })
 ```
@@ -2428,7 +2437,31 @@ VELOCIOUS_BACKGROUND_JOBS_DISPATCH_STRATEGY=beacon
 VELOCIOUS_BACKGROUND_JOBS_POLL_INTERVAL_MS=1000
 VELOCIOUS_BACKGROUND_JOBS_WORKER_SHUTDOWN_TIMEOUT_MS=indefinite
 VELOCIOUS_BACKGROUND_JOBS_JOB_TIMEOUT_MS=5400000
+# Opt-in release generation values (omit all three for exact legacy behavior):
+VELOCIOUS_BACKGROUND_JOBS_GENERATION_ID=release-20260828.1
+VELOCIOUS_BACKGROUND_JOBS_INITIAL_GENERATION_STATE=candidate
+VELOCIOUS_BACKGROUND_JOBS_LIFECYCLE_SOCKET_PATH=/srv/app/releases/20260828.1/run/background-jobs.sock
 ```
+
+Activate or retire that exact generation with one acknowledged local request:
+
+```sh
+npx velocious background-jobs:activate --generation release-20260828.1 --socket /srv/app/releases/20260828.1/run/background-jobs.sock
+npx velocious background-jobs:retire --generation release-20260828.1 --socket /srv/app/releases/20260828.1/run/background-jobs.sock
+```
+
+Each lifecycle command sends one request with no retry and has a hard 10000ms
+deadline; `--timeout-ms` accepts 1 through 25000ms. Generation-aware workers,
+clients, and reporters require their hello acknowledgement before readiness or
+mutation and bound it to 4000ms by default.
+
+Generation ids supplied through config, environment, API, or CLI must be
+identical and match `^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`; invalid or conflicting
+identity fails before listening. Omit generation settings to preserve legacy
+worker ids, protocol, disconnect recovery, and custom-adapter compatibility.
+An ID-only configuration derives `candidate`; that default does not conflict
+with an explicit API/CLI `active` or `retired` recovery state, while multiple
+actual state sources must still agree.
 
 `VELOCIOUS_BACKGROUND_JOBS_WORKER_SHUTDOWN_TIMEOUT_MS` (default: `indefinite`) bounds how long a `background-jobs-worker` waits for in-flight jobs on `SIGTERM`/`SIGINT` before terminating any forked or spawned child runners still running. The default waits for jobs to finish and never interrupts a running job; a positive finite cap is a per-worker shutdown control for an explicitly requested process stop, not the normal deploy-completion mechanism. During release retirement, the old jobs-main and workers may drain for hours after deploy returns. See [docs/background-jobs.md](docs/background-jobs.md#worker-shutdown-and-process-job-draining).
 
@@ -2637,7 +2670,7 @@ Each job must define exactly one of `every` or `cron`. Cron times are evaluated 
 
 ## Persistence and retries
 
-Jobs are persisted in the configured database (`backgroundJobs.databaseIdentifier`) in an internal `background_jobs` table. When a worker picks a job, the main generates a unique lease id before asking the adapter to mark the job handed off, and the worker reports completion or failure back to the main process. If that persistence call has an ambiguous result, only the exact caller-generated lease is conditionally returned; failed recovery is retained for the dispatch error-retry path, so worker admission and concurrency do not remain stranded and a newer lease is never reclaimed. Custom adapters must persist a supplied `markHandedOff({handoffId})` exactly; built-in adapters continue generating one for legacy direct callers that omit it. If a worker socket disconnects unexpectedly, only the leases handed to that exact socket are immediately returned to the queue; late reports are fenced by lease id so they cannot mutate a newer attempt. This recovery is at-least-once and may repeat application side effects if the disconnected attempt had already started them. Gracefully draining workers keep their leases while they finish. Startup reconnection/adoption is an abnormal crash/legacy-recovery facility, not the normal deploy topology: during ordinary release retirement the old main remains alive and owns its old workers, and they must not reconnect to the new main. A production integration that restarts jobs-main every deploy and depends on worker adoption is not compliant with the release-generation contract. See [release-generation draining](docs/background-jobs.md#release-generation-draining) and [worker disconnect recovery](docs/background-jobs.md#worker-disconnect-recovery).
+Jobs are persisted in the configured database (`backgroundJobs.databaseIdentifier`) in an internal `background_jobs` table. When a worker picks a job, the main generates a unique lease id before asking the adapter to mark the job handed off, and the worker reports completion or failure back to the main process. If that persistence call has an ambiguous result, only the exact caller-generated lease is conditionally returned; failed recovery is retained for the dispatch error-retry path, so worker admission and concurrency do not remain stranded and a newer lease is never reclaimed. Custom adapters must persist a supplied `markHandedOff({handoffId})` exactly; built-in adapters continue generating one for legacy direct callers that omit it. A legacy worker disconnect returns only that socket's leases immediately. Generation mode instead preserves the exact leases through reconnect grace for the same qualified worker, then returns them to the global queue on expiry. Late reports are fenced by generation-qualified worker id, lease id, and handoff time so they cannot mutate a newer attempt. This recovery is at-least-once and may repeat application side effects if the disconnected attempt had already started them. A release-retiring worker revokes readiness but retains heartbeat, its unchanged old endpoint, exact-generation reconnect, accepted work, child execution, durable reports, and acknowledgements until its drain settles; retiring/retired mains reject new identities and never grant reconnecting workers readiness. Startup reconnection/adoption is an abnormal crash/legacy-recovery facility, not the normal deploy topology: during ordinary release retirement the old main remains alive and owns its old workers, and they must not reconnect to the new main. A production integration that restarts jobs-main on every deploy and depends on worker adoption is not compliant with the release-generation contract. See [release-generation draining](docs/background-jobs.md#release-generation-draining) and [worker disconnect recovery](docs/background-jobs.md#worker-disconnect-recovery).
 
 Failed jobs are re-queued with backoff and retried up to 10 times by default (10s, 1m, 10m, 1h, then +1h per retry). You can override the retry limit per job:
 
