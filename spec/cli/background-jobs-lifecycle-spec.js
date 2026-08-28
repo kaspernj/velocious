@@ -112,7 +112,7 @@ describe("Background jobs lifecycle CLI", () => {
     }
   })
 
-  it("starts an explicit active recovery main over an ID-only environment", async () => {
+  it("starts an explicit active recovery main over an ID-only environment", {databaseCleaning: {transaction: false, truncate: false}}, async () => {
     const environment = {
       ...process.env,
       MSSQL_SA_PASSWORD: process.env.MSSQL_SA_PASSWORD || "unused-for-sqlite-focused-tests",
