@@ -50,7 +50,82 @@ class SingleRequestDriver extends BaseDriver {
   }
 }
 
+class TransactionLifecycleDriver extends BaseDriver {
+  /** @type {string[]} */
+  events = []
+  physicalTransactionActive = false
+
+  constructor() {
+    super({}, Configuration.current())
+  }
+
+  async _startTransactionAction() {
+    if (this.physicalTransactionActive) throw new Error("A transaction is already running")
+
+    this.events.push("start")
+    this.physicalTransactionActive = true
+  }
+
+  async _commitTransactionAction() {
+    if (!this.physicalTransactionActive) throw new Error("A transaction isn't running")
+
+    this.events.push("commit")
+    this.physicalTransactionActive = false
+  }
+
+  async _rollbackTransactionAction() {
+    this.events.push("rollback")
+    this.physicalTransactionActive = false
+  }
+
+  async _startSavePointAction() {
+    if (!this.physicalTransactionActive) throw new Error("Cannot issue SAVE TRANSACTION when there is no active transaction.")
+
+    this.events.push("savepoint")
+  }
+
+  async _releaseSavePointAction() {
+    if (!this.physicalTransactionActive) throw new Error("Cannot release a savepoint when there is no active transaction.")
+
+    this.events.push("release savepoint")
+  }
+}
+
 describe("Shared transaction parent connection coordination", {databaseCleaning: {transaction: false, truncate: false}}, () => {
+  it("serializes concurrent transaction callbacks on one coordinated physical connection", async () => {
+    const connection = new TransactionLifecycleDriver()
+    const broker = await SharedTransactionBroker.start({connections: {default: connection}})
+    /** @type {() => void} */
+    let releaseFirst = () => {}
+    const firstGate = new Promise((resolve) => { releaseFirst = resolve })
+    /** @type {() => void} */
+    let resolveFirstStarted = () => {}
+    const firstStarted = new Promise((resolve) => { resolveFirstStarted = resolve })
+    let secondStarted = false
+    const firstTransaction = connection.transaction(async () => {
+      resolveFirstStarted()
+      await firstGate
+    })
+    let secondTransaction = Promise.resolve()
+
+    try {
+      await firstStarted
+      secondTransaction = connection.transaction(async () => { secondStarted = true })
+      await new Promise((resolve) => setImmediate(resolve))
+
+      expect(secondStarted).toEqual(false)
+
+      releaseFirst()
+      await Promise.all([firstTransaction, secondTransaction])
+
+      expect(connection.events).toEqual(["start", "commit", "start", "commit"])
+    } finally {
+      releaseFirst()
+      await Promise.allSettled([firstTransaction, secondTransaction])
+      await broker.close()
+    }
+  })
+
   it("serializes a parent query behind child broker work on the same physical connection", async () => {
     const connection = new SingleRequestDriver()
     const broker = await SharedTransactionBroker.start({connections: {default: connection}})

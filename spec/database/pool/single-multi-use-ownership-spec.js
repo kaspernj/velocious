@@ -3,6 +3,7 @@
 import DatabaseDriver from "../../../src/database/drivers/base.js"
 import OperationLease from "../../../src/database/operation-lease.js"
 import SingleMultiUsePool from "../../../src/database/pool/single-multi-use.js"
+import SharedTransactionBroker from "../../../src/testing/shared-transaction-broker.js"
 import dummyConfiguration from "../../dummy/src/config/configuration.js"
 import {deferred, waitFor} from "awaitery"
 
@@ -47,6 +48,45 @@ class ControlledSinglePoolDriver extends DatabaseDriver {
   async _close() {
     controlledCloseCount++
     if (controlledCloseError) throw controlledCloseError
+  }
+}
+
+class CoordinatedLeaseDriver extends ControlledSinglePoolDriver {
+  allowOrdinaryTransactionStart = deferred()
+  ordinaryTransactionStartEntered = deferred()
+  operationLeaseInstalled = false
+
+  /** @returns {Promise<void>} - Starts the fake physical transaction. */
+  async _startTransactionAction() {}
+
+  /** @returns {Promise<void>} - Commits the fake physical transaction. */
+  async _commitTransactionAction() {}
+
+  /** @returns {Promise<void>} - Rolls back the fake physical transaction. */
+  async _rollbackTransactionAction() {}
+
+  /**
+   * Pauses an ordinary transaction after coordinator admission.
+   * @param {Pick<import("../../../src/database/drivers/base.js").QueryOptions, "operationOwner">} [options] - Transaction ownership.
+   * @returns {Promise<void>} - Resolves once transaction startup completes.
+   */
+  async startTransaction(options = {}) {
+    if (!options.operationOwner) {
+      this.ordinaryTransactionStartEntered.resolve(undefined)
+      await this.allowOrdinaryTransactionStart.promise
+    }
+
+    await super.startTransaction(options)
+  }
+
+  /**
+   * Records operation-lease admission.
+   * @param {OperationLease} operationLease - Active lease.
+   * @returns {Promise<void>} - Resolves once the lease is installed.
+   */
+  async setOperationLease(operationLease) {
+    await super.setOperationLease(operationLease)
+    this.operationLeaseInstalled = true
   }
 }
 
@@ -320,6 +360,43 @@ describe("SingleMultiUsePool captured ownership", () => {
         // The test clears this lease before proving subsequent progress.
       }
       await pool.checkin(existingConnection)
+      await pool.closeAll()
+      resetControlledConnects()
+    }
+  })
+
+  it("keeps operation lease admission behind a coordinated ordinary transaction", async () => {
+    const pool = new SingleMultiUsePool({configuration: dummyConfiguration, identifier: "default"})
+    const config = databaseConfiguration("coordinated-lease", 2)
+
+    config.driver = CoordinatedLeaseDriver
+    const connection = /** @type {CoordinatedLeaseDriver} */ (await pool.checkoutForConfiguration(config, {}, {retain: true}))
+    const broker = await SharedTransactionBroker.start({connections: {default: connection}})
+    const ordinaryTransaction = connection.transaction(async () => {})
+    let operationEntered = false
+    /** @type {Promise<void>} */
+    let operation = Promise.resolve()
+
+    try {
+      await connection.ordinaryTransactionStartEntered.promise
+      operation = pool.withCapturedOperationConnection({databaseConfiguration: config, name: "captured-operation"}, async () => {
+        operationEntered = true
+      })
+      await new Promise((resolve) => setImmediate(resolve))
+
+      expect(connection.operationLeaseInstalled).toEqual(false)
+      expect(operationEntered).toEqual(false)
+
+      connection.allowOrdinaryTransactionStart.resolve(undefined)
+      await Promise.all([ordinaryTransaction, operation])
+
+      expect(connection.operationLeaseInstalled).toEqual(true)
+      expect(operationEntered).toEqual(true)
+    } finally {
+      connection.allowOrdinaryTransactionStart.resolve(undefined)
+      await Promise.allSettled([ordinaryTransaction, operation])
+      await broker.close()
+      await pool.checkin(connection)
       await pool.closeAll()
       resetControlledConnects()
     }

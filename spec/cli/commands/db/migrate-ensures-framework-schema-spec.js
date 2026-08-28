@@ -99,8 +99,8 @@ describe("Cli - Commands - db:migrate framework schema", () => {
       processArgs: ["db:migrate"],
       testing: true
     })
-    const databaseConfiguration = dummyConfiguration.getDatabaseIdentifier("default")
-    const migrations = databaseConfiguration.migrations
+    const databaseConfigurations = Object.values(dummyConfiguration.getDatabaseConfiguration())
+    const migrationSettings = databaseConfigurations.map((databaseConfiguration) => databaseConfiguration.migrations)
 
     await cli.getConfiguration().ensureConnections(async (dbs) => {
       await dbs.default.withDisabledForeignKeys(async () => {
@@ -110,7 +110,7 @@ describe("Cli - Commands - db:migrate framework schema", () => {
         await dbs.default.dropTable("velocious_attachments", {cascade: true, ifExists: true})
       })
 
-      databaseConfiguration.migrations = false
+      for (const databaseConfiguration of databaseConfigurations) databaseConfiguration.migrations = false
 
       try {
         await cli.execute()
@@ -118,7 +118,9 @@ describe("Cli - Commands - db:migrate framework schema", () => {
         expect(await dbs.default.tableExists("background_jobs")).toEqual(false)
         expect(await dbs.default.tableExists("velocious_attachments")).toEqual(false)
       } finally {
-        databaseConfiguration.migrations = migrations
+        for (let index = 0; index < databaseConfigurations.length; index++) {
+          databaseConfigurations[index].migrations = migrationSettings[index]
+        }
 
         const handler = new EnvironmentHandlerNode()
 

@@ -1376,63 +1376,65 @@ export default class VelociousDatabaseDriversBase {
   async transaction(callback, options = {}) {
     await this._waitForOperationLease(options.operationOwner)
 
-    if (this._transactionsCount > 0) {
-      return await this._runTransactionAttempt(callback, options)
-    }
-
-    const args = this.getArgs()
-    const maxAttempts = optionalPositiveInteger(args.deadlockMaxRetries, "deadlockMaxRetries") ?? 8
-    const configuredBaseWaitMs = optionalPositiveInteger(args.deadlockBaseWaitMs, "deadlockBaseWaitMs")
-    const deadlockMaxWaitMs = optionalPositiveInteger(args.deadlockMaxWaitMs, "deadlockMaxWaitMs") ?? 1000
-    let attempt = 0
-
-    while (true) {
-      attempt++
-      const attemptStartedAtMs = this._nowMs()
-
-      try {
+    return await coordinateSharedTransactionConnection(this, async () => {
+      if (this._transactionsCount > 0) {
         return await this._runTransactionAttempt(callback, options)
-      } catch (error) {
-        if (error instanceof VelociousDatabaseAfterCommitCallbackError) throw error.callbackError
-        if (!(error instanceof Error)) throw error
-
-        const retryInfo = this.retryableDatabaseError(error)
-        const willRetry = Boolean(retryInfo.deadlock && attempt < maxAttempts && this._transactionsCount == 0)
-
-        if (willRetry) {
-          this._reportDeadlockRetryDiagnostic({
-            attempt,
-            contentionKind: retryInfo.contentionKind || "deadlock",
-            error,
-            maxAttempts,
-            transactionAttemptDurationMs: Math.max(0, this._nowMs() - attemptStartedAtMs),
-            willRetry
-          })
-
-          // An explicitly-configured base wins so the tuning knob is effective even on drivers
-          // whose classifier supplies its own `waitMs` (MySQL/MariaDB return a fixed 50ms for
-          // deadlocks); otherwise honor that classifier hint, then fall back to 50ms.
-          const baseWaitMs = configuredBaseWaitMs ?? (typeof retryInfo.waitMs == "number" && retryInfo.waitMs > 0 ? retryInfo.waitMs : 50)
-
-          // Full-jitter exponential backoff: wait a uniform-random duration in
-          // [0, min(base * 2^(attempt-1), cap)]. The doubling ceiling spreads retries out as
-          // contention persists, and the jitter de-correlates transactions that deadlocked in
-          // lockstep so they stop re-colliding on the same wait (the linear `base * attempt`
-          // this replaces had every victim retry after an identical delay). `attempt` is
-          // 1-based here, so 2^(attempt-1) is 1, 2, 4, ... The cap keeps the tail sub-second.
-          const ceilingWaitMs = Math.min(baseWaitMs * (2 ** (attempt - 1)), deadlockMaxWaitMs)
-          const jitteredWaitMs = Math.floor(Math.random() * (ceilingWaitMs + 1))
-
-          const loggedContentionKind = retryInfo.contentionKind || "transaction contention"
-
-          this.logger.warn(`Retrying transaction after ${loggedContentionKind} (attempt ${attempt}/${maxAttempts})`)
-          await this._waitMs(jitteredWaitMs)
-          continue
-        }
-
-        throw error
       }
-    }
+
+      const args = this.getArgs()
+      const maxAttempts = optionalPositiveInteger(args.deadlockMaxRetries, "deadlockMaxRetries") ?? 8
+      const configuredBaseWaitMs = optionalPositiveInteger(args.deadlockBaseWaitMs, "deadlockBaseWaitMs")
+      const deadlockMaxWaitMs = optionalPositiveInteger(args.deadlockMaxWaitMs, "deadlockMaxWaitMs") ?? 1000
+      let attempt = 0
+
+      while (true) {
+        attempt++
+        const attemptStartedAtMs = this._nowMs()
+
+        try {
+          return await this._runTransactionAttempt(callback, options)
+        } catch (error) {
+          if (error instanceof VelociousDatabaseAfterCommitCallbackError) throw error.callbackError
+          if (!(error instanceof Error)) throw error
+
+          const retryInfo = this.retryableDatabaseError(error)
+          const willRetry = Boolean(retryInfo.deadlock && attempt < maxAttempts && this._transactionsCount == 0)
+
+          if (willRetry) {
+            this._reportDeadlockRetryDiagnostic({
+              attempt,
+              contentionKind: retryInfo.contentionKind || "deadlock",
+              error,
+              maxAttempts,
+              transactionAttemptDurationMs: Math.max(0, this._nowMs() - attemptStartedAtMs),
+              willRetry
+            })
+
+            // An explicitly-configured base wins so the tuning knob is effective even on drivers
+            // whose classifier supplies its own `waitMs` (MySQL/MariaDB return a fixed 50ms for
+            // deadlocks); otherwise honor that classifier hint, then fall back to 50ms.
+            const baseWaitMs = configuredBaseWaitMs ?? (typeof retryInfo.waitMs == "number" && retryInfo.waitMs > 0 ? retryInfo.waitMs : 50)
+
+            // Full-jitter exponential backoff: wait a uniform-random duration in
+            // [0, min(base * 2^(attempt-1), cap)]. The doubling ceiling spreads retries out as
+            // contention persists, and the jitter de-correlates transactions that deadlocked in
+            // lockstep so they stop re-colliding on the same wait (the linear `base * attempt`
+            // this replaces had every victim retry after an identical delay). `attempt` is
+            // 1-based here, so 2^(attempt-1) is 1, 2, 4, ... The cap keeps the tail sub-second.
+            const ceilingWaitMs = Math.min(baseWaitMs * (2 ** (attempt - 1)), deadlockMaxWaitMs)
+            const jitteredWaitMs = Math.floor(Math.random() * (ceilingWaitMs + 1))
+
+            const loggedContentionKind = retryInfo.contentionKind || "transaction contention"
+
+            this.logger.warn(`Retrying transaction after ${loggedContentionKind} (attempt ${attempt}/${maxAttempts})`)
+            await this._waitMs(jitteredWaitMs)
+            continue
+          }
+
+          throw error
+        }
+      }
+    }, options.operationOwner)
   }
 
   /**

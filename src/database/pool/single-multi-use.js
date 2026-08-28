@@ -2,6 +2,7 @@
 
 import BasePool from "./base.js"
 import OperationLease from "../operation-lease.js"
+import {coordinateSharedTransactionConnection} from "../../testing/shared-transaction-connection-coordinator.js"
 
 /**
  * SinglePoolConnectionEntry type.
@@ -408,21 +409,23 @@ export default class VelociousDatabasePoolSingleMultiUser extends BasePool {
     const owner = Symbol("single-pool-operation-owner")
     const operationLease = new OperationLease(owner)
     const connection = await this.checkoutForConfiguration(databaseConfiguration, options, checkoutArgs)
-    let operationLeaseInstalled = false
 
     try {
-      await connection.setOperationLease(operationLease)
-      operationLeaseInstalled = true
+      return await coordinateSharedTransactionConnection(connection, async () => {
+        let operationLeaseInstalled = false
 
-      return await callback(connection, owner)
+        try {
+          await connection.setOperationLease(operationLease)
+          operationLeaseInstalled = true
+
+          return await callback(connection, owner)
+        } finally {
+          operationLease.release()
+          if (operationLeaseInstalled) connection.clearOperationLease(operationLease)
+        }
+      })
     } finally {
-      operationLease.release()
-
-      try {
-        if (operationLeaseInstalled) connection.clearOperationLease(operationLease)
-      } finally {
-        await this.checkin(connection)
-      }
+      await this.checkin(connection)
     }
   }
 
