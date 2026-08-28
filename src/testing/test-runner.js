@@ -438,8 +438,10 @@ export default class TestRunner {
       throw new Error(`Dummy helper not found at ${dummyPath}`)
     }
 
-    // Release Dummy.run's bootstrap checkout before test hooks and callbacks begin.
-    await Dummy.run(async () => {})
+    // Persistent server resources must not inherit an attempt scope that will be revoked.
+    await this.getConfiguration().getEnvironmentHandler().runWithCapturedTestDatabaseAccessScope(undefined, async () => {
+      await Dummy.run(async () => {})
+    })
     this.getConfiguration().assertDatabaseAccessAllowed()
     await callback()
   }
@@ -1367,10 +1369,18 @@ export default class TestRunner {
    * Records a cleanup failure after timeout handling has begun.
    * @param {unknown} reason - Detached cleanup rejection.
    * @param {string} cleanupName - Cleanup operation name.
+   * @param {Set<Error>} [recordedErrors] - Attempt-owned cleanup errors already reported.
    * @returns {void}
    */
-  recordTimeoutCleanupFailure(reason, cleanupName) {
+  recordTimeoutCleanupFailure(reason, cleanupName, recordedErrors) {
     const error = reason instanceof Error ? reason : new Error(`${cleanupName} cleanup failed: ${String(reason)}`)
+
+    if (recordedErrors) {
+      // Multiple bounded observers can receive the same detached cleanup rejection.
+      if (recordedErrors.has(error)) return
+      recordedErrors.add(error)
+    }
+
     const near = this._lastTestContext
     const attribution = near ? `, near test: ${near.fullDescription} (${near.filePath}:${near.line})` : ""
 
@@ -1657,6 +1667,8 @@ export default class TestRunner {
           /** @type {BrowserDummyConnectionRegistration[]} */
           const browserDummyConnectionRegistrations = []
           const testDatabaseAccessScope = {revoked: false}
+          /** @type {Set<Error>} */
+          const recordedTimeoutCleanupErrors = new Set()
           testArgs.registerTransactionalTenant = async (args) => {
             await this.registerTransactionalTenant(args, transactionalTenantRegistrations)
           }
@@ -1677,7 +1689,10 @@ export default class TestRunner {
             // acquisition, beforeEach hooks, the test body and afterEach hooks) as
             // one promise so the timeout below can cover all of it.
             const runLifecycleCallback = async () => await this.runWithDummyIfNeeded(testArgs, async () => {
-              const useSharedTestConnections = testArgs.databaseCleaning?.transaction === true || testArgs.type == "request"
+              const useTransaction = testArgs.databaseCleaning?.transaction === true
+              const shouldTruncate = testArgs.databaseCleaning?.truncate ?? !useTransaction
+              const useSharedTestConnections = useTransaction || testArgs.type == "request"
+              const useTestConnections = useSharedTestConnections || shouldTruncate
               const runTestAttempt = async () => {
                 // Register dynamic candidates before hooks so transaction state changes
                 // made during a hook are immediately visible to any in-process work.
@@ -1796,9 +1811,9 @@ export default class TestRunner {
                 }
               }
 
-              if (useSharedTestConnections) {
-                // Transaction cleaning and request sharing require one connection for
-                // beforeEach, the test body and afterEach. Other tests own their checkouts.
+              if (useTestConnections) {
+                // Database cleaning requires one connection for beforeEach, the test
+                // body and afterEach; only transactions and requests share it dynamically.
                 await this.getConfiguration().ensureConnections({name: `Test: ${testDescription}`}, runTestAttempt)
               } else {
                 await runTestAttempt()
@@ -1858,7 +1873,7 @@ export default class TestRunner {
                 testDatabaseAccessScope.revoked = true
                 void testLifecycle.catch((cleanupError) => {
                   if (isTestDatabaseAccessRevocation(cleanupError)) return
-                  this.recordTimeoutCleanupFailure(cleanupError, "test lifecycle")
+                  this.recordTimeoutCleanupFailure(cleanupError, "test lifecycle", recordedTimeoutCleanupErrors)
                 })
                 const quarantine = this.quarantineBrowserDummyConnections(browserDummyConnectionRegistrations)
                 const quarantineOutcome = await awaitSettledOrGrace(quarantine, timeoutMs ?? 60000)
@@ -1873,7 +1888,7 @@ export default class TestRunner {
                   emergencyCleanupErrors.push(quarantineOutcome.reason)
                 } else if (!quarantineOutcome.settled) {
                   void quarantine.catch((cleanupError) => {
-                    this.recordTimeoutCleanupFailure(cleanupError, "browser dummy connection quarantine")
+                    this.recordTimeoutCleanupFailure(cleanupError, "browser dummy connection quarantine", recordedTimeoutCleanupErrors)
                   })
                 }
               }
@@ -1895,7 +1910,7 @@ export default class TestRunner {
                 emergencyCleanupErrors.push(brokerCleanupOutcome.reason)
               } else if (!brokerCleanupOutcome.settled) {
                 void brokerCleanup.catch((cleanupError) => {
-                  this.recordTimeoutCleanupFailure(cleanupError, "shared transaction broker")
+                  this.recordTimeoutCleanupFailure(cleanupError, "shared transaction broker", recordedTimeoutCleanupErrors)
                 })
               }
               sharedTransactionBrokerRegistration = undefined
@@ -1909,7 +1924,7 @@ export default class TestRunner {
                 // The timed-out attempt must not block the runner indefinitely, but a
                 // later rollback/discard failure still becomes a visible test failure.
                 void emergencyCleanup.catch((cleanupError) => {
-                  this.recordTimeoutCleanupFailure(cleanupError, "transactional tenant")
+                  this.recordTimeoutCleanupFailure(cleanupError, "transactional tenant", recordedTimeoutCleanupErrors)
                 })
               }
 

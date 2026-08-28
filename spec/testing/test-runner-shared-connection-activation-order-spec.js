@@ -219,6 +219,12 @@ describe("TestRunner shared connection activation order", {databaseCleaning: {tr
     expect(order).toEqual(["beforeEach", "test"])
   })
 
+  it("owns connections without transaction coordination for truncation-backed tests", async () => {
+    const order = await transactionCoordinationOrder({databaseCleaning: {transaction: false, truncate: true}})
+
+    expect(order).toEqual(["connections", "beforeEach", "test"])
+  })
+
   it("installs transaction coordination before a transaction-opening hook exposes the shared connection", async () => {
     const order = await transactionCoordinationOrder({databaseCleaning: {transaction: true}})
 
