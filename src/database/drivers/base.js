@@ -1771,34 +1771,36 @@ export default class VelociousDatabaseDriversBase {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async startTransaction(options = {}) {
-    while (true) {
-      /** @type {import("../operation-lease.js").default | undefined} */
-      let blockingOperationLease
+    await coordinateSharedTransactionConnection(this, async () => {
+      while (true) {
+        /** @type {import("../operation-lease.js").default | undefined} */
+        let blockingOperationLease
 
-      await this._transactionsActionsMutex.sync(async () => {
-        const operationLease = this._operationLease
+        await this._transactionsActionsMutex.sync(async () => {
+          const operationLease = this._operationLease
 
-        if (operationLease && options.operationOwner !== operationLease.owner) {
-          blockingOperationLease = operationLease
-          return
-        }
+          if (operationLease && options.operationOwner !== operationLease.owner) {
+            blockingOperationLease = operationLease
+            return
+          }
 
-        await this._runProfiledTransactionAction("start", async () => {
-          await this._startTransactionAction(options)
-        })
-        this._transactionsCount++
-
-        if (this._transactionsCount === 1) {
-          this._transactionCompletionPromise = new Promise((resolve) => {
-            this._resolveTransactionCompletion = resolve
+          await this._runProfiledTransactionAction("start", async () => {
+            await this._startTransactionAction(options)
           })
-        }
-      })
+          this._transactionsCount++
 
-      if (!blockingOperationLease) return
+          if (this._transactionsCount === 1) {
+            this._transactionCompletionPromise = new Promise((resolve) => {
+              this._resolveTransactionCompletion = resolve
+            })
+          }
+        })
 
-      await blockingOperationLease.wait(options.operationOwner)
-    }
+        if (!blockingOperationLease) return
+
+        await blockingOperationLease.wait(options.operationOwner)
+      }
+    }, options.operationOwner)
   }
 
   /**
@@ -1816,13 +1818,15 @@ export default class VelociousDatabaseDriversBase {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async commitTransaction(options = {}) {
-    await this._transactionsActionsMutex.sync(async () => {
-      await this._runProfiledTransactionAction("commit", async () => {
-        await this._commitTransactionAction(options)
+    await coordinateSharedTransactionConnection(this, async () => {
+      await this._transactionsActionsMutex.sync(async () => {
+        await this._runProfiledTransactionAction("commit", async () => {
+          await this._commitTransactionAction(options)
+        })
+        this._transactionsCount--
+        this._resolveCompletedTransaction()
       })
-      this._transactionsCount--
-      this._resolveCompletedTransaction()
-    })
+    }, options.operationOwner)
   }
 
   /** Resolves the current outer transaction completion when it has finished. */
@@ -2535,23 +2539,25 @@ export default class VelociousDatabaseDriversBase {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async rollbackTransaction(options = {}) {
-    await this._transactionsActionsMutex.sync(async () => {
-      try {
-        await this._runProfiledTransactionAction("rollback", async () => {
-          await this._rollbackTransactionAction(options)
-        })
-      } finally {
-        this._transactionsCount--
-        this._resolveCompletedTransaction()
+    await coordinateSharedTransactionConnection(this, async () => {
+      await this._transactionsActionsMutex.sync(async () => {
+        try {
+          await this._runProfiledTransactionAction("rollback", async () => {
+            await this._rollbackTransactionAction(options)
+          })
+        } finally {
+          this._transactionsCount--
+          this._resolveCompletedTransaction()
 
-        // A rolled-back transaction may have reverted DDL (e.g. a CREATE TABLE
-        // run lazily inside the transaction), so any cached schema metadata is
-        // now stale and must be invalidated. Without this, a later tableExists()
-        // check can report a table that the rollback already removed, so callers
-        // skip recreating it and then fail with "no such table".
-        this.clearSchemaCache()
-      }
-    })
+          // A rolled-back transaction may have reverted DDL (e.g. a CREATE TABLE
+          // run lazily inside the transaction), so any cached schema metadata is
+          // now stale and must be invalidated. Without this, a later tableExists()
+          // check can report a table that the rollback already removed, so callers
+          // skip recreating it and then fail with "no such table".
+          this.clearSchemaCache()
+        }
+      })
+    }, options.operationOwner)
   }
 
   /**
@@ -2578,9 +2584,11 @@ export default class VelociousDatabaseDriversBase {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async startSavePoint(savePointName, options = {}) {
-    await this._transactionsActionsMutex.sync(async () => {
-      await this._startSavePointAction(savePointName, options)
-    })
+    await coordinateSharedTransactionConnection(this, async () => {
+      await this._transactionsActionsMutex.sync(async () => {
+        await this._startSavePointAction(savePointName, options)
+      })
+    }, options.operationOwner)
   }
 
   /**
@@ -2624,9 +2632,11 @@ export default class VelociousDatabaseDriversBase {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async releaseSavePoint(savePointName, options = {}) {
-    await this._transactionsActionsMutex.sync(async () => {
-      await this._releaseSavePointAction(savePointName, options)
-    })
+    await coordinateSharedTransactionConnection(this, async () => {
+      await this._transactionsActionsMutex.sync(async () => {
+        await this._releaseSavePointAction(savePointName, options)
+      })
+    }, options.operationOwner)
   }
 
   /**
@@ -2658,9 +2668,11 @@ export default class VelociousDatabaseDriversBase {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async rollbackSavePoint(savePointName, options = {}) {
-    await this._transactionsActionsMutex.sync(async () => {
-      await this._rollbackSavePointAction(savePointName, options)
-    })
+    await coordinateSharedTransactionConnection(this, async () => {
+      await this._transactionsActionsMutex.sync(async () => {
+        await this._rollbackSavePointAction(savePointName, options)
+      })
+    }, options.operationOwner)
   }
 
   /**
