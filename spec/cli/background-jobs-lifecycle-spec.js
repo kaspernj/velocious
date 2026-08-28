@@ -6,6 +6,7 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { connectGenerationPeer, startGenerationMain } from "../helpers/background-jobs-generation-harness.js"
+import createBackgroundJobsLifecycleCliProject from "../helpers/background-jobs-lifecycle-cli-project.js"
 import releaseLifecyclePaths from "../helpers/release-lifecycle-paths.js"
 import stalledSocketServer from "../helpers/stalled-socket-server.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
@@ -42,11 +43,12 @@ async function runCli(args) {
  * Starts a real main CLI, observes its listening boundary, and terminates it.
  * @param {string[]} args - Main command arguments.
  * @param {NodeJS.ProcessEnv} environment - Child environment.
+ * @param {string} cwd - Isolated application directory.
  * @returns {Promise<{code: number | null, listening: boolean, stderr: string, stdout: string}>} - Main result.
  */
-async function runMainCli(args, environment) {
+async function runMainCli(args, environment, cwd) {
   const child = spawn(process.execPath, [cliEntryPath, ...args], {
-    cwd: dummyConfiguration.getDirectory(),
+    cwd,
     env: environment,
     stdio: ["ignore", "pipe", "pipe"]
   })
@@ -75,12 +77,22 @@ async function runMainCli(args, environment) {
     const outcome = await timeout({errorMessage: "Background jobs main CLI did not settle", timeout: 2000}, async () => {
       return await Promise.race([listening.then(() => ({code: null, outcome: "listening"})), closed])
     })
-    if (outcome.outcome === "listening") child.kill("SIGTERM")
-    const result = outcome.outcome === "closed" ? outcome : await closed
+    if (outcome.outcome === "closed") {
+      throw new Error(
+        `Background jobs main CLI exited before listening (code ${String(outcome.code)})\n` +
+        `stdout:\n${stdout}\nstderr:\n${stderr}`
+      )
+    }
+
+    child.kill("SIGTERM")
+    const result = await closed
 
     return {code: result.code, listening: observedListening, stderr, stdout}
   } finally {
-    if (child.exitCode === null && child.signalCode === null) child.kill("SIGTERM")
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill("SIGTERM")
+      await closed
+    }
   }
 }
 
@@ -113,27 +125,37 @@ describe("Background jobs lifecycle CLI", () => {
   })
 
   it("starts an explicit active recovery main over an ID-only environment", async () => {
+    const project = await createBackgroundJobsLifecycleCliProject()
     const environment = {
       ...process.env,
-      MSSQL_SA_PASSWORD: process.env.MSSQL_SA_PASSWORD || "unused-for-sqlite-focused-tests",
       VELOCIOUS_BACKGROUND_JOBS_GENERATION_ID: "release-cli-recovery",
+      VELOCIOUS_BACKGROUND_JOBS_HOST: "127.0.0.1",
       VELOCIOUS_BACKGROUND_JOBS_PORT: "0",
-      VELOCIOUS_DISABLE_MSSQL: "1",
       VELOCIOUS_ENV: "test"
     }
+    delete environment.VELOCIOUS_BACKGROUND_JOB_CHILD
     delete environment.VELOCIOUS_BACKGROUND_JOBS_INITIAL_GENERATION_STATE
     delete environment.VELOCIOUS_BACKGROUND_JOBS_LIFECYCLE_SOCKET_PATH
-    const result = await runMainCli([
-      "background-jobs-main",
-      "--generation",
-      "release-cli-recovery",
-      "--initial-generation-state",
-      "active"
-    ], environment)
+    delete environment.VELOCIOUS_BACKGROUND_JOBS_DATABASE_IDENTIFIER
+    delete environment.VELOCIOUS_DISABLE_MSSQL
+    delete environment.VELOCIOUS_DISABLED_DATABASE_IDENTIFIERS
+    delete environment.VELOCIOUS_TEST_SHARED_TRANSACTION_BROKER
 
-    expect(result.listening).toEqual(true)
-    expect(result.code).toEqual(0)
-    expect(result.stderr).toEqual("")
+    try {
+      const result = await runMainCli([
+        "background-jobs-main",
+        "--generation",
+        "release-cli-recovery",
+        "--initial-generation-state",
+        "active"
+      ], environment, project.directory)
+
+      expect(result.listening).toEqual(true)
+      expect(result.code).toEqual(0)
+      expect(result.stderr).toEqual("")
+    } finally {
+      await project.cleanup()
+    }
   })
 
   it("acknowledges idempotent activation and retirement and exits with truthful status", async () => {
