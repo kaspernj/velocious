@@ -315,7 +315,15 @@ Deletion is batched by id (`SELECT` a page, then `DELETE ... WHERE id IN (...)`)
 
 ## Worker Disconnect Recovery
 
-Each durable worker handoff has a unique lease id. If a worker socket disconnects unexpectedly, `background-jobs-main` immediately returns only the jobs handed to that exact socket to the queue and makes them available to another connected worker. Two connections that advertise the same worker id remain isolated from each other.
+Each durable worker handoff has a unique lease id. In legacy mode, if a worker
+socket disconnects unexpectedly, `background-jobs-main` immediately returns
+only the jobs handed to that exact socket to the queue. In release-generation
+mode, the main retains those exact leases for the configured reconnect grace and
+accepts only the same generation-qualified worker identity back on its old
+endpoint. Grace expiry returns the exact leases to the global queue. A late
+report is fenced by generation-qualified worker id, handoff id, and handoff
+timestamp, so it cannot mutate a newer attempt. Two legacy connections that
+advertise the same worker id remain isolated from each other.
 
 The main chooses the lease id before persistence. If `markHandedOff` throws, it
 conditionally returns only that id, including when the database committed but
@@ -482,15 +490,97 @@ draining jobs generation. Runtime-owner/version replacement likewise preserves
 or transfers durable supervision and returns after the replacement is healthy;
 it is not a full synchronous shutdown.
 
+Velocious now supplies this opt-in jobs-generation protocol and lifecycle. It
+does not by itself make a production deploy topology compliant: Rollbridge (or
+another supervisor) must still start and retain each release-local main/worker
+unit, preserve it through later deploys and runtime-owner recovery, order old
+retirement before candidate activation, and pin every draining release. Rampway
+must treat healthy candidate activation as deploy success and release its lock
+without waiting for retired generations. Do not claim end-to-end production
+compliance until those supervisor and deployment prerequisites are installed.
+
 Within the Velocious worker/main protocol, jobs-main owns worker connections,
 lease fencing, report acceptance/acknowledgement, and durable store transitions;
 the worker/reporting side owns durable terminal-report retry, report-promise
 draining, per-job timeout execution, and child-runner reaping. The supervisor
 supplies generation process/endpoint ownership and durable recovery. The
 deployment tool supplies activation, deploy locking, and release cleanup pins.
-Current main startup adoption support alone does not provide this topology; do
-not claim compliance until the retirement quiescence and durable supervision
-paths exist end to end.
+
+### Enabling generation mode
+
+Generation mode is explicit and fail-loud. The id must match
+`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`; config, environment, API, and CLI values
+must either be absent or identical. Empty, malformed, or conflicting values
+abort before the generation main listens. When the id is unset, the established
+legacy endpoint, worker ids, handshake, immediate disconnect recovery, and
+third-party adapter behavior remain unchanged.
+
+```js
+backgroundJobs: {
+  generationId: "release-20260828.1",
+  initialGenerationState: "candidate",
+  host: "127.0.0.1",
+  port: 17431,
+  lifecycleSocketPath: "/srv/my-app/releases/20260828.1/run/background-jobs.sock"
+}
+```
+
+The equivalent process environment is:
+
+```sh
+VELOCIOUS_BACKGROUND_JOBS_GENERATION_ID=release-20260828.1
+VELOCIOUS_BACKGROUND_JOBS_INITIAL_GENERATION_STATE=candidate
+VELOCIOUS_BACKGROUND_JOBS_HOST=127.0.0.1
+VELOCIOUS_BACKGROUND_JOBS_PORT=17431
+VELOCIOUS_BACKGROUND_JOBS_LIFECYCLE_SOCKET_PATH=/srv/my-app/releases/20260828.1/run/background-jobs.sock
+```
+
+The main command also accepts `--generation`, `--initial-generation-state`, and
+`--lifecycle-socket`; the worker accepts `--generation`. Spawned, forked, and
+pooled runners inherit the exact endpoint and generation from their worker.
+
+`candidate` is quiescent: it performs no schedule ownership, concurrency
+reconciliation, dispatch, reclaim, or orphan sweep. Activation transitions it
+to `active`. Retirement installs its admission fence synchronously, stops new
+schedules/dispatch/admission/handoffs, then transitions through `retiring` to
+`retired` while preserving accepted workers, reports, acknowledgements,
+timeouts, child reaping, and durable transitions. A restarted `retired` main
+recovers only exact durable handoffs for its own generation and never dispatches
+global queue work. It reaches `stopped` only after its exact workers, handoffs,
+reports, worker connections, and lifecycle acknowledgements drain.
+
+Worker ownership is stored as `<generationId>:<workerUuid>` (maximum 165
+characters). The built-in SQL schema already gives `worker_id` 255 characters
+on SQLite, MariaDB/MySQL, PostgreSQL, and MSSQL, so enabling this feature needs
+no migration. Generation mode requires an adapter whose
+`supportsReleaseScopedGenerations()` returns `true`; the built-in SQL adapter
+does. Unsupported third-party adapters are rejected before listening, while
+legacy mode remains compatible with them.
+
+### Lifecycle control socket
+
+The release supervisor controls a candidate through the package-owned local
+Unix socket with exactly one acknowledged request:
+
+```sh
+npx velocious background-jobs:activate \
+  --generation release-20260828.1 \
+  --socket /srv/my-app/releases/20260828.1/run/background-jobs.sock
+
+npx velocious background-jobs:retire \
+  --generation release-20260828.1 \
+  --socket /srv/my-app/releases/20260828.1/run/background-jobs.sock
+```
+
+There is no polling, retry, PID guessing, marker file, or remote control
+endpoint. The socket must be an absolute portable-length path inside the release
+directory, under a real directory owned by the process user. Velocious creates
+it mode `0600`, refuses symlink/non-socket/foreign-owner/active collisions,
+removes only a same-owner stale socket whose inode did not change during the
+check, and removes its own path on shutdown only if the inode is still the one
+it created. Requests and acknowledgements carry the exact generation and a UUID;
+server errors preserve their name/message/stack and are also emitted on
+`framework-error` and `all-error` for supervisors whose hooks ignore stdio.
 
 ## Worker shutdown and process-job draining
 

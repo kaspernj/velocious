@@ -1,7 +1,7 @@
 // @ts-check
 
 import BackgroundJobsAdapterClient from "../background-jobs/adapter-client.js"
-import {validateTimeZone} from "../time-zone.js"
+import { validateTimeZone } from "../time-zone.js"
 
 /**
  * CommandFileObjectType type.
@@ -439,6 +439,24 @@ export default class VelociousEnvironmentHandlerBase {
    */
   async cliCommandsBackgroundJobsMain(_command) {
     throw new Error("cliCommandsBackgroundJobsMain not implemented")
+  }
+
+  /**
+   * Runs CLI background-jobs activation.
+   * @param {import("../cli/base-command.js").default} _command - Command.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Result.
+   */
+  async cliCommandsBackgroundJobsActivate(_command) {
+    throw new Error("cliCommandsBackgroundJobsActivate not implemented")
+  }
+
+  /**
+   * Runs CLI background-jobs retirement.
+   * @param {import("../cli/base-command.js").default} _command - Command.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Result.
+   */
+  async cliCommandsBackgroundJobsRetire(_command) {
+    throw new Error("cliCommandsBackgroundJobsRetire not implemented")
   }
 
   /**

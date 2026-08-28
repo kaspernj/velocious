@@ -1,5 +1,6 @@
 import BaseCommand from "../../../../cli/base-command.js"
 import BackgroundJobsWorker from "../../../../background-jobs/worker.js"
+import commandArguments from "../../../../cli/command-arguments.js"
 
 /**
  * Resolves the shutdown drain timeout from
@@ -30,21 +31,30 @@ export default class BackgroundJobsWorkerCommand extends BaseCommand {
     // Identify this process in `ps`/`top` instead of a generic "node" entry.
     process.title = "velocious background-jobs-worker"
 
-    const worker = new BackgroundJobsWorker({configuration: this.getConfiguration()})
+    const args = commandArguments({definition: {valueOptions: ["--generation"]}, processArgs: this.processArgs || []})
+    const worker = new BackgroundJobsWorker({
+      configuration: this.getConfiguration(),
+      generationId: typeof args.generation === "string" ? args.generation : undefined
+    })
     await worker.start()
 
     console.log("Background jobs worker connected")
 
     const timeoutMs = resolveShutdownTimeoutMs()
 
-    await new Promise((resolve) => {
+    await new Promise((resolve, reject) => {
       const shutdown = async () => {
-        await worker.stop({timeoutMs})
-        resolve(undefined)
+        try {
+          await worker.stop({timeoutMs})
+          resolve(undefined)
+        } catch (error) {
+          reject(error)
+        }
       }
 
       process.once("SIGINT", shutdown)
       process.once("SIGTERM", shutdown)
+      void worker.waitUntilStopped().then(() => resolve(undefined), reject)
     })
   }
 }

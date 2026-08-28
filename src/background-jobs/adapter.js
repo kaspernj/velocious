@@ -7,6 +7,14 @@
  */
 export default class BackgroundJobsAdapter {
   /**
+   * Declares exact durable fencing support for release-scoped generations.
+   * Third-party adapters must override this only after implementing the full
+   * snapshot, owner, report, and recovery contract.
+   * @returns {boolean} - Whether generation mode is supported.
+   */
+  supportsReleaseScopedGenerations() { return false }
+
+  /**
    * Ensures the adapter can accept work.
    * @returns {Promise<void>} - Resolves when ready.
    */

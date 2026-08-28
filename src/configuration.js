@@ -20,28 +20,29 @@
  * @property {Promise<void> | undefined} closePromise - Shared close operation.
  */
 
-import {digg} from "diggerize"
+import { digg } from "diggerize"
 import gettextConfig from "gettext-universal/build/src/config.js"
 import translate from "gettext-universal/build/src/translate.js"
 import Ability from "./authorization/ability.js"
 import BackgroundJobsAdapter from "./background-jobs/adapter.js"
 import DatabaseOperation from "./database/operation.js"
-import {initializeAuditedModelRelationships} from "./database/record/auditing.js"
+import { initializeAuditedModelRelationships } from "./database/record/auditing.js"
 import EventEmitter from "./utils/event-emitter.js"
 import VelociousWebsocketChannelSubscribers from "./http-server/websocket-channel-subscribers.js"
-import {CurrentConfigurationNotSetError, currentConfiguration, setCurrentConfiguration} from "./current-configuration.js"
-import {requestDetails} from "./error-reporting/request-details.js"
-import {frontendModelApiManifest, frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition, frontendModelResourcesForBackendProject} from "./frontend-models/resource-definition.js"
-import {currentOfflineGrantSigningKey, normalizeOfflineGrantSigningKey} from "./sync/offline-grant.js"
+import { CurrentConfigurationNotSetError, currentConfiguration, setCurrentConfiguration } from "./current-configuration.js"
+import { requestDetails } from "./error-reporting/request-details.js"
+import { frontendModelApiManifest, frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition, frontendModelResourcesForBackendProject } from "./frontend-models/resource-definition.js"
+import { currentOfflineGrantSigningKey, normalizeOfflineGrantSigningKey } from "./sync/offline-grant.js"
 import PluginRoutes from "./routes/plugin-routes.js"
 import restArgsError from "./utils/rest-args-error.js"
 import { validateTestActivityName } from "./testing/test-profile-activity.js"
-import {validateTimeZone} from "./time-zone.js"
-import {withTrackedStack} from "./utils/with-tracked-stack.js"
+import { validateTimeZone } from "./time-zone.js"
+import { withTrackedStack } from "./utils/with-tracked-stack.js"
 import VelociousPackage from "./packages/velocious-package.js"
 import FrontendTenantSqliteLifecycle from "./tenants/frontend-tenant-sqlite-lifecycle.js"
+import { resolveGenerationId, resolveInitialGenerationState, resolveLifecycleSocketPath } from "./background-jobs/generation-identity.js"
 
-export {CurrentConfigurationNotSetError}
+export { CurrentConfigurationNotSetError }
 
 /**
  * Runs current working directory.
@@ -1456,10 +1457,11 @@ export default class VelociousConfiguration {
 
   /**
    * Runs get background jobs config.
-   * @returns {Omit<Required<import("./configuration-types.js").BackgroundJobsConfiguration>, "adapter" | "retention"> & {retention: import("./configuration-types.js").ResolvedBackgroundJobsRetentionConfiguration}} - Background jobs configuration.
+   * @returns {Omit<Required<import("./configuration-types.js").BackgroundJobsConfiguration>, "adapter" | "retention" | "generationId" | "lifecycleSocketPath"> & {generationId?: string, lifecycleSocketPath?: string, retention: import("./configuration-types.js").ResolvedBackgroundJobsRetentionConfiguration}} - Background jobs configuration.
    */
   getBackgroundJobsConfig() {
     const processEnvironment = globalThis.process?.env
+    const generationEnvironment = processEnvironment || {}
     const envHost = processEnvironment?.VELOCIOUS_BACKGROUND_JOBS_HOST
     const envPortRaw = processEnvironment?.VELOCIOUS_BACKGROUND_JOBS_PORT
     const envDatabaseIdentifier = processEnvironment?.VELOCIOUS_BACKGROUND_JOBS_DATABASE_IDENTIFIER
@@ -1473,6 +1475,9 @@ export default class VelociousConfiguration {
     const envDispatchStrategy = processEnvironment?.VELOCIOUS_BACKGROUND_JOBS_DISPATCH_STRATEGY
     const envPollIntervalRaw = processEnvironment?.VELOCIOUS_BACKGROUND_JOBS_POLL_INTERVAL_MS
     const envJobTimeoutRaw = processEnvironment?.VELOCIOUS_BACKGROUND_JOBS_JOB_TIMEOUT_MS
+    const envGenerationId = processEnvironment?.VELOCIOUS_BACKGROUND_JOBS_GENERATION_ID
+    const envInitialGenerationState = processEnvironment?.VELOCIOUS_BACKGROUND_JOBS_INITIAL_GENERATION_STATE
+    const envLifecycleSocketPath = processEnvironment?.VELOCIOUS_BACKGROUND_JOBS_LIFECYCLE_SOCKET_PATH
     const envPort = envPortRaw ? Number(envPortRaw) : undefined
     const envMaxConcurrentForked = envMaxConcurrentForkedRaw ? Number(envMaxConcurrentForkedRaw) : undefined
     const envMaxConcurrent = envMaxConcurrentRaw ? Number(envMaxConcurrentRaw) : undefined
@@ -1484,6 +1489,18 @@ export default class VelociousConfiguration {
     const envPollInterval = envPollIntervalRaw ? Number(envPollIntervalRaw) : undefined
     const envJobTimeout = envJobTimeoutRaw ? Number(envJobTimeoutRaw) : undefined
     const configured = this._backgroundJobs || {}
+    const generationId = resolveGenerationId([
+      {name: "backgroundJobs.generationId", present: Object.hasOwn(configured, "generationId") && configured.generationId !== undefined, value: configured.generationId},
+      {name: "VELOCIOUS_BACKGROUND_JOBS_GENERATION_ID", present: Object.hasOwn(generationEnvironment, "VELOCIOUS_BACKGROUND_JOBS_GENERATION_ID"), value: envGenerationId}
+    ])
+    const initialGenerationState = resolveInitialGenerationState([
+      {name: "backgroundJobs.initialGenerationState", present: Object.hasOwn(configured, "initialGenerationState") && configured.initialGenerationState !== undefined, value: configured.initialGenerationState},
+      {name: "VELOCIOUS_BACKGROUND_JOBS_INITIAL_GENERATION_STATE", present: Object.hasOwn(generationEnvironment, "VELOCIOUS_BACKGROUND_JOBS_INITIAL_GENERATION_STATE"), value: envInitialGenerationState}
+    ], generationId)
+    const lifecycleSocketPath = resolveLifecycleSocketPath([
+      {name: "backgroundJobs.lifecycleSocketPath", present: Object.hasOwn(configured, "lifecycleSocketPath") && configured.lifecycleSocketPath !== undefined, value: configured.lifecycleSocketPath},
+      {name: "VELOCIOUS_BACKGROUND_JOBS_LIFECYCLE_SOCKET_PATH", present: Object.hasOwn(generationEnvironment, "VELOCIOUS_BACKGROUND_JOBS_LIFECYCLE_SOCKET_PATH"), value: envLifecycleSocketPath}
+    ], generationId)
     const mode = configured.mode === undefined ? "background" : configured.mode
 
     if (mode !== "background" && mode !== "inline") {
@@ -1545,7 +1562,7 @@ export default class VelociousConfiguration {
 
     const jobClasses = this.getBackgroundJobClasses()
 
-    return {host, port, databaseIdentifier, maxConcurrentForkedJobs, maxConcurrentInlineJobs, mode, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, dispatchStrategy, pollIntervalMs, queues, jobClasses, jobTimeoutMs, retention}
+    return {host, port, databaseIdentifier, maxConcurrentForkedJobs, maxConcurrentInlineJobs, mode, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, dispatchStrategy, pollIntervalMs, queues, jobClasses, jobTimeoutMs, retention, generationId, initialGenerationState, lifecycleSocketPath}
   }
 
   /**

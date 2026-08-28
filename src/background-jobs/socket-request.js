@@ -10,11 +10,13 @@ export default class BackgroundJobsSocketRequest {
    * @param {string} args.host - Host.
    * @param {number} args.port - Port.
    * @param {"client" | "reporter"} args.role - Socket role.
+   * @param {string} [args.generationId] - Release generation identity.
    */
-  constructor({host, port, role}) {
+  constructor({host, port, role, generationId}) {
     this.host = host
     this.port = port
     this.role = role
+    this.generationId = generationId
     /**
      * Internal test-only observability reference — NOT public API. Holds the
      * JsonSocket wrapper this request created so the timeout spec can inspect the
@@ -98,6 +100,21 @@ export default class BackgroundJobsSocketRequest {
        * @param {import("./types.js").BackgroundJobSocketMessage} message - Socket message.
        */
       jsonSocket.on("message", (message) => {
+        if (this.generationId && message?.type === "generation-accepted") {
+          if (message.generationId !== this.generationId) {
+            finish({destroy: true}, () => reject(new Error("Background jobs main acknowledged a different generation")))
+            return
+          }
+
+          onConnect(jsonSocket)
+          return
+        }
+
+        if (this.generationId && message?.type === "generation-rejected") {
+          finish({destroy: true}, () => reject(new Error(`Background jobs generation rejected: ${message.reason}`)))
+          return
+        }
+
         onMessage({
           message,
           resolve: (value) => finish({}, () => resolve(value)),
@@ -106,8 +123,8 @@ export default class BackgroundJobsSocketRequest {
       })
 
       socket.on("connect", () => {
-        jsonSocket.send({type: "hello", role: this.role})
-        onConnect(jsonSocket)
+        jsonSocket.send({type: "hello", role: this.role, ...(this.generationId ? {generationId: this.generationId} : {})})
+        if (!this.generationId) onConnect(jsonSocket)
       })
     })
   }

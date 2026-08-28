@@ -5,6 +5,7 @@ import wait from "awaitery/build/wait.js"
 import Logger from "../logger.js"
 import normalizeBackgroundJobError from "./normalize-error.js"
 import BackgroundJobsSocketRequest from "./socket-request.js"
+import { resolveGenerationId } from "./generation-identity.js"
 
 class BackgroundJobUpdateError extends Error {}
 
@@ -16,12 +17,14 @@ export default class BackgroundJobsStatusReporter {
    * @param {string} [args.host] - Host.
    * @param {number} [args.port] - Port.
    * @param {number} [args.attemptTimeoutMs] - Per-attempt socket-request timeout in milliseconds (default: 5000).
+   * @param {string} [args.generationId] - Explicit release generation identity.
    */
-  constructor({configuration, host, port, attemptTimeoutMs = 5000}) {
+  constructor({configuration, host, port, attemptTimeoutMs = 5000, generationId}) {
     this.configuration = configuration
     this.host = host
     this.port = port
     this.attemptTimeoutMs = attemptTimeoutMs
+    this.explicitGenerationId = generationId
     /**
      * Internal test-only observability state — NOT public API. References the most
      * recent socket request so the timeout spec can inspect how its socket was torn
@@ -48,9 +51,13 @@ export default class BackgroundJobsStatusReporter {
     const config = this.configuration.getBackgroundJobsConfig()
     const host = this.host || config.host
     const port = typeof this.port === "number" ? this.port : config.port
+    const generationId = resolveGenerationId([
+      {name: "backgroundJobs.generationId", present: config.generationId !== undefined, value: config.generationId},
+      {name: "BackgroundJobsStatusReporter generationId", present: this.explicitGenerationId !== undefined, value: this.explicitGenerationId}
+    ])
 
     await timeout({timeout: this.attemptTimeoutMs}, async ({control}) => {
-      const request = new BackgroundJobsSocketRequest({host, port, role: "reporter"})
+      const request = new BackgroundJobsSocketRequest({host, port, role: "reporter", generationId})
 
       this._lastRequest = request
 

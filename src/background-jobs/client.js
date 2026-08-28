@@ -3,6 +3,7 @@
 import timeout from "awaitery/build/timeout.js"
 import configurationResolver from "../configuration-resolver.js"
 import BackgroundJobsSocketRequest from "./socket-request.js"
+import { resolveGenerationId } from "./generation-identity.js"
 
 const DEFAULT_ENQUEUE_TIMEOUT_MS = 5000
 
@@ -12,10 +13,12 @@ export default class BackgroundJobsClient {
    * @param {object} [args] - Options.
    * @param {import("../configuration.js").default} [args.configuration] - Configuration.
    * @param {number} [args.enqueueTimeoutMs] - Maximum time to wait for an enqueue acknowledgement in milliseconds (default: 5000).
+   * @param {string} [args.generationId] - Explicit release generation identity.
    */
-  constructor({configuration, enqueueTimeoutMs = DEFAULT_ENQUEUE_TIMEOUT_MS} = {}) {
+  constructor({configuration, enqueueTimeoutMs = DEFAULT_ENQUEUE_TIMEOUT_MS, generationId} = {}) {
     this.configurationPromise = configuration ? Promise.resolve(configuration) : configurationResolver()
     this.enqueueTimeoutMs = enqueueTimeoutMs
+    this.explicitGenerationId = generationId
   }
 
   /**
@@ -24,9 +27,13 @@ export default class BackgroundJobsClient {
    */
   async _request() {
     const configuration = await this.configurationPromise
-    const {host, port} = configuration.getBackgroundJobsConfig()
+    const {host, port, generationId} = configuration.getBackgroundJobsConfig()
+    const resolvedGenerationId = resolveGenerationId([
+      {name: "backgroundJobs.generationId", present: generationId !== undefined, value: generationId},
+      {name: "BackgroundJobsClient generationId", present: this.explicitGenerationId !== undefined, value: this.explicitGenerationId}
+    ])
 
-    return new BackgroundJobsSocketRequest({host, port, role: "client"})
+    return new BackgroundJobsSocketRequest({host, port, role: "client", generationId: resolvedGenerationId})
   }
 
   /**
