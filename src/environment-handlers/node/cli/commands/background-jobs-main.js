@@ -22,8 +22,6 @@ export default class BackgroundJobsMainCommand extends BaseCommand {
     })
     await main.start()
 
-    console.log(`Background jobs main listening on ${main.host}:${main.getPort()}`)
-
     await new Promise((resolve, reject) => {
       const shutdown = async () => {
         try {
@@ -37,6 +35,7 @@ export default class BackgroundJobsMainCommand extends BaseCommand {
       process.once("SIGINT", shutdown)
       process.once("SIGTERM", shutdown)
       void main.waitUntilStopped().then(() => resolve(undefined), reject)
+      console.log(`Background jobs main listening on ${main.host}:${main.getPort()}`)
     })
   }
 }
