@@ -3346,17 +3346,23 @@ export default class FrontendModelController extends Controller {
     // stays focused on real backend failures.
     if (errorContext.expectedError) return
 
-    const errorMessage = error instanceof Error
-      ? `${error.message}\n${error.stack || ""}`
-      : String(error)
+    const configuration = this.getConfiguration()
+    const redactor = configuration.getLogRedactor()
+    const requestTiming = configuration.getCurrentRequestTiming()
+    const sensitiveValues = requestTiming ? requestTiming.getLogSensitiveValues() : new Set()
+    const normalizedError = error instanceof Error ? error : new Error(String(error))
+    const redactedError = redactor.redactError(normalizedError, sensitiveValues)
+    const redactedContext = /** @type {FrontendModelEndpointErrorContext} */ (redactor.redactStructured(errorContext, sensitiveValues))
 
     await this.logger.error(() => ["Frontend model endpoint request failed", {
-      action: errorContext.action,
-      commandType: errorContext.commandType,
-      correlationId: errorContext.correlationId,
-      error: errorMessage,
-      model: errorContext.model,
-      requestId: errorContext.requestId
+      action: redactedContext.action,
+      commandType: redactedContext.commandType,
+      correlationId: redactedContext.correlationId,
+      errorBacktrace: redactedError.stack,
+      errorClass: redactedError.name,
+      errorMessage: redactedError.message,
+      model: redactedContext.model,
+      requestId: redactedContext.requestId
     }])
 
     // Surface genuinely unexpected backend failures on the framework-error
@@ -3364,11 +3370,11 @@ export default class FrontendModelController extends Controller {
     // controller silently swallowing them behind the generic "Request
     // failed." client message.
     const errorPayload = {
-      correlationId: errorContext.correlationId,
-      context: errorContext,
-      error: error instanceof Error ? error : new Error(String(error)),
+      correlationId: redactedContext.correlationId,
+      context: redactedContext,
+      error: redactedError,
       request: this.getRequest(),
-      requestDetails: requestDetails(this.getRequest())
+      requestDetails: requestDetails(this.getRequest(), {redactor, sensitiveValues})
     }
 
     this.getConfiguration().getErrorEvents().emit("framework-error", errorPayload)

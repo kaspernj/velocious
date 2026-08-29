@@ -11,6 +11,7 @@ import VelociousError from "../../velocious-error.js"
 import WebsocketChannel from "../websocket-channel.js"
 import { websocketEventLogStoreForConfiguration } from "../websocket-event-log-store.js"
 import RequestRunner from "./request-runner.js"
+import RequestTiming from "./request-timing.js"
 import WebsocketRequest from "./websocket-request.js"
 
 /**
@@ -606,14 +607,28 @@ export default class VelociousHttpServerClientWebsocketSession {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async _dispatchMessage(message) {
-    const wrapper = this.configuration.getWebsocketAroundRequest?.()
+    const requestTiming = new RequestTiming()
+    const redactor = this.configuration.getLogRedactor()
+    let sensitiveValues = redactor.sensitiveValues(message)
 
-    if (wrapper) {
-      await wrapper(this, () => this._handleMessageInner(message))
-      return
+    sensitiveValues = redactor.sensitiveValues(this.getMetadata(), sensitiveValues)
+
+    if (this.upgradeRequest) {
+      sensitiveValues = redactor.requestSensitiveValues(this.upgradeRequest, sensitiveValues)
     }
 
-    await this._handleMessageInner(message)
+    requestTiming.registerLogSensitiveValues(sensitiveValues)
+
+    await this.configuration.runWithRequestTiming(requestTiming, async () => {
+      const wrapper = this.configuration.getWebsocketAroundRequest?.()
+
+      if (wrapper) {
+        await wrapper(this, () => this._handleMessageInner(message))
+        return
+      }
+
+      await this._handleMessageInner(message)
+    })
   }
 
   /**

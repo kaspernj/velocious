@@ -30,6 +30,8 @@ export default class RequestTiming {
   bucketStack = []
 
   dbQueryCount = 0
+  /** @type {Set<string>} */
+  logSensitiveValues = new Set()
   /**
    * Completed log method.
    * @type {"debug" | "info" | undefined} */
@@ -43,6 +45,23 @@ export default class RequestTiming {
    * @type {number | undefined} */
   responseServedAtMs = undefined
   startedAtMs = Date.now()
+
+  /**
+   * Registers exact sensitive values owned by this request lifecycle.
+   * @param {Set<string>} values - Sensitive value representations.
+   * @returns {void} - No return value.
+   */
+  registerLogSensitiveValues(values) {
+    for (const value of values) this.logSensitiveValues.add(value)
+  }
+
+  /**
+   * Gets the sensitive values owned by this request lifecycle.
+   * @returns {Set<string>} - Request-local sensitive value representations.
+   */
+  getLogSensitiveValues() {
+    return this.logSensitiveValues
+  }
 
   /**
    * Runs measure.

@@ -135,6 +135,11 @@ export default class VelociousHttpServerClientRequestRunner {
     this.requestTiming.startedAtMs = Date.now()
 
     return await this.configuration.runWithRequestTiming(this.requestTiming, async () => {
+      const redactor = this.configuration.getLogRedactor()
+      const sensitiveValues = redactor.requestSensitiveValues(this.request, this.requestTiming.getLogSensitiveValues())
+
+      this.requestTiming.registerLogSensitiveValues(sensitiveValues)
+
       // Run the whole request inside any per-test shared connection context so an
       // in-process handler executes on the test's connection (and open transaction).
       // No shared connection is set outside tests / in worker threads, so this is a
@@ -150,12 +155,16 @@ export default class VelociousHttpServerClientRequestRunner {
 
     if (!request) throw new Error("No request?")
 
+    const redactor = configuration.getLogRedactor()
+    const sensitiveValues = this.requestTiming.getLogSensitiveValues()
+    const loggedPath = redactor.redactPath(request.path(), sensitiveValues)
+
     try {
       await this.logger.debug(() => ["Run request lifecycle", {
         httpMethod: request.httpMethod(),
         httpVersion: request.httpVersion(),
         origin: request.origin(),
-        path: request.path(),
+        path: loggedPath,
         remoteAddress: request.remoteAddress()
       }])
       // Before we checked if the sec-fetch-mode was "cors", but it seems the sec-fetch-mode isn't always present
@@ -167,7 +176,7 @@ export default class VelociousHttpServerClientRequestRunner {
         await cors({request, response})
         await this.logger.debug(() => ["CORS handler done", {
           httpMethod: request.httpMethod(),
-          path: request.path(),
+          path: loggedPath,
           responseStatusCode: response.getStatusCode()
         }])
       }
@@ -176,7 +185,7 @@ export default class VelociousHttpServerClientRequestRunner {
         response.setStatus(200)
         response.setBody("")
         await this.logger.debug(() => ["Handled preflight OPTIONS request", {
-          path: request.path(),
+          path: loggedPath,
           responseStatusCode: response.getStatusCode()
         }])
       } else {
@@ -239,7 +248,7 @@ export default class VelociousHttpServerClientRequestRunner {
           await Promise.race([resolvePromise, timeoutPromise])
           await this.logger.debug(() => ["Routes resolver done", {
             httpMethod: request.httpMethod(),
-            path: request.path(),
+            path: loggedPath,
             responseStatusCode: response.getStatusCode(),
             hasFilePath: Boolean(response.getFilePath()),
             bodyType: responseBodyTypeForLog(response)
@@ -257,7 +266,9 @@ export default class VelociousHttpServerClientRequestRunner {
         } catch (error) {
           if (timedOut && resolvePromise) {
             void resolvePromise.catch((resolveError) => {
-              this.logger.warn(() => ["Request finished after timeout", resolveError])
+              const safeResolveError = redactor.redactError(ensureError(resolveError), sensitiveValues)
+
+              this.logger.warn(() => ["Request finished after timeout", safeResolveError])
             })
           }
           throw error
@@ -270,12 +281,18 @@ export default class VelociousHttpServerClientRequestRunner {
       const errorWithContext = /** @type {{velociousContext?: object}} */ (error)
       const errorContext = errorWithContext.velociousContext || {stage: "request-runner"}
       const logDetails = requestErrorLogDetails(error)
+      const redactedLogDetails = {
+        cleanedBacktrace: logDetails.cleanedBacktrace
+          ? redactor.redactString(logDetails.cleanedBacktrace, sensitiveValues)
+          : undefined,
+        errorSummary: redactor.redactString(logDetails.errorSummary, sensitiveValues)
+      }
 
-      await this.logger.error(() => requestErrorLogMessage(logDetails))
+      await this.logger.error(() => requestErrorLogMessage(redactedLogDetails))
 
       const errorPayload = {
-        context: errorContext,
-        error,
+        context: redactor.redactStructured(errorContext, sensitiveValues),
+        error: redactor.redactError(error, sensitiveValues),
         request,
         response
       }
@@ -292,7 +309,7 @@ export default class VelociousHttpServerClientRequestRunner {
 
     await this.logger.debug(() => ["Request runner done", {
       httpMethod: request.httpMethod(),
-      path: request.path(),
+      path: loggedPath,
       responseStatusCode: response.getStatusCode()
     }])
     this.state = "done"
