@@ -95,7 +95,9 @@ describe("package scripts", {databaseCleaning: {transaction: true}}, () => {
     try {
       await execFileAsync("git", ["clone", "--local", "--no-hardlinks", repositoryDirectory(), sourceDirectory])
       const packageJson = JSON.parse(await fs.readFile(path.join(repositoryDirectory(), "package.json"), "utf8"))
+      const packageLock = JSON.parse(await fs.readFile(path.join(repositoryDirectory(), "package-lock.json"), "utf8"))
       packageJson.devDependencies["eslint-plugin-jsdoc-inline-type-casts"] = `file:${path.join(repositoryDirectory(), "node_modules", "eslint-plugin-jsdoc-inline-type-casts")}`
+      packageJson.dependencies.snapreq = packageLock.packages["node_modules/snapreq"].resolved
       await fs.writeFile(path.join(sourceDirectory, "package.json"), JSON.stringify(packageJson, null, 2))
       await execFileAsync("git", [
         "-c", "user.name=Velocious test",

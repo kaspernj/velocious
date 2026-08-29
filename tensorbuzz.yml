@@ -118,7 +118,7 @@ builds:
   mssql_1:
     depends_on:
       - mssql
-    name: "MS-SQL (1/4)"
+    name: "MS-SQL (1/5)"
     services:
       mssql: *mssql_service
     script:
@@ -128,11 +128,11 @@ builds:
       - cd spec/dummy && node ../../bin/velocious.js db:create
       - cd spec/dummy && node ../../bin/velocious.js db:migrate
       - cd spec/dummy && node ../../bin/velocious.js g:base-models
-      - npm run test -- --groups 4 --group-number 1
+      - npm run test -- --groups 5 --group-number 1
   mssql_2:
     depends_on:
       - mssql
-    name: "MS-SQL (2/4)"
+    name: "MS-SQL (2/5)"
     services:
       mssql: *mssql_service
     script:
@@ -142,11 +142,11 @@ builds:
       - cd spec/dummy && node ../../bin/velocious.js db:create
       - cd spec/dummy && node ../../bin/velocious.js db:migrate
       - cd spec/dummy && node ../../bin/velocious.js g:base-models
-      - npm run test -- --groups 4 --group-number 2
+      - npm run test -- --groups 5 --group-number 2
   mssql_3:
     depends_on:
       - mssql
-    name: "MS-SQL (3/4)"
+    name: "MS-SQL (3/5)"
     services:
       mssql: *mssql_service
     script:
@@ -156,11 +156,11 @@ builds:
       - cd spec/dummy && node ../../bin/velocious.js db:create
       - cd spec/dummy && node ../../bin/velocious.js db:migrate
       - cd spec/dummy && node ../../bin/velocious.js g:base-models
-      - npm run test -- --groups 4 --group-number 3
+      - npm run test -- --groups 5 --group-number 3
   mssql_4:
     depends_on:
       - mssql
-    name: "MS-SQL (4/4)"
+    name: "MS-SQL (4/5)"
     services:
       mssql: *mssql_service
     script:
@@ -170,7 +170,21 @@ builds:
       - cd spec/dummy && node ../../bin/velocious.js db:create
       - cd spec/dummy && node ../../bin/velocious.js db:migrate
       - cd spec/dummy && node ../../bin/velocious.js g:base-models
-      - npm run test -- --groups 4 --group-number 4
+      - npm run test -- --groups 5 --group-number 4
+  mssql_5:
+    depends_on:
+      - mssql
+    name: "MS-SQL (5/5)"
+    services:
+      mssql: *mssql_service
+    script:
+      - cp spec/dummy/src/config/configuration.peakflow.mssql.js spec/dummy/src/config/configuration.js
+      - wait-for-it -t 120 mssql:1433
+      - sleep 5
+      - cd spec/dummy && node ../../bin/velocious.js db:create
+      - cd spec/dummy && node ../../bin/velocious.js db:migrate
+      - cd spec/dummy && node ../../bin/velocious.js g:base-models
+      - npm run test -- --groups 5 --group-number 5
   pgsql_1:
     depends_on:
       - mssql
