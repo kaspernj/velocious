@@ -6,9 +6,12 @@ import LocalBackgroundJobRegistry from "../../src/background-jobs/local-job-regi
 import LocalBackgroundJobsStore from "../../src/background-jobs/local-store.js"
 import NodeEnvironmentHandler from "../../src/environment-handlers/node.js"
 import {describe, expect, it} from "../../src/testing/test.js"
+import {deferred} from "awaitery"
+import {ManualBackgroundJobsClock} from "../helpers/local-background-jobs-test-harness.js"
 
 class ContextTrackingConfiguration extends Configuration {
   connectionContextActive = true
+  testDatabaseAccessScopeActive = true
 
   constructor() {
     super({
@@ -40,10 +43,24 @@ class ContextTrackingConfiguration extends Configuration {
     this.connectionContextActive = previous
     return result
   }
+
+  withoutCurrentTestDatabaseAccessScope(callback) {
+    const previous = this.testDatabaseAccessScopeActive
+
+    this.testDatabaseAccessScopeActive = false
+    const result = callback()
+
+    if (result instanceof Promise) {
+      return result.finally(() => { this.testDatabaseAccessScopeActive = previous })
+    }
+
+    this.testDatabaseAccessScopeActive = previous
+    return result
+  }
 }
 
 class ContextTrackingStore extends LocalBackgroundJobsStore {
-  /** @type {boolean[]} */
+  /** @type {Array<{connection: boolean, testDatabaseAccessScope: boolean}>} */
   observedConnectionContexts = []
 
   async ensureReady() {}
@@ -53,18 +70,37 @@ class ContextTrackingStore extends LocalBackgroundJobsStore {
   async recoverHandedOffJobs() { return [] }
 
   async nextAvailableJob() {
-    this.observedConnectionContexts.push(/** @type {ContextTrackingConfiguration} */ (this.configuration).connectionContextActive)
+    const configuration = /** @type {ContextTrackingConfiguration} */ (this.configuration)
+
+    this.observedConnectionContexts.push({
+      connection: configuration.connectionContextActive,
+      testDatabaseAccessScope: configuration.testDatabaseAccessScopeActive
+    })
     return null
   }
 
   async nextScheduledJob() {
-    this.observedConnectionContexts.push(/** @type {ContextTrackingConfiguration} */ (this.configuration).connectionContextActive)
+    const configuration = /** @type {ContextTrackingConfiguration} */ (this.configuration)
+
+    this.observedConnectionContexts.push({
+      connection: configuration.connectionContextActive,
+      testDatabaseAccessScope: configuration.testDatabaseAccessScopeActive
+    })
     return null
   }
 }
 
-describe("Local background jobs dispatcher - connection context", {databaseCleaning: {transaction: false, truncate: false}}, () => {
-  it("runs detached drain work outside the caller's database connection context", async () => {
+class FailingContextTrackingStore extends ContextTrackingStore {
+  failureGate = deferred()
+
+  async nextAvailableJob() {
+    await this.failureGate.promise
+    throw new Error("Planned detached drain failure")
+  }
+}
+
+describe("Local background jobs dispatcher - database contexts", {databaseCleaning: {transaction: false, truncate: false}}, () => {
+  it("runs detached drain work outside the caller's database contexts", async () => {
     const configuration = new ContextTrackingConfiguration()
     const registry = new LocalBackgroundJobRegistry({jobClasses: []})
     const store = new ContextTrackingStore({configuration})
@@ -74,8 +110,44 @@ describe("Local background jobs dispatcher - connection context", {databaseClean
 
     try {
       await dispatcher.waitForIdle()
-      expect(store.observedConnectionContexts).toEqual([false, false])
+      expect(store.observedConnectionContexts).toEqual([
+        {connection: false, testDatabaseAccessScope: false},
+        {connection: false, testDatabaseAccessScope: false}
+      ])
     } finally {
+      await dispatcher.stop()
+    }
+  })
+
+  it("keeps drain failure reporting and recovery outside the caller's database contexts", async () => {
+    const configuration = new ContextTrackingConfiguration()
+    const registry = new LocalBackgroundJobRegistry({jobClasses: []})
+    const store = new FailingContextTrackingStore({configuration})
+    const clock = new ManualBackgroundJobsClock()
+    const dispatcher = new LocalBackgroundJobsDispatcher({clock, configuration, registry, store})
+    /** @type {Array<{connection: boolean, testDatabaseAccessScope: boolean}>} */
+    const observedFailureContexts = []
+    const onFrameworkError = () => {
+      observedFailureContexts.push({
+        connection: configuration.connectionContextActive,
+        testDatabaseAccessScope: configuration.testDatabaseAccessScopeActive
+      })
+      throw new Error("Planned framework-error listener failure")
+    }
+
+    configuration.getErrorEvents().on("framework-error", onFrameworkError)
+
+    try {
+      await dispatcher.start()
+      const drainPromise = dispatcher._drainPromise
+
+      store.failureGate.resolve(undefined)
+      await expect(async () => await drainPromise).toThrow("Planned framework-error listener failure")
+
+      expect(observedFailureContexts).toEqual([{connection: false, testDatabaseAccessScope: false}])
+      expect(clock.timers.size).toEqual(1)
+    } finally {
+      configuration.getErrorEvents().off("framework-error", onFrameworkError)
       await dispatcher.stop()
     }
   })

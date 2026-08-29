@@ -2546,7 +2546,10 @@ export default class VelociousDatabaseDriversBase {
             await this._rollbackTransactionAction(options)
           })
         } finally {
-          this._transactionsCount--
+          // Driver recovery may need to clear a stale physical transaction when
+          // no logical transaction is active. Never let that cleanup underflow
+          // the logical depth and turn the next root transaction into a savepoint.
+          if (this._transactionsCount > 0) this._transactionsCount--
           this._resolveCompletedTransaction()
 
           // A rolled-back transaction may have reverted DDL (e.g. a CREATE TABLE

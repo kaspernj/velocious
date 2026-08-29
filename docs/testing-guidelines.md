@@ -11,6 +11,8 @@
 - Browser tests tagged `dummy` follow the same cleaning metadata. Transaction-cleaned and explicit no-cleaning tests do not receive additional pre/post truncation from browser dummy setup.
 - If a timed-out browser database-cleaning lifecycle remains active after the cleanup grace period, the runner quarantines its connections and aborts the remaining run rather than sharing them with another test. This applies to transaction rollback and explicit truncation cleaning.
 - Database access inherited from a revoked attempt fails explicitly, so a callback that resumes after timeout cleanup cannot use an existing pool connection or check out a replacement.
+- Persistent framework-owned dispatcher and websocket publish queues start outside the caller's revocable test-attempt scope. Tests that trigger this work must await the owning idle/barrier API; ordinary detached test callbacks retain their attempt scope and still fail after revocation.
+- Transaction cleanup may invoke driver rollback to clear stale physical state even when logical transaction depth is already zero. This recovery never decrements the logical depth below zero, so the next transaction starts at the root instead of issuing an invalid savepoint.
 
 ## Browser test runner hardening
 - Ensure backend app startup/shutdown is guarded with `try/finally`.

@@ -155,15 +155,17 @@ export class VelociousHttpServerWebsocketEventsHost {
     const handler = this.handlers.values().next().value
     const configuration = originatingConfiguration || handler?.configuration
     const previousTail = this.publishQueuesByChannel.get(channel) || Promise.resolve()
+    let queuedPublish
 
-    const tail = previousTail
-      .then(async () => {
-        if (configuration) {
-          return await configuration.withoutCurrentConnectionContexts(callback)
-        }
+    if (configuration) {
+      queuedPublish = previousTail.then(() => configuration.withoutCurrentTestDatabaseAccessScope(() => {
+        return configuration.withoutCurrentConnectionContexts(callback)
+      }))
+    } else {
+      queuedPublish = previousTail.then(callback)
+    }
 
-        return await callback()
-      })
+    const tail = queuedPublish
       .catch((error) => {
         console.error(errorMessage, error)
         throw error

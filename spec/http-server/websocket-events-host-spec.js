@@ -77,6 +77,28 @@ class GatedPersistEventsHost extends VelociousHttpServerWebsocketEventsHost {
   }
 }
 
+class AccessScopePersistEventsHost extends VelociousHttpServerWebsocketEventsHost {
+  persistGate = deferred()
+  /** @type {{revoked: boolean} | null | undefined} */
+  observedAccessScope = null
+  /** @type {() => {revoked: boolean} | undefined} */
+  currentAccessScope
+
+  /** @param {() => {revoked: boolean} | undefined} currentAccessScope - Current access-scope reader. */
+  constructor(currentAccessScope) {
+    super()
+    this.currentAccessScope = currentAccessScope
+  }
+
+  /** @returns {Promise<null>} - No persisted event metadata. */
+  async _persistV2EventIfNeeded() {
+    await this.persistGate.promise
+    this.observedAccessScope = this.currentAccessScope()
+
+    return null
+  }
+}
+
 describe("HttpServer - websocket events host", {databaseCleaning: {transaction: true}}, () => {
   it("keeps broadcast handlers separate from subscription debug state", () => {
     const host = new VelociousHttpServerWebsocketEventsHost()
@@ -106,10 +128,12 @@ describe("HttpServer - websocket events host", {databaseCleaning: {transaction: 
   it("isolates configuration-local broadcasts and deduplicates shared in-process handlers", async () => {
     const host = new VelociousHttpServerWebsocketEventsHost()
     const configurationA = {
-      withoutCurrentConnectionContexts: async (callback) => await callback()
+      withoutCurrentConnectionContexts: async (callback) => await callback(),
+      withoutCurrentTestDatabaseAccessScope: async (callback) => await callback()
     }
     const configurationB = {
-      withoutCurrentConnectionContexts: async (callback) => await callback()
+      withoutCurrentConnectionContexts: async (callback) => await callback(),
+      withoutCurrentTestDatabaseAccessScope: async (callback) => await callback()
     }
     const deliveries = []
 
@@ -150,7 +174,8 @@ describe("HttpServer - websocket events host", {databaseCleaning: {transaction: 
   it("does not let a blocked channel delay an independent channel", async () => {
     const host = new GatedPersistEventsHost()
     const configuration = {
-      withoutCurrentConnectionContexts: async (callback) => await callback()
+      withoutCurrentConnectionContexts: async (callback) => await callback(),
+      withoutCurrentTestDatabaseAccessScope: async (callback) => await callback()
     }
     /** @type {Array<string>} */
     const deliveries = []
@@ -180,13 +205,57 @@ describe("HttpServer - websocket events host", {databaseCleaning: {transaction: 
     expect(deliveries).toEqual(["ChannelB", "ChannelA"])
   })
 
+  it("does not suppress configuration contexts while queued publish work waits for its channel turn", async () => {
+    const host = new GatedPersistEventsHost()
+    const contextEntries = {connection: 0, testDatabaseAccessScope: 0}
+    const configurationA = {
+      withoutCurrentConnectionContexts: async (callback) => await callback(),
+      withoutCurrentTestDatabaseAccessScope: async (callback) => await callback()
+    }
+    const configurationB = {
+      withoutCurrentConnectionContexts: async (callback) => {
+        contextEntries.connection += 1
+        return await callback()
+      },
+      withoutCurrentTestDatabaseAccessScope: async (callback) => {
+        contextEntries.testDatabaseAccessScope += 1
+        return await callback()
+      }
+    }
+
+    host.register(/** @type {ReturnType<typeof JSON.parse>} */ ({
+      configuration: configurationA,
+      dispatchWebsocketV2Broadcast: () => {},
+      websocketV2BroadcastDispatchKey: () => configurationA
+    }))
+    host.register(/** @type {ReturnType<typeof JSON.parse>} */ ({
+      configuration: configurationB,
+      dispatchWebsocketV2Broadcast: () => {},
+      websocketV2BroadcastDispatchKey: () => configurationB
+    }))
+
+    const gate = host.gateChannel("SharedContextChannel")
+
+    host.broadcastV2({body: {n: 1}, broadcastParams: {}, channel: "SharedContextChannel", configuration: configurationA})
+    await timeout({timeout: 2000}, () => host.firstPersistStarted.promise)
+    host.broadcastV2({body: {n: 2}, broadcastParams: {}, channel: "SharedContextChannel", configuration: configurationB})
+
+    expect(contextEntries).toEqual({connection: 0, testDatabaseAccessScope: 0})
+
+    gate.resolve(undefined)
+    await host.awaitPendingBroadcasts()
+    expect(contextEntries).toEqual({connection: 1, testDatabaseAccessScope: 1})
+  })
+
   it("keeps exact FIFO persistence and delivery on a channel shared by legacy publish and V2 broadcasts", async () => {
     const host = new GatedPersistEventsHost()
     const configurationA = {
-      withoutCurrentConnectionContexts: async (callback) => await callback()
+      withoutCurrentConnectionContexts: async (callback) => await callback(),
+      withoutCurrentTestDatabaseAccessScope: async (callback) => await callback()
     }
     const configurationB = {
-      withoutCurrentConnectionContexts: async (callback) => await callback()
+      withoutCurrentConnectionContexts: async (callback) => await callback(),
+      withoutCurrentTestDatabaseAccessScope: async (callback) => await callback()
     }
     /** @type {Array<string>} */
     const deliveries = []
@@ -224,7 +293,8 @@ describe("HttpServer - websocket events host", {databaseCleaning: {transaction: 
   it("snapshots channel tails, waits for every snapshotted channel, excludes later work, and cleans up settled queues", async () => {
     const host = new GatedPersistEventsHost()
     const configuration = {
-      withoutCurrentConnectionContexts: async (callback) => await callback()
+      withoutCurrentConnectionContexts: async (callback) => await callback(),
+      withoutCurrentTestDatabaseAccessScope: async (callback) => await callback()
     }
     /** @type {Array<string>} */
     const deliveries = []
@@ -271,5 +341,20 @@ describe("HttpServer - websocket events host", {databaseCleaning: {transaction: 
 
     expect(deliveries).toEqual(["ChannelB", "ChannelA", "ChannelC"])
     expect(host.publishQueuesByChannel.size).toEqual(0)
+  })
+
+  it("creates queued persistence outside the caller's test database-access scope", async () => {
+    const environmentHandler = dummyConfiguration.getEnvironmentHandler()
+    const accessScope = {revoked: false}
+    const host = new AccessScopePersistEventsHost(() => environmentHandler.currentTestDatabaseAccessScope())
+
+    await dummyConfiguration.runWithTestDatabaseAccessScope(accessScope, async () => {
+      host.broadcastV2({body: {n: 1}, broadcastParams: {}, channel: "AccessScope", configuration: dummyConfiguration})
+    })
+    accessScope.revoked = true
+    host.persistGate.resolve(undefined)
+    await host.awaitPendingBroadcasts()
+
+    expect(host.observedAccessScope).toEqual(undefined)
   })
 })

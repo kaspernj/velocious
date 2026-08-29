@@ -3339,6 +3339,16 @@ export default class VelociousConfiguration {
     return this.getEnvironmentHandler().runWithTestDatabaseAccessScope(scope, callback)
   }
 
+  /**
+   * Runs persistent framework work without inheriting a test attempt's revocable database-access scope.
+   * @template T
+   * @param {() => T | Promise<T>} callback - Persistent work to run.
+   * @returns {Promise<T>} - Callback result.
+   */
+  async withoutCurrentTestDatabaseAccessScope(callback) {
+    return await this.getEnvironmentHandler().runWithCapturedTestDatabaseAccessScope(undefined, callback)
+  }
+
   /** Throws when a timed-out test attempt tries to start more database work. */
   assertDatabaseAccessAllowed() {
     this.getEnvironmentHandler().assertTestDatabaseAccessAllowed()
