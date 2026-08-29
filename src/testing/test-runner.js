@@ -278,6 +278,7 @@ export default class TestRunner {
     if (!configuration) throw new Error("configuration is required")
 
     this._configuration = configuration
+    this._sharedTransactionCoordinatorOwnerStorage = new AsyncLocalStorage()
     this._testDatabaseAccessScopeStorage = new AsyncLocalStorage()
     this._excludeTags = this.normalizeTags(excludeTags)
     this._excludeTagSet = new Set(this._excludeTags)
@@ -1563,7 +1564,10 @@ export default class TestRunner {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async runTests({afterEaches, beforeEaches, tests, descriptions, indentLevel, lineMatchedInScope = false, parentProfileScopeId}) {
-    this.getConfiguration().getEnvironmentHandler().installTestDatabaseAccessScopeStorage(this._testDatabaseAccessScopeStorage)
+    const environmentHandler = this.getConfiguration().getEnvironmentHandler()
+
+    environmentHandler.installSharedTransactionCoordinatorOwnerStorage(this._sharedTransactionCoordinatorOwnerStorage)
+    environmentHandler.installTestDatabaseAccessScopeStorage(this._testDatabaseAccessScopeStorage)
     const leftPadding = " ".repeat(indentLevel * 2)
     const scopeOwnerFilePath = tests.ownerFilePath ?? tests.filePath
     const profileScopeId = this._profiler?.scopeId(tests, {

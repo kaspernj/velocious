@@ -1,7 +1,9 @@
 // @ts-check
 
+import {AsyncLocalStorage} from "node:async_hooks"
 import BaseDriver from "../../src/database/drivers/base.js"
 import Configuration from "../../src/configuration.js"
+import BrowserEnvironmentHandler from "../../src/environment-handlers/browser.js"
 import SharedTransactionBroker from "../../src/testing/shared-transaction-broker.js"
 import SharedTransactionBrokerClient from "../../src/testing/shared-transaction-broker-client.js"
 import {coordinateSharedTransactionConnection} from "../../src/testing/shared-transaction-connection-coordinator.js"
@@ -97,7 +99,55 @@ class TransactionLifecycleDriver extends BaseDriver {
   }
 }
 
+class QueryBackedTransactionLifecycleDriver extends BaseDriver {
+  /** @type {string[]} */
+  queries = []
+
+  /** @param {Configuration} configuration - Browser-style configuration. */
+  constructor(configuration) {
+    super({}, configuration)
+  }
+
+  /**
+   * @param {string} sql - SQL string.
+   * @returns {Promise<[]>} - Empty rows.
+   */
+  async _queryActual(sql) {
+    this.queries.push(sql)
+    return []
+  }
+}
+
 describe("Shared transaction parent connection coordination", {databaseCleaning: {transaction: false, truncate: false}}, () => {
+  it("inherits coordinator ownership through retained transaction lifecycle work", async () => {
+    const environmentHandler = new BrowserEnvironmentHandler()
+
+    environmentHandler.installSharedTransactionCoordinatorOwnerStorage(new AsyncLocalStorage())
+    const configuration = new Configuration({
+      database: {test: {}},
+      environmentHandler
+    })
+    const connection = new QueryBackedTransactionLifecycleDriver(configuration)
+
+    await connection.startTransaction()
+    const broker = await SharedTransactionBroker.start({connections: {default: connection}})
+
+    await broker.close()
+
+    await connection.rollbackTransaction()
+    await connection.transaction(async () => {
+      await connection.query("SELECT nested", {logQuery: false})
+    })
+
+    expect(connection.queries).toEqual([
+      "BEGIN TRANSACTION",
+      "ROLLBACK",
+      "BEGIN TRANSACTION",
+      "SELECT nested",
+      "COMMIT"
+    ])
+  })
+
   it("serializes concurrent transaction callbacks on one coordinated physical connection", async () => {
     const connection = new TransactionLifecycleDriver()
     const broker = await SharedTransactionBroker.start({connections: {default: connection}})

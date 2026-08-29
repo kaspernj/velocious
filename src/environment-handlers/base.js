@@ -46,30 +46,49 @@ export default class VelociousEnvironmentHandlerBase {
 
   /**
    * Gets the active shared-transaction coordinator owner for a connection.
-   * Browser runtimes never install the Node test broker.
-   * @param {object} _connection - Parent physical connection.
+   * @param {object} connection - Parent physical connection.
    * @returns {symbol | undefined} - Active coordinator owner.
    */
-  getSharedTransactionCoordinatorOwner(_connection) { return undefined }
+  getSharedTransactionCoordinatorOwner(connection) {
+    return this._sharedTransactionCoordinatorOwnerStorage?.getStore()?.get(connection)
+  }
 
   /**
    * Runs work as the current shared-transaction coordinator owner.
    * @template T
-   * @param {object} _connection - Parent physical connection.
-   * @param {symbol} _owner - Coordinator owner.
+   * @param {object} connection - Parent physical connection.
+   * @param {symbol} owner - Coordinator owner.
    * @param {() => T} callback - Owned work.
    * @returns {T} - Callback result.
    */
-  runWithSharedTransactionCoordinatorOwner(_connection, _owner, callback) { return callback() }
+  runWithSharedTransactionCoordinatorOwner(connection, owner, callback) {
+    const storage = this._sharedTransactionCoordinatorOwnerStorage
+
+    if (!storage) return callback()
+
+    const owners = new Map(storage.getStore())
+
+    owners.set(connection, owner)
+    return storage.run(owners, callback)
+  }
 
   /**
    * Runs work without inherited shared-transaction ownership for one connection.
    * @template T
-   * @param {import("../database/drivers/base.js").default} _connection - Physical connection whose owner is cleared.
+   * @param {import("../database/drivers/base.js").default} connection - Physical connection whose owner is cleared.
    * @param {() => T} callback - Physical connection work.
    * @returns {T} - Callback result.
    */
-  runWithoutSharedTransactionCoordinatorOwner(_connection, callback) { return callback() }
+  runWithoutSharedTransactionCoordinatorOwner(connection, callback) {
+    const storage = this._sharedTransactionCoordinatorOwnerStorage
+
+    if (!storage) return callback()
+
+    const owners = new Map(storage.getStore())
+
+    owners.delete(connection)
+    return storage.run(owners, callback)
+  }
 
   /**
    * Runs work without inherited shared-transaction coordinator ownership.
@@ -77,7 +96,24 @@ export default class VelociousEnvironmentHandlerBase {
    * @param {() => T} callback - Detached work.
    * @returns {T} - Callback result.
    */
-  runWithoutSharedTransactionCoordinatorOwners(callback) { return callback() }
+  runWithoutSharedTransactionCoordinatorOwners(callback) {
+    const storage = this._sharedTransactionCoordinatorOwnerStorage
+
+    if (!storage) return callback()
+
+    return storage.run(new Map(), callback)
+  }
+
+  /**
+   * Installs async-context storage when this handler is driven by the Node test runner.
+   * @param {import("node:async_hooks").AsyncLocalStorage<Map<object, symbol>>} storage - Coordinator owner storage.
+   */
+  installSharedTransactionCoordinatorOwnerStorage(storage) {
+    this._sharedTransactionCoordinatorOwnerStorage ??= storage
+  }
+
+  /** @type {import("node:async_hooks").AsyncLocalStorage<Map<object, symbol>> | undefined} */
+  _sharedTransactionCoordinatorOwnerStorage = undefined
 
   /**
    * Runs work with test-profile attribution. Runtimes without async-context
