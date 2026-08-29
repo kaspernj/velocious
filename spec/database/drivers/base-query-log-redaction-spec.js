@@ -121,4 +121,46 @@ describe("Database drivers - query log redaction", () => {
     expect(messages[0]).toContain("[REDACTED]")
     expect(messages[0]).toContain(safeValue)
   })
+
+  it("uses isolated redaction contexts when an async handler resolver flushes queued messages", async () => {
+    const firstSecret = "SYNTHETIC_QUEUED_FIRST_6993A903"
+    const secondSecret = "SYNTHETIC_QUEUED_SECOND_6993A903"
+    const output = new LoggerArrayOutput()
+    const configuration = buildConfiguration(output)
+    const driver = new QueryLogRedactionDriver({}, configuration)
+    /** @type {(handler: import("../../../src/configuration-types.js").WebsocketMessageHandler) => void} */
+    let resolveHandler = () => {}
+    const messageHandlerPromise = new Promise((resolve) => { resolveHandler = resolve })
+    const session = new WebsocketSession({
+      client: /** @type {import("../../../src/http-server/client/index.js").default} */ ({events: new EventEmitter(), remoteAddress: "127.0.0.1"}),
+      configuration,
+      messageHandlerPromise
+    })
+    const initializePromise = session.initializeChannel()
+
+    await session._handleMessage({params: {authenticationToken: firstSecret, visibleValue: secondSecret}, type: "authentication-lookup"})
+    await session._handleMessage({params: {authenticationToken: secondSecret, visibleValue: firstSecret}, type: "authentication-lookup"})
+
+    resolveHandler({
+      onMessage: async ({message}) => {
+        const params = /** @type {{params: {authenticationToken: string, visibleValue: string}}} */ (message).params
+
+        await driver.query(`SELECT * FROM authentication_tokens WHERE token = '${params.authenticationToken}' AND label = '${params.visibleValue}'`)
+      }
+    })
+    await initializePromise
+
+    const messages = output.getLogs().map((entry) => entry.message)
+    const leakedValueCounts = {
+      first: messages[0].includes(firstSecret) ? 1 : 0,
+      second: messages[1].includes(secondSecret) ? 1 : 0
+    }
+
+    expect(messages.length).toEqual(2)
+    expect(leakedValueCounts).toEqual({first: 0, second: 0})
+    expect(messages[0]).toContain(secondSecret)
+    expect(messages[0]).toContain("[REDACTED]")
+    expect(messages[1]).toContain(firstSecret)
+    expect(messages[1]).toContain("[REDACTED]")
+  })
 })

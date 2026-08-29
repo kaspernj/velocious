@@ -93,6 +93,26 @@ describe("LogRedactor", () => {
     expect(redactedPath).toEqual(`/lookup?api-key=${LOG_REDACTION_MARKER}&visible=value`)
   })
 
+  it("redacts short structured credentials without replacing unrelated diagnostic text", async () => {
+    const redactor = new LogRedactor()
+    const safeDiagnostic = "SELECT 1 FROM v1_routes -- stack.js:123:45 literal=a encoded=%61 short=1234567"
+    const redacted = redactor.redactStructured({
+      apiKey: "a",
+      normalToken: "12345678",
+      password: "1234567",
+      safeDiagnostic,
+      sessionId: 1
+    })
+
+    expect(redacted.apiKey).toEqual(LOG_REDACTION_MARKER)
+    expect(redacted.normalToken).toEqual(LOG_REDACTION_MARKER)
+    expect(redacted.password).toEqual(LOG_REDACTION_MARKER)
+    expect(redacted.sessionId).toEqual(LOG_REDACTION_MARKER)
+    expect(redacted.safeDiagnostic).toEqual(safeDiagnostic)
+    expect(redactor.redactString(safeDiagnostic, new Set(["1", "a", "%61", "1234567"]))).toEqual(safeDiagnostic)
+    expect(redactor.redactString("credential=12345678", redactor.sensitiveValues({normalToken: "12345678"}))).toEqual(`credential=${LOG_REDACTION_MARKER}`)
+  })
+
   it("keeps request-local sensitive registries isolated across concurrent contexts", async () => {
     const firstSecret = "SYNTHETIC_CONCURRENT_FIRST_6993A903"
     const secondSecret = "SYNTHETIC_CONCURRENT_SECOND_6993A903"

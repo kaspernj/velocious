@@ -526,19 +526,31 @@ export default class VelociousHttpServerClientWebsocketSession {
   }
 
   /**
-   * Reports one unexpected WebSocket dispatch failure and returns its normalized Error.
+   * Reports one unexpected WebSocket dispatch failure and returns its redacted Error diagnostic.
    * @param {ReturnType<typeof JSON.parse>} caughtError - Caught dispatch failure.
    * @param {Record<string, ReturnType<typeof JSON.parse>>} context - Structured dispatch context.
-   * @returns {Error} - Normalized error for existing logs and client responses.
+   * @returns {Error} - Redacted error for logs and framework error events.
    */
   _reportUnexpectedDispatchError(caughtError, context) {
     const error = ensureError(caughtError)
+    const redactor = this.configuration.getLogRedactor()
+    const requestTiming = this.configuration.getCurrentRequestTiming()
+    let sensitiveValues = requestTiming ? requestTiming.getLogSensitiveValues() : new Set()
 
-    if (this._expectedClientError(error)) return error
+    if (this.upgradeRequest) {
+      sensitiveValues = redactor.requestSensitiveValues(this.upgradeRequest, sensitiveValues)
+    }
+
+    const redactedError = redactor.redactError(error, sensitiveValues)
+    const redactedContext = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (
+      redactor.redactStructured(context, sensitiveValues)
+    )
+
+    if (this._expectedClientError(error)) return redactedError
 
     const errorPayload = {
-      context,
-      error,
+      context: redactedContext,
+      error: redactedError,
       request: this.upgradeRequest
     }
     const errorEvents = this.configuration.getErrorEvents()
@@ -546,7 +558,7 @@ export default class VelociousHttpServerClientWebsocketSession {
     errorEvents.emit("framework-error", errorPayload)
     errorEvents.emit("all-error", {...errorPayload, errorType: "framework-error"})
 
-    return error
+    return redactedError
   }
 
   /**
@@ -607,6 +619,25 @@ export default class VelociousHttpServerClientWebsocketSession {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async _dispatchMessage(message) {
+    await this._runWithMessageLogContext(message, async () => {
+      const wrapper = this.configuration.getWebsocketAroundRequest?.()
+
+      if (wrapper) {
+        await wrapper(this, () => this._handleMessageInner(message))
+        return
+      }
+
+      await this._handleMessageInner(message)
+    })
+  }
+
+  /**
+   * Runs one decoded message in its own request timing and sensitive-value context.
+   * @param {WebsocketSessionMessage} message - Decoded client message.
+   * @param {() => Promise<void>} callback - Message dispatch callback.
+   * @returns {Promise<void>} - Resolves after the message finishes.
+   */
+  async _runWithMessageLogContext(message, callback) {
     const requestTiming = new RequestTiming()
     const redactor = this.configuration.getLogRedactor()
     let sensitiveValues = redactor.sensitiveValues(message)
@@ -619,16 +650,7 @@ export default class VelociousHttpServerClientWebsocketSession {
 
     requestTiming.registerLogSensitiveValues(sensitiveValues)
 
-    await this.configuration.runWithRequestTiming(requestTiming, async () => {
-      const wrapper = this.configuration.getWebsocketAroundRequest?.()
-
-      if (wrapper) {
-        await wrapper(this, () => this._handleMessageInner(message))
-        return
-      }
-
-      await this._handleMessageInner(message)
-    })
+    await this.configuration.runWithRequestTiming(requestTiming, callback)
   }
 
   /**
@@ -2208,7 +2230,8 @@ export default class VelociousHttpServerClientWebsocketSession {
     } catch (caughtError) {
       const handler = this.messageHandler
       const onError = handler ? handler.onError : null
-      const error = this._reportUnexpectedDispatchError(caughtError, {
+      const handlerError = ensureError(caughtError)
+      const error = this._reportUnexpectedDispatchError(handlerError, {
         stage: "websocket-message-handler"
       })
 
@@ -2216,7 +2239,7 @@ export default class VelociousHttpServerClientWebsocketSession {
       if (!onError) return
 
       try {
-        await onError({error, session: this})
+        await onError({error: handlerError, session: this})
       } catch (onErrorCaughtError) {
         const clientErrorMessage = onErrorCaughtError instanceof Error
           ? onErrorCaughtError.message
@@ -2352,7 +2375,9 @@ export default class VelociousHttpServerClientWebsocketSession {
 
       try {
         if (useHandler && this.messageHandler) {
-          await this._runMessageHandlerMessage(work.message)
+          await this._runWithMessageLogContext(work.message, async () => {
+            await this._runMessageHandlerMessage(work.message)
+          })
         } else {
           await this._dispatchMessage(work.message)
         }

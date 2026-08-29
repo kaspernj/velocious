@@ -4,6 +4,8 @@ import { forcedString } from "typanic"
 
 export const LOG_REDACTION_MARKER = "[REDACTED]"
 
+const MIN_UNSTRUCTURED_REDACTION_VALUE_LENGTH = 8
+
 const DEFAULT_SENSITIVE_NAME_PARTS = [
   "apikey",
   "authentication",
@@ -139,7 +141,10 @@ export default class LogRedactor {
     const orderedValues = [...sensitiveValues].sort((left, right) => right.length - left.length)
 
     for (const sensitiveValue of orderedValues) {
-      if (!sensitiveValue || sensitiveValue === LOG_REDACTION_MARKER) continue
+      if (
+        sensitiveValue.length < MIN_UNSTRUCTURED_REDACTION_VALUE_LENGTH ||
+        sensitiveValue === LOG_REDACTION_MARKER
+      ) continue
 
       redacted = redacted.replaceAll(sensitiveValue, LOG_REDACTION_MARKER)
     }

@@ -58,7 +58,11 @@ import {LOG_REDACTION_MARKER} from "velocious/build/src/log-redactor.js"
 Request-scoped sensitive values are registered on the request's existing async
 timing context. SQL diagnostics replace only those exact known values (including
 common URL, bearer-token, cookie-value, and SQL-escaped representations), rather
-than regex-parsing rendered SQL. Successful and failed query logs retain the SQL
+than regex-parsing rendered SQL. To keep ordinary numbers, short path segments,
+timings, and stack locations intact, exact replacement in unstructured text is
+limited to sensitive values of at least eight characters. Structured fields
+whose names match the policy are always replaced, including shorter strings and
+numbers. Successful and failed query logs retain the SQL
 operation/table/shape, safe values, elapsed time, query name, and application
 source line. Failed queries add `FAILED <ErrorClass>: <safe message>` and still
 throw the original database error.
