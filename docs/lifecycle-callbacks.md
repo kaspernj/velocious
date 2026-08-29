@@ -157,15 +157,17 @@ A create follows this order:
 1. `beforeValidation`
 2. validations
 3. `beforeSave`
-4. `beforeCreate`
-5. row persistence
-6. `afterCreate`
-7. relationship and attachment autosaves
-8. `afterSave`
+4. changed belongs-to relationship autosaves
+5. `beforeCreate`
+6. row persistence
+7. `afterCreate`
+8. has-many and has-one relationship autosaves
+9. attachment autosaves
+10. `afterSave`
 
-An update substitutes `beforeUpdate` and `afterUpdate` for the create-specific
-phases. Destruction runs `beforeDestroy`, dependent handling and deletion, then
-`afterDestroy`.
+An update follows the same ordering, substituting `beforeUpdate` and
+`afterUpdate` for the create-specific phases. Destruction runs `beforeDestroy`,
+dependent handling and deletion, then `afterDestroy`.
 
 ## Transactions and side effects
 
