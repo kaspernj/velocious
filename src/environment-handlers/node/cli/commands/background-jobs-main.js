@@ -44,7 +44,12 @@ export async function waitForBackgroundJobsMainShutdown({main, onReady, processO
 
   try {
     onReady()
-    await Promise.race([stopped, signal.then(async () => await main.stop())])
+    const shutdownCause = await Promise.race([
+      signal.then(() => "signal"),
+      stopped.then(() => "stopped")
+    ])
+
+    if (shutdownCause === "signal") await main.stop()
   } finally {
     processObject.removeListener("SIGINT", onSignal)
     processObject.removeListener("SIGTERM", onSignal)
