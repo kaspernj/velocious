@@ -44,7 +44,7 @@ async function runCli(args) {
  * @param {string[]} args - Main command arguments.
  * @param {NodeJS.ProcessEnv} environment - Child environment.
  * @param {string} cwd - Isolated application directory.
- * @returns {Promise<{code: number | null, listening: boolean, stderr: string, stdout: string}>} - Main result.
+ * @returns {Promise<{code: number | null, listening: boolean, signal: NodeJS.Signals | null, stderr: string, stdout: string}>} - Main result.
  */
 async function runMainCli(args, environment, cwd) {
   const child = spawn(process.execPath, [cliEntryPath, ...args], {
@@ -70,7 +70,7 @@ async function runMainCli(args, environment, cwd) {
   child.stderr.on("data", (chunk) => { stderr += chunk })
   const closed = new Promise((resolve, reject) => {
     child.once("error", reject)
-    child.once("close", (code) => resolve({code, outcome: "closed"}))
+    child.once("close", (code, signal) => resolve({code, outcome: "closed", signal}))
   })
 
   try {
@@ -79,7 +79,7 @@ async function runMainCli(args, environment, cwd) {
     })
     if (outcome.outcome === "closed") {
       throw new Error(
-        `Background jobs main CLI exited before listening (code ${String(outcome.code)})\n` +
+        `Background jobs main CLI exited before listening (code ${String(outcome.code)}, signal ${String(outcome.signal)})\n` +
         `stdout:\n${stdout}\nstderr:\n${stderr}`
       )
     }
@@ -87,7 +87,7 @@ async function runMainCli(args, environment, cwd) {
     child.kill("SIGTERM")
     const result = await closed
 
-    return {code: result.code, listening: observedListening, stderr, stdout}
+    return {code: result.code, listening: observedListening, signal: result.signal, stderr, stdout}
   } finally {
     if (child.exitCode === null && child.signalCode === null) {
       child.kill("SIGTERM")
@@ -152,6 +152,7 @@ describe("Background jobs lifecycle CLI", () => {
 
       expect(result.listening).toEqual(true)
       expect(result.code).toEqual(0)
+      expect(result.signal).toEqual(null)
       expect(result.stderr).toEqual("")
     } finally {
       await project.cleanup()
