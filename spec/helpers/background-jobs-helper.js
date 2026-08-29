@@ -11,6 +11,10 @@ import AsyncTrackedMultiConnectionPool from "../../src/database/pool/async-track
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 
 const defaultBackgroundJobsConfig = dummyConfiguration.getBackgroundJobsConfig()
+const generationConfigKeys = new Set(["generationId", "initialGenerationState", "lifecycleSocketPath"])
+const legacyDefaultBackgroundJobsConfig = Object.fromEntries(
+  Object.entries(defaultBackgroundJobsConfig).filter(([key]) => !generationConfigKeys.has(key))
+)
 
 /**
  * Clears only framework background-job persistence.
@@ -122,11 +126,14 @@ export async function withBackgroundJobs(callback, args) {
 export async function startBackgroundJobsMain({backgroundJobsConfig, waitForWorkerStop = false} = {}) {
   await dummyConfiguration.closeBackgroundJobsAdapter()
   dummyConfiguration.setBackgroundJobsConfig({
-    ...defaultBackgroundJobsConfig,
+    ...legacyDefaultBackgroundJobsConfig,
     adapter: undefined,
-    jobClasses: [...defaultBackgroundJobsConfig.jobClasses],
-    queues: {...defaultBackgroundJobsConfig.queues},
-    retention: {...defaultBackgroundJobsConfig.retention},
+    generationId: undefined,
+    initialGenerationState: undefined,
+    jobClasses: [...legacyDefaultBackgroundJobsConfig.jobClasses],
+    lifecycleSocketPath: undefined,
+    queues: {...legacyDefaultBackgroundJobsConfig.queues},
+    retention: {...legacyDefaultBackgroundJobsConfig.retention},
     ...backgroundJobsConfig
   })
 

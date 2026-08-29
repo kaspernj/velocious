@@ -16,6 +16,8 @@ import CliCommandsServer from "./node/cli/commands/server.js"
 import CliCommandsTest from "./node/cli/commands/test.js"
 import CliCommandsTestTimingManifestMerge from "./node/cli/commands/test/timing-manifest/merge.js"
 import CliCommandsBackgroundJobsMain from "./node/cli/commands/background-jobs-main.js"
+import CliCommandsBackgroundJobsActivate from "./node/cli/commands/background-jobs-activate.js"
+import CliCommandsBackgroundJobsRetire from "./node/cli/commands/background-jobs-retire.js"
 import CliCommandsBackgroundJobsWorker from "./node/cli/commands/background-jobs-worker.js"
 import CliCommandsBackgroundJobsRunner from "./node/cli/commands/background-jobs-runner.js"
 import CliCommandsBeacon from "./node/cli/commands/beacon.js"
@@ -26,20 +28,20 @@ import CliCommandsDbSeed from "./node/cli/commands/db/seed.js"
 import CliCommandsRunner from "./node/cli/commands/runner.js"
 import CliCommandsRunScript from "./node/cli/commands/run-script.js"
 import frontendModelCommandRouteHook from "../routes/hooks/frontend-model-command-route-hook.js"
-import {FRAMEWORK_SOURCE_DIRECTORY} from "../utils/backtrace-cleaner-node.js"
-import {dirname} from "path"
-import {fileURLToPath} from "url"
+import { FRAMEWORK_SOURCE_DIRECTORY } from "../utils/backtrace-cleaner-node.js"
+import { dirname } from "path"
+import { fileURLToPath } from "url"
 import fs from "fs/promises"
 import * as inflection from "inflection"
 import path from "path"
-import {AsyncLocalStorage as NodeAsyncLocalStorage} from "node:async_hooks"
-import {timingSafeEqual} from "node:crypto"
+import { AsyncLocalStorage as NodeAsyncLocalStorage } from "node:async_hooks"
+import { timingSafeEqual } from "node:crypto"
 import requireContext from "require-context"
 import AsyncTrackedMultiConnectionPool from "../database/pool/async-tracked-multi-connection.js"
 import InitializerFromRequireContext from "../database/initializer-from-require-context.js"
 import RecordAttachmentsStore from "../database/record/attachments/store.js"
 import toImportSpecifier from "../utils/to-import-specifier.js"
-import {validateTimeZone} from "../time-zone.js"
+import { validateTimeZone } from "../time-zone.js"
 import AttachmentPathSource from "./node/attachment-path-source.js"
 import { automaticSharedTransactionBrokerOmits, createSharedTransactionProxyDriver, sharedTransactionBrokerConfig } from "../testing/shared-transaction-proxy-driver.js"
 
@@ -882,6 +884,24 @@ export default class VelociousEnvironmentHandlerNode extends Base{
    */
   async cliCommandsBackgroundJobsMain(command) {
     return await this.forwardCommand(command, CliCommandsBackgroundJobsMain)
+  }
+
+  /**
+   * Runs CLI background-jobs activation.
+   * @param {import("../cli/base-command.js").default} command - Command.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Result.
+   */
+  async cliCommandsBackgroundJobsActivate(command) {
+    return await this.forwardCommand(command, CliCommandsBackgroundJobsActivate)
+  }
+
+  /**
+   * Runs CLI background-jobs retirement.
+   * @param {import("../cli/base-command.js").default} command - Command.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Result.
+   */
+  async cliCommandsBackgroundJobsRetire(command) {
+    return await this.forwardCommand(command, CliCommandsBackgroundJobsRetire)
   }
 
   /**

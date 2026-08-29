@@ -1,16 +1,18 @@
 // @ts-check
 
 import net from "net"
-import {fork, spawn} from "node:child_process"
+import { fork, spawn } from "node:child_process"
 import JsonSocket from "./json-socket.js"
 import BackgroundJobRegistry from "./job-registry.js"
 import configurationResolver from "../configuration-resolver.js"
 import BackgroundJobsStatusReporter from "./status-reporter.js"
-import {randomUUID} from "crypto"
-import {fileURLToPath} from "node:url"
+import { randomUUID } from "crypto"
+import { fileURLToPath } from "node:url"
 import shutdownLifecycle from "../utils/shutdown-lifecycle.js"
 import BackgroundJobRescheduleSignal from "./reschedule-signal.js"
 import performBackgroundJob from "./perform-job.js"
+import { createGenerationWorkerId } from "./generation-identity.js"
+import BackgroundJobsGenerationHandshakeTimeoutError, { DEFAULT_GENERATION_HANDSHAKE_TIMEOUT_MS, validateGenerationHandshakeTimeoutMs } from "./generation-handshake-timeout-error.js"
 
 /**
  * Per-forked-child timeout bookkeeping.
@@ -65,6 +67,8 @@ export default class BackgroundJobsWorker {
    * @param {import("../configuration.js").default} [args.configuration] - Configuration.
    * @param {string} [args.host] - Hostname.
    * @param {number} [args.port] - Port.
+   * @param {string} [args.generationId] - Explicit release generation identity.
+   * @param {string} [args.workerInstanceId] - Explicit stable worker UUID.
    * @param {number} [args.maxConcurrentForkedJobs] - Override the process runner concurrency cap from `configuration.getBackgroundJobsConfig()`.
    * @param {number} [args.maxConcurrentInlineJobs] - Override the inline-job concurrency cap from `configuration.getBackgroundJobsConfig()`.
    * @param {number} [args.pooledRunnerCount] - Override the pooled runner count.
@@ -74,11 +78,15 @@ export default class BackgroundJobsWorker {
    * @param {number} [args.pooledRunnerMaxLifetimeMs] - Override the per-runner recycle lifetime.
    * @param {number} [args.forkedChildSigkillGraceMs] - Override the grace period between SIGTERM and SIGKILL when reaping lingering process runners on stop.
    * @param {number} [args.heartbeatIntervalMs] - Override the liveness heartbeat interval (default 15000ms).
+   * @param {number} [args.generationHandshakeTimeoutMs] - Maximum time to wait for generation acknowledgement (default: 4000).
+   * @param {number} [args.reconnectDelayMs] - Delay before reconnecting an established worker connection (default: 1000).
    * @param {number} [args.jobTimeoutMs] - Override the wall-clock timeout for forked and pooled jobs from `configuration.getBackgroundJobsConfig()`. `0` disables it.
    * @param {boolean} [args.closeDatabaseConnectionsOnStop] - Whether stop owns closing the configuration's database pools (default true).
    * @param {() => void | Promise<void>} [args.onStopped] - Lifecycle hook invoked after the worker finishes stopping.
+   * @param {() => void} [args.onGenerationAccepted] - Explicit generation-acceptance observation hook.
+   * @param {() => void} [args.onRetireMessage] - Explicit retire-message observation hook.
    */
-  constructor({configuration, host, port, maxConcurrentForkedJobs, maxConcurrentInlineJobs, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, forkedChildSigkillGraceMs, heartbeatIntervalMs, jobTimeoutMs, closeDatabaseConnectionsOnStop = true, onStopped} = {}) {
+  constructor({configuration, host, port, generationId, workerInstanceId, maxConcurrentForkedJobs, maxConcurrentInlineJobs, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, forkedChildSigkillGraceMs, heartbeatIntervalMs, generationHandshakeTimeoutMs = DEFAULT_GENERATION_HANDSHAKE_TIMEOUT_MS, reconnectDelayMs = 1000, jobTimeoutMs, closeDatabaseConnectionsOnStop = true, onStopped, onGenerationAccepted, onRetireMessage} = {}) {
     /**
      * Narrows the runtime value to the documented type.
      * @type {Promise<import("../configuration.js").default>} */
@@ -89,8 +97,14 @@ export default class BackgroundJobsWorker {
     this.configuration = undefined
     this.host = host
     this.port = port
+    this.explicitGenerationId = generationId
+    this.workerInstanceId = workerInstanceId || randomUUID()
+    /** @type {string | undefined} */
+    this.generationId = undefined
     this.closeDatabaseConnectionsOnStop = closeDatabaseConnectionsOnStop
     this.onStopped = onStopped
+    this.onGenerationAccepted = onGenerationAccepted
+    this.onRetireMessage = onRetireMessage
     /**
      * Constructor override for the inline-job concurrency cap. When unset
      * the cap is read from `configuration.getBackgroundJobsConfig()` in
@@ -142,9 +156,31 @@ export default class BackgroundJobsWorker {
      */
     this.jobTimeoutMsOverride = typeof jobTimeoutMs === "number" ? jobTimeoutMs : undefined
     this.shouldStop = false
+    this.isRetiring = false
     /** @type {Promise<void> | undefined} */
     this.stopPromise = undefined
-    this.workerId = randomUUID()
+    /**
+     * Resolves stop observation.
+     * @type {(value?: void) => void}
+     */
+    this._resolveStopped = () => {}
+    /**
+     * Rejects stop observation.
+     * @type {(error: Error) => void}
+     */
+    this._rejectStopped = () => {}
+    /** @type {Promise<void>} */
+    this._stoppedPromise = Promise.resolve()
+    this._resetStoppedPromise()
+    this.workerId = this.workerInstanceId
+    this._generationAccepted = false
+    this.generationHandshakeTimeoutMs = validateGenerationHandshakeTimeoutMs(generationHandshakeTimeoutMs)
+    if (!Number.isInteger(reconnectDelayMs) || reconnectDelayMs < 0 || reconnectDelayMs > MAX_FORKED_JOB_TIMEOUT_MS) {
+      throw new TypeError("reconnectDelayMs must be an integer between 0 and 2147483647")
+    }
+    this.reconnectDelayMs = reconnectDelayMs
+    /** @type {ReturnType<typeof setTimeout> | undefined} */
+    this._reconnectTimer = undefined
     this.heartbeatIntervalMs = typeof heartbeatIntervalMs === "number" && heartbeatIntervalMs >= 1
       ? heartbeatIntervalMs
       : HEARTBEAT_INTERVAL_MS
@@ -213,9 +249,21 @@ export default class BackgroundJobsWorker {
    */
   async start() {
     this.shouldStop = false
+    this.isRetiring = false
     this.stopPromise = undefined
+    this._resetStoppedPromise()
     this.configuration = await this.configurationPromise
     this.configuration.setCurrent()
+    const resolvedConfig = this.configuration.getBackgroundJobsConfig()
+    this.generationId = this.configuration.resolveBackgroundJobsGenerationConfig({
+      generationId: this.explicitGenerationId,
+      sourceName: "BackgroundJobsWorker"
+    }).generationId
+    this.workerId = this.generationId
+      ? createGenerationWorkerId({generationId: this.generationId, workerInstanceId: this.workerInstanceId})
+      : this.workerInstanceId
+    this.host ||= resolvedConfig.host
+    if (typeof this.port !== "number") this.port = resolvedConfig.port
     await this.configuration.initialize({type: "background-jobs-worker"})
     await this.configuration.connectBeacon({peerType: "background-jobs-worker"})
 
@@ -240,9 +288,25 @@ export default class BackgroundJobsWorker {
     this.statusReporter = new BackgroundJobsStatusReporter({
       configuration: this.configuration,
       host: this.host,
-      port: this.port
+      port: this.port,
+      generationHandshakeTimeoutMs: this.generationHandshakeTimeoutMs,
+      generationId: this.generationId
     })
-    await this._connect()
+    try {
+      await this._connect({allowReconnect: false})
+    } catch (error) {
+      try {
+        await this.stop()
+      } catch (cleanupError) {
+        throw new AggregateError(
+          [error, cleanupError],
+          "Background jobs worker startup and cleanup failed",
+          {cause: cleanupError}
+        )
+      }
+
+      throw error
+    }
   }
 
   /**
@@ -261,9 +325,31 @@ export default class BackgroundJobsWorker {
    * @returns {Promise<void>} - Resolves when stopped.
    */
   stop({timeoutMs} = {}) {
-    if (!this.stopPromise) this.stopPromise = this._stop({timeoutMs})
+    const stopPromise = this.stopPromise || this._stop({timeoutMs})
 
-    return this.stopPromise
+    if (!this.stopPromise) {
+      this.stopPromise = stopPromise
+      void stopPromise.then(this._resolveStopped, (error) => {
+        this._rejectStopped(error instanceof Error ? error : new Error(String(error)))
+      })
+    }
+
+    return stopPromise
+  }
+
+  /**
+   * Waits for automatic or requested stop.
+   * @returns {Promise<void>} - Resolves when this worker has fully stopped.
+   */
+  waitUntilStopped() { return this._stoppedPromise }
+
+  /** Resets the stop observation promise for a new worker start. */
+  _resetStoppedPromise() {
+    this._stoppedPromise = new Promise((resolve, reject) => {
+      this._resolveStopped = resolve
+      this._rejectStopped = reject
+    })
+    void this._stoppedPromise.catch(() => {})
   }
 
   /**
@@ -274,7 +360,12 @@ export default class BackgroundJobsWorker {
    */
   async _stop({timeoutMs} = {}) {
     this.shouldStop = true
+    this.isRetiring = true
     this._stopHeartbeat()
+    if (this._reconnectTimer) {
+      clearTimeout(this._reconnectTimer)
+      this._reconnectTimer = undefined
+    }
 
     await shutdownLifecycle({
       onStopped: this.onStopped,
@@ -297,6 +388,63 @@ export default class BackgroundJobsWorker {
         // chance to land before the socket closes.
         await this._drainInflight(this.inflightReports, timeoutMs)
 
+        if (this.jsonSocket) this.jsonSocket.close()
+        if (!this.configuration) return
+
+        try {
+          await this.configuration.disconnectBeacon()
+        } finally {
+          if (this.closeDatabaseConnectionsOnStop) await this.configuration.closeDatabaseConnections()
+        }
+      }
+    })
+  }
+
+  /** Begins generation retirement without revoking liveness during the drain. */
+  _beginGenerationRetirement() {
+    if (this.stopPromise) return
+
+    this.isRetiring = true
+    const stopPromise = this._stopAfterGenerationDrain()
+    this.stopPromise = stopPromise
+    void stopPromise.then(this._resolveStopped, (error) => {
+      const normalizedError = error instanceof Error ? error : new Error(String(error))
+
+      this._rejectStopped(normalizedError)
+      this._reportLifecycleError(normalizedError)
+    })
+  }
+
+  /**
+   * Drains accepted generation work while retaining the exact connection and
+   * heartbeat, then performs the final terminating stop.
+   * @returns {Promise<void>} - Resolves after the worker has fully closed.
+   */
+  async _stopAfterGenerationDrain() {
+    if (this.jsonSocket) {
+      try {
+        this.jsonSocket.send({type: "draining"})
+      } catch {
+        // The close handler owns exact same-generation reconnect.
+      }
+    }
+
+    await this._drainInflight(this.inflightInlineJobs)
+    await this._drainInflight(this.inflightPooledJobs)
+    await this._drainInflight(this.inflightProcessJobs)
+    await this._drainInflight(this.inflightReports)
+
+    this.shouldStop = true
+    this._stopHeartbeat()
+    if (this._reconnectTimer) {
+      clearTimeout(this._reconnectTimer)
+      this._reconnectTimer = undefined
+    }
+    await this._terminateProcessChildren()
+
+    await shutdownLifecycle({
+      onStopped: this.onStopped,
+      shutdown: async () => {
         if (this.jsonSocket) this.jsonSocket.close()
         if (!this.configuration) return
 
@@ -360,23 +508,84 @@ export default class BackgroundJobsWorker {
     }
   }
 
-  async _connect() {
+  /**
+   * Connects to the worker's resolved endpoint and completes its hello fence.
+   * @param {object} args - Reconnect policy.
+   * @param {boolean} args.allowReconnect - Whether a failed attempt may schedule another connection.
+   * @returns {Promise<void>} - Resolves after generation acknowledgement.
+   */
+  async _connect({allowReconnect}) {
     const configuration = this.configuration
     if (!configuration) throw new Error("Background jobs worker configuration not initialized")
 
     const config = configuration.getBackgroundJobsConfig()
+    if (this.generationId) this._generationAccepted = false
     const host = this.host || config.host
     const port = typeof this.port === "number" ? this.port : config.port
     const socket = net.createConnection({host, port})
     socket.setKeepAlive(true, SOCKET_KEEPALIVE_MS)
     const jsonSocket = new JsonSocket(socket)
     this.jsonSocket = jsonSocket
+    /**
+     * Resolves the generation handshake.
+     * @type {() => void}
+     */
+    let resolveHandshake = () => {}
+    /**
+     * Rejects the generation handshake.
+     * @type {(error: Error) => void}
+     */
+    let rejectHandshake = () => {}
+    let connectionAccepted = false
+    /** @type {ReturnType<typeof setTimeout> | undefined} */
+    let handshakeTimer
+    const handshake = new Promise((/** @type {(value: void) => void} */ resolve, reject) => {
+      resolveHandshake = resolve
+      rejectHandshake = reject
+    })
 
     /**
      * Handles a background job socket message.
      * @param {import("./types.js").BackgroundJobSocketMessage} message - Socket message.
      */
     jsonSocket.on("message", async (message) => {
+      if (message?.type === "generation-accepted") {
+        if (!this.generationId || message.generationId !== this.generationId) {
+          rejectHandshake(new Error("Background jobs main acknowledged a different generation"))
+          jsonSocket.destroy()
+          return
+        }
+
+        this._generationAccepted = true
+        connectionAccepted = true
+        if (handshakeTimer) {
+          clearTimeout(handshakeTimer)
+          handshakeTimer = undefined
+        }
+        if (message.lifecycleState === "retiring" || message.lifecycleState === "retired") this.isRetiring = true
+        this.onGenerationAccepted?.()
+        this._sendReadyIfRunning()
+        this._startHeartbeat()
+        resolveHandshake()
+        return
+      }
+
+      if (message?.type === "generation-rejected") {
+        this.shouldStop = true
+        if (handshakeTimer) clearTimeout(handshakeTimer)
+        rejectHandshake(new Error(`Background jobs generation rejected: ${message.reason}`))
+        jsonSocket.destroy()
+        return
+      }
+
+      if (message?.type === "retire") {
+        if (this.generationId && message.generationId === this.generationId) {
+          this.onRetireMessage?.()
+          this._beginGenerationRetirement()
+        }
+        return
+      }
+
       if (message?.type === "job") {
         await this._handleJob(message.payload)
       }
@@ -384,19 +593,74 @@ export default class BackgroundJobsWorker {
 
     jsonSocket.on("error", (error) => {
       console.error("Background jobs worker socket error:", error)
+      if (this.generationId && !this._generationAccepted) rejectHandshake(error)
     })
 
     jsonSocket.on("close", () => {
+      if (handshakeTimer) clearTimeout(handshakeTimer)
       this._stopHeartbeat()
+      if (this.jsonSocket === jsonSocket) this.jsonSocket = undefined
+      if (this.generationId && !this._generationAccepted) {
+        rejectHandshake(new Error("Background jobs socket closed before generation acknowledgement"))
+      }
       if (this.shouldStop) return
-      setTimeout(() => { void this._connect() }, 1000)
+      if (connectionAccepted || allowReconnect || !this.generationId) this._scheduleReconnect()
     })
 
+    if (this.generationId) {
+      handshakeTimer = setTimeout(() => {
+        const error = new BackgroundJobsGenerationHandshakeTimeoutError({
+          endpoint: `${host}:${port}`,
+          generationId: this.generationId || "",
+          role: "worker",
+          timeoutMs: this.generationHandshakeTimeoutMs
+        })
+        rejectHandshake(error)
+        jsonSocket.destroy()
+      }, this.generationHandshakeTimeoutMs)
+    }
+
     socket.on("connect", () => {
-      jsonSocket.send({type: "hello", role: "worker", supportsHandoffIdReporting: true, supportsHeartbeat: true, supportsPooled: true, workerId: this.workerId})
-      this._sendReadyIfRunning()
-      this._startHeartbeat()
+      jsonSocket.send({type: "hello", role: "worker", ...(this.generationId ? {generationId: this.generationId} : {}), supportsHandoffIdReporting: true, supportsHeartbeat: true, supportsPooled: true, workerId: this.workerId})
+      if (!this.generationId) {
+        connectionAccepted = true
+        this._sendReadyIfRunning()
+        this._startHeartbeat()
+        resolveHandshake()
+      }
     })
+
+    if (this.generationId) await handshake
+  }
+
+  /** Schedules one fenced reconnect to the worker's unchanged endpoint. */
+  _scheduleReconnect() {
+    if (this.shouldStop || this._reconnectTimer) return
+
+    this._reconnectTimer = setTimeout(() => {
+      this._reconnectTimer = undefined
+      if (this.shouldStop) return
+      void this._connect({allowReconnect: true}).catch((error) => {
+        if (!this.shouldStop) console.error("Background jobs worker reconnect failed:", error)
+      })
+    }, this.reconnectDelayMs)
+    if (typeof this._reconnectTimer.unref === "function") this._reconnectTimer.unref()
+  }
+
+  /**
+   * Surfaces an unexpected worker lifecycle failure through the framework error
+   * channels so a supervisor hook that ignores stdio still has observability.
+   * @param {ReturnType<typeof JSON.parse>} error - Worker lifecycle failure.
+   */
+  _reportLifecycleError(error) {
+    const configuration = this.configuration
+    if (!configuration) return
+    const normalizedError = error instanceof Error ? error : new Error(String(error))
+    const payload = {context: {generationId: this.generationId, stage: "background-jobs-worker-lifecycle"}, error: normalizedError}
+    const errorEvents = configuration.getErrorEvents()
+
+    errorEvents.emit("framework-error", payload)
+    errorEvents.emit("all-error", {...payload, errorType: "framework-error"})
   }
 
   /**
@@ -408,17 +672,20 @@ export default class BackgroundJobsWorker {
   _startHeartbeat() {
     this._stopHeartbeat()
 
-    this._heartbeatTimer = setInterval(() => {
-      if (this.shouldStop || !this.jsonSocket) return
-
-      try {
-        this.jsonSocket.send({type: "heartbeat", workerId: this.workerId})
-      } catch {
-        // Socket is closing/closed; the close handler drives reconnect.
-      }
-    }, this.heartbeatIntervalMs)
+    this._heartbeatTimer = setInterval(() => this._sendHeartbeat(), this.heartbeatIntervalMs)
 
     if (typeof this._heartbeatTimer.unref === "function") this._heartbeatTimer.unref()
+  }
+
+  /** Sends one liveness heartbeat while the worker has not finally stopped. */
+  _sendHeartbeat() {
+    if (this.shouldStop || !this.jsonSocket) return
+
+    try {
+      this.jsonSocket.send({type: "heartbeat", workerId: this.workerId})
+    } catch {
+      // Socket is closing/closed; the close handler drives reconnect.
+    }
   }
 
   /**
@@ -612,8 +879,9 @@ export default class BackgroundJobsWorker {
    * @returns {void}
    */
   _sendReadyIfRunning({revokePooledAdmission = false} = {}) {
-    if (this.shouldStop) return
+    if (this.shouldStop || this.isRetiring) return
     if (!this.jsonSocket) return
+    if (this.generationId && !this._generationAccepted) return
 
     const readyMessage = this._readyMessage({revokePooledAdmission})
 
@@ -866,10 +1134,9 @@ export default class BackgroundJobsWorker {
   _createPooledChild() {
     const configuration = this.configuration
     if (!configuration) throw new Error("Background jobs worker configuration not initialized")
-    const config = configuration.getBackgroundJobsConfig()
     const child = fork(POOLED_RUNNER_ENTRY_PATH, [], {
       cwd: configuration.getDirectory(), execArgv: [], stdio: ["ignore", "ignore", "ignore", "ipc"],
-      env: Object.assign({}, process.env, {VELOCIOUS_BACKGROUND_JOB_CHILD: "1", VELOCIOUS_ENV: configuration.getEnvironment(), VELOCIOUS_BACKGROUND_JOBS_HOST: config.host, VELOCIOUS_BACKGROUND_JOBS_PORT: `${config.port}`})
+      env: Object.assign({}, process.env, this._childBackgroundJobsEnvironment())
     })
     this.pooledChildren.add(child)
     this.inflightProcessChildren.add(child)
@@ -1086,18 +1353,11 @@ export default class BackgroundJobsWorker {
     if (!configuration) throw new Error("Background jobs worker configuration not initialized")
 
     const directory = configuration.getDirectory()
-    const backgroundJobsConfig = configuration.getBackgroundJobsConfig()
-
     return fork(FORKED_RUNNER_ENTRY_PATH, [], {
       cwd: directory,
       execArgv: [],
       stdio: ["ignore", "ignore", "ignore", "ipc"],
-      env: Object.assign({}, process.env, {
-        VELOCIOUS_BACKGROUND_JOB_CHILD: "1",
-        VELOCIOUS_ENV: configuration.getEnvironment(),
-        VELOCIOUS_BACKGROUND_JOBS_HOST: backgroundJobsConfig.host,
-        VELOCIOUS_BACKGROUND_JOBS_PORT: `${backgroundJobsConfig.port}`
-      })
+      env: Object.assign({}, process.env, this._childBackgroundJobsEnvironment())
     })
   }
 
@@ -1320,18 +1580,11 @@ export default class BackgroundJobsWorker {
     const argvCommand = process.argv[1]
     const command = argvCommand ? argvCommand : `${directory}/bin/velocious.js`
     const encodedPayload = Buffer.from(JSON.stringify(payload)).toString("base64")
-    const backgroundJobsConfig = configuration.getBackgroundJobsConfig()
     const child = spawn(process.execPath, [command, "background-jobs-runner"], {
       cwd: directory,
       detached: true,
       stdio: "ignore",
-      env: Object.assign({}, process.env, {
-        VELOCIOUS_BACKGROUND_JOB_CHILD: "1",
-        VELOCIOUS_ENV: configuration.getEnvironment(),
-        VELOCIOUS_BACKGROUND_JOBS_HOST: backgroundJobsConfig.host,
-        VELOCIOUS_BACKGROUND_JOBS_PORT: `${backgroundJobsConfig.port}`,
-        VELOCIOUS_JOB_PAYLOAD: encodedPayload
-      })
+      env: Object.assign({}, process.env, this._childBackgroundJobsEnvironment(), {VELOCIOUS_JOB_PAYLOAD: encodedPayload})
     })
 
     this.inflightProcessChildren.add(child)
@@ -1351,6 +1604,24 @@ export default class BackgroundJobsWorker {
     child.unref()
 
     return finished
+  }
+
+  /**
+   * Builds the exact main endpoint and generation inherited by every child.
+   * @returns {Record<string, string>} - Child process environment additions.
+   */
+  _childBackgroundJobsEnvironment() {
+    const configuration = this.configuration
+    if (!configuration) throw new Error("Background jobs worker configuration not initialized")
+    if (!this.host || typeof this.port !== "number") throw new Error("Background jobs worker endpoint not resolved")
+
+    return {
+      VELOCIOUS_BACKGROUND_JOB_CHILD: "1",
+      VELOCIOUS_ENV: configuration.getEnvironment(),
+      VELOCIOUS_BACKGROUND_JOBS_HOST: this.host,
+      VELOCIOUS_BACKGROUND_JOBS_PORT: `${this.port}`,
+      ...(this.generationId ? {VELOCIOUS_BACKGROUND_JOBS_GENERATION_ID: this.generationId} : {})
+    }
   }
 
   /**
