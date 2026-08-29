@@ -74,9 +74,7 @@ async function runMainCli(args, environment, cwd) {
   })
 
   try {
-    const outcome = await timeout({errorMessage: "Background jobs main CLI did not settle", timeout: 2000}, async () => {
-      return await Promise.race([listening.then(() => ({code: null, outcome: "listening"})), closed])
-    })
+    const outcome = await Promise.race([listening.then(() => ({code: null, outcome: "listening"})), closed])
     if (outcome.outcome === "closed") {
       throw new Error(
         `Background jobs main CLI exited before listening (code ${String(outcome.code)}, signal ${String(outcome.signal)})\n` +
