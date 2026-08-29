@@ -102,9 +102,13 @@ export default class LocalBackgroundJobsDispatcher {
     }
 
     this._wakeQueued = true
-    const drain = Promise.resolve().then(async () => {
-      this._wakeQueued = false
-      await this._drain()
+    const drain = this.configuration.withoutCurrentConnectionContexts(() => {
+      return Promise
+        .resolve()
+        .then(async () => {
+          this._wakeQueued = false
+          await this._drain()
+        })
     })
     const drainPromise = drain
       .catch((error) => {

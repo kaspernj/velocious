@@ -56,7 +56,7 @@ exactly in the durable claim. Direct callers that omit it retain the legacy
 generated-id behavior; callers coordinating an ambiguous claim should retain
 and fence the supplied id.
 
-Queue-cap reconciliation, deduplication, insertion, capacity reservation, claims, acknowledgements, and capacity release are transactional. A local enqueue performed inside an application transaction registers its dispatcher wake with `afterCommit`: committed work becomes visible before execution, while rollback removes the row and discards the wake.
+Queue-cap reconciliation, deduplication, insertion, capacity reservation, claims, acknowledgements, and capacity release are transactional. A local enqueue performed inside an application transaction registers its dispatcher wake with `afterCommit`: committed work becomes visible before execution, while rollback removes the row and discards the wake. Dispatcher drain work starts outside the enqueue caller's database connection context, so it checks out and owns its transactions independently instead of retaining a connection after the caller commits or checks it in.
 
 Job failures emit `background-job-failed` and its `all-error` mirror for both retrying and terminal attempts. Unexpected readiness, dispatch, storage, timer, or acknowledgement failures emit `framework-error` and `all-error`; they are not silently logged and dropped.
 
