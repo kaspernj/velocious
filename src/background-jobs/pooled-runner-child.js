@@ -1,7 +1,7 @@
 // @ts-check
 
 import runJobPayload, { BackgroundJobPerformedFailure } from "./job-runner.js"
-import { closeRunnerConnections, currentConfigurationOrNull } from "./runner-graceful-shutdown.js"
+import { closeRunnerConnections, closeRunnerFrameworkConnections, currentConfigurationOrNull } from "./runner-graceful-shutdown.js"
 import setRunnerProcessTitle from "./runner-process-title.js"
 import PooledRunnerBrokerIdentity from "./pooled-runner-broker-identity.js"
 import { runWithSharedTransactionBrokerConfig } from "../testing/shared-transaction-proxy-driver.js"
@@ -10,7 +10,8 @@ const BASE_PROCESS_TITLE = "velocious background-jobs-runner"
 
 setRunnerProcessTitle()
 
-let shuttingDown = false
+/** @type {Promise<void> | undefined} */
+let shutdownPromise
 
 /**
  * Closes the runner's connections — releasing any advisory lock a killed-mid-pass
@@ -19,12 +20,15 @@ let shuttingDown = false
  * @param {number} exitCode - Process exit code.
  * @returns {Promise<void>}
  */
-async function shutdownRunner(exitCode) {
-  if (shuttingDown) return
-  shuttingDown = true
+function shutdownRunner(exitCode) {
+  if (shutdownPromise) return shutdownPromise
 
-  await closeRunnerConnections(currentConfigurationOrNull())
-  process.exit(exitCode)
+  shutdownPromise = (async () => {
+    await closeRunnerConnections(currentConfigurationOrNull())
+    process.exit(exitCode)
+  })()
+
+  return shutdownPromise
 }
 
 /**
@@ -36,7 +40,7 @@ async function shutdownRunner(exitCode) {
  */
 const runningJobIds = new Set()
 const brokerIdentity = new PooledRunnerBrokerIdentity({
-  closeConnections: async () => await closeRunnerConnections(currentConfigurationOrNull())
+  closeConnections: async () => await closeRunnerFrameworkConnections(currentConfigurationOrNull())
 })
 
 /**
@@ -107,7 +111,11 @@ async function runJob(payload, sharedTransactionBroker) {
   try {
     const status = await runWithSharedTransactionBrokerConfig(sharedTransactionBroker, async () => {
       return await brokerIdentity.run(sharedTransactionBroker, async () => {
-        return await runJobPayload(payload, {closeConnections: false, manageProcessTitle: false})
+        return await runJobPayload(payload, {
+          closeConnections: false,
+          manageProcessTitle: false,
+          processType: "background-jobs-pooled-runner"
+        })
       })
     })
     await sendOutcome({jobId: payload.id, acknowledged: true, status})

@@ -5,6 +5,13 @@
  */
 
 /**
+ * Immutable identity shared by application initializers for one process lifecycle.
+ * @typedef {object} ApplicationProcessContext
+ * @property {string} type - Generic process type supplied to `configuration.initialize()`.
+ * @property {string} instanceId - Opaque identity unique to this lifecycle.
+ */
+
+/**
  * @typedef {(args: {request: import("./http-server/client/request.js").default | import("./http-server/client/websocket-request.js").default, response: import("./http-server/client/response.js").default}) => Promise<void>} CorsType
  */
 

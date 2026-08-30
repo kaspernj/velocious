@@ -10,8 +10,8 @@ import setRunnerProcessTitle from "./runner-process-title.js"
 // which jobs are running, how many of each, and which are eating resources.
 setRunnerProcessTitle()
 
-let finishing = false
-let shuttingDown = false
+/** @type {Promise<void> | undefined} */
+let shutdownPromise
 
 /**
  * Closes the runner's connections — releasing any advisory lock a killed-mid-job
@@ -21,12 +21,15 @@ let shuttingDown = false
  * @param {number} exitCode - Process exit code.
  * @returns {Promise<void>}
  */
-async function shutdownRunner(exitCode) {
-  if (shuttingDown || finishing) return
-  shuttingDown = true
+function shutdownRunner(exitCode) {
+  if (shutdownPromise) return shutdownPromise
 
-  await closeRunnerConnections(currentConfigurationOrNull())
-  process.exit(exitCode)
+  shutdownPromise = (async () => {
+    await closeRunnerConnections(currentConfigurationOrNull())
+    process.exit(exitCode)
+  })()
+
+  return shutdownPromise
 }
 
 /**
@@ -45,25 +48,13 @@ function isJobMessage(message) {
 /**
  * Runs finish.
  * @param {number} exitCode - Process exit code.
- * @returns {void}
+ * @returns {Promise<void>}
  */
-function finish(exitCode) {
-  finishing = true
-  process.exitCode = exitCode
-
-  if (process.connected && process.disconnect) {
-    process.disconnect()
+async function finish(exitCode) {
+  if (process.send) {
+    await new Promise((resolve) => process.send?.({type: "job-reported"}, () => resolve(undefined)))
   }
-
-  setImmediate(() => process.exit(exitCode))
-}
-
-/**
- * Runs report job finished.
- * @returns {void}
- */
-function reportJobFinished() {
-  if (process.send) process.send({type: "job-reported"})
+  await shutdownRunner(exitCode)
 }
 
 /**
@@ -79,7 +70,10 @@ async function runJobMessage(message) {
   // The per-job process title (and its restore) is set inside runJobPayload,
   // which reads the job class's `static processTitle`. This process boots with
   // the base "velocious background-jobs-runner" title set at module load above.
-  await runJobPayload(message.payload, {closeConnections: false})
+  await runJobPayload(message.payload, {
+    closeConnections: false,
+    processType: "background-jobs-forked-runner"
+  })
 }
 
 /**
@@ -88,15 +82,17 @@ async function runJobMessage(message) {
  * @returns {Promise<void>} - Resolves after completion is reported.
  */
 async function handleJobMessage(message) {
+  let exitCode
+
   try {
     await runJobMessage(message)
-    reportJobFinished()
-    finish(0)
+    exitCode = 0
   } catch (error) {
-    reportJobFinished()
     console.error("Forked background job runner failed:", error)
-    finish(1)
+    exitCode = 1
   }
+
+  await finish(exitCode)
 }
 
 for (const signal of ["SIGTERM", "SIGINT"]) {
@@ -104,7 +100,7 @@ for (const signal of ["SIGTERM", "SIGINT"]) {
 }
 
 process.once("disconnect", () => {
-  if (!finishing) void shutdownRunner(0)
+  void shutdownRunner(0)
 })
 
 process.once("message", (message) => {

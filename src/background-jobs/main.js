@@ -7,7 +7,7 @@ import BackgroundJobsScheduler from "./scheduler.js"
 import Logger from "../logger.js"
 import PruneTerminalBackgroundJobsJob from "../jobs/prune-terminal-background-jobs.js"
 import VelociousError from "../velocious-error.js"
-import shutdownLifecycle from "../utils/shutdown-lifecycle.js"
+import shutdownLifecycle, { runShutdownSteps } from "../utils/shutdown-lifecycle.js"
 import { validateGenerationId, workerIdBelongsToGeneration } from "./generation-identity.js"
 import BackgroundJobsLifecycleControlServer from "./lifecycle-control-server.js"
 
@@ -330,13 +330,19 @@ export default class BackgroundJobsMain {
         this._startGenerationRecoveryOwnership()
       }
     } catch (error) {
+      let cleanupError
+
       try {
         await this.stop()
-      } catch (cleanupError) {
+      } catch (caughtCleanupError) {
+        cleanupError = caughtCleanupError
+      }
+
+      if (cleanupError) {
         throw new AggregateError(
           [error, cleanupError],
           "Background jobs main startup and cleanup failed",
-          {cause: cleanupError}
+          {cause: error}
         )
       }
 
@@ -440,31 +446,30 @@ export default class BackgroundJobsMain {
    * Runs stop beacon and server.
    * @returns {Promise<void>} */
   async _stopBeaconAndServer() {
-    try {
-      await this.lifecycleControlServer?.close()
-      this.lifecycleControlServer = undefined
-    } finally {
-      try {
-        await this.configuration.disconnectBeacon()
-      } finally {
-        await this._closeServerAndDatabaseConnections()
-      }
-    }
-  }
-
-  /**
-   * Runs close server and database connections.
-   * @returns {Promise<void>} */
-  async _closeServerAndDatabaseConnections() {
-    try {
-      await this._closeServer()
-    } finally {
-      if (this.closeDatabaseConnectionsOnStop) {
-        await this.configuration.closeDatabaseConnections()
-      } else {
-        await this.configuration.closeBackgroundJobsAdapter()
-      }
-    }
+    await runShutdownSteps({
+      message: "Background jobs main application and framework shutdown failed",
+      steps: [
+        async () => {
+          try {
+            await this.lifecycleControlServer?.close()
+          } finally {
+            this.lifecycleControlServer = undefined
+          }
+        },
+        ...(this.closeDatabaseConnectionsOnStop
+          ? [async () => await this.configuration.shutdown()]
+          : []),
+        async () => await this.configuration.disconnectBeacon(),
+        async () => await this._closeServer(),
+        async () => {
+          if (this.closeDatabaseConnectionsOnStop) {
+            await this.configuration.closeDatabaseConnections()
+          } else {
+            await this.configuration.closeBackgroundJobsAdapter()
+          }
+        }
+      ]
+    })
   }
 
   /**

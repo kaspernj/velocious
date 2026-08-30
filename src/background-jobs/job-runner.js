@@ -4,6 +4,7 @@ import configurationResolver from "../configuration-resolver.js"
 import BackgroundJobRegistry from "./job-registry.js"
 import BackgroundJobsStatusReporter from "./status-reporter.js"
 import BackgroundJobRescheduleSignal from "./reschedule-signal.js"
+import { closeRunnerConnections } from "./runner-graceful-shutdown.js"
 
 const BEACON_READY_TIMEOUT_MS = 5000
 
@@ -80,12 +81,13 @@ function runnerProcessTitle(JobClass, payload) {
  * @param {object} [options] - Runner options.
  * @param {boolean} [options.closeConnections] - Whether to gracefully close framework connections after the job.
  * @param {boolean} [options.manageProcessTitle] - Whether to set the per-job process title and restore it afterwards. Off for concurrent pooled runners, where interleaved snapshot/restore of the single process-wide `process.title` would corrupt it; the pooled child owns an aggregate title instead.
+ * @param {string} [options.processType] - Generic application process type.
  * @returns {Promise<"completed" | "rescheduled">} - Acknowledged outcome.
  */
-export default async function runJobPayload(payload, {closeConnections = true, manageProcessTitle = true} = {}) {
+export default async function runJobPayload(payload, {closeConnections = true, manageProcessTitle = true, processType = "background-jobs-runner"} = {}) {
   const configuration = await configurationResolver()
   configuration.setCurrent()
-  await configuration.initialize({type: "background-jobs-runner"})
+  await configuration.initialize({type: processType})
   await connectBeacon(configuration)
   const reporter = new BackgroundJobsStatusReporter({configuration})
 
@@ -167,11 +169,7 @@ export default async function runJobPayload(payload, {closeConnections = true, m
     // one) doesn't misreport a finished job as still running.
     if (manageProcessTitle) process.title = previousTitle
     if (closeConnections) {
-      try {
-        await configuration.disconnectBeacon()
-      } finally {
-        await configuration.closeDatabaseConnections()
-      }
+      await closeRunnerConnections(configuration)
     }
   }
 }

@@ -10,6 +10,7 @@ let testDirectorySequence = 0
 
 class HttpServerConfigurationTestConfiguration {
   debug = false
+  shutdownCalls = 0
   websocketEvents = null
 
   /** @param {{httpServer?: import("../../src/configuration-types.js").HttpServerConfiguration}} args */
@@ -47,6 +48,11 @@ class HttpServerConfigurationTestConfiguration {
 
   /** @returns {Promise<void>} */
   async closeDatabaseConnections() {}
+
+  /** @returns {Promise<void>} */
+  async shutdown() {
+    this.shutdownCalls++
+  }
 }
 
 /**
@@ -96,6 +102,8 @@ describe("Application HTTP server configuration", {databaseCleaning: {transactio
       port: 0,
       workers: 2
     })
+
+    expect(configuration.shutdownCalls).toEqual(1)
   })
 
   it("lets direct application httpServer args override configuration defaults", async () => {
