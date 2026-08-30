@@ -37,7 +37,7 @@
 * Default-on buffered HTTP response compression with Brotli/gzip content negotiation, global and per-response opt-outs, and HEAD-correct representation headers (see [docs/http-server.md](docs/http-server.md#response-compression))
 * Background jobs with Node SQL/TCP workers plus a Browser/Expo local SQLite store and in-process dispatcher, including failure events, authorized database-scoped dashboard counts, and an opt-in release-scoped main/worker generation protocol with acknowledged activation, asynchronous retirement, and retired-main recovery. Production compliance additionally requires downstream supervisor retention/activation ordering and release pins (see [docs/background-jobs.md](docs/background-jobs.md), [docs/local-background-jobs.md](docs/local-background-jobs.md), and [docs/background-jobs-dashboard.md](docs/background-jobs-dashboard.md))
 * Durable one-off background-job scheduling with exact epoch timestamps (see [docs/scheduled-background-job-enqueue.md](docs/scheduled-background-job-enqueue.md))
-* Rails-style request and database query logging (see [docs/logging.md](docs/logging.md))
+* Rails-style request and database query logging with structured credential redaction (see [docs/logging.md](docs/logging.md))
 * EJS-backed mailers with delivery, queueing, and payload rendering support (see [docs/mailers.md](docs/mailers.md))
 * Trusted reverse proxy handling for `request.remoteAddress()` (see [docs/trusted-proxies.md](docs/trusted-proxies.md))
 * In-process driver schema metadata caching (see [docs/schema-metadata-cache.md](docs/schema-metadata-cache.md))
@@ -1915,7 +1915,8 @@ const configuration = new Configuration({
     console: false,            // disable console output
     file: true,                // enable file output
     directory: "/custom/logs", // optional, defaults to "<project>/log" in Node
-    filePath: "/tmp/app.log"   // optional explicit path
+    filePath: "/tmp/app.log",  // optional explicit path
+    sensitiveNames: ["integrationPin"] // optional app-specific additions
   }
 })
 ```
@@ -1975,6 +1976,8 @@ Task Load (1.9ms)  SELECT `tasks`.* FROM `tasks` WHERE `tasks`.`id` = 1 LIMIT 1
 Model queries use operation names such as `Task Load`, `Task Count`, `Task Pluck`, `Task Create`, `Task Update`, and `Task Destroy`. Raw driver queries use `SQL`. The source arrow is included only when Velocious can identify an application frame; dependency and framework frames such as `node_modules` are omitted.
 
 Query logging defaults to off in the `test` environment to keep CI output quiet and is skipped when no output emits `info`. Override it with `logging: {queryLogging: true}` when a test build should write SQL timing logs, and use the normal logging output settings to send those logs to console or file.
+
+- **Credential redaction**: Request headers, parsed body/params, nested arrays, URL queries, WebSocket authentication params, rendered SQL diagnostics, and request/frontend-model errors are redacted before formatting and output fan-out. Defaults match common authorization, authentication, credential, password, secret, token, API-key, cookie/session, and base64-content name variants case-insensitively. Add application names with `logging.sensitiveNames`; entries must be non-blank strings. Exact request-scoped values are replaced in SQL/error text while safe fields, SQL shape, timing, source lines, error class/backtrace, and correlation metadata remain visible. Import `LOG_REDACTION_MARKER` from `velocious/build/src/log-redactor.js` when code needs to compare the deterministic marker. See [logging and credential redaction](docs/logging.md#credential-redaction).
 
 ## Listen for framework errors
 

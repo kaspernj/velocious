@@ -20,6 +20,7 @@ import Response from "../../src/http-server/client/response.js"
 import Task from "../dummy/src/models/task.js"
 import User from "../dummy/src/models/user.js"
 import VelociousError from "../../src/velocious-error.js"
+import { LOG_REDACTION_MARKER } from "../../src/log-redactor.js"
 
 const FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE = "Request failed."
 
@@ -682,9 +683,9 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     expect(reporterContexts[0].requestId).toEqual("request-1")
     expect(reporterRequestDetails[0]?.httpMethod).toEqual("POST")
     expect(reporterRequestDetails[0]?.path).toEqual("/frontend-models")
-    expect(reporterRequestDetails[0]?.body?.requests?.[0]?.payload?.authorization).toEqual("[redacted]")
+    expect(reporterRequestDetails[0]?.body?.requests?.[0]?.payload?.authorization).toEqual(LOG_REDACTION_MARKER)
     expect(reporterRequestDetails[0]?.body?.requests?.[0]?.payload?.comments?.[0]).toContain("[truncated ")
-    expect(reporterRequestDetails[0]?.body?.requests?.[0]?.payload?.payload?.contentBase64).toEqual("[redacted]")
+    expect(reporterRequestDetails[0]?.body?.requests?.[0]?.payload?.payload?.contentBase64).toEqual(LOG_REDACTION_MARKER)
   })
 
   it("compacts oversized shared frontend-model request details for client error reporters", async () => {

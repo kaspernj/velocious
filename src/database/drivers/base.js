@@ -170,7 +170,7 @@ import TableData from "../table-data/index.js"
 import TableColumn from "../table-data/table-column.js"
 import TableForeignKey from "../table-data/table-foreign-key.js"
 import wait from "awaitery/build/wait.js"
-import { optionalPositiveInteger } from "typanic"
+import { ensureError, optionalPositiveInteger } from "typanic"
 import {coordinateSharedTransactionConnection, runWithoutSharedTransactionCoordinatorOwner} from "../../testing/shared-transaction-connection-coordinator.js"
 import { currentTestProfileContext } from "../../testing/test-profile-context.js"
 import sha256Hex from "../../utils/sha256-hex.js"
@@ -1998,7 +1998,10 @@ export default class VelociousDatabaseDriversBase {
           const waitMs = typeof retryInfo.waitMs === "number" && Number.isFinite(retryInfo.waitMs) ? retryInfo.waitMs : 100
 
           if (waitMs > 0) await wait(waitMs)
-          this.logger.warn(`Retrying query because failed with: ${error.stack}`)
+          const sensitiveValues = requestTiming ? requestTiming.getLogSensitiveValues() : new Set()
+          const loggedError = this.configuration.getLogRedactor().redactString(error.stack || error.message, sensitiveValues)
+
+          this.logger.warn(`Retrying query because failed with: ${loggedError}`)
           // Retry
         } else {
           throw error
@@ -2064,17 +2067,32 @@ export default class VelociousDatabaseDriversBase {
     let result
 
     try {
-      const runQueryActualWithHooks = async () => await this._queryActualWithHooks(querySql, options, originalSql)
+      try {
+        const runQueryActualWithHooks = async () => await this._queryActualWithHooks(querySql, options, originalSql)
 
-      if (requestTiming && tries === 1) {
-        result = await requestTiming.measureDbQuery(runQueryActualWithHooks)
-      } else if (requestTiming) {
-        result = await requestTiming.measure("db", runQueryActualWithHooks)
-      } else {
-        result = await runQueryActualWithHooks()
+        if (requestTiming && tries === 1) {
+          result = await requestTiming.measureDbQuery(runQueryActualWithHooks)
+        } else if (requestTiming) {
+          result = await requestTiming.measure("db", runQueryActualWithHooks)
+        } else {
+          result = await runQueryActualWithHooks()
+        }
+      } finally {
+        this._activeQuery = previousActiveQuery
       }
-    } finally {
-      this._activeQuery = previousActiveQuery
+    } catch (error) {
+      if (options.logQuery !== false) {
+        await this._logQuery({
+          elapsedMs: nowMs() - startedAtMs,
+          error: ensureError(error),
+          logName: options.logName || "SQL",
+          requestTiming,
+          sourceStack: options.sourceStack,
+          sql: originalSql
+        })
+      }
+
+      throw error
     }
 
     const elapsedMs = nowMs() - startedAtMs
@@ -2083,6 +2101,7 @@ export default class VelociousDatabaseDriversBase {
       await this._logQuery({
         elapsedMs,
         logName: options.logName || "SQL",
+        requestTiming,
         sourceStack: options.sourceStack,
         sql: originalSql
       })
@@ -2374,17 +2393,25 @@ export default class VelociousDatabaseDriversBase {
    * Runs log query.
    * @param {object} args - Options object.
    * @param {number} args.elapsedMs - Elapsed milliseconds.
+   * @param {Error} [args.error] - Query failure, when the driver call failed.
    * @param {string} args.logName - Query log subject.
+   * @param {import("../../http-server/client/request-timing.js").default | undefined} args.requestTiming - Request timing.
    * @param {string | undefined} args.sourceStack - Source stack.
    * @param {string} args.sql - SQL string.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async _logQuery({elapsedMs, logName, sourceStack, sql}) {
+  async _logQuery({elapsedMs, error, logName, requestTiming, sourceStack, sql}) {
     const logger = new Logger(logName, {configuration: this.configuration})
     const sourceLine = this._querySourceLine(sourceStack)
+    const sensitiveValues = requestTiming ? requestTiming.getLogSensitiveValues() : new Set()
+    const redactor = this.configuration.getLogRedactor()
+    const loggedSql = redactor.redactString(sql, sensitiveValues)
+    const failure = error
+      ? ` FAILED ${error.name}: ${redactor.redactString(error.message, sensitiveValues)}`
+      : ""
     const message = sourceLine
-      ? `(${formatElapsedMs(elapsedMs)})  ${sql}\n  ↳ ${sourceLine}`
-      : `(${formatElapsedMs(elapsedMs)})  ${sql}`
+      ? `(${formatElapsedMs(elapsedMs)})${failure}  ${loggedSql}\n  ↳ ${sourceLine}`
+      : `(${formatElapsedMs(elapsedMs)})${failure}  ${loggedSql}`
 
     await logger.info(message)
   }

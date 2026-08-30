@@ -12,17 +12,6 @@ import {applyResponseCompression} from "./response-compression.js"
 import WebsocketSession from "./websocket-session.js"
 
 /**
- * Runs summarize request data.
- * @param {Buffer} data - Incoming request data.
- * @returns {{length: number, preview: string}} - Request data summary.
- */
-function summarizeRequestData(data) {
-  const preview = data.toString("latin1", 0, Math.min(data.length, 160)).replaceAll("\r", "\\r").replaceAll("\n", "\\n")
-
-  return {length: data.length, preview}
-}
-
-/**
  * Runs bad request details.
  * @param {Error & {velociousContext?: Record<string, ReturnType<typeof JSON.parse>>}} error - Error instance.
  * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Safe bad-request details for logs.
@@ -141,11 +130,14 @@ export default class VeoliciousHttpServerClient {
     const currentRequest = this.currentRequest
 
     if (!currentRequest) throw new Error("No current request")
+    const redactor = this.configuration.getLogRedactor()
+    const sensitiveValues = redactor.requestSensitiveValues(currentRequest)
+
     this.logger.debug(() => ["executeCurrentRequest request", {
       clientCount: this.clientCount,
       httpMethod: currentRequest.httpMethod(),
       httpVersion: currentRequest.httpVersion(),
-      path: currentRequest.path(),
+      path: redactor.redactPath(currentRequest.path(), sensitiveValues),
       queueLength: this.requestRunners.length
     }])
 
@@ -176,8 +168,8 @@ export default class VeoliciousHttpServerClient {
   onWrite(data) {
     this.logger.debug(() => ["onWrite start", {
       clientCount: this.clientCount,
+      length: data.length,
       state: this.state,
-      ...summarizeRequestData(data)
     }])
 
     if (this.websocketSession) {

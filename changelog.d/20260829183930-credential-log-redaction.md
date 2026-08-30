@@ -1,0 +1,1 @@
+Add structured, request-scoped credential redaction for request, SQL, WebSocket, and error diagnostics, with secure defaults, checked application extensions, and one exported marker shared by every logging output.

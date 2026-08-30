@@ -32,6 +32,7 @@ import EventEmitter from "./utils/event-emitter.js"
 import VelociousWebsocketChannelSubscribers from "./http-server/websocket-channel-subscribers.js"
 import { CurrentConfigurationNotSetError, currentConfiguration, setCurrentConfiguration } from "./current-configuration.js"
 import { requestDetails } from "./error-reporting/request-details.js"
+import LogRedactor from "./log-redactor.js"
 import { frontendModelApiManifest, frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition, frontendModelResourcesForBackendProject } from "./frontend-models/resource-definition.js"
 import { currentOfflineGrantSigningKey, normalizeOfflineGrantSigningKey } from "./sync/offline-grant.js"
 import PluginRoutes from "./routes/plugin-routes.js"
@@ -439,6 +440,7 @@ export default class VelociousConfiguration {
      * @type {((session: import("./http-server/client/websocket-session.js").default) => ReturnType<typeof JSON.parse> | Promise<ReturnType<typeof JSON.parse>>) | null} */
     this._websocketSessionIdentityResolver = null
     this._logging = logging
+    this._logRedactor = new LogRedactor({sensitiveNames: logging?.sensitiveNames})
     this._mailerBackend = mailerBackend
     this._routeResolverHooks = [...(routeResolverHooks || [])]
     this._addDebugEndpointRouteHook()
@@ -1457,6 +1459,14 @@ export default class VelociousConfiguration {
       levels,
       outputs: this._logging?.outputs
     }
+  }
+
+  /**
+   * Gets the configuration-owned structured logging redactor.
+   * @returns {LogRedactor} - Structured logging redactor.
+   */
+  getLogRedactor() {
+    return this._logRedactor
   }
 
   /**
@@ -3498,7 +3508,9 @@ export default class VelociousConfiguration {
   async clientErrorPayloadForError(args) {
     /** @type {import("./configuration-types.js").ClientErrorPayloadReporterPayload} */
     const payload = {}
-    const details = requestDetails(args.request)
+    const requestTiming = this.getCurrentRequestTiming()
+    const sensitiveValues = requestTiming ? requestTiming.getLogSensitiveValues() : new Set()
+    const details = requestDetails(args.request, {redactor: this.getLogRedactor(), sensitiveValues})
 
     for (const reporter of this._clientErrorPayloadReporters) {
       const reporterPayload = await reporter({

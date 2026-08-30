@@ -44,6 +44,11 @@ export default class VelociousRoutesResolver {
     delete this.params.controller
     this.request = request
     this.response = response
+    const requestTiming = configuration.getCurrentRequestTiming()
+    const initialSensitiveValues = requestTiming ? requestTiming.getLogSensitiveValues() : new Set()
+
+    this.logSensitiveValues = configuration.getLogRedactor().requestSensitiveValues(request, initialSensitiveValues)
+    if (requestTiming) requestTiming.registerLogSensitiveValues(this.logSensitiveValues)
   }
 
   /**
@@ -127,7 +132,9 @@ export default class VelociousRoutesResolver {
 
       if (!logger) throw new Error("Logger not initialized")
 
-      await logger.warn(`No route matched for ${rawPath}. Tried controller at ${attemptedControllerPath}`)
+      const loggedPath = this.configuration.getLogRedactor().redactPath(rawPath, this.logSensitiveValues)
+
+      await logger.warn(`No route matched for ${loggedPath}. Tried controller at ${attemptedControllerPath}`)
 
       controller = "errors"
       controllerPath = "./built-in/errors/controller.js"
@@ -370,6 +377,14 @@ export default class VelociousRoutesResolver {
     const request = this.request
     const timestamp = this._formatTimestamp(new Date())
     const remoteAddress = request.remoteAddress() || "unknown"
+    const redactor = this.configuration.getLogRedactor()
+
+    this.logSensitiveValues = redactor.sensitiveValues(this.params, this.logSensitiveValues)
+
+    const requestTiming = this.configuration.getCurrentRequestTiming()
+
+    if (requestTiming) requestTiming.registerLogSensitiveValues(this.logSensitiveValues)
+
     const loggedParams = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (this._sanitizeParamsForLogging(this.params))
 
     delete loggedParams.action
@@ -377,7 +392,9 @@ export default class VelociousRoutesResolver {
 
     const controllerLogger = new Logger(controllerClass.name, {configuration: this.configuration})
 
-    await controllerLogger[logMethod](() => `Started ${request.httpMethod()} "${request.path()}" for ${remoteAddress} at ${timestamp}`)
+    const loggedPath = redactor.redactPath(request.path(), this.logSensitiveValues)
+
+    await controllerLogger[logMethod](() => `Started ${request.httpMethod()} "${loggedPath}" for ${remoteAddress} at ${timestamp}`)
     await controllerLogger[logMethod](() => `Processing by ${controllerClass.name}#${action}`)
     await controllerLogger[logMethod](() => [`  Parameters:`, loggedParams])
   }
@@ -453,6 +470,17 @@ export default class VelociousRoutesResolver {
    * @returns {ReturnType<typeof JSON.parse>} - The sanitize params for logging.
    */
   _sanitizeParamsForLogging(value) {
+    const preparedValue = this._prepareParamsForLogging(value)
+
+    return this.configuration.getLogRedactor().redactStructured(preparedValue, this.logSensitiveValues)
+  }
+
+  /**
+   * Preserves useful upload metadata before generic structured redaction.
+   * @param {ReturnType<typeof JSON.parse>} value - Value to prepare.
+   * @returns {ReturnType<typeof JSON.parse>} - Logging-safe structural copy.
+   */
+  _prepareParamsForLogging(value) {
     if (value instanceof UploadedFile) {
       return {
         className: value.constructor.name,
@@ -462,7 +490,7 @@ export default class VelociousRoutesResolver {
     }
 
     if (Array.isArray(value)) {
-      return value.map((item) => this._sanitizeParamsForLogging(item))
+      return value.map((item) => this._prepareParamsForLogging(item))
     }
 
     if (value && typeof value === "object") {
@@ -472,7 +500,7 @@ export default class VelociousRoutesResolver {
       const result = {}
 
       for (const key of Object.keys(value)) {
-        result[key] = this._sanitizeParamsForLogging(value[key])
+        result[key] = this._prepareParamsForLogging(value[key])
       }
 
       return result

@@ -14,6 +14,9 @@ describe("Cli - Commands - db:rollback", () => {
     "mailer_delivery_operations",
     "velocious_attachments",
     "velocious_internal_migrations",
+    // The optional local adapter owns these tables, not application migrations.
+    "velocious_local_background_job_concurrency",
+    "velocious_local_background_jobs",
     "velocious_server_sequences",
     "velocious_sync_scopes",
     "websocket_channel_events",
@@ -150,9 +153,7 @@ describe("Cli - Commands - db:rollback", () => {
       "users",
       "uuid_acts_as_list_items",
       "uuid_interactions",
-      "uuid_items",
-      "velocious_local_background_job_concurrency",
-      "velocious_local_background_jobs"
+      "uuid_items"
     ]
     const expectedRolledBackMigrations = [
       "20230728075328",

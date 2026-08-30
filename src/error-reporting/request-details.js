@@ -1,18 +1,22 @@
 // @ts-check
 
 import UploadedFile from "../http-server/client/uploaded-file/uploaded-file.js"
+import LogRedactor, { LOG_REDACTION_MARKER } from "../log-redactor.js"
 
 const REQUEST_DETAILS_BODY_MAX_SERIALIZED_LENGTH = 12000
 const REQUEST_DETAILS_STRING_MAX_LENGTH = 1000
 const REQUEST_DETAILS_ARRAY_MAX_ITEMS = 50
-const REDACTED_REQUEST_DETAILS_VALUE = "[redacted]"
+const defaultLogRedactor = new LogRedactor()
 
 /**
  * Extracts request metadata without retaining the request object.
  * @param {import("../http-server/client/request.js").default | import("../http-server/client/websocket-request.js").default | undefined} request - Request object, when present.
+ * @param {object} [args] - Redaction context.
+ * @param {LogRedactor} [args.redactor] - Application logging redactor.
+ * @param {Set<string>} [args.sensitiveValues] - Request-local sensitive values.
  * @returns {import("../configuration-types.js").ErrorRequestDetails | null} - Request metadata.
  */
-export function requestDetails(request) {
+export function requestDetails(request, {redactor = defaultLogRedactor, sensitiveValues = new Set()} = {}) {
   if (!request) return null
 
   let details
@@ -20,13 +24,13 @@ export function requestDetails(request) {
   try {
     details = {
       httpMethod: request.httpMethod(),
-      path: request.path()
+      path: redactor.redactPath(request.path(), sensitiveValues)
     }
   } catch {
     return null
   }
 
-  const body = requestBodySnapshot(request)
+  const body = requestBodySnapshot(request, {redactor, sensitiveValues})
 
   if (body !== undefined) {
     return {...details, body}
@@ -38,17 +42,18 @@ export function requestDetails(request) {
 /**
  * Snapshots parsed request params for error reports.
  * @param {import("../http-server/client/request.js").default | import("../http-server/client/websocket-request.js").default} request - Request object.
+ * @param {{redactor: LogRedactor, sensitiveValues: Set<string>}} args - Redaction context.
  * @returns {ReturnType<typeof JSON.parse> | undefined} - Sanitized body snapshot.
  */
-function requestBodySnapshot(request) {
+function requestBodySnapshot(request, {redactor, sensitiveValues}) {
   if (typeof request.params !== "function") return undefined
 
   try {
-    return requestDetailsBodySnapshot(request.params())
+    return requestDetailsBodySnapshot(request.params(), {redactor, sensitiveValues})
   } catch (error) {
     return {
       __unavailable: true,
-      error: error instanceof Error ? error.message : String(error)
+      error: redactor.redactString(error instanceof Error ? error.message : String(error), sensitiveValues)
     }
   }
 }
@@ -56,11 +61,13 @@ function requestBodySnapshot(request) {
 /**
  * Builds a bounded, redacted body snapshot for error reports.
  * @param {ReturnType<typeof JSON.parse>} body - Parsed request body.
+ * @param {{redactor: LogRedactor, sensitiveValues: Set<string>}} args - Redaction context.
  * @returns {ReturnType<typeof JSON.parse>} - Sanitized body snapshot.
  */
-function requestDetailsBodySnapshot(body) {
+function requestDetailsBodySnapshot(body, {redactor, sensitiveValues}) {
   const originalLength = serializedLength(body)
-  const sanitized = sanitizeRequestDetailsValue(body)
+  const collectedValues = redactor.sensitiveValues(body, sensitiveValues)
+  const sanitized = sanitizeRequestDetailsValue(body, {redactor, sensitiveValues: collectedValues})
   const sanitizedLength = serializedLength(sanitized)
 
   if (originalLength <= REQUEST_DETAILS_BODY_MAX_SERIALIZED_LENGTH && sanitizedLength <= REQUEST_DETAILS_BODY_MAX_SERIALIZED_LENGTH) {
@@ -79,18 +86,17 @@ function requestDetailsBodySnapshot(body) {
 /**
  * Sanitizes a value recursively for request details.
  * @param {ReturnType<typeof JSON.parse>} value - Value to sanitize.
- * @param {string} [key] - Current object key.
- * @param {WeakSet<object>} [seen] - Seen object references.
+ * @param {{key?: string, redactor: LogRedactor, seen?: WeakSet<object>, sensitiveValues: Set<string>}} args - Redaction traversal state.
  * @returns {ReturnType<typeof JSON.parse>} - Sanitized value.
  */
-function sanitizeRequestDetailsValue(value, key = "", seen = new WeakSet()) {
-  if (sensitiveRequestDetailsKey(key)) return REDACTED_REQUEST_DETAILS_VALUE
+function sanitizeRequestDetailsValue(value, {key = "", redactor, seen = new WeakSet(), sensitiveValues}) {
+  if (redactor.isSensitiveName(key)) return LOG_REDACTION_MARKER
   if (primitiveRequestDetailsValue(value)) return value
   if (bufferValue(value)) return bufferRequestDetailsSummary(value)
   if (value instanceof UploadedFile) return uploadedFileRequestDetailsSummary(value)
-  if (typeof value === "string") return sanitizeRequestDetailsString(value)
-  if (Array.isArray(value)) return sanitizeRequestDetailsArray(value, seen)
-  if (typeof value === "object") return sanitizeRequestDetailsObject(value, seen)
+  if (typeof value === "string") return sanitizeRequestDetailsString(redactor.redactString(value, sensitiveValues))
+  if (Array.isArray(value)) return sanitizeRequestDetailsArray(value, {redactor, seen, sensitiveValues})
+  if (typeof value === "object") return sanitizeRequestDetailsObject(value, {redactor, seen, sensitiveValues})
 
   return String(value)
 }
@@ -118,13 +124,13 @@ function sanitizeRequestDetailsString(value) {
 /**
  * Sanitizes an array value.
  * @param {Array<ReturnType<typeof JSON.parse>>} value - Array value.
- * @param {WeakSet<object>} seen - Seen object references.
+ * @param {{redactor: LogRedactor, seen: WeakSet<object>, sensitiveValues: Set<string>}} args - Redaction traversal state.
  * @returns {Array<ReturnType<typeof JSON.parse>>} - Sanitized array.
  */
-function sanitizeRequestDetailsArray(value, seen) {
+function sanitizeRequestDetailsArray(value, {redactor, seen, sensitiveValues}) {
   const entries = value
     .slice(0, REQUEST_DETAILS_ARRAY_MAX_ITEMS)
-    .map((entry) => sanitizeRequestDetailsValue(entry, "", seen))
+    .map((entry) => sanitizeRequestDetailsValue(entry, {redactor, seen, sensitiveValues}))
 
   if (value.length > REQUEST_DETAILS_ARRAY_MAX_ITEMS) {
     entries.push({__omittedItems: value.length - REQUEST_DETAILS_ARRAY_MAX_ITEMS})
@@ -136,10 +142,10 @@ function sanitizeRequestDetailsArray(value, seen) {
 /**
  * Sanitizes a plain object-like value.
  * @param {object} value - Object value.
- * @param {WeakSet<object>} seen - Seen object references.
+ * @param {{redactor: LogRedactor, seen: WeakSet<object>, sensitiveValues: Set<string>}} args - Redaction traversal state.
  * @returns {Record<string, ReturnType<typeof JSON.parse>> | string} - Sanitized object or circular marker.
  */
-function sanitizeRequestDetailsObject(value, seen) {
+function sanitizeRequestDetailsObject(value, {redactor, seen, sensitiveValues}) {
   if (seen.has(value)) return "[circular]"
 
   seen.add(value)
@@ -148,7 +154,7 @@ function sanitizeRequestDetailsObject(value, seen) {
   const sanitized = {}
 
   for (const [entryKey, entryValue] of Object.entries(value)) {
-    sanitized[entryKey] = sanitizeRequestDetailsValue(entryValue, entryKey, seen)
+    sanitized[entryKey] = sanitizeRequestDetailsValue(entryValue, {key: entryKey, redactor, seen, sensitiveValues})
   }
 
   seen.delete(value)
@@ -192,15 +198,6 @@ function uploadedFileRequestDetailsSummary(uploadedFile) {
     filename: uploadedFile.filename(),
     size: uploadedFile.size()
   }
-}
-
-/**
- * Checks whether a key should be redacted from request details.
- * @param {string} key - Object key.
- * @returns {boolean} - Whether the value is sensitive.
- */
-function sensitiveRequestDetailsKey(key) {
-  return /authorization|contentBase64|password|secret|sessionToken|token/i.test(key)
 }
 
 /**
