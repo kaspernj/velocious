@@ -13,6 +13,7 @@
 - Database access inherited from a revoked attempt fails explicitly, so a callback that resumes after timeout cleanup cannot use an existing pool connection or check out a replacement.
 - Persistent framework-owned dispatcher and websocket publish queues start outside the caller's revocable test-attempt scope. Tests that trigger this work must await the owning idle/barrier API; ordinary detached test callbacks retain their attempt scope and still fail after revocation.
 - Transaction cleanup may invoke driver rollback to clear stale physical state even when logical transaction depth is already zero. This recovery never decrements the logical depth below zero, so the next transaction starts at the root instead of issuing an invalid savepoint.
+- Background-job tests that require a row to remain queued must insert it through the owned store without waking or draining the main; `performLater` schedules dispatcher work and therefore cannot establish a queued-state precondition. Failure-report gates must target one job id and use separate started, release, and completed signals so concurrent reports cannot overwrite a shared resolver.
 
 ## Browser test runner hardening
 - Ensure backend app startup/shutdown is guarded with `try/finally`.
