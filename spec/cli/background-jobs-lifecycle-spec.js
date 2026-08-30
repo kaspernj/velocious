@@ -44,7 +44,7 @@ async function runCli(args) {
  * @param {string[]} args - Main command arguments.
  * @param {NodeJS.ProcessEnv} environment - Child environment.
  * @param {string} cwd - Isolated application directory.
- * @returns {Promise<{code: number | null, listening: boolean, stderr: string, stdout: string}>} - Main result.
+ * @returns {Promise<{code: number | null, listening: boolean, signal: NodeJS.Signals | null, stderr: string, stdout: string}>} - Main result.
  */
 async function runMainCli(args, environment, cwd) {
   const child = spawn(process.execPath, [cliEntryPath, ...args], {
@@ -70,16 +70,14 @@ async function runMainCli(args, environment, cwd) {
   child.stderr.on("data", (chunk) => { stderr += chunk })
   const closed = new Promise((resolve, reject) => {
     child.once("error", reject)
-    child.once("close", (code) => resolve({code, outcome: "closed"}))
+    child.once("close", (code, signal) => resolve({code, outcome: "closed", signal}))
   })
 
   try {
-    const outcome = await timeout({errorMessage: "Background jobs main CLI did not settle", timeout: 2000}, async () => {
-      return await Promise.race([listening.then(() => ({code: null, outcome: "listening"})), closed])
-    })
+    const outcome = await Promise.race([listening.then(() => ({code: null, outcome: "listening"})), closed])
     if (outcome.outcome === "closed") {
       throw new Error(
-        `Background jobs main CLI exited before listening (code ${String(outcome.code)})\n` +
+        `Background jobs main CLI exited before listening (code ${String(outcome.code)}, signal ${String(outcome.signal)})\n` +
         `stdout:\n${stdout}\nstderr:\n${stderr}`
       )
     }
@@ -87,13 +85,33 @@ async function runMainCli(args, environment, cwd) {
     child.kill("SIGTERM")
     const result = await closed
 
-    return {code: result.code, listening: observedListening, stderr, stdout}
+    return {code: result.code, listening: observedListening, signal: result.signal, stderr, stdout}
   } finally {
     if (child.exitCode === null && child.signalCode === null) {
       child.kill("SIGTERM")
       await closed
     }
   }
+}
+
+/** @returns {NodeJS.ProcessEnv} - Isolated active-recovery child environment. */
+function activeRecoveryEnvironment() {
+  const environment = {
+    ...process.env,
+    VELOCIOUS_BACKGROUND_JOBS_GENERATION_ID: "release-cli-recovery",
+    VELOCIOUS_BACKGROUND_JOBS_HOST: "127.0.0.1",
+    VELOCIOUS_BACKGROUND_JOBS_PORT: "0",
+    VELOCIOUS_ENV: "test"
+  }
+  delete environment.VELOCIOUS_BACKGROUND_JOB_CHILD
+  delete environment.VELOCIOUS_BACKGROUND_JOBS_INITIAL_GENERATION_STATE
+  delete environment.VELOCIOUS_BACKGROUND_JOBS_LIFECYCLE_SOCKET_PATH
+  delete environment.VELOCIOUS_BACKGROUND_JOBS_DATABASE_IDENTIFIER
+  delete environment.VELOCIOUS_DISABLE_MSSQL
+  delete environment.VELOCIOUS_DISABLED_DATABASE_IDENTIFIERS
+  delete environment.VELOCIOUS_TEST_SHARED_TRANSACTION_BROKER
+
+  return environment
 }
 
 describe("Background jobs lifecycle CLI", () => {
@@ -126,20 +144,6 @@ describe("Background jobs lifecycle CLI", () => {
 
   it("starts an explicit active recovery main over an ID-only environment", async () => {
     const project = await createBackgroundJobsLifecycleCliProject()
-    const environment = {
-      ...process.env,
-      VELOCIOUS_BACKGROUND_JOBS_GENERATION_ID: "release-cli-recovery",
-      VELOCIOUS_BACKGROUND_JOBS_HOST: "127.0.0.1",
-      VELOCIOUS_BACKGROUND_JOBS_PORT: "0",
-      VELOCIOUS_ENV: "test"
-    }
-    delete environment.VELOCIOUS_BACKGROUND_JOB_CHILD
-    delete environment.VELOCIOUS_BACKGROUND_JOBS_INITIAL_GENERATION_STATE
-    delete environment.VELOCIOUS_BACKGROUND_JOBS_LIFECYCLE_SOCKET_PATH
-    delete environment.VELOCIOUS_BACKGROUND_JOBS_DATABASE_IDENTIFIER
-    delete environment.VELOCIOUS_DISABLE_MSSQL
-    delete environment.VELOCIOUS_DISABLED_DATABASE_IDENTIFIERS
-    delete environment.VELOCIOUS_TEST_SHARED_TRANSACTION_BROKER
 
     try {
       const result = await runMainCli([
@@ -148,11 +152,34 @@ describe("Background jobs lifecycle CLI", () => {
         "release-cli-recovery",
         "--initial-generation-state",
         "active"
-      ], environment, project.directory)
+      ], activeRecoveryEnvironment(), project.directory)
 
       expect(result.listening).toEqual(true)
       expect(result.code).toEqual(0)
+      expect(result.signal).toEqual(null)
       expect(result.stderr).toEqual("")
+    } finally {
+      await project.cleanup()
+    }
+  })
+
+  it("exits nonzero with the causal error when graceful main shutdown rejects", async () => {
+    const shutdownErrorMessage = "release recovery shutdown failed"
+    const project = await createBackgroundJobsLifecycleCliProject({shutdownErrorMessage})
+
+    try {
+      const result = await runMainCli([
+        "background-jobs-main",
+        "--generation",
+        "release-cli-recovery",
+        "--initial-generation-state",
+        "active"
+      ], activeRecoveryEnvironment(), project.directory)
+
+      expect(result.listening).toEqual(true)
+      expect(result.code).toEqual(1)
+      expect(result.signal).toEqual(null)
+      expect(result.stderr).toMatch(new RegExp(shutdownErrorMessage))
     } finally {
       await project.cleanup()
     }

@@ -6,9 +6,10 @@ import path from "node:path"
 
 /**
  * Creates an isolated application for lifecycle CLI process tests.
+ * @param {{shutdownErrorMessage?: string}} [options] - Isolated shutdown behavior.
  * @returns {Promise<{cleanup: () => Promise<void>, directory: string}>} - Fixture helpers.
  */
-export default async function createBackgroundJobsLifecycleCliProject() {
+export default async function createBackgroundJobsLifecycleCliProject({shutdownErrorMessage = ""} = {}) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-background-jobs-lifecycle-cli-"))
   const configurationPath = path.join(directory, "src", "config", "configuration.js")
   const configurationImportPath = new URL("../../src/configuration.js", import.meta.url).href
@@ -24,7 +25,16 @@ import NodeEnvironmentHandler from ${JSON.stringify(environmentHandlerImportPath
 import SingleMultiUsePool from ${JSON.stringify(poolImportPath)}
 import SqliteDriver from ${JSON.stringify(sqliteDriverImportPath)}
 
-export default new Configuration({
+class LifecycleCliConfiguration extends Configuration {
+  async closeBackgroundJobsAdapter() {
+    await super.closeBackgroundJobsAdapter()
+
+    const shutdownErrorMessage = ${JSON.stringify(shutdownErrorMessage)}
+    if (shutdownErrorMessage) throw new Error(shutdownErrorMessage)
+  }
+}
+
+export default new LifecycleCliConfiguration({
   autoload: false,
   database: {
     test: {
