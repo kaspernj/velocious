@@ -17,7 +17,7 @@ export async function runShutdownSteps({message, steps}) {
     try {
       await step()
     } catch (error) {
-      if (error instanceof AggregateError) {
+      if (error instanceof AggregateError && error.errors.length > 0) {
         errors.push(...error.errors)
       } else {
         errors.push(error)

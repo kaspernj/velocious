@@ -40,9 +40,10 @@ function buildInitializer({run, teardown}) {
 
 /**
  * @param {Array<typeof Initializer>} initializerClasses - Ordered initializer classes.
+ * @param {import("../../src/configuration-types.js").ConfigurationArgsType["database"]} [database] - Optional database configuration.
  * @returns {Promise<{cleanup: () => Promise<void>, configuration: Configuration}>} - Test configuration and cleanup.
  */
-async function buildConfiguration(initializerClasses) {
+async function buildConfiguration(initializerClasses, database) {
   const tmpRoot = path.join(repoRoot(), "tmp")
   await fs.mkdir(tmpRoot, {recursive: true})
   const directory = await fs.mkdtemp(path.join(tmpRoot, "application-process-lifecycle-"))
@@ -54,6 +55,7 @@ async function buildConfiguration(initializerClasses) {
   initializerContext.id = "application-process-lifecycle-spec"
 
   const configuration = new Configuration({
+    database,
     directory,
     environment: "test",
     environmentHandler: new EnvironmentHandlerNode(),
@@ -300,6 +302,61 @@ describe("Configuration application process lifecycle", {databaseCleaning: {tran
       firstRunRelease.resolve()
       firstTeardownRelease.resolve()
       replacementRunRelease.resolve()
+      await cleanup()
+    }
+  })
+
+  it("queues initialization behind an intervening shutdown during framework close", async () => {
+    const closeStarted = deferred()
+    const closeRelease = deferred()
+    class BlockingClosePool {
+      static clearGlobalConnections() {}
+
+      setCurrent() {}
+
+      async closeAll() {
+        closeStarted.resolve()
+        await closeRelease.promise
+      }
+    }
+    const events = []
+    const TestInitializer = buildInitializer({
+      run: (initializer) => events.push(`start:${initializer.getProcessContext().instanceId}`),
+      teardown: (initializer) => events.push(`teardown:${initializer.getProcessContext().instanceId}`)
+    })
+    const {cleanup, configuration} = await buildConfiguration([TestInitializer], {
+      test: {
+        default: {
+          driver: class {},
+          poolType: BlockingClosePool,
+          type: "fake"
+        }
+      }
+    })
+
+    try {
+      configuration.getDatabasePool()
+      await configuration.initialize({type: "server"})
+
+      const close = configuration.closeDatabaseConnections()
+      await closeStarted.promise
+      const queuedInitialize = configuration.initialize({type: "server"})
+      const shutdown = configuration.shutdown()
+
+      closeRelease.resolve()
+      await Promise.all([close, queuedInitialize, shutdown])
+
+      expect(configuration.isInitialized()).toBe(true)
+      expect(events.map((event) => event.split(":")[0])).toEqual(["start", "teardown", "start"])
+      expect(events[2].split(":")[1] === events[0].split(":")[1]).toBe(false)
+
+      const replacementShutdown = configuration.shutdown()
+
+      expect(replacementShutdown === shutdown).toBe(false)
+      await replacementShutdown
+      expect(events.map((event) => event.split(":")[0])).toEqual(["start", "teardown", "start", "teardown"])
+    } finally {
+      closeRelease.resolve()
       await cleanup()
     }
   })

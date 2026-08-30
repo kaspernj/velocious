@@ -2441,16 +2441,19 @@ export default class VelociousConfiguration {
     if (this._queuedInitializePromise) return this._queuedInitializePromise
 
     const queuedInitializePromise = (async () => {
-      try {
-        await waitFor
-      } catch (error) {
-        if (!continueAfterWaitFailure) throw error
-      }
+      await this._waitForInitializeBlocker({continueAfterWaitFailure, waitFor})
 
       if (this._shutdownPromise === waitFor) this._shutdownPromise = undefined
       if (this._initializePromise === waitFor) {
         this._initializePromise = undefined
         this._initializePromiseGeneration = undefined
+      }
+
+      const shutdownPromise = this._shutdownPromise
+
+      if (shutdownPromise) {
+        await this._waitForInitializeBlocker({continueAfterWaitFailure: true, waitFor: shutdownPromise})
+        if (this._shutdownPromise === shutdownPromise) this._shutdownPromise = undefined
       }
 
       if (this._initializePromise && this._initializePromiseGeneration !== this._modelInitializationGeneration) {
@@ -2471,6 +2474,21 @@ export default class VelociousConfiguration {
     this._queuedInitializePromise = queuedInitializePromise
 
     return queuedInitializePromise
+  }
+
+  /**
+   * Waits for a lifecycle phase before queued initialization proceeds.
+   * @param {object} args - Wait policy.
+   * @param {boolean} args.continueAfterWaitFailure - Whether replacement startup remains available after a failed phase.
+   * @param {Promise<void>} args.waitFor - Lifecycle phase that must settle first.
+   * @returns {Promise<void>} - Resolves when queued initialization may continue.
+   */
+  async _waitForInitializeBlocker({continueAfterWaitFailure, waitFor}) {
+    try {
+      await waitFor
+    } catch (error) {
+      if (!continueAfterWaitFailure) throw error
+    }
   }
 
   /**

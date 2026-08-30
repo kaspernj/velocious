@@ -14,7 +14,7 @@ import commandArguments from "../../../../cli/command-arguments.js"
  * @param {() => void} args.onReady - Publishes readiness after listeners exist.
  * @param {BackgroundJobsWorkerSignalProcess} [args.processObject] - Signal emitter.
  * @param {number} [args.timeoutMs] - Optional worker drain timeout.
- * @param {{stop: (args?: {timeoutMs?: number}) => Promise<void>, waitUntilStopped: () => Promise<void>}} args.worker - Worker lifecycle owner.
+ * @param {{start: () => Promise<void>, stop: (args?: {timeoutMs?: number}) => Promise<void>, waitUntilStopped: () => Promise<void>}} args.worker - Worker lifecycle owner.
  * @returns {Promise<void>} - Resolves once the worker stops.
  */
 export async function waitForBackgroundJobsWorkerShutdown({onReady, processObject = process, timeoutMs, worker}) {
@@ -28,10 +28,11 @@ export async function waitForBackgroundJobsWorkerShutdown({onReady, processObjec
 
   processObject.once("SIGINT", onSignal)
   processObject.once("SIGTERM", onSignal)
-  const stopped = worker.waitUntilStopped()
 
   try {
+    await worker.start()
     onReady()
+    const stopped = worker.waitUntilStopped()
     const shutdownCause = await Promise.race([
       signal.then(() => "signal"),
       stopped.then(() => "stopped")
@@ -78,7 +79,6 @@ export default class BackgroundJobsWorkerCommand extends BaseCommand {
       configuration: this.getConfiguration(),
       generationId: typeof args.generation === "string" ? args.generation : undefined
     })
-    await worker.start()
 
     const timeoutMs = resolveShutdownTimeoutMs()
 
