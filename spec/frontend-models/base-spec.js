@@ -542,7 +542,7 @@ function expectPrimaryKeyFirstRequest(fetchStub) {
 
 const stubFetch = stubFrontendModelFetch
 
-describe("Frontend models - base", {databaseCleaning: {transaction: true}}, () => {
+describe("Frontend models - base", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("defines root scopes on frontend model classes", () => {
     const Task = buildScopedTestModelClass()
 
