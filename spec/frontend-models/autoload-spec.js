@@ -65,7 +65,7 @@ async function expectPerRecordProjectPreload(Task) {
   }
 }
 
-describe("Frontend models - autoload", {databaseCleaning: {transaction: true}}, () => {
+describe("Frontend models - autoload", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("batch-loads a belongsTo relationship for every cohort sibling in one request", async () => {
     const {Task} = buildAutoloadTestModelClasses()
 
