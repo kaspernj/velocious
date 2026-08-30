@@ -22,9 +22,7 @@ export default class BackgroundJobsMainCommand extends BaseCommand {
     })
     await main.start()
 
-    console.log(`Background jobs main listening on ${main.host}:${main.getPort()}`)
-
-    await new Promise((resolve, reject) => {
+    const stopped = new Promise((resolve, reject) => {
       const shutdown = async () => {
         try {
           await main.stop()
@@ -38,5 +36,11 @@ export default class BackgroundJobsMainCommand extends BaseCommand {
       process.once("SIGTERM", shutdown)
       void main.waitUntilStopped().then(() => resolve(undefined), reject)
     })
+
+    // Consumers use this line as the readiness boundary, so signal ownership
+    // must already be installed before the process advertises itself.
+    console.log(`Background jobs main listening on ${main.host}:${main.getPort()}`)
+
+    await stopped
   }
 }

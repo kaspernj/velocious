@@ -1,11 +1,14 @@
 // @ts-check
 
 import MysqlDriver from "../../../../src/database/drivers/mysql/index.js"
+import LogRedactor from "../../../../src/log-redactor.js"
 import {describe, expect, it} from "../../../../src/testing/test.js"
 
-const configuration = /** @type {any} */ ({
+const logRedactor = new LogRedactor()
+const configuration = /** @type {import("../../../../src/configuration.js").default} */ ({
   debug: false,
   getCurrentRequestTiming: () => undefined,
+  getLogRedactor: () => logRedactor,
   getQueryLoggingEnabled: () => false
 })
 
