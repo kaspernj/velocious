@@ -6,6 +6,21 @@ reports as available to the process. An explicit `workers` value still overrides
 that default. In-process mode keeps one effective handler by default because it
 shares the caller's runtime state; an explicit in-process worker count is honored.
 
+## Application lifecycle ownership
+
+The `velocious server` process initializes application hooks with type `server`.
+Each threaded request worker owns a separate configuration lifecycle with type
+`worker-handler`; in-process handlers share the server lifecycle. SIGTERM and
+SIGINT ownership is installed before the CLI announces readiness.
+
+Graceful stop drains the HTTP server and worker handlers, invokes initializer
+teardown once for each owned lifecycle, then disconnects Beacon and closes
+database connections. Application teardown precedes framework cleanup, but every
+close is attempted. Multiple failures are returned as an ordered
+`AggregateError`; a single failure is returned unchanged. See
+[application process lifecycle](application-process-lifecycle.md) for the hook
+and process-context API.
+
 ## File Responses
 
 Controllers can stream a file without loading it into memory:

@@ -9,6 +9,7 @@ import SyncPublisher from "./sync/sync-publisher.js"
 import SyncWebsocketChannel from "./sync/sync-websocket-channel.js"
 import websocketEventsHost from "./http-server/websocket-events-host.js"
 import restArgsError from "./utils/rest-args-error.js"
+import { runShutdownSteps } from "./utils/shutdown-lifecycle.js"
 
 /**
  * HttpServerConfiguration type.
@@ -40,6 +41,8 @@ export default class VelociousApplication {
      * Stores the http server lock value.
      * @type {HttpServerLock | undefined} */
     this.httpServerLock = undefined
+    /** @type {Promise<void> | undefined} */
+    this._stopPromise = undefined
   }
 
   /**
@@ -186,17 +189,34 @@ export default class VelociousApplication {
    * Runs stop.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async stop() {
-    await this.logger.debug("Stopping server")
+  stop() {
+    if (!this._stopPromise) this._stopPromise = this._stop()
 
-    try {
-      await this.httpServer?.stop()
-      this.configuration._httpServerInstance = undefined
-      await this.configuration.disconnectBeacon()
-      await this.configuration.closeDatabaseConnections()
-    } finally {
-      await this.releaseHttpServerLock()
-    }
+    return this._stopPromise
+  }
+
+  /**
+   * Stops application and framework resources.
+   * @returns {Promise<void>} - Resolves after every application and framework close succeeds.
+   */
+  async _stop() {
+    await runShutdownSteps({
+      message: "Application and framework shutdown failed",
+      steps: [
+        async () => await this.logger.debug("Stopping server"),
+        async () => {
+          try {
+            await this.httpServer?.stop()
+          } finally {
+            this.configuration._httpServerInstance = undefined
+          }
+        },
+        async () => await this.configuration.shutdown(),
+        async () => await this.configuration.disconnectBeacon(),
+        async () => await this.configuration.closeDatabaseConnections(),
+        async () => await this.releaseHttpServerLock()
+      ]
+    })
   }
 
   /**

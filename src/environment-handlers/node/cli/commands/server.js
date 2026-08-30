@@ -66,6 +66,7 @@ export function waitForApplicationWithSignalShutdown({application, processObject
 
       try {
         await application.stop()
+        finish()
       } catch (error) {
         finish(error)
       }
@@ -82,7 +83,9 @@ export function waitForApplicationWithSignalShutdown({application, processObject
     processObject.once("SIGINT", onSignal)
     processObject.once("SIGTERM", onSignal)
 
-    application.wait().then(() => finish()).catch((error) => finish(error))
+    application.wait().then(() => {
+      if (!stopping) finish()
+    }).catch((error) => finish(error))
   })
 }
 
@@ -148,7 +151,9 @@ export default class VelociousCliCommandsServer extends BaseCommand{
 
     await application.initialize()
     await application.startHttpServer()
+    const waitPromise = waitForApplicationWithSignalShutdown({application})
+
     console.log(`Started Velocious HTTP server on ${httpServer.host}:${httpServer.port} in ${environment} environment`)
-    await waitForApplicationWithSignalShutdown({application})
+    await waitPromise
   }
 }

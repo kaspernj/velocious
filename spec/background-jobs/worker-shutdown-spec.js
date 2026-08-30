@@ -170,14 +170,15 @@ describe("Background jobs worker - shutdown", () => {
     const worker = new BackgroundJobsWorker({
       configuration: /** @type {import("../../src/configuration.js").default} */ ({
         closeDatabaseConnections: async () => { events.push("close-db") },
-        disconnectBeacon: async () => { events.push("disconnect-beacon") }
+        disconnectBeacon: async () => { events.push("disconnect-beacon") },
+        shutdown: async () => { events.push("shutdown-app") }
       })
     })
     worker.configuration = await worker.configurationPromise
 
     await worker.stop()
 
-    expect(events).toEqual(["disconnect-beacon", "close-db"])
+    expect(events).toEqual(["shutdown-app", "disconnect-beacon", "close-db"])
   })
 
   it("preserves externally owned database connections on stop", async () => {
@@ -187,7 +188,8 @@ describe("Background jobs worker - shutdown", () => {
       closeDatabaseConnectionsOnStop: false,
       configuration: /** @type {import("../../src/configuration.js").default} */ ({
         closeDatabaseConnections: async () => { events.push("close-db") },
-        disconnectBeacon: async () => { events.push("disconnect-beacon") }
+        disconnectBeacon: async () => { events.push("disconnect-beacon") },
+        shutdown: async () => { events.push("shutdown-app") }
       })
     })
     worker.configuration = await worker.configurationPromise
@@ -195,6 +197,37 @@ describe("Background jobs worker - shutdown", () => {
     await worker.stop()
 
     expect(events).toEqual(["disconnect-beacon"])
+  })
+
+  it("attempts every owned application and framework close after failures", async () => {
+    const events = []
+    const applicationError = new Error("worker application teardown failed")
+    const beaconError = new Error("worker beacon close failed")
+    const databaseError = new Error("worker database close failed")
+    const worker = new BackgroundJobsWorker({
+      configuration: /** @type {import("../../src/configuration.js").default} */ ({
+        closeDatabaseConnections: async () => {
+          events.push("close-db")
+          throw databaseError
+        },
+        disconnectBeacon: async () => {
+          events.push("disconnect-beacon")
+          throw beaconError
+        },
+        shutdown: async () => {
+          events.push("shutdown-app")
+          throw applicationError
+        }
+      })
+    })
+    worker.configuration = await worker.configurationPromise
+
+    const error = await captureRejection(worker.stop())
+
+    expect(events).toEqual(["shutdown-app", "disconnect-beacon", "close-db"])
+    expect(error).toBeInstanceOf(AggregateError)
+    expect(/** @type {AggregateError} */ (error).errors).toEqual([applicationError, beaconError, databaseError])
+    expect(error.cause).toBe(applicationError)
   })
 
   it("runs the stopped hook after preserving stop options", async () => {
@@ -315,7 +348,7 @@ describe("Background jobs worker - shutdown", () => {
     expect(exit.code === 0 && !exit.signal).toBeFalse()
   })
 
-  it("exits after durable completion without waiting for graceful teardown", async () => {
+  it("attempts bounded cleanup after durable forked completion", async () => {
     const {cleanup, directory} = await createStalledTeardownProject()
     const server = net.createServer()
     const jobId = `job-${Date.now()}`
@@ -349,10 +382,11 @@ describe("Background jobs worker - shutdown", () => {
       })
 
       child.send({type: "job", payload: {id: jobId, jobName: "ExitAfterCompletionJob", args: []}})
-      const exit = await timeout({timeout: 2000}, async () => await waitForChildExit(child))
+      const exit = await waitForChildExit(child, 7000)
 
       expect(durableReportReceived).toBe(true)
-      expect(exit).toEqual({code: 0, signal: null})
+      expect(exit.signal).toBe(null)
+      expect(exit.code).toBeGreaterThan(0)
     } finally {
       if (child && !child.killed && child.exitCode === null) child.kill("SIGKILL")
       await new Promise((resolve) => server.close(resolve))
@@ -539,7 +573,7 @@ describe("Background jobs worker - shutdown", () => {
       })
 
       child.send({type: "job", payload: {id: jobId, jobName: "ExitAfterCompletionJob", args: []}})
-      const exit = await waitForChildExit(child, 5000)
+      const exit = await waitForChildExit(child, 7000)
 
       expect(completionReports).toBe(1)
       expect(exit.signal).toBe(null)
@@ -608,6 +642,7 @@ describe("Background jobs worker - shutdown", () => {
       configuration: /** @type {import("../../src/configuration.js").default} */ ({
         closeDatabaseConnections: async () => { events.push("close-db") },
         disconnectBeacon: async () => { events.push("disconnect-beacon") },
+        shutdown: async () => { events.push("shutdown-app") },
         resolveBackgroundJobsGenerationConfig: legacyGenerationConfig,
         getBackgroundJobsConfig: () => ({
           databaseIdentifier: "default",
@@ -627,7 +662,7 @@ describe("Background jobs worker - shutdown", () => {
 
     await main.stop()
 
-    expect(events).toEqual(["disconnect-beacon", "close-server", "close-db"])
+    expect(events).toEqual(["shutdown-app", "disconnect-beacon", "close-server", "close-db"])
   })
 
   it("preserves externally owned database connections on stop", async () => {
@@ -639,6 +674,7 @@ describe("Background jobs worker - shutdown", () => {
         closeBackgroundJobsAdapter: async () => { events.push("close-adapter") },
         closeDatabaseConnections: async () => { events.push("close-db") },
         disconnectBeacon: async () => { events.push("disconnect-beacon") },
+        shutdown: async () => { events.push("shutdown-app") },
         resolveBackgroundJobsGenerationConfig: legacyGenerationConfig,
         getBackgroundJobsConfig: () => ({
           databaseIdentifier: "default",

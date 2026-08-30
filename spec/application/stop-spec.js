@@ -23,7 +23,8 @@ describe("Application.stop", {databaseCleaning: {transaction: true}}, () => {
     const configuration = {
       closeDatabaseConnections: async () => { closedConnections = true },
       debug: false,
-      disconnectBeacon: async () => {}
+      disconnectBeacon: async () => {},
+      shutdown: async () => {}
     }
 
     const app = new Application({configuration, type: "test"})
@@ -32,6 +33,46 @@ describe("Application.stop", {databaseCleaning: {transaction: true}}, () => {
     await app.stop()
 
     expect(closedConnections).toBeTrue()
+  })
+
+  it("shares one stop and closes application resources before every framework resource", async () => {
+    const events = []
+    const applicationError = new Error("application teardown failed")
+    const beaconError = new Error("beacon close failed")
+    const databaseError = new Error("database close failed")
+    const configuration = {
+      closeDatabaseConnections: async () => {
+        events.push("database")
+        throw databaseError
+      },
+      debug: false,
+      disconnectBeacon: async () => {
+        events.push("beacon")
+        throw beaconError
+      },
+      shutdown: async () => {
+        events.push("application")
+        throw applicationError
+      }
+    }
+    const app = new Application({configuration, type: "test"})
+    app.httpServer = {stop: async () => { events.push("http") }}
+
+    const first = app.stop()
+    const second = app.stop()
+    let error
+
+    expect(second).toBe(first)
+    try {
+      await first
+    } catch (caughtError) {
+      error = caughtError
+    }
+
+    expect(events).toEqual(["http", "application", "beacon", "database"])
+    expect(error).toBeInstanceOf(AggregateError)
+    expect(/** @type {AggregateError} */ (error).errors).toEqual([applicationError, beaconError, databaseError])
+    expect(error.cause).toBe(applicationError)
   })
 
   it("waits for run cleanup to stop the application", async () => {

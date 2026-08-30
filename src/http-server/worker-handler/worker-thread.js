@@ -8,6 +8,7 @@ import errorLogger from "../../error-logger.js"
 import Logger from "../../logger.js"
 import toImportSpecifier from "../../utils/to-import-specifier.js"
 import WebsocketEvents from "../websocket-events.js"
+import { runShutdownSteps } from "../../utils/shutdown-lifecycle.js"
 
 /**
  * Runs summarize client write chunk.
@@ -311,12 +312,18 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
    * @returns {Promise<void>} Resolves after worker shutdown has been requested.
    */
   async handleShutdown() {
-    await Promise.all(Object.values(this.clients).map((client) => client.abortPendingFileResponses()))
-    this.fileTransfers.clear()
+    const clients = Object.values(this.clients)
 
-    if (this.configuration?.closeDatabaseConnections) {
-      await this.configuration.closeDatabaseConnections()
-    }
+    await runShutdownSteps({
+      message: "HTTP worker-handler shutdown failed",
+      steps: [
+        ...clients.map((client) => async () => await client.abortPendingFileResponses()),
+        async () => {
+          this.fileTransfers.clear()
+          await this.application?.stop()
+        }
+      ]
+    })
 
     this.parentPort.postMessage({command: "shutdownComplete"})
     process.exit(0)

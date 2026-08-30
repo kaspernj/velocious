@@ -3,12 +3,13 @@
 import timeout from "awaitery/build/timeout.js"
 
 import Configuration, {CurrentConfigurationNotSetError} from "../configuration.js"
+import { runShutdownSteps } from "../utils/shutdown-lifecycle.js"
 
 /**
  * The subset of a configuration a runner closes on shutdown. Typed structurally so
  * the shutdown path stays typechecked without a broad cast, and a future signature
  * drift surfaces at the call sites (and in tests) instead of hiding behind `any`.
- * @typedef {{disconnectBeacon: () => Promise<void>, closeDatabaseConnections: () => Promise<void>}} RunnerCloseableConfiguration
+ * @typedef {{disconnectBeacon: () => Promise<void>, closeDatabaseConnections: () => Promise<void>, shutdown: () => Promise<void>}} RunnerCloseableConfiguration
  */
 /** Bounded grace for closing framework connections on shutdown before forcing exit. */
 const SHUTDOWN_CLOSE_TIMEOUT_MS = 5000
@@ -39,19 +40,34 @@ const SHUTDOWN_CLOSE_TIMEOUT_MS = 5000
 export async function closeRunnerConnections(configuration, closeTimeoutMs = SHUTDOWN_CLOSE_TIMEOUT_MS) {
   if (!configuration) return
 
-  const [beaconResult, databaseResult] = await Promise.allSettled([
+  await runShutdownSteps({
+    message: "Failed to close background-job runner application and framework resources",
+    steps: [
+      async () => await timeout({timeout: closeTimeoutMs}, () => configuration.shutdown()),
+      async () => await closeRunnerFrameworkConnections(configuration, closeTimeoutMs)
+    ]
+  })
+}
+
+/**
+ * Closes only a pooled runner's framework connections while its application
+ * process lifecycle remains active for later jobs.
+ * @param {RunnerCloseableConfiguration | null} configuration - Configuration whose framework connections to close.
+ * @param {number} [closeTimeoutMs] - Max time for each framework close.
+ * @returns {Promise<void>} - Resolves after framework cleanup.
+ */
+export async function closeRunnerFrameworkConnections(configuration, closeTimeoutMs = SHUTDOWN_CLOSE_TIMEOUT_MS) {
+  if (!configuration) return
+
+  const results = await Promise.allSettled([
     timeout({timeout: closeTimeoutMs}, () => configuration.disconnectBeacon()),
     timeout({timeout: closeTimeoutMs}, () => configuration.closeDatabaseConnections())
   ])
+  const steps = results.map((result) => async () => {
+    if (result.status === "rejected") throw result.reason
+  })
 
-  /** @type {unknown[]} */
-  const errors = []
-
-  if (beaconResult.status == "rejected") errors.push(beaconResult.reason)
-  if (databaseResult.status == "rejected") errors.push(databaseResult.reason)
-
-  if (errors.length == 1) throw errors[0]
-  if (errors.length > 1) throw new AggregateError(errors, "Failed to close background-job runner connections on shutdown")
+  await runShutdownSteps({message: "Failed to close background-job runner framework resources", steps})
 }
 
 /**

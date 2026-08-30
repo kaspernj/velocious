@@ -32,6 +32,7 @@
 * Per-record ability checks via `.abilities(...)` on frontend queries + `record.can(action)` (see [docs/abilities.md](docs/abilities.md))
 * Translated model attributes with current-locale relationship sorting (see [docs/translations.md](docs/translations.md))
 * Cross-process broadcast bus for `broadcastToChannel` via `velocious beacon`, including background job runner processes (see [docs/beacon.md](docs/beacon.md))
+* Rails-style application process initializer teardown with immutable process identity, reverse idempotent shutdown, and explicit HTTP/background-job ownership (see [docs/application-process-lifecycle.md](docs/application-process-lifecycle.md))
 * Configurable HTTP server worker handlers plus backpressured, descriptor-only file responses with completion callbacks (see [docs/http-server.md](docs/http-server.md))
 * Default-on buffered HTTP response compression with Brotli/gzip content negotiation, global and per-response opt-outs, and HEAD-correct representation headers (see [docs/http-server.md](docs/http-server.md#response-compression))
 * Background jobs with Node SQL/TCP workers plus a Browser/Expo local SQLite store and in-process dispatcher, including failure events, authorized database-scoped dashboard counts, and an opt-in release-scoped main/worker generation protocol with acknowledged activation, asynchronous retirement, and retired-main recovery. Production compliance additionally requires downstream supervisor retention/activation ordering and release pins (see [docs/background-jobs.md](docs/background-jobs.md), [docs/local-background-jobs.md](docs/local-background-jobs.md), and [docs/background-jobs-dashboard.md](docs/background-jobs-dashboard.md))
@@ -59,6 +60,12 @@ npx velocious init
 ```
 
 By default, Velocious looks for your configuration in `src/config/configuration.js`. If you keep the configuration elsewhere, make sure your app imports it early and calls `configuration.setCurrent()`.
+
+Application initializers may implement `teardown()` and inspect their frozen
+`getProcessContext()` value. Long-lived process owners call
+`configuration.shutdown()` before framework connection cleanup; see the
+[application process lifecycle guide](docs/application-process-lifecycle.md) for
+promise identity, errors, process types, and pooled/forked runner semantics.
 
 # Node SQLite driver
 

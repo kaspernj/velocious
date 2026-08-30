@@ -22,6 +22,7 @@
 
 import { digg } from "diggerize"
 import gettextConfig from "gettext-universal/build/src/config.js"
+import UUID from "pure-uuid"
 import translate from "gettext-universal/build/src/translate.js"
 import Ability from "./authorization/ability.js"
 import BackgroundJobsAdapter from "./background-jobs/adapter.js"
@@ -41,6 +42,7 @@ import { withTrackedStack } from "./utils/with-tracked-stack.js"
 import VelociousPackage from "./packages/velocious-package.js"
 import FrontendTenantSqliteLifecycle from "./tenants/frontend-tenant-sqlite-lifecycle.js"
 import { resolveGenerationId, resolveInitialGenerationState, resolveLifecycleSocketPath } from "./background-jobs/generation-identity.js"
+import { runShutdownSteps } from "./utils/shutdown-lifecycle.js"
 
 export { CurrentConfigurationNotSetError }
 
@@ -303,6 +305,16 @@ export default class VelociousConfiguration {
     }
 
     this._isInitialized = false
+    /** @type {import("./configuration-types.js").ApplicationProcessContext | undefined} */
+    this._applicationProcessContext = undefined
+    /** @type {import("./initializer.js").default[]} */
+    this._successfulInitializers = []
+    /** @type {boolean} */
+    this._applicationLifecycleInitialized = false
+    /** @type {Promise<void> | undefined} */
+    this._shutdownPromise = undefined
+    /** @type {Promise<void> | undefined} */
+    this._queuedInitializePromise = undefined
     this._modelsInitialized = false
     /**
      * Invalidates model phases that started before database connections closed.
@@ -323,6 +335,8 @@ export default class VelociousConfiguration {
      * @type {Promise<void> | undefined}
      */
     this._initializePromise = undefined
+    /** @type {number | undefined} */
+    this._initializePromiseGeneration = undefined
     const websocketInboundQueue = httpServer?.websocketInboundQueue
     const websocketOutboundQueue = httpServer?.websocketOutboundQueue
 
@@ -2364,49 +2378,134 @@ export default class VelociousConfiguration {
    * @param {string} args.type - Type identifier.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async initialize({type} = {type: "undefined"}) {
-    if (this._closeDatabaseConnectionsPromise) {
-      await this._closeDatabaseConnectionsPromise
+  initialize({type} = {type: "undefined"}) {
+    if (this._queuedInitializePromise) return this._queuedInitializePromise
+
+    if (this._shutdownPromise) {
+      return this._queueInitialize({continueAfterWaitFailure: true, type, waitFor: this._shutdownPromise})
     }
 
+    if (this._closeDatabaseConnectionsPromise) {
+      return this._queueInitialize({continueAfterWaitFailure: false, type, waitFor: this._closeDatabaseConnectionsPromise})
+    }
+
+    return this._beginInitialize({type})
+  }
+
+  /**
+   * Starts or joins initialization after lifecycle blockers have settled.
+   * @param {object} args - Startup options.
+   * @param {string} args.type - Generic application process type.
+   * @returns {Promise<void>} - Shared startup promise.
+   */
+  _beginInitialize({type}) {
     const initializationGeneration = this._modelInitializationGeneration
 
-    if (this._isInitialized) return
+    if (this._initializePromise && this._initializePromiseGeneration === initializationGeneration) {
+      return this._initializePromise
+    }
+
+    if (this._initializePromise) {
+      return this._queueInitialize({continueAfterWaitFailure: false, type, waitFor: this._initializePromise})
+    }
+
+    if (this._isInitialized) {
+      this._initializePromise = Promise.resolve()
+      this._initializePromiseGeneration = initializationGeneration
+
+      return this._initializePromise
+    }
     // Memoize the in-progress initialization so concurrent callers await the same
     // bootstrap instead of racing. `_isInitialized` was previously set to `true`
     // up front, so a second caller (e.g. a pooled runner with
     // `pooledRunnerConcurrency > 1` starting several jobs on a cold child) could
     // skip initialization and load models / perform a job while the first call
     // was still awaiting model discovery and initializers. Mirrors connectBeacon.
-    if (this._initializePromise) {
-      const initializePromise = this._initializePromise
+    const initializePromise = this._runInitialize({initializationGeneration, type})
 
-      await initializePromise
+    this._initializePromise = initializePromise
+    this._initializePromiseGeneration = initializationGeneration
 
-      if (this._modelInitializationGeneration === initializationGeneration && !this._isInitialized) {
-        if (this._initializePromise === initializePromise) {
-          this._initializePromise = undefined
-        }
+    return initializePromise
+  }
 
-        return await this.initialize({type})
+  /**
+   * Queues one shared initialization behind an incompatible lifecycle phase.
+   * @param {object} args - Queue options.
+   * @param {boolean} args.continueAfterWaitFailure - Whether a completed failed shutdown still permits replacement startup.
+   * @param {string} args.type - Replacement process type.
+   * @param {Promise<void>} args.waitFor - Lifecycle phase that must settle first.
+   * @returns {Promise<void>} - Shared queued startup promise.
+   */
+  _queueInitialize({continueAfterWaitFailure, type, waitFor}) {
+    if (this._queuedInitializePromise) return this._queuedInitializePromise
+
+    const queuedInitializePromise = (async () => {
+      try {
+        await waitFor
+      } catch (error) {
+        if (!continueAfterWaitFailure) throw error
       }
 
-      return
+      if (this._shutdownPromise === waitFor) this._shutdownPromise = undefined
+      if (this._initializePromise === waitFor) {
+        this._initializePromise = undefined
+        this._initializePromiseGeneration = undefined
+      }
+
+      if (this._initializePromise && this._initializePromiseGeneration !== this._modelInitializationGeneration) {
+        const staleInitializePromise = this._initializePromise
+
+        await staleInitializePromise
+        if (this._initializePromise === staleInitializePromise) {
+          this._initializePromise = undefined
+          this._initializePromiseGeneration = undefined
+        }
+      }
+
+      await this._beginInitialize({type})
+    })().finally(() => {
+      this._queuedInitializePromise = undefined
+    })
+
+    this._queuedInitializePromise = queuedInitializePromise
+
+    return queuedInitializePromise
+  }
+
+  /**
+   * Runs one atomic framework and application initialization attempt.
+   * @param {object} args - Initialization identity.
+   * @param {number} args.initializationGeneration - Framework model generation.
+   * @param {string} args.type - Generic application process type.
+   * @returns {Promise<void>} - Resolves when initialized.
+   */
+  async _runInitialize({initializationGeneration, type}) {
+    const startsApplicationLifecycle = !this._applicationLifecycleInitialized
+
+    if (startsApplicationLifecycle) {
+      this._applicationProcessContext = Object.freeze({
+        instanceId: new UUID(4).format(),
+        type
+      })
     }
 
-    const initializePromise = (async () => {
+    try {
       await this.initializeModels({type})
 
       // Model initialization can be invalidated by a concurrent connection close.
       // If models are not ready, stop without marking the configuration initialized
       // so the next caller retries a full bootstrap.
-      if (this._modelInitializationGeneration !== initializationGeneration || !this._modelsInitialized) return
+      if (this._modelInitializationGeneration !== initializationGeneration || !this._modelsInitialized) {
+        if (startsApplicationLifecycle) this._resetApplicationLifecycle()
+        return
+      }
 
       await this.getEnvironmentHandler().autoDiscoverResources(this)
       this._mergeDiscoveredAbilityResources()
       this._validateResourceRelationshipsOnModels()
 
-      if (this._initializers) {
+      if (startsApplicationLifecycle && this._initializers) {
         const initializers = await this._initializers({configuration: this})
         const {requireContext, ...restArgs} = initializers
 
@@ -2415,37 +2514,106 @@ export default class VelociousConfiguration {
         if (requireContext) {
           for (const initializerKey of requireContext.keys()) {
             const InitializerClass = requireContext(initializerKey).default
-            const initializerInstance = new InitializerClass({configuration: this, type})
+            const processContext = this._applicationProcessContext
+
+            if (!processContext) throw new Error("Application process context is not available during initializer startup")
+
+            const initializerInstance = new InitializerClass({configuration: this, processContext, type})
 
             await initializerInstance.run()
+            this._successfulInitializers.push(initializerInstance)
           }
         }
       }
 
+      if (startsApplicationLifecycle) this._applicationLifecycleInitialized = true
+
       if (this._modelInitializationGeneration === initializationGeneration) {
         this._isInitialized = true
       }
+    } catch (error) {
+      if (startsApplicationLifecycle) {
+        let teardownError
+
+        try {
+          await this._teardownSuccessfulInitializers()
+        } catch (caughtTeardownError) {
+          teardownError = caughtTeardownError
+        } finally {
+          this._resetApplicationLifecycle()
+        }
+
+        if (teardownError instanceof AggregateError) {
+          throw new AggregateError(
+            [error, ...teardownError.errors],
+            "Application process startup and cleanup failed",
+            {cause: error}
+          )
+        }
+
+        if (teardownError !== undefined) {
+          throw new AggregateError(
+            [error, teardownError],
+            "Application process startup and cleanup failed",
+            {cause: error}
+          )
+        }
+      }
+
+      throw error
+    } finally {
+      if (!this._isInitialized && this._initializePromiseGeneration === initializationGeneration) {
+        this._initializePromise = undefined
+        this._initializePromiseGeneration = undefined
+      }
+    }
+  }
+
+  /**
+   * Tears down every successfully started initializer in reverse order.
+   * @returns {Promise<void>} - Resolves when every teardown succeeds.
+   */
+  async _teardownSuccessfulInitializers() {
+    const successfulInitializers = this._successfulInitializers.splice(0).reverse()
+
+    await runShutdownSteps({
+      message: "Application initializer teardown failed",
+      steps: successfulInitializers.map((initializer) => async () => await initializer.teardown())
+    })
+  }
+
+  /** Clears application-owned lifecycle state after every teardown attempt. */
+  _resetApplicationLifecycle() {
+    this._applicationLifecycleInitialized = false
+    this._applicationProcessContext = undefined
+    this._successfulInitializers = []
+  }
+
+  /**
+   * Tears down the current application lifecycle once.
+   * @returns {Promise<void>} - Exact shared shutdown promise.
+   */
+  shutdown() {
+    if (this._shutdownPromise) return this._shutdownPromise
+
+    const initializePromise = this._initializePromise
+    const shutdownPromise = (async () => {
+      try {
+        if (initializePromise) await initializePromise
+        await this._teardownSuccessfulInitializers()
+      } finally {
+        this._resetApplicationLifecycle()
+        this._isInitialized = false
+        if (this._initializePromise === initializePromise) {
+          this._initializePromise = undefined
+          this._initializePromiseGeneration = undefined
+        }
+      }
     })()
 
-    this._initializePromise = initializePromise
+    this._shutdownPromise = shutdownPromise
 
-    try {
-      await initializePromise
-    } catch (error) {
-      // Let a later call retry a failed initialization instead of every future
-      // caller awaiting the same cached rejection.
-      if (this._initializePromise === initializePromise) {
-        this._initializePromise = undefined
-      }
-      throw error
-    }
-
-    // If the inner IIFE returned without marking the configuration initialized
-    // (e.g. because models were invalidated mid-bootstrap), clear the promise so
-    // a later call retries a full bootstrap.
-    if (!this._isInitialized && this._initializePromise === initializePromise) {
-      this._initializePromise = undefined
-    }
+    return shutdownPromise
   }
 
   /**

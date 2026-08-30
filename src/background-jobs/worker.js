@@ -8,7 +8,7 @@ import configurationResolver from "../configuration-resolver.js"
 import BackgroundJobsStatusReporter from "./status-reporter.js"
 import { randomUUID } from "crypto"
 import { fileURLToPath } from "node:url"
-import shutdownLifecycle from "../utils/shutdown-lifecycle.js"
+import shutdownLifecycle, { runShutdownSteps } from "../utils/shutdown-lifecycle.js"
 import BackgroundJobRescheduleSignal from "./reschedule-signal.js"
 import performBackgroundJob from "./perform-job.js"
 import { createGenerationWorkerId } from "./generation-identity.js"
@@ -295,13 +295,19 @@ export default class BackgroundJobsWorker {
     try {
       await this._connect({allowReconnect: false})
     } catch (error) {
+      let cleanupError
+
       try {
         await this.stop()
-      } catch (cleanupError) {
+      } catch (caughtCleanupError) {
+        cleanupError = caughtCleanupError
+      }
+
+      if (cleanupError) {
         throw new AggregateError(
           [error, cleanupError],
           "Background jobs worker startup and cleanup failed",
-          {cause: cleanupError}
+          {cause: error}
         )
       }
 
@@ -391,11 +397,7 @@ export default class BackgroundJobsWorker {
         if (this.jsonSocket) this.jsonSocket.close()
         if (!this.configuration) return
 
-        try {
-          await this.configuration.disconnectBeacon()
-        } finally {
-          if (this.closeDatabaseConnectionsOnStop) await this.configuration.closeDatabaseConnections()
-        }
+        await this._closeConfiguration()
       }
     })
   }
@@ -448,12 +450,31 @@ export default class BackgroundJobsWorker {
         if (this.jsonSocket) this.jsonSocket.close()
         if (!this.configuration) return
 
-        try {
-          await this.configuration.disconnectBeacon()
-        } finally {
-          if (this.closeDatabaseConnectionsOnStop) await this.configuration.closeDatabaseConnections()
-        }
+        await this._closeConfiguration()
       }
+    })
+  }
+
+  /**
+   * Closes application resources before framework resources when this worker owns them.
+   * @returns {Promise<void>} - Resolves after every owned close succeeds.
+   */
+  async _closeConfiguration() {
+    const configuration = this.configuration
+
+    if (!configuration) return
+
+    await runShutdownSteps({
+      message: "Background jobs worker application and framework shutdown failed",
+      steps: [
+        ...(this.closeDatabaseConnectionsOnStop
+          ? [async () => await configuration.shutdown()]
+          : []),
+        async () => await configuration.disconnectBeacon(),
+        ...(this.closeDatabaseConnectionsOnStop
+          ? [async () => await configuration.closeDatabaseConnections()]
+          : [])
+      ]
     })
   }
 

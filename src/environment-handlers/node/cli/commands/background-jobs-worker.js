@@ -3,6 +3,48 @@ import BackgroundJobsWorker from "../../../../background-jobs/worker.js"
 import commandArguments from "../../../../cli/command-arguments.js"
 
 /**
+ * @typedef {object} BackgroundJobsWorkerSignalProcess
+ * @property {(event: "SIGINT" | "SIGTERM", listener: () => void) => BackgroundJobsWorkerSignalProcess} once - Registers one signal listener.
+ * @property {(event: "SIGINT" | "SIGTERM", listener: () => void) => BackgroundJobsWorkerSignalProcess} removeListener - Removes one signal listener.
+ */
+
+/**
+ * Owns process signals before publishing worker readiness.
+ * @param {object} args - Shutdown ownership.
+ * @param {() => void} args.onReady - Publishes readiness after listeners exist.
+ * @param {BackgroundJobsWorkerSignalProcess} [args.processObject] - Signal emitter.
+ * @param {number} [args.timeoutMs] - Optional worker drain timeout.
+ * @param {{stop: (args?: {timeoutMs?: number}) => Promise<void>, waitUntilStopped: () => Promise<void>}} args.worker - Worker lifecycle owner.
+ * @returns {Promise<void>} - Resolves once the worker stops.
+ */
+export async function waitForBackgroundJobsWorkerShutdown({onReady, processObject = process, timeoutMs, worker}) {
+  /**
+   * Resolves the signal wait.
+   * @type {() => void}
+   */
+  let resolveSignal = () => {}
+  const signal = new Promise((resolve) => { resolveSignal = () => resolve(undefined) })
+  const onSignal = () => resolveSignal()
+
+  processObject.once("SIGINT", onSignal)
+  processObject.once("SIGTERM", onSignal)
+  const stopped = worker.waitUntilStopped()
+
+  try {
+    onReady()
+    const shutdownCause = await Promise.race([
+      signal.then(() => "signal"),
+      stopped.then(() => "stopped")
+    ])
+
+    if (shutdownCause === "signal") await worker.stop({timeoutMs})
+  } finally {
+    processObject.removeListener("SIGINT", onSignal)
+    processObject.removeListener("SIGTERM", onSignal)
+  }
+}
+
+/**
  * Resolves the shutdown drain timeout from
  * `VELOCIOUS_BACKGROUND_JOBS_WORKER_SHUTDOWN_TIMEOUT_MS`:
  *   - unset / "indefinite" / "0" → indefinite: wait for in-flight jobs to
@@ -38,23 +80,12 @@ export default class BackgroundJobsWorkerCommand extends BaseCommand {
     })
     await worker.start()
 
-    console.log("Background jobs worker connected")
-
     const timeoutMs = resolveShutdownTimeoutMs()
 
-    await new Promise((resolve, reject) => {
-      const shutdown = async () => {
-        try {
-          await worker.stop({timeoutMs})
-          resolve(undefined)
-        } catch (error) {
-          reject(error)
-        }
-      }
-
-      process.once("SIGINT", shutdown)
-      process.once("SIGTERM", shutdown)
-      void worker.waitUntilStopped().then(() => resolve(undefined), reject)
+    await waitForBackgroundJobsWorkerShutdown({
+      onReady: () => console.log("Background jobs worker connected"),
+      timeoutMs,
+      worker
     })
   }
 }
