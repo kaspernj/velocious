@@ -4,6 +4,16 @@
 - Prefer end-to-end/browser integration tests over stub-only tests for frontend-model behavior.
 - Validate actual browser-to-backend HTTP behavior using Velocious browser test runner.
 - Use the [Factory framework](factories.md) to build/create test data instead of repeating direct `Model.create(...)` setup; cover its persistence/association behavior with real dummy-app models in `*.browser-spec.js` files.
+- Database-cleaning metadata is transactional by default. Omit `databaseCleaning` for ordinary model and in-process request coverage so the configured testing hook keeps setup, application work, and cleanup on one rollback-owned connection.
+- Use `{transaction: false, truncate: true}` only when behavior genuinely requires independent committed sessions, DDL that auto-commits or cannot run inside the wrapper transaction, or lock contention. Truncation disables and restores constraints around every example and is substantially slower, especially on SQL Server; never use it as a timeout or isolation workaround.
+- Pool-lifecycle tests that restart or directly own their connections, and tests that never touch configured databases, can opt out without truncation using `{transaction: false, truncate: false}`. Transaction-disabled non-request tests own their checkouts; the runner does not pin or expose a shared connection for them.
+- Node tests tagged `dummy`, and specs that invoke `Dummy.run()` directly, bootstrap the shared dummy application outside inherited database-connection contexts and the revocable test-attempt scope, then run the callback in its original scope. Transaction and truncation cleaning receive a runner-owned connection across hooks and the callback; explicit no-cleaning tests retain independent callback checkouts. Only transaction-cleaned and request tests expose dynamic shared connections to in-process work.
+- Browser tests tagged `dummy` follow the same cleaning metadata. Transaction-cleaned and explicit no-cleaning tests do not receive additional pre/post truncation from browser dummy setup.
+- If a timed-out browser database-cleaning lifecycle remains active after the cleanup grace period, the runner quarantines its connections and aborts the remaining run rather than sharing them with another test. This applies to transaction rollback and explicit truncation cleaning.
+- Database access inherited from a revoked attempt fails explicitly, so a callback that resumes after timeout cleanup cannot use an existing pool connection or check out a replacement.
+- Persistent framework-owned dispatcher and websocket publish queues start outside the caller's revocable test-attempt scope. Tests that trigger this work must await the owning idle/barrier API; ordinary detached test callbacks retain their attempt scope and still fail after revocation.
+- Transaction cleanup may invoke driver rollback to clear stale physical state even when logical transaction depth is already zero. This recovery never decrements the logical depth below zero, so the next transaction starts at the root instead of issuing an invalid savepoint.
+- Background-job tests that require a row to remain queued must insert it through the owned store without waking or draining the main; `performLater` schedules dispatcher work and therefore cannot establish a queued-state precondition. Failure-report gates must target one job id and use separate started, release, and completed signals so concurrent reports cannot overwrite a shared resolver.
 
 ## Browser test runner hardening
 - Ensure backend app startup/shutdown is guarded with `try/finally`.
@@ -124,9 +134,12 @@ session in a gap between transaction startup and broker activation. This keeps
 enqueue, handoff, and terminal job rows on the same parent-owned transaction on
 async-tracked database pools instead of checking out an independently committed
 connection. Parent store callbacks and child broker calls also share the broker's
-per-physical-connection queue, preventing overlapping driver requests while
-preserving root-savepoint leases. Inherited sibling work is drained before its broker
-queue entry is released. A delayed callback whose inherited owner has already ended
+per-physical-connection queue. Parent transactions retain that queue for their full
+start/callback/commit-or-rollback lifecycle, preventing sibling transactions from
+mistaking one another for nested savepoints. Captured operation leases enter the same
+queue before lease installation, preventing lease admission from blocking a transaction
+that already owns the queue. Inherited sibling work is drained before its broker queue
+entry is released. A delayed callback whose inherited owner has already ended
 must re-enter that queue. Each nested owned call receives a child FIFO that drains
 before its parent is released, so nested sibling queries remain serialized without
 deadlocking awaited nesting or coupling independent physical connections. The

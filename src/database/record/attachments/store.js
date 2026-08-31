@@ -103,32 +103,7 @@ export default class RecordAttachmentsStore {
 
     this._readyPromise = (async () => {
       await this._withDb(async (db) => {
-        db.clearSchemaCache()
-
-        if (await db.tableExists(ATTACHMENTS_TABLE)) {
-          await this.ensureAttachmentStoreSchema({db})
-          return
-        }
-
-        const table = new TableData(ATTACHMENTS_TABLE, {ifNotExists: true})
-
-        table.string("id", {null: false, primaryKey: true})
-        table.string("record_type", {null: false, index: true})
-        table.string("record_id", {null: false, index: true})
-        table.string("name", {null: false, index: true})
-        table.integer("position", {null: false})
-        table.string("filename", {null: false})
-        table.string("content_type", {null: true})
-        table.bigint("byte_size", {null: false})
-        table.string("driver", {null: true})
-        table.string("storage_key", {null: true})
-        table.text("content_base64", {null: true})
-        table.bigint("created_at_ms", {null: false})
-        table.bigint("updated_at_ms", {null: false})
-
-        await db.createTable(table)
-        this._driverColumnsAvailable = true
-        this._contentBase64Nullable = true
+        await this.ensureSchema(db)
       }, model)
     })()
 
@@ -137,6 +112,40 @@ export default class RecordAttachmentsStore {
     } finally {
       this._readyPromise = null
     }
+  }
+
+  /**
+   * Ensures attachment schema through an already-owned connection.
+   * @param {import("../../drivers/base.js").default} db - Database connection.
+   * @returns {Promise<void>} - Resolves when schema is ready.
+   */
+  async ensureSchema(db) {
+    db.clearSchemaCache()
+
+    if (await db.tableExists(ATTACHMENTS_TABLE)) {
+      await this.ensureAttachmentStoreSchema({db})
+      return
+    }
+
+    const table = new TableData(ATTACHMENTS_TABLE, {ifNotExists: true})
+
+    table.string("id", {null: false, primaryKey: true})
+    table.string("record_type", {null: false, index: true})
+    table.string("record_id", {null: false, index: true})
+    table.string("name", {null: false, index: true})
+    table.integer("position", {null: false})
+    table.string("filename", {null: false})
+    table.string("content_type", {null: true})
+    table.bigint("byte_size", {null: false})
+    table.string("driver", {null: true})
+    table.string("storage_key", {null: true})
+    table.text("content_base64", {null: true})
+    table.bigint("created_at_ms", {null: false})
+    table.bigint("updated_at_ms", {null: false})
+
+    await db.createTable(table)
+    this._driverColumnsAvailable = true
+    this._contentBase64Nullable = true
   }
 
   /**

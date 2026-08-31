@@ -1376,63 +1376,65 @@ export default class VelociousDatabaseDriversBase {
   async transaction(callback, options = {}) {
     await this._waitForOperationLease(options.operationOwner)
 
-    if (this._transactionsCount > 0) {
-      return await this._runTransactionAttempt(callback, options)
-    }
-
-    const args = this.getArgs()
-    const maxAttempts = optionalPositiveInteger(args.deadlockMaxRetries, "deadlockMaxRetries") ?? 8
-    const configuredBaseWaitMs = optionalPositiveInteger(args.deadlockBaseWaitMs, "deadlockBaseWaitMs")
-    const deadlockMaxWaitMs = optionalPositiveInteger(args.deadlockMaxWaitMs, "deadlockMaxWaitMs") ?? 1000
-    let attempt = 0
-
-    while (true) {
-      attempt++
-      const attemptStartedAtMs = this._nowMs()
-
-      try {
+    return await coordinateSharedTransactionConnection(this, async () => {
+      if (this._transactionsCount > 0) {
         return await this._runTransactionAttempt(callback, options)
-      } catch (error) {
-        if (error instanceof VelociousDatabaseAfterCommitCallbackError) throw error.callbackError
-        if (!(error instanceof Error)) throw error
-
-        const retryInfo = this.retryableDatabaseError(error)
-        const willRetry = Boolean(retryInfo.deadlock && attempt < maxAttempts && this._transactionsCount == 0)
-
-        if (willRetry) {
-          this._reportDeadlockRetryDiagnostic({
-            attempt,
-            contentionKind: retryInfo.contentionKind || "deadlock",
-            error,
-            maxAttempts,
-            transactionAttemptDurationMs: Math.max(0, this._nowMs() - attemptStartedAtMs),
-            willRetry
-          })
-
-          // An explicitly-configured base wins so the tuning knob is effective even on drivers
-          // whose classifier supplies its own `waitMs` (MySQL/MariaDB return a fixed 50ms for
-          // deadlocks); otherwise honor that classifier hint, then fall back to 50ms.
-          const baseWaitMs = configuredBaseWaitMs ?? (typeof retryInfo.waitMs == "number" && retryInfo.waitMs > 0 ? retryInfo.waitMs : 50)
-
-          // Full-jitter exponential backoff: wait a uniform-random duration in
-          // [0, min(base * 2^(attempt-1), cap)]. The doubling ceiling spreads retries out as
-          // contention persists, and the jitter de-correlates transactions that deadlocked in
-          // lockstep so they stop re-colliding on the same wait (the linear `base * attempt`
-          // this replaces had every victim retry after an identical delay). `attempt` is
-          // 1-based here, so 2^(attempt-1) is 1, 2, 4, ... The cap keeps the tail sub-second.
-          const ceilingWaitMs = Math.min(baseWaitMs * (2 ** (attempt - 1)), deadlockMaxWaitMs)
-          const jitteredWaitMs = Math.floor(Math.random() * (ceilingWaitMs + 1))
-
-          const loggedContentionKind = retryInfo.contentionKind || "transaction contention"
-
-          this.logger.warn(`Retrying transaction after ${loggedContentionKind} (attempt ${attempt}/${maxAttempts})`)
-          await this._waitMs(jitteredWaitMs)
-          continue
-        }
-
-        throw error
       }
-    }
+
+      const args = this.getArgs()
+      const maxAttempts = optionalPositiveInteger(args.deadlockMaxRetries, "deadlockMaxRetries") ?? 8
+      const configuredBaseWaitMs = optionalPositiveInteger(args.deadlockBaseWaitMs, "deadlockBaseWaitMs")
+      const deadlockMaxWaitMs = optionalPositiveInteger(args.deadlockMaxWaitMs, "deadlockMaxWaitMs") ?? 1000
+      let attempt = 0
+
+      while (true) {
+        attempt++
+        const attemptStartedAtMs = this._nowMs()
+
+        try {
+          return await this._runTransactionAttempt(callback, options)
+        } catch (error) {
+          if (error instanceof VelociousDatabaseAfterCommitCallbackError) throw error.callbackError
+          if (!(error instanceof Error)) throw error
+
+          const retryInfo = this.retryableDatabaseError(error)
+          const willRetry = Boolean(retryInfo.deadlock && attempt < maxAttempts && this._transactionsCount == 0)
+
+          if (willRetry) {
+            this._reportDeadlockRetryDiagnostic({
+              attempt,
+              contentionKind: retryInfo.contentionKind || "deadlock",
+              error,
+              maxAttempts,
+              transactionAttemptDurationMs: Math.max(0, this._nowMs() - attemptStartedAtMs),
+              willRetry
+            })
+
+            // An explicitly-configured base wins so the tuning knob is effective even on drivers
+            // whose classifier supplies its own `waitMs` (MySQL/MariaDB return a fixed 50ms for
+            // deadlocks); otherwise honor that classifier hint, then fall back to 50ms.
+            const baseWaitMs = configuredBaseWaitMs ?? (typeof retryInfo.waitMs == "number" && retryInfo.waitMs > 0 ? retryInfo.waitMs : 50)
+
+            // Full-jitter exponential backoff: wait a uniform-random duration in
+            // [0, min(base * 2^(attempt-1), cap)]. The doubling ceiling spreads retries out as
+            // contention persists, and the jitter de-correlates transactions that deadlocked in
+            // lockstep so they stop re-colliding on the same wait (the linear `base * attempt`
+            // this replaces had every victim retry after an identical delay). `attempt` is
+            // 1-based here, so 2^(attempt-1) is 1, 2, 4, ... The cap keeps the tail sub-second.
+            const ceilingWaitMs = Math.min(baseWaitMs * (2 ** (attempt - 1)), deadlockMaxWaitMs)
+            const jitteredWaitMs = Math.floor(Math.random() * (ceilingWaitMs + 1))
+
+            const loggedContentionKind = retryInfo.contentionKind || "transaction contention"
+
+            this.logger.warn(`Retrying transaction after ${loggedContentionKind} (attempt ${attempt}/${maxAttempts})`)
+            await this._waitMs(jitteredWaitMs)
+            continue
+          }
+
+          throw error
+        }
+      }
+    }, options.operationOwner)
   }
 
   /**
@@ -1769,34 +1771,36 @@ export default class VelociousDatabaseDriversBase {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async startTransaction(options = {}) {
-    while (true) {
-      /** @type {import("../operation-lease.js").default | undefined} */
-      let blockingOperationLease
+    await coordinateSharedTransactionConnection(this, async () => {
+      while (true) {
+        /** @type {import("../operation-lease.js").default | undefined} */
+        let blockingOperationLease
 
-      await this._transactionsActionsMutex.sync(async () => {
-        const operationLease = this._operationLease
+        await this._transactionsActionsMutex.sync(async () => {
+          const operationLease = this._operationLease
 
-        if (operationLease && options.operationOwner !== operationLease.owner) {
-          blockingOperationLease = operationLease
-          return
-        }
+          if (operationLease && options.operationOwner !== operationLease.owner) {
+            blockingOperationLease = operationLease
+            return
+          }
 
-        await this._runProfiledTransactionAction("start", async () => {
-          await this._startTransactionAction(options)
-        })
-        this._transactionsCount++
-
-        if (this._transactionsCount === 1) {
-          this._transactionCompletionPromise = new Promise((resolve) => {
-            this._resolveTransactionCompletion = resolve
+          await this._runProfiledTransactionAction("start", async () => {
+            await this._startTransactionAction(options)
           })
-        }
-      })
+          this._transactionsCount++
 
-      if (!blockingOperationLease) return
+          if (this._transactionsCount === 1) {
+            this._transactionCompletionPromise = new Promise((resolve) => {
+              this._resolveTransactionCompletion = resolve
+            })
+          }
+        })
 
-      await blockingOperationLease.wait(options.operationOwner)
-    }
+        if (!blockingOperationLease) return
+
+        await blockingOperationLease.wait(options.operationOwner)
+      }
+    }, options.operationOwner)
   }
 
   /**
@@ -1814,13 +1818,15 @@ export default class VelociousDatabaseDriversBase {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async commitTransaction(options = {}) {
-    await this._transactionsActionsMutex.sync(async () => {
-      await this._runProfiledTransactionAction("commit", async () => {
-        await this._commitTransactionAction(options)
+    await coordinateSharedTransactionConnection(this, async () => {
+      await this._transactionsActionsMutex.sync(async () => {
+        await this._runProfiledTransactionAction("commit", async () => {
+          await this._commitTransactionAction(options)
+        })
+        this._transactionsCount--
+        this._resolveCompletedTransaction()
       })
-      this._transactionsCount--
-      this._resolveCompletedTransaction()
-    })
+    }, options.operationOwner)
   }
 
   /** Resolves the current outer transaction completion when it has finished. */
@@ -2560,23 +2566,28 @@ export default class VelociousDatabaseDriversBase {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async rollbackTransaction(options = {}) {
-    await this._transactionsActionsMutex.sync(async () => {
-      try {
-        await this._runProfiledTransactionAction("rollback", async () => {
-          await this._rollbackTransactionAction(options)
-        })
-      } finally {
-        this._transactionsCount--
-        this._resolveCompletedTransaction()
+    await coordinateSharedTransactionConnection(this, async () => {
+      await this._transactionsActionsMutex.sync(async () => {
+        try {
+          await this._runProfiledTransactionAction("rollback", async () => {
+            await this._rollbackTransactionAction(options)
+          })
+        } finally {
+          // Driver recovery may need to clear a stale physical transaction when
+          // no logical transaction is active. Never let that cleanup underflow
+          // the logical depth and turn the next root transaction into a savepoint.
+          if (this._transactionsCount > 0) this._transactionsCount--
+          this._resolveCompletedTransaction()
 
-        // A rolled-back transaction may have reverted DDL (e.g. a CREATE TABLE
-        // run lazily inside the transaction), so any cached schema metadata is
-        // now stale and must be invalidated. Without this, a later tableExists()
-        // check can report a table that the rollback already removed, so callers
-        // skip recreating it and then fail with "no such table".
-        this.clearSchemaCache()
-      }
-    })
+          // A rolled-back transaction may have reverted DDL (e.g. a CREATE TABLE
+          // run lazily inside the transaction), so any cached schema metadata is
+          // now stale and must be invalidated. Without this, a later tableExists()
+          // check can report a table that the rollback already removed, so callers
+          // skip recreating it and then fail with "no such table".
+          this.clearSchemaCache()
+        }
+      })
+    }, options.operationOwner)
   }
 
   /**
@@ -2603,9 +2614,11 @@ export default class VelociousDatabaseDriversBase {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async startSavePoint(savePointName, options = {}) {
-    await this._transactionsActionsMutex.sync(async () => {
-      await this._startSavePointAction(savePointName, options)
-    })
+    await coordinateSharedTransactionConnection(this, async () => {
+      await this._transactionsActionsMutex.sync(async () => {
+        await this._startSavePointAction(savePointName, options)
+      })
+    }, options.operationOwner)
   }
 
   /**
@@ -2649,9 +2662,11 @@ export default class VelociousDatabaseDriversBase {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async releaseSavePoint(savePointName, options = {}) {
-    await this._transactionsActionsMutex.sync(async () => {
-      await this._releaseSavePointAction(savePointName, options)
-    })
+    await coordinateSharedTransactionConnection(this, async () => {
+      await this._transactionsActionsMutex.sync(async () => {
+        await this._releaseSavePointAction(savePointName, options)
+      })
+    }, options.operationOwner)
   }
 
   /**
@@ -2683,9 +2698,11 @@ export default class VelociousDatabaseDriversBase {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async rollbackSavePoint(savePointName, options = {}) {
-    await this._transactionsActionsMutex.sync(async () => {
-      await this._rollbackSavePointAction(savePointName, options)
-    })
+    await coordinateSharedTransactionConnection(this, async () => {
+      await this._transactionsActionsMutex.sync(async () => {
+        await this._rollbackSavePointAction(savePointName, options)
+      })
+    }, options.operationOwner)
   }
 
   /**

@@ -13,7 +13,16 @@ import TestRunner from "../../src/testing/test-runner.js"
  * @returns {Promise<string[]>} - Observed lifecycle order.
  */
 async function transactionCoordinationOrder(testArgs) {
-  const configuration = new Configuration({
+  const order = []
+
+  class ObservedConfiguration extends Configuration {
+    async ensureConnections(_args, callback) {
+      order.push("connections")
+      return await callback({})
+    }
+  }
+
+  const configuration = new ObservedConfiguration({
     database: {test: {}},
     directory: process.cwd(),
     environment: "test",
@@ -23,8 +32,6 @@ async function transactionCoordinationOrder(testArgs) {
     localeFallbacks: {en: ["en"]},
     locales: ["en"]
   })
-  const order = []
-
   class ObservedTestRunner extends TestRunner {
     async application() {
       return new Application({configuration, type: "test-runner-observation"})
@@ -72,7 +79,35 @@ async function transactionCoordinationOrder(testArgs) {
 }
 
 describe("TestRunner shared connection activation order", {databaseCleaning: {transaction: false, truncate: false}}, () => {
-  it("activates dynamic providers before non-request beforeEach hooks", async () => {
+  it("loads testing configuration before test files", async () => {
+    const order = []
+
+    class ObservedEnvironmentHandler extends EnvironmentHandlerNode {
+      async importTestingConfigPath() { order.push("testing config") }
+
+      async importTestFiles() { order.push("test files") }
+    }
+
+    const environmentHandler = new ObservedEnvironmentHandler()
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory: process.cwd(),
+      environment: "test",
+      environmentHandler,
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"],
+      testing: `${process.cwd()}/spec/dummy/src/config/testing.js`
+    })
+    const testRunner = new TestRunner({configuration, testFiles: ["example-spec.js"]})
+
+    await testRunner.prepare()
+
+    expect(order).toEqual(["testing config", "test files"])
+  })
+
+  it("runs afterEach hooks from the inner scope to the outer scope", async () => {
     const configuration = new Configuration({
       database: {test: {}},
       directory: process.cwd(),
@@ -84,44 +119,116 @@ describe("TestRunner shared connection activation order", {databaseCleaning: {tr
       locales: ["en"]
     })
     const order = []
-
-    class ObservedTestRunner extends TestRunner {
-      activateTestSharedConnections() {
-        order.push("activate")
-        return []
-      }
-
-      async startSharedTransactionBroker() {
-        order.push("broker")
-        return undefined
-      }
-    }
-
-    const testRunner = new ObservedTestRunner({configuration, testFiles: []})
+    const testRunner = new TestRunner({configuration, testFiles: []})
     const tests = {
       args: {},
       afterAlls: [],
-      afterEaches: [],
+      afterEaches: [
+        {callback: async () => { order.push("framework cleanup") }},
+        {callback: async () => { order.push("outer afterEach") }}
+      ],
       beforeAlls: [],
-      beforeEaches: [{callback: async () => { order.push("beforeEach") }}],
+      beforeEaches: [],
+      subs: {
+        nested: {
+          args: {},
+          afterAlls: [],
+          afterEaches: [{callback: async () => { order.push("inner afterEach") }}],
+          beforeAlls: [],
+          beforeEaches: [],
+          subs: {},
+          tests: {
+            "runs hooks": {
+              args: {},
+              function: async () => { order.push("test") }
+            }
+          }
+        }
+      },
+      tests: {}
+    }
+
+    await testRunner.runTests({afterEaches: [], beforeEaches: [], tests, descriptions: [], indentLevel: 0})
+    await testRunner.runTests({afterEaches: [], beforeEaches: [], tests, descriptions: [], indentLevel: 0})
+
+    expect(order).toEqual([
+      "test", "inner afterEach", "outer afterEach", "framework cleanup",
+      "test", "inner afterEach", "outer afterEach", "framework cleanup"
+    ])
+  })
+
+  it("runs framework afterEach cleanup and reports every hook failure", async () => {
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory: process.cwd(),
+      environment: "test",
+      environmentHandler: new EnvironmentHandlerNode(),
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"]
+    })
+    const order = []
+    const testRunner = new TestRunner({configuration, testFiles: []})
+    const tests = {
+      args: {},
+      afterAlls: [],
+      afterEaches: [
+        {callback: async () => {
+          order.push("framework cleanup")
+          throw new Error("expected framework cleanup failure")
+        }},
+        {callback: async () => {
+          order.push("user afterEach")
+          throw new Error("expected user cleanup failure")
+        }}
+      ],
+      beforeAlls: [],
+      beforeEaches: [],
       subs: {},
       tests: {
-        "runs outside request mode": {
+        "fails during cleanup": {
           args: {},
-          function: async () => { order.push("test") }
+          function: async () => {
+            order.push("test")
+            throw new Error("expected test body failure")
+          }
         }
       }
     }
 
     await testRunner.runTests({afterEaches: [], beforeEaches: [], tests, descriptions: [], indentLevel: 0})
 
-    expect(order[0]).toEqual("activate")
+    expect(order).toEqual(["test", "user afterEach", "framework cleanup"])
+    expect(testRunner.getFailedTests()).toBe(1)
+    const failure = testRunner.getFailedTestDetails()[0].error
+
+    expect(failure).toBeInstanceOf(AggregateError)
+    expect(failure.cause.message).toEqual("expected test body failure")
+    expect(failure.errors[0].message).toEqual("expected test body failure")
+    expect(failure.errors[1]).toBeInstanceOf(AggregateError)
+    expect(failure.errors[1].errors.map((error) => error.message)).toEqual([
+      "expected user cleanup failure",
+      "expected framework cleanup failure"
+    ])
+  })
+
+  it("does not activate dynamic providers for transaction-disabled non-request tests", async () => {
+    const order = await transactionCoordinationOrder({databaseCleaning: {transaction: false, truncate: false}})
+
+    expect(order).toEqual(["beforeEach", "test"])
+  })
+
+  it("owns connections without transaction coordination for truncation-backed tests", async () => {
+    const order = await transactionCoordinationOrder({databaseCleaning: {transaction: false, truncate: true}})
+
+    expect(order).toEqual(["connections", "beforeEach", "test"])
   })
 
   it("installs transaction coordination before a transaction-opening hook exposes the shared connection", async () => {
     const order = await transactionCoordinationOrder({databaseCleaning: {transaction: true}})
 
-    expect(order).toEqual(["activate", "coordinate", "beforeEach", "publish", "test"])
+    expect(order).toEqual(["connections", "activate", "coordinate", "beforeEach", "publish", "test"])
   })
 
   it("installs request coordination before a hook can open a manual transaction", async () => {
@@ -130,7 +237,7 @@ describe("TestRunner shared connection activation order", {databaseCleaning: {tr
       type: "request"
     })
 
-    expect(order).toEqual(["activate", "coordinate", "beforeEach", "publish", "test"])
+    expect(order).toEqual(["connections", "activate", "coordinate", "beforeEach", "publish", "test"])
   })
 
   it("revokes shared access before broker shutdown and transaction cleanup", async () => {

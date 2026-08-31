@@ -17,6 +17,9 @@ export default class VelociousDatabaseDriversSqliteWeb extends Base {
    * @type {ConnectionSqlJs | undefined} */
   _connection = undefined
 
+  /** @type {SqliteWebConnection | undefined} */
+  _externalConnection = undefined
+
   /**
    * Runs sql js locate file.
    * @returns {(file: string) => string} - locateFile callback for sql.js.
@@ -34,18 +37,21 @@ export default class VelociousDatabaseDriversSqliteWeb extends Base {
   async connect() {
     this.args = this.getArgs()
 
-    if (!this.args.getConnection) {
-      if (this.args.reset) {
-        await deleteSqliteWebPersistences({databaseName: this.databaseName()})
-      }
-
-      const persistence = await createSqliteWebPersistence({databaseName: this.databaseName()})
-      const SQL = await initSqlJs({locateFile: this.sqlJsLocateFile()})
-      const databaseContent = await persistence.load()
-      const connectionSqlJs = new ConnectionSqlJs(this, new SQL.Database(databaseContent), persistence)
-
-      this._connection = connectionSqlJs
+    if (this.args.getConnection) {
+      this._externalConnection = this.args.getConnection()
+      return
     }
+
+    if (this.args.reset) {
+      await deleteSqliteWebPersistences({databaseName: this.databaseName()})
+    }
+
+    const persistence = await createSqliteWebPersistence({databaseName: this.databaseName()})
+    const SQL = await initSqlJs({locateFile: this.sqlJsLocateFile()})
+    const databaseContent = await persistence.load()
+    const connectionSqlJs = new ConnectionSqlJs(this, new SQL.Database(databaseContent), persistence)
+
+    this._connection = connectionSqlJs
   }
 
   async _close() {
@@ -152,7 +158,9 @@ export default class VelociousDatabaseDriversSqliteWeb extends Base {
    */
   getConnection() {
     if (this.args?.getConnection) {
-      return /** @type {SqliteWebConnection} */ (this.args.getConnection())
+      if (!this._externalConnection) throw new Error("SQLite web external connection has not been initialized")
+
+      return this._externalConnection
     } else {
       if (!this._connection) throw new Error("SQLite web connection has not been initialized")
       return this._connection

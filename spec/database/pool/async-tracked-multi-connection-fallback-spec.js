@@ -16,7 +16,7 @@ function getPool() {
 // Each test mutates pool internals (global fallback, `pool.connections`) and
 // asserts on the "created when missing" path, so run against a freshly
 // restarted Dummy to avoid state leaking across examples.
-describe("database - pool - async tracked multi connection", () => {
+describe("database - pool - async tracked multi connection", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("returns a global fallback connection when no async context has been set", async () => {
     await Dummy.run(async () => {
       const pool = getPool()

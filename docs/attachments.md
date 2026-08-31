@@ -21,6 +21,12 @@ The backend accepts Buffer, string, `Uint8Array`, `ArrayBuffer`, browser-style
 `{path, filename?, contentType?}` shape. Frontend-model attachment input remains
 transport-safe and rejects `{path: ...}`.
 
+`db:migrate` creates and updates the framework-owned `velocious_attachments`
+table on each migrated database through the same idempotent schema owner used
+at runtime. This keeps schema DDL outside application and test transactions and
+includes the table in generated structure SQL before the first attachment is
+written.
+
 ## Node path input
 
 Path input is disabled by default because it lets application code ask the

@@ -102,25 +102,36 @@ export default class LocalBackgroundJobsDispatcher {
     }
 
     this._wakeQueued = true
-    const drain = Promise.resolve().then(async () => {
-      this._wakeQueued = false
-      await this._drain()
-    })
-    const drainPromise = drain
-      .catch((error) => {
-        this._reportFrameworkError({error, stage: "local-background-jobs-drain"})
-        this._armRecoveryTimer()
-      })
-      .finally(() => {
-        if (this._drainPromise === drainPromise) this._drainPromise = null
+    /** @type {Promise<void>} */
+    let drainPromise
 
-        if (this._redrain && this._accepting) {
-          this._redrain = false
-          this.wake()
-        } else {
-          this._resolveIdleWaiters()
-        }
+    drainPromise = this.configuration.withoutCurrentTestDatabaseAccessScope(() => {
+      return this.configuration.withoutCurrentConnectionContexts(() => {
+        return Promise
+          .resolve()
+          .then(async () => {
+            this._wakeQueued = false
+            await this._drain()
+          })
+          .catch((error) => {
+            try {
+              this._reportFrameworkError({error, stage: "local-background-jobs-drain"})
+            } finally {
+              this._armRecoveryTimer()
+            }
+          })
+          .finally(() => {
+            if (this._drainPromise === drainPromise) this._drainPromise = null
+
+            if (this._redrain && this._accepting) {
+              this._redrain = false
+              this.wake()
+            } else {
+              this._resolveIdleWaiters()
+            }
+          })
       })
+    })
 
     this._drainPromise = drainPromise
   }

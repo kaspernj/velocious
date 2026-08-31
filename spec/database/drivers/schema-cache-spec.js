@@ -45,6 +45,7 @@ function buildConfiguration(databaseConfig) {
     addRouteResolverHook(hook) {
       routeResolverHooks.push(hook)
     },
+    assertDatabaseAccessAllowed() {},
     clearSchemaCachesForReuseKey() {
       // This stub configuration owns no pool registry, so cross-pool invalidation
       // is a no-op here; the pool clears its own connections directly.
@@ -80,7 +81,7 @@ function buildConfiguration(databaseConfig) {
   return configuration
 }
 
-describe("Database drivers - schema cache", {databaseCleaning: {truncate: false}}, () => {
+describe("Database drivers - schema cache", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("clears schema caches across live async-tracked pool connections", async () => {
     const pool = new AsyncTrackedMultiConnection({
       configuration: buildConfiguration({driver: SchemaCacheTestDriver, name: "schema-cache-test", type: "sqlite"}),

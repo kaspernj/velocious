@@ -17,6 +17,7 @@ import { currentTestProfileContext } from "../../testing/test-profile-context.js
  * @property {number | null} timeoutAt - Timestamp when the checkout will time out, or null when disabled.
  * @property {number | null} timeoutMillis - Milliseconds to wait before rejecting, or null when disabled.
  * @property {ReturnType<typeof setTimeout> | undefined} timeoutTimer - Timer that rejects the pending checkout.
+ * @property {{revoked: boolean} | undefined} [testDatabaseAccessScope] - Database-access scope captured at enqueue.
  * @property {import("../../testing/test-profiler.js").TestProfileAsyncContext | undefined} [testProfileContext] - Async-safe profile attribution captured at enqueue.
  */
 export const CLOSED_CONNECTION = Symbol("velociousClosedConnection")
@@ -227,7 +228,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     const trackedConnection = /** @type {import("../drivers/base.js").default & {[CLOSED_CONNECTION]?: boolean, [CONNECTION_CHECKED_OUT_AT]?: number, [IDLE_CONNECTION_CHECKED_IN_AT]?: number}} */ (connection)
 
     if (trackedConnection[CLOSED_CONNECTION]) {
-      this.untrackConnectionInUse(connection, id)
+      if (typeof id === "number") this.untrackConnectionInUse(connection, id)
       await this.drainPendingCheckouts()
       return
     }
@@ -343,6 +344,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    * @returns {Promise<import("../drivers/base.js").default>} - Resolves with the checkout.
    */
   async checkout(options = {}) {
+    this.assertDatabaseAccessAllowed()
     let databaseConfig = this.getConfiguration()
     let reuseKey = this.getConfigurationReuseKey(databaseConfig)
     let connection = this.takeIdleConnectionForReuseKey(reuseKey)
@@ -380,6 +382,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    * @returns {Promise<import("../drivers/base.js").default>} - Activated pooled connection.
    */
   async checkoutForConfiguration(databaseConfig, options = {}) {
+    this.assertDatabaseAccessAllowed()
     const reuseKey = this.getConfigurationReuseKey(databaseConfig)
     const lifecycleRetainedConnection = this.lifecycleRetainedConnections.get(reuseKey)
 
@@ -446,6 +449,11 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    * @returns {Promise<import("../drivers/base.js").default>} - Activated connection.
    */
   async activateConnection(connection, options = {}) {
+    try {
+      this.assertDatabaseAccessAllowed()
+    } catch (error) {
+      await this.closeRejectedCheckoutAndThrow(connection, error)
+    }
     if (connection.getIdSeq() !== undefined) throw new Error(`Connection already has an ID-seq - is it in use? ${connection.getIdSeq()}`)
 
     const id = this.idSeq++
@@ -459,15 +467,48 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
     try {
       await connection.setConnectionCheckoutName(options.name)
+      this.assertDatabaseAccessAllowed()
     } catch (error) {
-      delete this.connectionsInUse[id]
-      connection.setIdSeq(undefined)
-      await this.closeConnection(connection)
-
-      throw error
+      await this.closeRejectedCheckoutAndThrow(connection, error, id)
     }
 
     return connection
+  }
+
+  /**
+   * Closes a rejected checkout, then hands freed capacity to queued callers.
+   * @param {import("../drivers/base.js").default} connection - Rejected connection.
+   * @param {ReturnType<typeof JSON.parse>} error - Access revocation error.
+   * @param {number} [id] - Assigned checkout id, if activation reached that stage.
+   * @returns {Promise<never>} - Always rejects with the access or cleanup errors.
+   */
+  async closeRejectedCheckoutAndThrow(connection, error, id) {
+    if (id !== undefined) this.untrackConnectionInUse(connection, id)
+
+    /** @type {ReturnType<typeof JSON.parse>[]} */
+    const cleanupErrors = []
+
+    try {
+      await this.closeConnection(connection)
+    } catch (closeError) {
+      cleanupErrors.push(closeError)
+    }
+
+    try {
+      if (this.pendingCheckoutDrainPromise) {
+        this.pendingCheckoutDrainRequested = true
+      } else {
+        await this.drainPendingCheckouts()
+      }
+    } catch (drainError) {
+      cleanupErrors.push(drainError)
+    }
+
+    if (cleanupErrors.length > 0) {
+      throw new AggregateError([error, ...cleanupErrors], "Database checkout rejection cleanup failed", {cause: error})
+    }
+
+    throw error
   }
 
   /**
@@ -588,6 +629,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
         timeoutAt: timeoutMillis === null ? null : enqueuedAt + timeoutMillis,
         timeoutMillis,
         timeoutTimer: undefined,
+        testDatabaseAccessScope: this.configuration.getEnvironmentHandler().currentTestDatabaseAccessScope(),
         testProfileContext: currentTestProfileContext(this.configuration)
       }
 
@@ -887,20 +929,23 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     const environmentHandler = this.configuration.getEnvironmentHandler()
 
     return await environmentHandler.runWithTestProfileContext(checkout.testProfileContext, async () => {
-      let connection
+      return await environmentHandler.runWithCapturedTestDatabaseAccessScope(checkout.testDatabaseAccessScope, async () => {
+        let connection
 
-      try {
-        connection = await this.spawnConnectionForCheckout(
-          checkout.databaseConfig,
-          checkout.reuseKey,
-          checkout.testProfileContext
-        )
-      } catch (error) {
-        checkout.reject(error instanceof Error ? error : new Error("Failed to spawn database connection.", {cause: error}))
-        return
-      }
+        try {
+          this.assertDatabaseAccessAllowed()
+          connection = await this.spawnConnectionForCheckout(
+            checkout.databaseConfig,
+            checkout.reuseKey,
+            checkout.testProfileContext
+          )
+        } catch (error) {
+          checkout.reject(error instanceof Error ? error : new Error("Failed to spawn database connection.", {cause: error}))
+          return
+        }
 
-      await this.resolvePendingCheckout(checkout, connection)
+        await this.resolvePendingCheckout(checkout, connection)
+      })
     })
   }
 
@@ -914,11 +959,13 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
     const environmentHandler = this.configuration.getEnvironmentHandler()
 
     return await environmentHandler.runWithTestProfileContext(checkout.testProfileContext, async () => {
-      try {
-        checkout.resolve(await this.activateConnection(connection, checkout.options))
-      } catch (error) {
-        checkout.reject(error instanceof Error ? error : new Error("Failed to activate database connection.", {cause: error}))
-      }
+      return await environmentHandler.runWithCapturedTestDatabaseAccessScope(checkout.testDatabaseAccessScope, async () => {
+        try {
+          checkout.resolve(await this.activateConnection(connection, checkout.options))
+        } catch (error) {
+          checkout.reject(error instanceof Error ? error : new Error("Failed to activate database connection.", {cause: error}))
+        }
+      })
     })
   }
 
@@ -945,6 +992,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    * @returns {Promise<T>} - Resolves with the callback result.
    */
   async withConnection(optionsOrCallback, callback) {
+    this.assertDatabaseAccessAllowed()
     const options = typeof optionsOrCallback == "function" ? {} : optionsOrCallback
     const actualCallback = typeof optionsOrCallback == "function" ? optionsOrCallback : callback
 
@@ -1046,6 +1094,7 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    * @returns {import("../drivers/base.js").default} - The current connection.
    */
   getCurrentConnection() {
+    this.assertDatabaseAccessAllowed()
     const id = this.asyncLocalStorage.getStore()
 
     if (id === undefined) return this.currentFallbackConnectionOrFail()

@@ -3527,6 +3527,32 @@ export default class VelociousConfiguration {
   }
 
   /**
+   * Runs one test attempt in a revocable database-access context.
+   * @template T
+   * @param {{revoked: boolean}} scope - Attempt-owned access scope.
+   * @param {() => T | Promise<T>} callback - Attempt work.
+   * @returns {T | Promise<T>} - Callback result.
+   */
+  runWithTestDatabaseAccessScope(scope, callback) {
+    return this.getEnvironmentHandler().runWithTestDatabaseAccessScope(scope, callback)
+  }
+
+  /**
+   * Runs persistent framework work without inheriting a test attempt's revocable database-access scope.
+   * @template T
+   * @param {() => T | Promise<T>} callback - Persistent work to run.
+   * @returns {Promise<T>} - Callback result.
+   */
+  async withoutCurrentTestDatabaseAccessScope(callback) {
+    return await this.getEnvironmentHandler().runWithCapturedTestDatabaseAccessScope(undefined, callback)
+  }
+
+  /** Throws when a timed-out test attempt tries to start more database work. */
+  assertDatabaseAccessAllowed() {
+    this.getEnvironmentHandler().assertTestDatabaseAccessAllowed()
+  }
+
+  /**
    * Runs with connections.
    * @template T
    * @param {WithConnectionsOptionsType | WithConnectionsCallbackType<T>} optionsOrCallback - Checkout options or callback function.
@@ -3534,6 +3560,7 @@ export default class VelociousConfiguration {
    * @returns {Promise<T>} - Resolves with the callback result.
    */
   async withConnections(optionsOrCallback, callback) {
+    this.assertDatabaseAccessAllowed()
     const {
       callback: actualWithConnectionsCallback,
       databaseIdentifiers,
@@ -3564,6 +3591,7 @@ export default class VelociousConfiguration {
    * @returns {Promise<T>} - Resolves with the callback result.
    */
   async withTransaction({databaseIdentifier, name = "Configuration.withTransaction", ...restArgs}, callback) {
+    this.assertDatabaseAccessAllowed()
     restArgsError(restArgs)
 
     if (!databaseIdentifier) throw new Error("Configuration.withTransaction requires a databaseIdentifier")
@@ -3577,6 +3605,7 @@ export default class VelociousConfiguration {
     const pool = this.getDatabasePool(databaseIdentifier)
 
     return await pool.withOperationConnection({name}, async (connection, owner) => {
+      this.assertDatabaseAccessAllowed()
       const operation = new DatabaseOperation({
         configuration: this,
         databaseConfiguration,
@@ -3588,7 +3617,10 @@ export default class VelociousConfiguration {
       })
 
       try {
-        return await operation.transaction(async () => await callback(operation))
+        return await operation.transaction(async () => {
+          this.assertDatabaseAccessAllowed()
+          return await callback(operation)
+        })
       } finally {
         operation.complete()
       }
@@ -3605,6 +3637,7 @@ export default class VelociousConfiguration {
    * @returns {Promise<T>} - Callback result.
    */
   async withDatabaseOperation({databaseConfiguration, databaseIdentifier, name = "Configuration.withDatabaseOperation", schemaGeneration, tenant, ...restArgs}, callback) {
+    this.assertDatabaseAccessAllowed()
     restArgsError(restArgs)
 
     if (!databaseIdentifier) throw new Error("Configuration.withDatabaseOperation requires a databaseIdentifier")
@@ -3615,6 +3648,7 @@ export default class VelociousConfiguration {
     const configurationReuseKey = pool.getConfigurationReuseKey(databaseConfiguration)
 
     return await pool.withCapturedOperationConnection({databaseConfiguration, name}, async (connection, owner) => {
+      this.assertDatabaseAccessAllowed()
       const operation = new DatabaseOperation({
         configuration: this,
         databaseConfiguration,
@@ -3644,6 +3678,7 @@ export default class VelociousConfiguration {
   async withDatabaseIdentifierConnections({callback, dbs, identifiers, name, stackLabel}) {
     const stack = Error().stack
     const actualCallback = async () => {
+      this.assertDatabaseAccessAllowed()
       return await withTrackedStack(stack || stackLabel, async () => {
         return await callback(dbs)
       })
@@ -3677,6 +3712,7 @@ export default class VelociousConfiguration {
    * @returns {Record<string, import("./database/drivers/base.js").default>} A map of database connections with identifier as key
    */
   getCurrentConnections(databaseIdentifiers = this.getDatabaseIdentifiers()) {
+    this.assertDatabaseAccessAllowed()
     /**
      * Dbs.
      * @type {{[key: string]: import("./database/drivers/base.js").default}} */
@@ -3766,6 +3802,7 @@ export default class VelociousConfiguration {
    * @returns {Promise<T>} - Resolves with the callback result.
    */
   async ensureConnections(optionsOrCallback, callback) {
+    this.assertDatabaseAccessAllowed()
     const {
       callback: actualWithConnectionsCallback,
       databaseIdentifiers,
