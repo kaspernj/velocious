@@ -603,8 +603,9 @@ it created. Requests and acknowledgements carry the exact generation and a UUID;
 server errors preserve their name/message/stack and are also emitted on
 `framework-error` and `all-error` for supervisors whose hooks ignore stdio.
 The client issues one request with no retry and defaults to a hard 10000ms
-deadline (configurable from 1 through 25000ms, deliberately below Rollbridge's
-30-second hook deadline); timeout destroys the socket and exits the CLI nonzero.
+deadline (configurable from 1 through 60000ms so supervised lifecycle transitions
+can use a full-minute deadline); timeout destroys the socket and exits the CLI
+nonzero.
 
 ## Worker shutdown and process-job draining
 

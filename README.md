@@ -2461,7 +2461,7 @@ npx velocious background-jobs:retire --generation release-20260828.1 --socket /s
 ```
 
 Each lifecycle command sends one request with no retry and has a hard 10000ms
-deadline; `--timeout-ms` accepts 1 through 25000ms. Generation-aware workers,
+deadline; `--timeout-ms` accepts 1 through 60000ms. Generation-aware workers,
 clients, and reporters require their hello acknowledgement before readiness or
 mutation and bound it to 4000ms by default.
 
