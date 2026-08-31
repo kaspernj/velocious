@@ -6,7 +6,7 @@ import timeout from "awaitery/build/timeout.js"
 import JsonSocket from "./json-socket.js"
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 10000
-const MAX_REQUEST_TIMEOUT_MS = 25000
+export const MAX_LIFECYCLE_REQUEST_TIMEOUT_MS = 60000
 
 /** One-request acknowledged lifecycle client. */
 export default class BackgroundJobsLifecycleClient {
@@ -26,8 +26,8 @@ export default class BackgroundJobsLifecycleClient {
     })
     this.generationId = generationConfig.generationId
     this.socketPath = generationConfig.lifecycleSocketPath
-    if (!Number.isInteger(requestTimeoutMs) || requestTimeoutMs < 1 || requestTimeoutMs > MAX_REQUEST_TIMEOUT_MS) {
-      throw new TypeError(`requestTimeoutMs must be an integer between 1 and ${MAX_REQUEST_TIMEOUT_MS}`)
+    if (!Number.isInteger(requestTimeoutMs) || requestTimeoutMs < 1 || requestTimeoutMs > MAX_LIFECYCLE_REQUEST_TIMEOUT_MS) {
+      throw new TypeError(`requestTimeoutMs must be an integer between 1 and ${MAX_LIFECYCLE_REQUEST_TIMEOUT_MS}`)
     }
     this.requestTimeoutMs = requestTimeoutMs
     if (!this.generationId) throw new Error("Background jobs lifecycle client requires generationId")

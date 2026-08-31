@@ -4,7 +4,7 @@ import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import timeout, { TimeoutError } from "awaitery/build/timeout.js"
-import BackgroundJobsLifecycleClient from "../../src/background-jobs/lifecycle-client.js"
+import BackgroundJobsLifecycleClient, { MAX_LIFECYCLE_REQUEST_TIMEOUT_MS } from "../../src/background-jobs/lifecycle-client.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import { connectGenerationPeer, startGenerationMain } from "../helpers/background-jobs-generation-harness.js"
 import releaseLifecyclePaths from "../helpers/release-lifecycle-paths.js"
@@ -12,6 +12,28 @@ import stalledSocketServer from "../helpers/stalled-socket-server.js"
 import { describe, expect, it } from "../../src/testing/test.js"
 
 describe("Background jobs lifecycle control", () => {
+  it("accepts the maximum lifecycle request timeout", () => {
+    expect(MAX_LIFECYCLE_REQUEST_TIMEOUT_MS).toEqual(60000)
+
+    const client = new BackgroundJobsLifecycleClient({
+      configuration: dummyConfiguration,
+      generationId: "release-maximum-timeout",
+      requestTimeoutMs: 60000,
+      socketPath: "/tmp/velocious-maximum-timeout.sock"
+    })
+
+    expect(client.requestTimeoutMs).toEqual(60000)
+  })
+
+  it("rejects a lifecycle request timeout above the maximum", () => {
+    expect(() => new BackgroundJobsLifecycleClient({
+      configuration: dummyConfiguration,
+      generationId: "release-over-maximum-timeout",
+      requestTimeoutMs: 60001,
+      socketPath: "/tmp/velocious-over-maximum-timeout.sock"
+    })).toThrow(/requestTimeoutMs must be an integer between 1 and 60000/)
+  })
+
   it("times out one stalled lifecycle request and destroys its Unix socket connection", async () => {
     const paths = await releaseLifecyclePaths()
     const stalled = await stalledSocketServer({socketPath: paths.socketPath})

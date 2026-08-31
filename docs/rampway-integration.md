@@ -32,12 +32,23 @@ another application integration) must pass one identical generation id,
 endpoint, and release-local socket to the complete main/worker pool. Until those
 downstream pieces land, do not describe the production stack as fully compliant.
 
-Lifecycle commands make one acknowledged request and default to a hard
-10-second timeout (with a maximum configurable 25 seconds), below Rollbridge's
-30-second hook deadline. During a retained generation's drain, a transient jobs
-TCP disconnect is recovered only by that exact generation-qualified worker on
-the unchanged release endpoint; this does not permit discovery of or handoff to
-the candidate endpoint.
+Lifecycle commands make one acknowledged request, default to a hard 10-second
+timeout, and accept an integer timeout from 1 through 60000ms. The process
+supervisor that launches the command owns a separate outer hook deadline, which
+must be greater than the selected lifecycle request timeout so the supervisor
+cannot kill the CLI before its one-shot request settles. For Rollbridge,
+`lifecycle.activateCommand` is bounded by its activation-hook deadline, while
+`lifecycle.quietCommand` is bounded by the process's `gracefulStopMs` hook
+deadline (or 30 seconds when that window is `"indefinite"`).
+`rollbridge@0.1.39` fixes activation hooks at 30 seconds, so an activation command
+under that version must keep `--timeout-ms` below 30000 (for example, 25000); a
+60000ms request requires a Rollbridge contract whose activation-hook deadline is
+greater than 60000ms. Rampway's external-owner handoff timeout and deploy lock,
+plus Rollbridge's health and process-drain timeouts, are different bounds and do
+not extend the Rollbridge lifecycle hook. During a retained generation's drain,
+a transient jobs TCP disconnect is recovered only by that exact
+generation-qualified worker on the unchanged release endpoint; this does not
+permit discovery of or handoff to the candidate endpoint.
 
 ## Install and mount
 
