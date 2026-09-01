@@ -3,7 +3,7 @@
     "velocious": "build/bin/velocious.js"
   },
   "name": "velocious",
-  "version": "1.0.635",
+  "version": "1.0.636",
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "files": [
@@ -48,7 +48,8 @@
     "velocious": "asd",
     "verify:docker-dev-environment": "node scripts/verify-docker-dev-environment.js",
     "watch": "tsc -w",
-    "watch:ejs": "chokidar \"src/**/*.ejs\" -c \"npm run copy:ejs\""
+    "watch:ejs": "chokidar \"src/**/*.ejs\" -c \"npm run copy:ejs\"",
+    "prepare": "npm run build"
   },
   "type": "module",
   "repository": {
