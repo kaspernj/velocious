@@ -95,8 +95,9 @@ describe("Background jobs lifecycle control", () => {
       await accepted
       const retireMessage = peer.nextMessage()
 
-      expect(await client.retire()).toEqual("retired")
-      expect(await client.retire()).toEqual("retired")
+      expect(await client.retire()).toEqual("retiring")
+      expect(await client.retire()).toEqual("retiring")
+      await main._retirementPromise
       expect(main.getLifecycleState()).toEqual("retired")
       expect((await retireMessage).type).toEqual("retire")
       expect(main.server?.listening).toEqual(true)
