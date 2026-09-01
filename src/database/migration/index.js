@@ -28,6 +28,7 @@
 import { convertLegacyDateValueToUtcStorage } from "../datetime-storage.js"
 import * as inflection from "inflection"
 import restArgsError from "../../utils/rest-args-error.js"
+import { DEFAULT_MIGRATION_EXECUTION_PHASE, migrationExecutionPhase } from "../migration-execution-phase.js"
 import ChangeTable from "./change-table.js"
 import CreateIndexBase from "../query/create-index-base.js"
 import TableColumn from "../table-data/table-column.js"
@@ -38,6 +39,26 @@ class NotImplementedError extends Error {}
 export {NotImplementedError}
 
 export default class VelociousDatabaseMigration {
+  /** @type {import("../migration-execution-phase.js").MigrationExecutionPhase | undefined} */
+  static _executionPhase
+
+  /**
+   * Declares when this migration is eligible to run.
+   * @param {import("../migration-execution-phase.js").MigrationExecutionPhase} phase - Execution phase.
+   * @returns {void} - No return value.
+   */
+  static runInPhase(phase) {
+    this._executionPhase = migrationExecutionPhase(phase)
+  }
+
+  /**
+   * Gets the declared execution phase.
+   * @returns {import("../migration-execution-phase.js").MigrationExecutionPhase} - Declared execution phase.
+   */
+  static getExecutionPhase() {
+    return this._executionPhase || DEFAULT_MIGRATION_EXECUTION_PHASE
+  }
+
   /**
    * Runs on databases.
    * @param {string[]} databaseIdentifiers - Database identifiers.
