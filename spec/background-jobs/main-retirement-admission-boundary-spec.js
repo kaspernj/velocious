@@ -41,6 +41,35 @@ describe("Background jobs main retirement admission boundary", () => {
     }
   })
 
+  it("acknowledges activation before the newly active generation drains queued work", async () => {
+    const claim = promiseBarrier()
+    const {main, store} = await startGenerationMain({
+      afterHandoffClaim: async () => {
+        claim.entered()
+        await claim.blocked
+      },
+      generationId: "release-activation-ack",
+      initialGenerationState: "candidate"
+    })
+    const peer = await connectGenerationPeer(main.getPort())
+
+    try {
+      await store.enqueue({jobName: "ActivationAckJob", args: [], options: {executionMode: "inline"}})
+      const accepted = peer.nextMessage()
+      peer.jsonSocket.send({type: "hello", role: "worker", generationId: "release-activation-ack", workerId: "release-activation-ack:49b70c09-7fcf-40ae-b89a-598216013fde", supportsHandoffIdReporting: true, supportsHeartbeat: true})
+      await accepted
+      peer.jsonSocket.send({type: "ready", acceptsInline: true, acceptsForked: false, acceptsPooled: false, acceptsSpawned: false})
+
+      await main.activate()
+      expect(main.getLifecycleState()).toEqual("active")
+      await claim.waiting
+    } finally {
+      claim.release()
+      await peer.close()
+      await main.stop()
+    }
+  })
+
   it("returns a real claim that commits after the synchronous retirement fence", async () => {
     const claim = promiseBarrier()
     const {main, store} = await startGenerationMain({

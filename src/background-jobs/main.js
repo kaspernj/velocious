@@ -602,10 +602,14 @@ export default class BackgroundJobsMain {
    * @returns {Promise<void>} - Activation completion.
    */
   async _activate() {
+    this.logger.info(() => ["Background jobs generation activation starting", {generationId: this.generationId}])
     await this._startActiveOwnership()
     this.lifecycleState = "active"
     this._creditReadyWorkers()
-    await this._drain()
+    this.logger.info(() => ["Background jobs generation activation acknowledged", {generationId: this.generationId}])
+    void this._drain().catch((error) => {
+      this.logger.error(() => ["Background jobs generation post-activation drain failed", {error, generationId: this.generationId}])
+    })
   }
 
   /**
