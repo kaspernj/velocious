@@ -1,0 +1,1 @@
+{"version":3,"file":"files-finder.d.ts","sourceRoot":"","sources":["../../../../src/database/migrator/files-finder.js"],"names":[],"mappings":"AAOA,MAAM,CAAC,OAAO,OAAO,oCAAoC;IAWhD,IAAI;IAVX;;;;OAIG;IACH,YAAY,EAAC,IAAI,EAAE,GAAG,QAAQ,EAAC,EAF5B;QAAqB,IAAI,EAAjB,MAAM,CAChB;KAC8B,EAM9B;IAED;;;OAGG;IACG,SAAS,IAFF,OAAO,CAAC,KAAK,CAAC,OAAO,YAAY,EAAE,mBAAmB,CAAC,CAAC,CA8BpE;CACF"}

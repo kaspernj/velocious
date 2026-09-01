@@ -59,6 +59,10 @@ npm install velocious
 npx velocious init
 ```
 
+Pinned Git commits can be installed without lifecycle scripts by using a GitHub
+commit archive. Velocious checks in generated `build/` output for this purpose;
+see [Git dependency installation](docs/git-installation.md).
+
 By default, Velocious looks for your configuration in `src/config/configuration.js`. If you keep the configuration elsewhere, make sure your app imports it early and calls `configuration.setCurrent()`.
 
 Application initializers may implement `teardown()` and inspect their frozen

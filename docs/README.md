@@ -16,6 +16,7 @@ This folder contains implementation learnings and practical guidance discovered 
 - `docs/http-server.md`: HTTP server worker configuration, socket distribution behavior, buffered response compression, and HEAD response semantics.
 - `docs/expo-metro-compatibility.md`: Expo/Metro integration rules and the repository Expo export check.
 - `docs/frontend-models.md`: Frontend model transport, commands, lookup semantics, and pitfalls.
+- `docs/git-installation.md`: Credential-free installation from pinned Git commits without lifecycle scripts.
 - `docs/query-bulk-operations.md`: `updateAll` for efficient batch updates and `destroyAll` behavior.
 - `docs/rampway-integration.md`: Mounting and operating Rampway's package-owned durable deployment control plane in a Velocious application.
 - `docs/logging.md`: Rails-style request and database query logging behavior.

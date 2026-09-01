@@ -1,0 +1,1 @@
+{"version":3,"file":"check.d.ts","sourceRoot":"","sources":["../../../../../../src/cli/commands/db/tenants/check.js"],"names":[],"mappings":"AAEA,OAAO,WAAW,MAAM,0BAA0B,CAAA;AAGlD,MAAM,CAAC,OAAO,OAAO,cAAe,SAAQ,WAAW;IACrD;;;OAGG;IACG,OAAO,IAFA,OAAO,CAAC;QAAC,UAAU,EAAE,MAAM,CAAC;QAAC,WAAW,EAAE,MAAM,CAAA;KAAC,GAAG,IAAI,CAAC,CA4BrE;CACF"}

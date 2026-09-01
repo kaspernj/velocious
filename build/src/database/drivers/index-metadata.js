@@ -1,0 +1,26 @@
+// @ts-check
+import { forcedBoolean, forcedString } from "typanic";
+/**
+ * IndexMetadataType type.
+ * @typedef {object} IndexMetadataType
+ * @property {string} column_name - Index column name.
+ * @property {string} index_name - Index name.
+ * @property {boolean} is_primary_key - Whether the index is primary.
+ * @property {boolean} is_unique - Whether the index is unique.
+ * @property {string} table_name - Table name.
+ */
+/**
+ * Normalizes one untrusted database index metadata row.
+ * @param {import("./base.js").QueryRowType} row - Database index metadata row.
+ * @returns {IndexMetadataType} - Validated index metadata.
+ */
+export function normalizeIndexMetadataRow(row) {
+    return {
+        column_name: forcedString(row.column_name, "index column_name"),
+        index_name: forcedString(row.index_name, "index index_name"),
+        is_primary_key: forcedBoolean(row.is_primary_key, "index is_primary_key"),
+        is_unique: forcedBoolean(row.is_unique, "index is_unique"),
+        table_name: forcedString(row.table_name, "index table_name")
+    };
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiaW5kZXgtbWV0YWRhdGEuanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuLi8uLi8uLi8uLi9zcmMvZGF0YWJhc2UvZHJpdmVycy9pbmRleC1tZXRhZGF0YS5qcyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQSxZQUFZO0FBRVosT0FBTyxFQUFFLGFBQWEsRUFBRSxZQUFZLEVBQUUsTUFBTSxTQUFTLENBQUE7QUFFckQ7Ozs7Ozs7O0dBUUc7QUFFSDs7OztHQUlHO0FBQ0gsTUFBTSxVQUFVLHlCQUF5QixDQUFDLEdBQUc7SUFDM0MsT0FBTztRQUNMLFdBQVcsRUFBRSxZQUFZLENBQUMsR0FBRyxDQUFDLFdBQVcsRUFBRSxtQkFBbUIsQ0FBQztRQUMvRCxVQUFVLEVBQUUsWUFBWSxDQUFDLEdBQUcsQ0FBQyxVQUFVLEVBQUUsa0JBQWtCLENBQUM7UUFDNUQsY0FBYyxFQUFFLGFBQWEsQ0FBQyxHQUFHLENBQUMsY0FBYyxFQUFFLHNCQUFzQixDQUFDO1FBQ3pFLFNBQVMsRUFBRSxhQUFhLENBQUMsR0FBRyxDQUFDLFNBQVMsRUFBRSxpQkFBaUIsQ0FBQztRQUMxRCxVQUFVLEVBQUUsWUFBWSxDQUFDLEdBQUcsQ0FBQyxVQUFVLEVBQUUsa0JBQWtCLENBQUM7S0FDN0QsQ0FBQTtBQUNILENBQUMiLCJzb3VyY2VzQ29udGVudCI6WyIvLyBAdHMtY2hlY2tcblxuaW1wb3J0IHsgZm9yY2VkQm9vbGVhbiwgZm9yY2VkU3RyaW5nIH0gZnJvbSBcInR5cGFuaWNcIlxuXG4vKipcbiAqIEluZGV4TWV0YWRhdGFUeXBlIHR5cGUuXG4gKiBAdHlwZWRlZiB7b2JqZWN0fSBJbmRleE1ldGFkYXRhVHlwZVxuICogQHByb3BlcnR5IHtzdHJpbmd9IGNvbHVtbl9uYW1lIC0gSW5kZXggY29sdW1uIG5hbWUuXG4gKiBAcHJvcGVydHkge3N0cmluZ30gaW5kZXhfbmFtZSAtIEluZGV4IG5hbWUuXG4gKiBAcHJvcGVydHkge2Jvb2xlYW59IGlzX3ByaW1hcnlfa2V5IC0gV2hldGhlciB0aGUgaW5kZXggaXMgcHJpbWFyeS5cbiAqIEBwcm9wZXJ0eSB7Ym9vbGVhbn0gaXNfdW5pcXVlIC0gV2hldGhlciB0aGUgaW5kZXggaXMgdW5pcXVlLlxuICogQHByb3BlcnR5IHtzdHJpbmd9IHRhYmxlX25hbWUgLSBUYWJsZSBuYW1lLlxuICovXG5cbi8qKlxuICogTm9ybWFsaXplcyBvbmUgdW50cnVzdGVkIGRhdGFiYXNlIGluZGV4IG1ldGFkYXRhIHJvdy5cbiAqIEBwYXJhbSB7aW1wb3J0KFwiLi9iYXNlLmpzXCIpLlF1ZXJ5Um93VHlwZX0gcm93IC0gRGF0YWJhc2UgaW5kZXggbWV0YWRhdGEgcm93LlxuICogQHJldHVybnMge0luZGV4TWV0YWRhdGFUeXBlfSAtIFZhbGlkYXRlZCBpbmRleCBtZXRhZGF0YS5cbiAqL1xuZXhwb3J0IGZ1bmN0aW9uIG5vcm1hbGl6ZUluZGV4TWV0YWRhdGFSb3cocm93KSB7XG4gIHJldHVybiB7XG4gICAgY29sdW1uX25hbWU6IGZvcmNlZFN0cmluZyhyb3cuY29sdW1uX25hbWUsIFwiaW5kZXggY29sdW1uX25hbWVcIiksXG4gICAgaW5kZXhfbmFtZTogZm9yY2VkU3RyaW5nKHJvdy5pbmRleF9uYW1lLCBcImluZGV4IGluZGV4X25hbWVcIiksXG4gICAgaXNfcHJpbWFyeV9rZXk6IGZvcmNlZEJvb2xlYW4ocm93LmlzX3ByaW1hcnlfa2V5LCBcImluZGV4IGlzX3ByaW1hcnlfa2V5XCIpLFxuICAgIGlzX3VuaXF1ZTogZm9yY2VkQm9vbGVhbihyb3cuaXNfdW5pcXVlLCBcImluZGV4IGlzX3VuaXF1ZVwiKSxcbiAgICB0YWJsZV9uYW1lOiBmb3JjZWRTdHJpbmcocm93LnRhYmxlX25hbWUsIFwiaW5kZXggdGFibGVfbmFtZVwiKVxuICB9XG59XG4iXX0=

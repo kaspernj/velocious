@@ -1,0 +1,397 @@
+export type SerializedSyncScope = {
+    /**
+     * - Plain attribute conditions from the query.
+     */
+    conditions: Record<string, ReturnType<typeof JSON.parse>>;
+    /**
+     * - Resource/model name the scope was declared for, or null for the all-types (user) scope covering every type the server authorizes for the caller.
+     */
+    resourceType: string | null;
+    /**
+     * - Local partition key: the authenticated identity that declared the scope. Used only to partition the local scope/cursor store (never sent to the server as scope conditions), so a user scope's empty-conditions cursor does not leak across accounts on a shared device.
+     */
+    owner?: string;
+};
+export type ModelSyncRealtimeDeclaration = {
+    /**
+     * - Server channel name to subscribe.
+     */
+    channel: string;
+    /**
+     * - Static subscribe params. The framework injects `authenticationToken` automatically.
+     */
+    params?: Record<string, ReturnType<typeof JSON.parse>>;
+};
+export type SyncClientConflictTrackingConfig = {
+    /**
+     * - Stable device identity.
+     */
+    actorDeviceId: string;
+    /**
+     * - Stable user identity.
+     */
+    actorUserId: string;
+    /**
+     * - Durable idempotency-id generator.
+     */
+    clientMutationId: () => string;
+    /**
+     * - Existing durable mutation log.
+     */
+    mutationLog: import("./local-mutation-log.js").default;
+    /**
+     * - Mutation clock.
+     */
+    now?: () => Date;
+    /**
+     * - Grant identifier retained with intent.
+     */
+    offlineGrantId: string;
+    /**
+     * - Policy hash retained with intent.
+     */
+    policyHash: string;
+    /**
+     * - Authoritative version attribute; defaults to updatedAt when present.
+     */
+    versionAttribute?: string;
+};
+export type SyncClientResourceConfig = {
+    /**
+     * - Model metadata owner for scope translation and derived attributes.
+     */
+    metadataModelClass: ReturnType<typeof JSON.parse>;
+    /**
+     * - Local model class for this resource.
+     */
+    modelClass: ReturnType<typeof JSON.parse>;
+    /**
+     * - Pull-apply attribute mapper. Required for resources that receive pulled changes.
+     */
+    attributes?: import("./sync-api-client-types.js").SyncResourceConfig["attributes"];
+    /**
+     * - Custom pull-apply record resolver.
+     */
+    findRecord?: import("./sync-api-client-types.js").SyncResourceConfig["findRecord"];
+    /**
+     * - Custom pull-apply delete resolver.
+     */
+    findRecordForDelete?: import("./sync-api-client-types.js").SyncResourceConfig["findRecordForDelete"];
+    /**
+     * - Post-apply hook.
+     */
+    afterApply?: import("./sync-api-client-types.js").SyncResourceConfig["afterApply"];
+    /**
+     * - Attributes coerced through sync boolean parsing when queueing.
+     */
+    booleanAttributes?: string[];
+    /**
+     * - Opt-in durable base-version conflict tracking.
+     */
+    conflictTracking?: SyncClientConflictTrackingConfig;
+    /**
+     * - Attributes stripped from queued payloads.
+     */
+    localOnlyAttributes?: string[];
+    /**
+     * - Maps a mutation operation to a sync type. The "upsert" flag queues creates and updates as "update" rows (the server upserts by resource id) and destroys as "delete". Defaults to the operation name with destroy mapped to "delete".
+     */
+    syncType?: "upsert" | ((args: {
+        operation: "create" | "update" | "destroy";
+        record: ReturnType<typeof JSON.parse>;
+    }) => string);
+    /**
+     * - Custom queued-payload builder for tracked mutations.
+     */
+    trackedData?: (args: {
+        operation: "create" | "update" | "destroy";
+        record: ReturnType<typeof JSON.parse>;
+    }) => Record<string, ReturnType<typeof JSON.parse>>;
+    /**
+     * - Automatic mutation tracking policy. On by default (creates and updates queue automatically); `false` opts the resource out, `true` adds destroys, `{operations}` narrows the tracked operations.
+     */
+    track?: boolean | {
+        operations: Array<"create" | "update" | "destroy">;
+    };
+    /**
+     * - Deprecated: static legacy realtime channel this resource subscribes through `subscribeRealtime(...)`. Declared pull scopes subscribe the framework sync channel automatically.
+     */
+    realtime?: ModelSyncRealtimeDeclaration;
+};
+export type ModelSyncDeclarationConfig<TModel = any> = {
+    /**
+     * - Post-apply hook.
+     */
+    afterApply?: import("./sync-api-client-types.js").SyncResourceConfig["afterApply"];
+    /**
+     * - Pull-apply attribute mapper. Required for resources that receive pulled changes.
+     */
+    attributes?: import("./sync-api-client-types.js").SyncResourceConfig["attributes"];
+    /**
+     * - Extra boolean attributes merged with the boolean columns derived from column types.
+     */
+    booleanAttributes?: string[];
+    /**
+     * - Opt-in durable base-version conflict tracking.
+     */
+    conflictTracking?: SyncClientConflictTrackingConfig;
+    /**
+     * - Custom pull-apply record resolver.
+     */
+    findRecord?: import("./sync-api-client-types.js").SyncResourceConfig["findRecord"];
+    /**
+     * - Custom pull-apply delete resolver.
+     */
+    findRecordForDelete?: import("./sync-api-client-types.js").SyncResourceConfig["findRecordForDelete"];
+    /**
+     * - Extra local-only attributes merged with the derived primary key, createdAt/updatedAt, and sync bookkeeping attributes.
+     */
+    localOnlyAttributes?: string[];
+    /**
+     * - Server-side publish declaration consumed by `SyncPublisher.fromConfiguration(...)` on the backend; ignored by the client.
+     */
+    publish?: import("./sync-publisher-types.js").SyncPublishDeclaration<TModel>;
+    /**
+     * - Sync type flag or mapper (see SyncClientResourceConfig).
+     */
+    syncType?: "upsert" | ((args: {
+        operation: "create" | "update" | "destroy";
+        record: ReturnType<typeof JSON.parse>;
+    }) => string);
+    /**
+     * - Automatic mutation tracking policy; an array is shorthand for {operations}. On by default (creates and updates queue automatically); `false` opts the model out (for models written by non-user flows), `true` adds destroys.
+     */
+    track?: boolean | Array<"create" | "update" | "destroy"> | {
+        operations: Array<"create" | "update" | "destroy">;
+    };
+    /**
+     * - Custom queued-payload builder for tracked mutations.
+     */
+    trackedData?: (args: {
+        operation: "create" | "update" | "destroy";
+        record: ReturnType<typeof JSON.parse>;
+    }) => Record<string, ReturnType<typeof JSON.parse>>;
+    /**
+     * - Deprecated: static legacy realtime channel this resource subscribes through `subscribeRealtime(...)`. Declared pull scopes subscribe the framework sync channel automatically.
+     */
+    realtime?: ModelSyncRealtimeDeclaration;
+};
+export type ModelSyncDeclaration<TModel = any> = boolean | ModelSyncDeclarationConfig<TModel>;
+export type SyncClientSharedConnection = import("../configuration-types.js").VelociousSyncRealtimeWebsocketClient;
+export type SyncClientOptions = {
+    /**
+     * - Configuration owning the registered models, the `sync.client` block, and the scope-store database. Defaults to the current configuration.
+     */
+    configuration?: import("../configuration.js").default;
+    /**
+     * - Seeds a newly declared scope's cursor (e.g. from a pre-scope cursor store) so devices don't re-pull everything.
+     */
+    legacyCursor?: (args: {
+        scope: SerializedSyncScope;
+    }) => string | null | Promise<string | null>;
+    /**
+     * - Immutable scalar context captured for this client and sent with every pull, replay, and realtime subscription.
+     */
+    requestContext?: import("../remote-request-context.js").RemoteRequestContext;
+    /**
+     * - Scope store override (tests).
+     */
+    scopeStore?: import("./sync-scope-store.js").default;
+    /**
+     * - Pending-sync model override. Defaults to the registered "Sync" model.
+     */
+    syncModel?: ReturnType<typeof JSON.parse>;
+    /**
+     * - Tenant database identifier; required with tenantHandle.
+     */
+    databaseIdentifier?: string;
+    /**
+     * - Immutable tenant handle binding every local sync state transition.
+     */
+    tenantHandle?: import("../tenants/tenant-handle.js").default;
+};
+export type SyncClientConfig = {
+    /**
+     * - Resolves the auth token sent with sync requests.
+     */
+    authenticationToken: () => string | Promise<string>;
+    /**
+     * - Max syncs per request.
+     */
+    batchSize?: number;
+    /**
+     * - Configuration owning the scope-store database.
+     */
+    configuration: import("../configuration.js").default;
+    /**
+     * - Connectivity gate for pulls and replays. Defaults to always online.
+     */
+    isOnline?: () => boolean | Promise<boolean>;
+    /**
+     * - Seeds a newly declared scope's cursor (e.g. from a pre-scope cursor store) so devices don't re-pull everything.
+     */
+    legacyCursor?: (args: {
+        scope: SerializedSyncScope;
+    }) => string | null | Promise<string | null>;
+    /**
+     * - Reports background replay/pull failures. Defaults to rethrowing.
+     */
+    onError?: (error: Error) => void;
+    /**
+     * - Posts one changes request.
+     */
+    postChanges: (payload: import("./sync-api-client-types.js").SyncChangesRequest & {
+        scope: SerializedSyncScope;
+    }) => Promise<import("./sync-api-client-types.js").SyncChangesResponse>;
+    /**
+     * - Posts one replay request.
+     */
+    postReplay: (payload: {
+        authenticationToken: string;
+        syncs: Array<Record<string, ReturnType<typeof JSON.parse>>>;
+    }) => Promise<import("./sync-api-client-types.js").SyncReplayResponse>;
+    /**
+     * - Realtime push configuration consumed by `subscribeRealtime(...)`.
+     */
+    realtime?: import("../configuration-types.js").VelociousSyncClientRealtimeConfiguration;
+    /**
+     * - Immutable scalar context captured for this client.
+     */
+    requestContext: import("../remote-request-context.js").RemoteRequestContext;
+    /**
+     * - Derived resource policies keyed by resource/model name.
+     */
+    resources: Record<string, SyncClientResourceConfig>;
+    /**
+     * - Local pending-sync model class.
+     */
+    syncModel: ReturnType<typeof JSON.parse>;
+    /**
+     * - Tenant-scoped database identifier.
+     */
+    databaseIdentifier?: string;
+    /**
+     * - Tenant-scoped immutable handle.
+     */
+    tenantHandle?: import("../tenants/tenant-handle.js").default;
+    /**
+     * - Shared app-lifetime websocket client instance (the low-level shared-connection form).
+     */
+    websocketClient?: SyncClientSharedConnection;
+    /**
+     * - Shared app-lifetime websocket URL the framework builds a client from.
+     */
+    websocketUrl?: string | (() => string | null | undefined);
+};
+/**
+ * Client-declared sync scope serialized from a model query.
+ * @typedef {object} SerializedSyncScope
+ * @property {Record<string, ReturnType<typeof JSON.parse>>} conditions - Plain attribute conditions from the query.
+ * @property {string | null} resourceType - Resource/model name the scope was declared for, or null for the all-types (user) scope covering every type the server authorizes for the caller.
+ * @property {string} [owner] - Local partition key: the authenticated identity that declared the scope. Used only to partition the local scope/cursor store (never sent to the server as scope conditions), so a user scope's empty-conditions cursor does not leak across accounts on a shared device.
+ */
+/**
+ * Static realtime channel declaration on a model's `static sync`, for channels
+ * whose name and params are static.
+ * @deprecated Declared pull scopes subscribe the framework sync channel automatically; keep this only for legacy app channels.
+ * @typedef {object} ModelSyncRealtimeDeclaration
+ * @property {string} channel - Server channel name to subscribe.
+ * @property {Record<string, ReturnType<typeof JSON.parse>>} [params] - Static subscribe params. The framework injects `authenticationToken` automatically.
+ */
+/**
+ * Durable optimistic-version tracking configuration. Identity/grant fields are
+ * retained in the shared LocalMutationLog mutation shape used by offline sync.
+ * @typedef {object} SyncClientConflictTrackingConfig
+ * @property {string} actorDeviceId - Stable device identity.
+ * @property {string} actorUserId - Stable user identity.
+ * @property {() => string} clientMutationId - Durable idempotency-id generator.
+ * @property {import("./local-mutation-log.js").default} mutationLog - Existing durable mutation log.
+ * @property {() => Date} [now] - Mutation clock.
+ * @property {string} offlineGrantId - Grant identifier retained with intent.
+ * @property {string} policyHash - Policy hash retained with intent.
+ * @property {string} [versionAttribute] - Authoritative version attribute; defaults to updatedAt when present.
+ */
+/**
+ * Declarative per-resource sync policy.
+ * @typedef {object} SyncClientResourceConfig
+ * @property {ReturnType<typeof JSON.parse>} metadataModelClass - Model metadata owner for scope translation and derived attributes.
+ * @property {ReturnType<typeof JSON.parse>} modelClass - Local model class for this resource.
+ * @property {import("./sync-api-client-types.js").SyncResourceConfig["attributes"]} [attributes] - Pull-apply attribute mapper. Required for resources that receive pulled changes.
+ * @property {import("./sync-api-client-types.js").SyncResourceConfig["findRecord"]} [findRecord] - Custom pull-apply record resolver.
+ * @property {import("./sync-api-client-types.js").SyncResourceConfig["findRecordForDelete"]} [findRecordForDelete] - Custom pull-apply delete resolver.
+ * @property {import("./sync-api-client-types.js").SyncResourceConfig["afterApply"]} [afterApply] - Post-apply hook.
+ * @property {string[]} [booleanAttributes] - Attributes coerced through sync boolean parsing when queueing.
+ * @property {SyncClientConflictTrackingConfig} [conflictTracking] - Opt-in durable base-version conflict tracking.
+ * @property {string[]} [localOnlyAttributes] - Attributes stripped from queued payloads.
+ * @property {"upsert" | ((args: {operation: "create" | "update" | "destroy", record: ReturnType<typeof JSON.parse>}) => string)} [syncType] - Maps a mutation operation to a sync type. The "upsert" flag queues creates and updates as "update" rows (the server upserts by resource id) and destroys as "delete". Defaults to the operation name with destroy mapped to "delete".
+ * @property {(args: {operation: "create" | "update" | "destroy", record: ReturnType<typeof JSON.parse>}) => Record<string, ReturnType<typeof JSON.parse>>} [trackedData] - Custom queued-payload builder for tracked mutations.
+ * @property {boolean | {operations: Array<"create" | "update" | "destroy">}} [track] - Automatic mutation tracking policy. On by default (creates and updates queue automatically); `false` opts the resource out, `true` adds destroys, `{operations}` narrows the tracked operations.
+ * @property {ModelSyncRealtimeDeclaration} [realtime] - Deprecated: static legacy realtime channel this resource subscribes through `subscribeRealtime(...)`. Declared pull scopes subscribe the framework sync channel automatically.
+ */
+/**
+ * Model-level client sync declaration read from `static sync` by
+ * `SyncClient.fromConfiguration(...)`. `true` opts the model in with all
+ * defaults; an object customizes the derived resource config.
+ * @template [TModel=any]
+ * @typedef {object} ModelSyncDeclarationConfig
+ * @property {import("./sync-api-client-types.js").SyncResourceConfig["afterApply"]} [afterApply] - Post-apply hook.
+ * @property {import("./sync-api-client-types.js").SyncResourceConfig["attributes"]} [attributes] - Pull-apply attribute mapper. Required for resources that receive pulled changes.
+ * @property {string[]} [booleanAttributes] - Extra boolean attributes merged with the boolean columns derived from column types.
+ * @property {SyncClientConflictTrackingConfig} [conflictTracking] - Opt-in durable base-version conflict tracking.
+ * @property {import("./sync-api-client-types.js").SyncResourceConfig["findRecord"]} [findRecord] - Custom pull-apply record resolver.
+ * @property {import("./sync-api-client-types.js").SyncResourceConfig["findRecordForDelete"]} [findRecordForDelete] - Custom pull-apply delete resolver.
+ * @property {string[]} [localOnlyAttributes] - Extra local-only attributes merged with the derived primary key, createdAt/updatedAt, and sync bookkeeping attributes.
+ * @property {import("./sync-publisher-types.js").SyncPublishDeclaration<TModel>} [publish] - Server-side publish declaration consumed by `SyncPublisher.fromConfiguration(...)` on the backend; ignored by the client.
+ * @property {"upsert" | ((args: {operation: "create" | "update" | "destroy", record: ReturnType<typeof JSON.parse>}) => string)} [syncType] - Sync type flag or mapper (see SyncClientResourceConfig).
+ * @property {boolean | Array<"create" | "update" | "destroy"> | {operations: Array<"create" | "update" | "destroy">}} [track] - Automatic mutation tracking policy; an array is shorthand for {operations}. On by default (creates and updates queue automatically); `false` opts the model out (for models written by non-user flows), `true` adds destroys.
+ * @property {(args: {operation: "create" | "update" | "destroy", record: ReturnType<typeof JSON.parse>}) => Record<string, ReturnType<typeof JSON.parse>>} [trackedData] - Custom queued-payload builder for tracked mutations.
+ * @property {ModelSyncRealtimeDeclaration} [realtime] - Deprecated: static legacy realtime channel this resource subscribes through `subscribeRealtime(...)`. Declared pull scopes subscribe the framework sync channel automatically.
+ */
+/**
+ * Model-level sync declaration value: `true` opts in with all defaults, an
+ * object customizes the derived resource config.
+ * @template [TModel=any]
+ * @typedef {boolean | ModelSyncDeclarationConfig<TModel>} ModelSyncDeclaration
+ */
+/**
+ * Shared app-lifetime websocket connection all sync traffic rides. Matches the
+ * realtime websocket client contract; the sync client rides it without owning
+ * its connect/disconnect lifecycle.
+ * @typedef {import("../configuration-types.js").VelociousSyncRealtimeWebsocketClient} SyncClientSharedConnection
+ */
+/**
+ * Options for building a sync client. Everything else — resources, transport
+ * POSTers, auth, connectivity, batch size — is derived from the configuration's
+ * registered models (`static sync`) and its `sync.client` block.
+ * @typedef {object} SyncClientOptions
+ * @property {import("../configuration.js").default} [configuration] - Configuration owning the registered models, the `sync.client` block, and the scope-store database. Defaults to the current configuration.
+ * @property {(args: {scope: SerializedSyncScope}) => string | null | Promise<string | null>} [legacyCursor] - Seeds a newly declared scope's cursor (e.g. from a pre-scope cursor store) so devices don't re-pull everything.
+ * @property {import("../remote-request-context.js").RemoteRequestContext} [requestContext] - Immutable scalar context captured for this client and sent with every pull, replay, and realtime subscription.
+ * @property {import("./sync-scope-store.js").default} [scopeStore] - Scope store override (tests).
+ * @property {ReturnType<typeof JSON.parse>} [syncModel] - Pending-sync model override. Defaults to the registered "Sync" model.
+ * @property {string} [databaseIdentifier] - Tenant database identifier; required with tenantHandle.
+ * @property {import("../tenants/tenant-handle.js").default} [tenantHandle] - Immutable tenant handle binding every local sync state transition.
+ */
+/**
+ * Internal derived sync client configuration built by the SyncClient
+ * constructor — not an app-facing API.
+ * @typedef {object} SyncClientConfig
+ * @property {() => string | Promise<string>} authenticationToken - Resolves the auth token sent with sync requests.
+ * @property {number} [batchSize] - Max syncs per request.
+ * @property {import("../configuration.js").default} configuration - Configuration owning the scope-store database.
+ * @property {() => boolean | Promise<boolean>} [isOnline] - Connectivity gate for pulls and replays. Defaults to always online.
+ * @property {(args: {scope: SerializedSyncScope}) => string | null | Promise<string | null>} [legacyCursor] - Seeds a newly declared scope's cursor (e.g. from a pre-scope cursor store) so devices don't re-pull everything.
+ * @property {(error: Error) => void} [onError] - Reports background replay/pull failures. Defaults to rethrowing.
+ * @property {(payload: import("./sync-api-client-types.js").SyncChangesRequest & {scope: SerializedSyncScope}) => Promise<import("./sync-api-client-types.js").SyncChangesResponse>} postChanges - Posts one changes request.
+ * @property {(payload: {authenticationToken: string, syncs: Array<Record<string, ReturnType<typeof JSON.parse>>>}) => Promise<import("./sync-api-client-types.js").SyncReplayResponse>} postReplay - Posts one replay request.
+ * @property {import("../configuration-types.js").VelociousSyncClientRealtimeConfiguration} [realtime] - Realtime push configuration consumed by `subscribeRealtime(...)`.
+ * @property {import("../remote-request-context.js").RemoteRequestContext} requestContext - Immutable scalar context captured for this client.
+ * @property {Record<string, SyncClientResourceConfig>} resources - Derived resource policies keyed by resource/model name.
+ * @property {ReturnType<typeof JSON.parse>} syncModel - Local pending-sync model class.
+ * @property {string} [databaseIdentifier] - Tenant-scoped database identifier.
+ * @property {import("../tenants/tenant-handle.js").default} [tenantHandle] - Tenant-scoped immutable handle.
+ * @property {SyncClientSharedConnection} [websocketClient] - Shared app-lifetime websocket client instance (the low-level shared-connection form).
+ * @property {string | (() => string | null | undefined)} [websocketUrl] - Shared app-lifetime websocket URL the framework builds a client from.
+ */
+export {};
+//# sourceMappingURL=sync-client-types.d.ts.map

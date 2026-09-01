@@ -1,0 +1,1 @@
+{"version":3,"file":"has-one.d.ts","sourceRoot":"","sources":["../../../../../src/database/record/relationships/has-one.js"],"names":[],"mappings":"AAEA,OAAO,gBAAgB,MAAM,WAAW,CAAA;AAGxC,MAAM,CAAC,OAAO,OAAO,yCAA0C,SAAQ,gBAAgB;IAqB5E,+BAA+B;IApBxC;;;OAGG;IACH,aAAa,IAFA,MAAM,CAUlB;IAED;;;OAGG;IACH,YAAY,IAFC,MAAM,GAAG,SAAS,CAwB9B;CACF"}

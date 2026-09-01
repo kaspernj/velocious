@@ -1,0 +1,1 @@
+{"version":3,"file":"foreign-key.d.ts","sourceRoot":"","sources":["../../../../../src/database/drivers/mysql/foreign-key.js"],"names":[],"mappings":"AAEA,OAAO,cAAc,MAAM,wBAAwB,CAAA;AAGnD,MAAM,CAAC,OAAO,OAAO,uCAAwC,SAAQ,cAAc;IACjF,aAAa,QAA+C;IAC5D,OAAO,QAAmD;IAC1D,YAAY,QAA8C;IAC1D,uBAAuB,QAA0D;IACjF,sBAAsB,QAAyD;CAChF"}

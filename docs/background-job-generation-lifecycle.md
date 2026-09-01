@@ -6,4 +6,4 @@ Retirement synchronously fences new dispatch, then lets workers finish in-flight
 
 Lifecycle control emits structured start/completion/failure stages. Request bounds must accommodate startup reconciliation, but larger timeouts are not a substitute for non-blocking activation semantics.
 
-Git consumers are supported: `prepare` builds generated runtime artifacts from source. Immutable Git SHA/content digest proves code identity; package version remains compatibility metadata.
+Git consumers are supported through checked-in generated runtime artifacts. Immutable Git SHA/content digest proves code identity; package version remains compatibility metadata.
