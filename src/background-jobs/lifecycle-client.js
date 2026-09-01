@@ -6,7 +6,7 @@ import timeout from "awaitery/build/timeout.js"
 import JsonSocket from "./json-socket.js"
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 10000
-export const MAX_LIFECYCLE_REQUEST_TIMEOUT_MS = 60000
+export const MAX_LIFECYCLE_REQUEST_TIMEOUT_MS = 120000
 
 /** One-request acknowledged lifecycle client. */
 export default class BackgroundJobsLifecycleClient {

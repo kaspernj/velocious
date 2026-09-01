@@ -13,25 +13,25 @@ import { describe, expect, it } from "../../src/testing/test.js"
 
 describe("Background jobs lifecycle control", () => {
   it("accepts the maximum lifecycle request timeout", () => {
-    expect(MAX_LIFECYCLE_REQUEST_TIMEOUT_MS).toEqual(60000)
+    expect(MAX_LIFECYCLE_REQUEST_TIMEOUT_MS).toEqual(120000)
 
     const client = new BackgroundJobsLifecycleClient({
       configuration: dummyConfiguration,
       generationId: "release-maximum-timeout",
-      requestTimeoutMs: 60000,
+      requestTimeoutMs: 120000,
       socketPath: "/tmp/velocious-maximum-timeout.sock"
     })
 
-    expect(client.requestTimeoutMs).toEqual(60000)
+    expect(client.requestTimeoutMs).toEqual(120000)
   })
 
   it("rejects a lifecycle request timeout above the maximum", () => {
     expect(() => new BackgroundJobsLifecycleClient({
       configuration: dummyConfiguration,
       generationId: "release-over-maximum-timeout",
-      requestTimeoutMs: 60001,
+      requestTimeoutMs: 120001,
       socketPath: "/tmp/velocious-over-maximum-timeout.sock"
-    })).toThrow(/requestTimeoutMs must be an integer between 1 and 60000/)
+    })).toThrow(/requestTimeoutMs must be an integer between 1 and 120000/)
   })
 
   it("times out one stalled lifecycle request and destroys its Unix socket connection", async () => {
