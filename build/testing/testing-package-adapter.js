@@ -26,29 +26,31 @@ function runnerArguments(options) {
 /**
  * Converts one public package suite to the Velocious runner's tree shape.
  * @param {TestingPackageSuite} suite - Public suite declaration.
+ * @param {import("./test-runner.js").TestArgs} inheritedArgs - Arguments inherited from the parent scope.
  * @returns {import("./test-runner.js").TestsArgument} - Velocious test tree.
  */
-function runnerSuite(suite) {
+function runnerSuite(suite, inheritedArgs) {
   /** @type {Record<string, import("./test-runner.js").TestData>} */
   const suiteTests = {}
   /** @type {Record<string, import("./test-runner.js").TestsArgument>} */
   const nestedSuites = {}
+  const suiteArgs = {...inheritedArgs, ...runnerArguments(suite.options)}
 
   for (const test of suite.tests) {
     suiteTests[test.name] = {
-      args: runnerArguments(test.options),
+      args: {...suiteArgs, ...runnerArguments(test.options)},
       filePath: test.location.filePath,
       function: test.callback,
       line: test.location.line
     }
   }
 
-  for (const nestedSuite of suite.suites) nestedSuites[nestedSuite.name] = runnerSuite(nestedSuite)
+  for (const nestedSuite of suite.suites) nestedSuites[nestedSuite.name] = runnerSuite(nestedSuite, suiteArgs)
 
   return {
     afterAlls: suite.hooks.afterAll.map((hook) => ({callback: hook.callback})),
     afterEaches: suite.hooks.afterEach.map((hook) => ({callback: hook.callback})),
-    args: runnerArguments(suite.options),
+    args: suiteArgs,
     beforeAlls: suite.hooks.beforeAll.map((hook) => ({callback: hook.callback})),
     beforeEaches: suite.hooks.beforeEach.map((hook) => ({callback: hook.callback})),
     filePath: suite.location.filePath,
@@ -68,7 +70,7 @@ export function synchronizeTestingPackageTests(tests) {
     if (synchronizedSuites.has(suite)) continue
     if (tests.subs[suite.name]) throw new Error(`Duplicate test description: ${suite.name}`)
 
-    tests.subs[suite.name] = runnerSuite(suite)
+    tests.subs[suite.name] = runnerSuite(suite, tests.args)
     synchronizedSuites.add(suite)
   }
 }

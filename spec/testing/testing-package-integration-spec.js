@@ -50,7 +50,7 @@ describe("@velocious/testing integration", {databaseCleaning: {transaction: fals
     expect(packageJson.devDependencies["@velocious/testing"]).toEqual(undefined)
   })
 
-  it("discovers tests imported from the public package", async () => {
+  it("discovers tests imported from the public package with inherited options", async () => {
     const temporaryDirectory = path.join(repositoryDirectory, "tmp")
 
     await fs.mkdir(temporaryDirectory, {recursive: true})
@@ -63,8 +63,12 @@ describe("@velocious/testing integration", {databaseCleaning: {transaction: fals
     await fs.writeFile(fixturePath, `
       import {describe, it} from "@velocious/testing"
 
-      describe(${JSON.stringify(suiteName)}, () => {
-        it("is visible to the Velocious runner", () => {})
+      describe(${JSON.stringify(suiteName)}, {retries: 2, tags: "suite", timeoutMs: 1000, type: "model"}, () => {
+        it("is visible to the Velocious runner", {retries: 3, tags: "test", timeoutMs: 2000}, () => {})
+
+        describe("nested suite", {tags: "nested suite", type: "request"}, () => {
+          it("inherits nested options", {tags: "nested test", timeoutMs: 3000}, () => {})
+        })
       })
     `)
 
@@ -78,9 +82,30 @@ describe("@velocious/testing integration", {databaseCleaning: {transaction: fals
 
       await testRunner.prepare()
 
-      expect(testRunner.getTestsCount()).toEqual(originalTestCount + 1)
-      expect(tests.subs[suiteName]?.tests["is visible to the Velocious runner"]).toBeDefined()
-      expect(tests.subs[suiteName]?.tests["is visible to the Velocious runner"]?.filePath).toEqual(fixturePath)
+      const importedSuite = tests.subs[suiteName]
+      const importedTest = importedSuite?.tests["is visible to the Velocious runner"]
+      const nestedTest = importedSuite?.subs["nested suite"]?.tests["inherits nested options"]
+
+      expect(testRunner.getTestsCount()).toEqual(originalTestCount + 2)
+      expect(importedTest?.filePath).toEqual(fixturePath)
+      expect(importedTest?.args).toEqual({
+        databaseCleaning: {transaction: true},
+        retries: 3,
+        retry: 3,
+        tags: ["suite", "test"],
+        timeoutMs: 2000,
+        timeoutSeconds: 2,
+        type: "model"
+      })
+      expect(nestedTest?.args).toEqual({
+        databaseCleaning: {transaction: true},
+        retries: 2,
+        retry: 2,
+        tags: ["suite", "nested suite", "nested test"],
+        timeoutMs: 3000,
+        timeoutSeconds: 3,
+        type: "request"
+      })
     } finally {
       delete tests.subs[suiteName]
       defaultTestContext.reset()
