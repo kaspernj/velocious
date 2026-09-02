@@ -44,6 +44,15 @@ export async function startBackgroundJobs({backgroundJobsConfig, workerOptions =
   })
 
   const {onStopped, ...resolvedWorkerOptions} = workerOptions
+  const previousOnWorkerReady = main.onWorkerReady
+  let resolveWorkerReady
+  const workerReady = new Promise((resolve) => {
+    resolveWorkerReady = resolve
+  })
+  main.onWorkerReady = (readyWorker) => {
+    previousOnWorkerReady?.(readyWorker)
+    resolveWorkerReady()
+  }
   const worker = new BackgroundJobsWorker({
     closeDatabaseConnectionsOnStop: false,
     configuration: dummyConfiguration,
@@ -57,6 +66,8 @@ export async function startBackgroundJobs({backgroundJobsConfig, workerOptions =
     ...resolvedWorkerOptions
   })
   await worker.start()
+  await workerReady
+  main.onWorkerReady = previousOnWorkerReady
 
   return {main, store, worker}
 }
