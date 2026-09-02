@@ -70,7 +70,7 @@ describe("Background jobs main retirement admission boundary", () => {
     }
   })
 
-  it("returns a real claim that commits after the synchronous retirement fence", async () => {
+  it("returns after the synchronous fence while full retirement tracks the blocked claim", async () => {
     const claim = promiseBarrier()
     const {main, store} = await startGenerationMain({
       afterHandoffClaim: async () => {
@@ -98,12 +98,14 @@ describe("Background jobs main retirement admission boundary", () => {
       await claim.waiting
 
       const retirement = main.retire()
+      const fullRetirement = main._retirementPromise
       const retireMessage = peer.nextMessage()
       expect(main.getLifecycleState()).toEqual("retiring")
       expect(main.readyWorkers.size).toEqual(0)
       await retirement
+      expect(main.getLifecycleState()).toEqual("retiring")
       claim.release()
-      await main._retirementPromise
+      await fullRetirement
 
       expect((await store.getJob(jobId))?.status).toEqual("queued")
       expect(main.getLifecycleState()).toEqual("retired")
