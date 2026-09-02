@@ -108,6 +108,19 @@ export default class VelociousDatabaseMigration {
     configuration: import("../../configuration.js").default;
     _databaseIdentifier: string;
     _db: import("../drivers/base.js").default;
+    /** @type {import("../migration-execution-phase.js").MigrationExecutionPhase | undefined} */
+    static _executionPhase: import("../migration-execution-phase.js").MigrationExecutionPhase | undefined;
+    /**
+     * Declares when this migration is eligible to run.
+     * @param {import("../migration-execution-phase.js").MigrationExecutionPhase} phase - Execution phase.
+     * @returns {void} - No return value.
+     */
+    static runInPhase(phase: import("../migration-execution-phase.js").MigrationExecutionPhase): void;
+    /**
+     * Gets the declared execution phase.
+     * @returns {import("../migration-execution-phase.js").MigrationExecutionPhase} - Declared execution phase.
+     */
+    static getExecutionPhase(): import("../migration-execution-phase.js").MigrationExecutionPhase;
     /**
      * Runs on databases.
      * @param {string[]} databaseIdentifiers - Database identifiers.

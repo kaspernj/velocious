@@ -4,6 +4,7 @@ import {digg} from "diggerize"
 import BaseCommand from "../../../base-command.js"
 import Migrator from "../../../../database/migrator.js"
 import TenantDatabaseCommandHelper from "../../../tenant-database-command-helper.js"
+import migrationExecutionPhaseArgument from "../../../migration-execution-phase-argument.js"
 
 export default class DbTenantsMigrate extends BaseCommand {
   /**
@@ -11,6 +12,7 @@ export default class DbTenantsMigrate extends BaseCommand {
    * @returns {Promise<{identifier: string, migrationCount: number, tenantCount: number} | void>} - Result in test mode.
    */
   async execute() {
+    const executionPhase = migrationExecutionPhaseArgument(this.processArgs || [])
     const helper = new TenantDatabaseCommandHelper({
       command: this,
       identifier: this.processArgs?.[1]
@@ -19,7 +21,8 @@ export default class DbTenantsMigrate extends BaseCommand {
     const tenantCount = await helper.eachTenant(async ({databaseConfiguration, tenant}) => {
       const migrator = new Migrator({
         configuration: this.getConfiguration(),
-        databaseIdentifiers: [helper.identifier]
+        databaseIdentifiers: [helper.identifier],
+        executionPhase
       })
 
       let migrationsApplied = 0

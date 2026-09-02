@@ -641,6 +641,7 @@ export default class BackgroundJobsMain {
     await this.scheduler?.stop()
     this.scheduler = undefined
     if (this._drainPromise) await this._drainPromise
+    if (this._stopped) return
 
     for (const worker of this.workers) {
       worker.isDraining = true

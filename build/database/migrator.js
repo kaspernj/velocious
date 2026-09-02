@@ -5,6 +5,7 @@ import * as inflection from "inflection"
 import Logger from "../logger.js"
 import MigrationsLedger from "./migrations-ledger.js"
 import {NotImplementedError} from "./migration/index.js"
+import { migrationExecutionPhase, migrationRunsInExecutionPhase } from "./migration-execution-phase.js"
 import restArgsError from "../utils/rest-args-error.js"
 
 export default class VelociousDatabaseMigrator {
@@ -18,14 +19,16 @@ export default class VelociousDatabaseMigrator {
    * @param {object} args - Options object.
    * @param {import("../configuration.js").default} args.configuration - Configuration instance.
    * @param {string[]} [args.databaseIdentifiers] - Optional database identifiers to migrate.
+   * @param {import("./migration-execution-phase.js").MigrationExecutionPhase} [args.executionPhase] - Optional migration execution phase to select.
    */
-  constructor({configuration, databaseIdentifiers, ...restArgs}) {
+  constructor({configuration, databaseIdentifiers, executionPhase, ...restArgs}) {
     restArgsError(restArgs)
 
     if (!configuration) throw new Error("configuration argument is required")
 
     this.configuration = configuration
     this.databaseIdentifiers = databaseIdentifiers
+    this.executionPhase = executionPhase === undefined ? undefined : migrationExecutionPhase(executionPhase)
     this.logger = new Logger(this)
   }
 
@@ -188,6 +191,7 @@ export default class VelociousDatabaseMigrator {
       if (!MigrationClass || typeof MigrationClass !== "function") {
         throw new Error(`Migration ${migration.file} must export a default migration class. Type: ${typeof MigrationClass}`)
       }
+      if (!migrationRunsInExecutionPhase(MigrationClass, this.executionPhase)) continue
       if (!(MigrationClass.getDatabaseIdentifiers() || ["default"]).includes(databaseIdentifier)) continue
 
       const migrationInstance = new MigrationClass({configuration: this.configuration, databaseIdentifier, db})
@@ -519,6 +523,7 @@ export default class VelociousDatabaseMigrator {
     if (!migrationClass || typeof migrationClass !== "function") {
       throw new Error(`Migration ${migration.file} must export a default migration class. Type: ${typeof migrationClass}`)
     }
+    if (direction == "up" && !migrationRunsInExecutionPhase(migrationClass, this.executionPhase)) return false
 
     const migrationDatabaseIdentifiers = migrationClass.getDatabaseIdentifiers() || ["default"]
 

@@ -4,6 +4,8 @@ import {digg} from "diggerize"
 import BaseCommand from "../../../../base-command.js"
 import TenantDatabaseCommandHelper from "../../../../tenant-database-command-helper.js"
 import TenantMigrationPendingInspector from "../../../../../database/tenants/migration-pending-inspector.js"
+import { migrationRunsInExecutionPhase } from "../../../../../database/migration-execution-phase.js"
+import migrationExecutionPhaseArgument from "../../../../migration-execution-phase-argument.js"
 
 export default class DbTenantsMigrationsPending extends BaseCommand {
   /**
@@ -11,6 +13,7 @@ export default class DbTenantsMigrationsPending extends BaseCommand {
    * @returns {Promise<{hasPendingMigrations: boolean, identifier: string, migrationCount: number, pendingTenantCount: number, tenantCount: number}>} - Deploy preflight result.
    */
   async execute() {
+    const executionPhase = migrationExecutionPhaseArgument(this.processArgs || [])
     const helper = new TenantDatabaseCommandHelper({
       command: this,
       identifier: this.processArgs?.[1]
@@ -24,7 +27,7 @@ export default class DbTenantsMigrationsPending extends BaseCommand {
 
       const MigrationClass = await requireMigration(migration.fullPath)
 
-      if ((MigrationClass.getDatabaseIdentifiers() || ["default"]).includes(helper.identifier)) {
+      if (migrationRunsInExecutionPhase(MigrationClass, executionPhase) && (MigrationClass.getDatabaseIdentifiers() || ["default"]).includes(helper.identifier)) {
         applicableMigrationVersions.push(migration.date)
       }
     }

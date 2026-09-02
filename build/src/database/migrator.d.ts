@@ -2,6 +2,7 @@ import Logger from "../logger.js";
 export default class VelociousDatabaseMigrator {
     configuration: import("../configuration.js").default;
     databaseIdentifiers: string[] | undefined;
+    executionPhase: import("./migration-execution-phase.js").MigrationExecutionPhase | undefined;
     logger: Logger;
     /**
      * Migrations versions.
@@ -12,10 +13,12 @@ export default class VelociousDatabaseMigrator {
      * @param {object} args - Options object.
      * @param {import("../configuration.js").default} args.configuration - Configuration instance.
      * @param {string[]} [args.databaseIdentifiers] - Optional database identifiers to migrate.
+     * @param {import("./migration-execution-phase.js").MigrationExecutionPhase} [args.executionPhase] - Optional migration execution phase to select.
      */
-    constructor({ configuration, databaseIdentifiers, ...restArgs }: {
+    constructor({ configuration, databaseIdentifiers, executionPhase, ...restArgs }: {
         configuration: import("../configuration.js").default;
         databaseIdentifiers?: string[];
+        executionPhase?: import("./migration-execution-phase.js").MigrationExecutionPhase;
     });
     /**
      * Runs handles database identifier.

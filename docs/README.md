@@ -11,6 +11,7 @@ This folder contains implementation learnings and practical guidance discovered 
 - `docs/background-jobs.md`: Background job operational behavior, including failure events for production error reporting.
 - `docs/cli.md`: CLI process exit behavior for successful and rejected commands.
 - `docs/database-migrations.md`: Migration helpers, UTC datetime storage, implicit primary keys, and reference column defaults.
+- `docs/migration-execution-phases.md`: Caller-selected pre-runtime and post-publication migration sets across filesystem, package, require-context, and tenant catalogs.
 - `docs/docker-development-environment.md`: Canonical `dev` Compose service, development-home bind contract, credential boundary, and the static contract verifier.
 - `docs/operation-scoped-transactions.md`: Explicit singular-database transactions with operation-bound models, records, savepoints, commit callbacks, and pool isolation.
 - `docs/http-server.md`: HTTP server worker configuration, socket distribution behavior, buffered response compression, and HEAD response semantics.

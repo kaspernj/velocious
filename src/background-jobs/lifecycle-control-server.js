@@ -244,7 +244,7 @@ export default class BackgroundJobsLifecycleControlServer {
     try {
       this._validateRequest(message)
       if (action === "activate") await this.main.activate()
-      else await this.main.retire()
+      else void this.main.retire()
 
       this._writeResponse(socket, {
         type: "background-jobs-lifecycle-ack",
