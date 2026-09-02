@@ -1,0 +1,98 @@
+// @ts-check
+/**
+ * A literal or lazy attribute (or transient) declaration. A function value is the
+ * lazy form and receives the evaluator context; any other value is a literal.
+ * @typedef {object} AttributeDeclaration
+ * @property {"attribute"} kind - Discriminant.
+ * @property {string} name - Attribute name.
+ * @property {boolean} isTransient - Whether the value is transient (never assigned/returned).
+ * @property {ReturnType<typeof JSON.parse>} value - Literal value or lazy `(context) => value` function.
+ */
+/**
+ * A lifecycle callback declaration. The same declaration object reached through
+ * multiple trait paths runs once per record (dedup is by object identity).
+ * @typedef {object} CallbackDeclaration
+ * @property {"callback"} kind - Discriminant.
+ * @property {string} event - One of the supported callback events.
+ * @property {(args: {record: ReturnType<typeof JSON.parse>, context: ReturnType<typeof JSON.parse>, strategy: string}) => (void | Promise<void>)} fn - Callback body.
+ */
+/**
+ * A base-trait inclusion declaration (a trait applied by default within a factory
+ * or composed inside another trait).
+ * @typedef {object} TraitIncludeDeclaration
+ * @property {"traitInclude"} kind - Discriminant.
+ * @property {string} name - Referenced trait name.
+ */
+/**
+ * A custom-constructor declaration.
+ * @typedef {object} InitializeWithDeclaration
+ * @property {"initializeWith"} kind - Discriminant.
+ * @property {(args: {attributes: Record<string, ReturnType<typeof JSON.parse>>, context: ReturnType<typeof JSON.parse>, get: (name: string) => ReturnType<typeof JSON.parse>}) => (ReturnType<typeof JSON.parse> | Promise<ReturnType<typeof JSON.parse>>)} fn - Constructor body.
+ */
+/**
+ * A custom-persistence declaration.
+ * @typedef {object} ToCreateDeclaration
+ * @property {"toCreate"} kind - Discriminant.
+ * @property {(args: {record: ReturnType<typeof JSON.parse>, context: ReturnType<typeof JSON.parse>}) => (void | Promise<void>)} fn - Persistence body.
+ */
+/**
+ * A declaration that disables persistence entirely for the create strategy.
+ * @typedef {object} SkipCreateDeclaration
+ * @property {"skipCreate"} kind - Discriminant.
+ */
+/**
+ * Union of every declaration kind stored on a factory/trait definition. Includes
+ * association declarations imported from their own module.
+ * @typedef {AttributeDeclaration | CallbackDeclaration | TraitIncludeDeclaration | InitializeWithDeclaration | ToCreateDeclaration | SkipCreateDeclaration | import("./association-declaration.js").default} Declaration
+ */
+/**
+ * Creates a literal/lazy attribute declaration.
+ * @param {string} name - Attribute name.
+ * @param {ReturnType<typeof JSON.parse>} value - Literal value or lazy function.
+ * @param {boolean} isTransient - Whether the declaration is transient.
+ * @returns {AttributeDeclaration} - The frozen declaration.
+ */
+export function attributeDeclaration(name, value, isTransient) {
+    return Object.freeze({ kind: "attribute", name, isTransient, value });
+}
+/**
+ * Creates a lifecycle callback declaration.
+ * @param {string} event - Callback event name.
+ * @param {CallbackDeclaration["fn"]} fn - Callback body.
+ * @returns {CallbackDeclaration} - The frozen declaration.
+ */
+export function callbackDeclaration(event, fn) {
+    return Object.freeze({ kind: "callback", event, fn });
+}
+/**
+ * Creates a base-trait inclusion declaration.
+ * @param {string} name - Referenced trait name.
+ * @returns {TraitIncludeDeclaration} - The frozen declaration.
+ */
+export function traitIncludeDeclaration(name) {
+    return Object.freeze({ kind: "traitInclude", name });
+}
+/**
+ * Creates a custom-constructor declaration.
+ * @param {InitializeWithDeclaration["fn"]} fn - Constructor body.
+ * @returns {InitializeWithDeclaration} - The frozen declaration.
+ */
+export function initializeWithDeclaration(fn) {
+    return Object.freeze({ kind: "initializeWith", fn });
+}
+/**
+ * Creates a custom-persistence declaration.
+ * @param {ToCreateDeclaration["fn"]} fn - Persistence body.
+ * @returns {ToCreateDeclaration} - The frozen declaration.
+ */
+export function toCreateDeclaration(fn) {
+    return Object.freeze({ kind: "toCreate", fn });
+}
+/**
+ * Creates a skip-create declaration.
+ * @returns {SkipCreateDeclaration} - The frozen declaration.
+ */
+export function skipCreateDeclaration() {
+    return Object.freeze({ kind: "skipCreate" });
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZGVjbGFyYXRpb25zLmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiLi4vLi4vLi4vLi4vc3JjL3Rlc3RpbmcvZmFjdG9yeS9kZWNsYXJhdGlvbnMuanMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBQUEsWUFBWTtBQUVaOzs7Ozs7OztHQVFHO0FBRUg7Ozs7Ozs7R0FPRztBQUVIOzs7Ozs7R0FNRztBQUVIOzs7OztHQUtHO0FBRUg7Ozs7O0dBS0c7QUFFSDs7OztHQUlHO0FBRUg7Ozs7R0FJRztBQUVIOzs7Ozs7R0FNRztBQUNILE1BQU0sVUFBVSxvQkFBb0IsQ0FBQyxJQUFJLEVBQUUsS0FBSyxFQUFFLFdBQVc7SUFDM0QsT0FBTyxNQUFNLENBQUMsTUFBTSxDQUFDLEVBQUMsSUFBSSxFQUFFLFdBQVcsRUFBRSxJQUFJLEVBQUUsV0FBVyxFQUFFLEtBQUssRUFBQyxDQUFDLENBQUE7QUFDckUsQ0FBQztBQUVEOzs7OztHQUtHO0FBQ0gsTUFBTSxVQUFVLG1CQUFtQixDQUFDLEtBQUssRUFBRSxFQUFFO0lBQzNDLE9BQU8sTUFBTSxDQUFDLE1BQU0sQ0FBQyxFQUFDLElBQUksRUFBRSxVQUFVLEVBQUUsS0FBSyxFQUFFLEVBQUUsRUFBQyxDQUFDLENBQUE7QUFDckQsQ0FBQztBQUVEOzs7O0dBSUc7QUFDSCxNQUFNLFVBQVUsdUJBQXVCLENBQUMsSUFBSTtJQUMxQyxPQUFPLE1BQU0sQ0FBQyxNQUFNLENBQUMsRUFBQyxJQUFJLEVBQUUsY0FBYyxFQUFFLElBQUksRUFBQyxDQUFDLENBQUE7QUFDcEQsQ0FBQztBQUVEOzs7O0dBSUc7QUFDSCxNQUFNLFVBQVUseUJBQXlCLENBQUMsRUFBRTtJQUMxQyxPQUFPLE1BQU0sQ0FBQyxNQUFNLENBQUMsRUFBQyxJQUFJLEVBQUUsZ0JBQWdCLEVBQUUsRUFBRSxFQUFDLENBQUMsQ0FBQTtBQUNwRCxDQUFDO0FBRUQ7Ozs7R0FJRztBQUNILE1BQU0sVUFBVSxtQkFBbUIsQ0FBQyxFQUFFO0lBQ3BDLE9BQU8sTUFBTSxDQUFDLE1BQU0sQ0FBQyxFQUFDLElBQUksRUFBRSxVQUFVLEVBQUUsRUFBRSxFQUFDLENBQUMsQ0FBQTtBQUM5QyxDQUFDO0FBRUQ7OztHQUdHO0FBQ0gsTUFBTSxVQUFVLHFCQUFxQjtJQUNuQyxPQUFPLE1BQU0sQ0FBQyxNQUFNLENBQUMsRUFBQyxJQUFJLEVBQUUsWUFBWSxFQUFDLENBQUMsQ0FBQTtBQUM1QyxDQUFDIiwic291cmNlc0NvbnRlbnQiOlsiLy8gQHRzLWNoZWNrXG5cbi8qKlxuICogQSBsaXRlcmFsIG9yIGxhenkgYXR0cmlidXRlIChvciB0cmFuc2llbnQpIGRlY2xhcmF0aW9uLiBBIGZ1bmN0aW9uIHZhbHVlIGlzIHRoZVxuICogbGF6eSBmb3JtIGFuZCByZWNlaXZlcyB0aGUgZXZhbHVhdG9yIGNvbnRleHQ7IGFueSBvdGhlciB2YWx1ZSBpcyBhIGxpdGVyYWwuXG4gKiBAdHlwZWRlZiB7b2JqZWN0fSBBdHRyaWJ1dGVEZWNsYXJhdGlvblxuICogQHByb3BlcnR5IHtcImF0dHJpYnV0ZVwifSBraW5kIC0gRGlzY3JpbWluYW50LlxuICogQHByb3BlcnR5IHtzdHJpbmd9IG5hbWUgLSBBdHRyaWJ1dGUgbmFtZS5cbiAqIEBwcm9wZXJ0eSB7Ym9vbGVhbn0gaXNUcmFuc2llbnQgLSBXaGV0aGVyIHRoZSB2YWx1ZSBpcyB0cmFuc2llbnQgKG5ldmVyIGFzc2lnbmVkL3JldHVybmVkKS5cbiAqIEBwcm9wZXJ0eSB7UmV0dXJuVHlwZTx0eXBlb2YgSlNPTi5wYXJzZT59IHZhbHVlIC0gTGl0ZXJhbCB2YWx1ZSBvciBsYXp5IGAoY29udGV4dCkgPT4gdmFsdWVgIGZ1bmN0aW9uLlxuICovXG5cbi8qKlxuICogQSBsaWZlY3ljbGUgY2FsbGJhY2sgZGVjbGFyYXRpb24uIFRoZSBzYW1lIGRlY2xhcmF0aW9uIG9iamVjdCByZWFjaGVkIHRocm91Z2hcbiAqIG11bHRpcGxlIHRyYWl0IHBhdGhzIHJ1bnMgb25jZSBwZXIgcmVjb3JkIChkZWR1cCBpcyBieSBvYmplY3QgaWRlbnRpdHkpLlxuICogQHR5cGVkZWYge29iamVjdH0gQ2FsbGJhY2tEZWNsYXJhdGlvblxuICogQHByb3BlcnR5IHtcImNhbGxiYWNrXCJ9IGtpbmQgLSBEaXNjcmltaW5hbnQuXG4gKiBAcHJvcGVydHkge3N0cmluZ30gZXZlbnQgLSBPbmUgb2YgdGhlIHN1cHBvcnRlZCBjYWxsYmFjayBldmVudHMuXG4gKiBAcHJvcGVydHkgeyhhcmdzOiB7cmVjb3JkOiBSZXR1cm5UeXBlPHR5cGVvZiBKU09OLnBhcnNlPiwgY29udGV4dDogUmV0dXJuVHlwZTx0eXBlb2YgSlNPTi5wYXJzZT4sIHN0cmF0ZWd5OiBzdHJpbmd9KSA9PiAodm9pZCB8IFByb21pc2U8dm9pZD4pfSBmbiAtIENhbGxiYWNrIGJvZHkuXG4gKi9cblxuLyoqXG4gKiBBIGJhc2UtdHJhaXQgaW5jbHVzaW9uIGRlY2xhcmF0aW9uIChhIHRyYWl0IGFwcGxpZWQgYnkgZGVmYXVsdCB3aXRoaW4gYSBmYWN0b3J5XG4gKiBvciBjb21wb3NlZCBpbnNpZGUgYW5vdGhlciB0cmFpdCkuXG4gKiBAdHlwZWRlZiB7b2JqZWN0fSBUcmFpdEluY2x1ZGVEZWNsYXJhdGlvblxuICogQHByb3BlcnR5IHtcInRyYWl0SW5jbHVkZVwifSBraW5kIC0gRGlzY3JpbWluYW50LlxuICogQHByb3BlcnR5IHtzdHJpbmd9IG5hbWUgLSBSZWZlcmVuY2VkIHRyYWl0IG5hbWUuXG4gKi9cblxuLyoqXG4gKiBBIGN1c3RvbS1jb25zdHJ1Y3RvciBkZWNsYXJhdGlvbi5cbiAqIEB0eXBlZGVmIHtvYmplY3R9IEluaXRpYWxpemVXaXRoRGVjbGFyYXRpb25cbiAqIEBwcm9wZXJ0eSB7XCJpbml0aWFsaXplV2l0aFwifSBraW5kIC0gRGlzY3JpbWluYW50LlxuICogQHByb3BlcnR5IHsoYXJnczoge2F0dHJpYnV0ZXM6IFJlY29yZDxzdHJpbmcsIFJldHVyblR5cGU8dHlwZW9mIEpTT04ucGFyc2U+PiwgY29udGV4dDogUmV0dXJuVHlwZTx0eXBlb2YgSlNPTi5wYXJzZT4sIGdldDogKG5hbWU6IHN0cmluZykgPT4gUmV0dXJuVHlwZTx0eXBlb2YgSlNPTi5wYXJzZT59KSA9PiAoUmV0dXJuVHlwZTx0eXBlb2YgSlNPTi5wYXJzZT4gfCBQcm9taXNlPFJldHVyblR5cGU8dHlwZW9mIEpTT04ucGFyc2U+Pil9IGZuIC0gQ29uc3RydWN0b3IgYm9keS5cbiAqL1xuXG4vKipcbiAqIEEgY3VzdG9tLXBlcnNpc3RlbmNlIGRlY2xhcmF0aW9uLlxuICogQHR5cGVkZWYge29iamVjdH0gVG9DcmVhdGVEZWNsYXJhdGlvblxuICogQHByb3BlcnR5IHtcInRvQ3JlYXRlXCJ9IGtpbmQgLSBEaXNjcmltaW5hbnQuXG4gKiBAcHJvcGVydHkgeyhhcmdzOiB7cmVjb3JkOiBSZXR1cm5UeXBlPHR5cGVvZiBKU09OLnBhcnNlPiwgY29udGV4dDogUmV0dXJuVHlwZTx0eXBlb2YgSlNPTi5wYXJzZT59KSA9PiAodm9pZCB8IFByb21pc2U8dm9pZD4pfSBmbiAtIFBlcnNpc3RlbmNlIGJvZHkuXG4gKi9cblxuLyoqXG4gKiBBIGRlY2xhcmF0aW9uIHRoYXQgZGlzYWJsZXMgcGVyc2lzdGVuY2UgZW50aXJlbHkgZm9yIHRoZSBjcmVhdGUgc3RyYXRlZ3kuXG4gKiBAdHlwZWRlZiB7b2JqZWN0fSBTa2lwQ3JlYXRlRGVjbGFyYXRpb25cbiAqIEBwcm9wZXJ0eSB7XCJza2lwQ3JlYXRlXCJ9IGtpbmQgLSBEaXNjcmltaW5hbnQuXG4gKi9cblxuLyoqXG4gKiBVbmlvbiBvZiBldmVyeSBkZWNsYXJhdGlvbiBraW5kIHN0b3JlZCBvbiBhIGZhY3RvcnkvdHJhaXQgZGVmaW5pdGlvbi4gSW5jbHVkZXNcbiAqIGFzc29jaWF0aW9uIGRlY2xhcmF0aW9ucyBpbXBvcnRlZCBmcm9tIHRoZWlyIG93biBtb2R1bGUuXG4gKiBAdHlwZWRlZiB7QXR0cmlidXRlRGVjbGFyYXRpb24gfCBDYWxsYmFja0RlY2xhcmF0aW9uIHwgVHJhaXRJbmNsdWRlRGVjbGFyYXRpb24gfCBJbml0aWFsaXplV2l0aERlY2xhcmF0aW9uIHwgVG9DcmVhdGVEZWNsYXJhdGlvbiB8IFNraXBDcmVhdGVEZWNsYXJhdGlvbiB8IGltcG9ydChcIi4vYXNzb2NpYXRpb24tZGVjbGFyYXRpb24uanNcIikuZGVmYXVsdH0gRGVjbGFyYXRpb25cbiAqL1xuXG4vKipcbiAqIENyZWF0ZXMgYSBsaXRlcmFsL2xhenkgYXR0cmlidXRlIGRlY2xhcmF0aW9uLlxuICogQHBhcmFtIHtzdHJpbmd9IG5hbWUgLSBBdHRyaWJ1dGUgbmFtZS5cbiAqIEBwYXJhbSB7UmV0dXJuVHlwZTx0eXBlb2YgSlNPTi5wYXJzZT59IHZhbHVlIC0gTGl0ZXJhbCB2YWx1ZSBvciBsYXp5IGZ1bmN0aW9uLlxuICogQHBhcmFtIHtib29sZWFufSBpc1RyYW5zaWVudCAtIFdoZXRoZXIgdGhlIGRlY2xhcmF0aW9uIGlzIHRyYW5zaWVudC5cbiAqIEByZXR1cm5zIHtBdHRyaWJ1dGVEZWNsYXJhdGlvbn0gLSBUaGUgZnJvemVuIGRlY2xhcmF0aW9uLlxuICovXG5leHBvcnQgZnVuY3Rpb24gYXR0cmlidXRlRGVjbGFyYXRpb24obmFtZSwgdmFsdWUsIGlzVHJhbnNpZW50KSB7XG4gIHJldHVybiBPYmplY3QuZnJlZXplKHtraW5kOiBcImF0dHJpYnV0ZVwiLCBuYW1lLCBpc1RyYW5zaWVudCwgdmFsdWV9KVxufVxuXG4vKipcbiAqIENyZWF0ZXMgYSBsaWZlY3ljbGUgY2FsbGJhY2sgZGVjbGFyYXRpb24uXG4gKiBAcGFyYW0ge3N0cmluZ30gZXZlbnQgLSBDYWxsYmFjayBldmVudCBuYW1lLlxuICogQHBhcmFtIHtDYWxsYmFja0RlY2xhcmF0aW9uW1wiZm5cIl19IGZuIC0gQ2FsbGJhY2sgYm9keS5cbiAqIEByZXR1cm5zIHtDYWxsYmFja0RlY2xhcmF0aW9ufSAtIFRoZSBmcm96ZW4gZGVjbGFyYXRpb24uXG4gKi9cbmV4cG9ydCBmdW5jdGlvbiBjYWxsYmFja0RlY2xhcmF0aW9uKGV2ZW50LCBmbikge1xuICByZXR1cm4gT2JqZWN0LmZyZWV6ZSh7a2luZDogXCJjYWxsYmFja1wiLCBldmVudCwgZm59KVxufVxuXG4vKipcbiAqIENyZWF0ZXMgYSBiYXNlLXRyYWl0IGluY2x1c2lvbiBkZWNsYXJhdGlvbi5cbiAqIEBwYXJhbSB7c3RyaW5nfSBuYW1lIC0gUmVmZXJlbmNlZCB0cmFpdCBuYW1lLlxuICogQHJldHVybnMge1RyYWl0SW5jbHVkZURlY2xhcmF0aW9ufSAtIFRoZSBmcm96ZW4gZGVjbGFyYXRpb24uXG4gKi9cbmV4cG9ydCBmdW5jdGlvbiB0cmFpdEluY2x1ZGVEZWNsYXJhdGlvbihuYW1lKSB7XG4gIHJldHVybiBPYmplY3QuZnJlZXplKHtraW5kOiBcInRyYWl0SW5jbHVkZVwiLCBuYW1lfSlcbn1cblxuLyoqXG4gKiBDcmVhdGVzIGEgY3VzdG9tLWNvbnN0cnVjdG9yIGRlY2xhcmF0aW9uLlxuICogQHBhcmFtIHtJbml0aWFsaXplV2l0aERlY2xhcmF0aW9uW1wiZm5cIl19IGZuIC0gQ29uc3RydWN0b3IgYm9keS5cbiAqIEByZXR1cm5zIHtJbml0aWFsaXplV2l0aERlY2xhcmF0aW9ufSAtIFRoZSBmcm96ZW4gZGVjbGFyYXRpb24uXG4gKi9cbmV4cG9ydCBmdW5jdGlvbiBpbml0aWFsaXplV2l0aERlY2xhcmF0aW9uKGZuKSB7XG4gIHJldHVybiBPYmplY3QuZnJlZXplKHtraW5kOiBcImluaXRpYWxpemVXaXRoXCIsIGZufSlcbn1cblxuLyoqXG4gKiBDcmVhdGVzIGEgY3VzdG9tLXBlcnNpc3RlbmNlIGRlY2xhcmF0aW9uLlxuICogQHBhcmFtIHtUb0NyZWF0ZURlY2xhcmF0aW9uW1wiZm5cIl19IGZuIC0gUGVyc2lzdGVuY2UgYm9keS5cbiAqIEByZXR1cm5zIHtUb0NyZWF0ZURlY2xhcmF0aW9ufSAtIFRoZSBmcm96ZW4gZGVjbGFyYXRpb24uXG4gKi9cbmV4cG9ydCBmdW5jdGlvbiB0b0NyZWF0ZURlY2xhcmF0aW9uKGZuKSB7XG4gIHJldHVybiBPYmplY3QuZnJlZXplKHtraW5kOiBcInRvQ3JlYXRlXCIsIGZufSlcbn1cblxuLyoqXG4gKiBDcmVhdGVzIGEgc2tpcC1jcmVhdGUgZGVjbGFyYXRpb24uXG4gKiBAcmV0dXJucyB7U2tpcENyZWF0ZURlY2xhcmF0aW9ufSAtIFRoZSBmcm96ZW4gZGVjbGFyYXRpb24uXG4gKi9cbmV4cG9ydCBmdW5jdGlvbiBza2lwQ3JlYXRlRGVjbGFyYXRpb24oKSB7XG4gIHJldHVybiBPYmplY3QuZnJlZXplKHtraW5kOiBcInNraXBDcmVhdGVcIn0pXG59XG4iXX0=

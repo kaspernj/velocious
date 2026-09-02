@@ -1,0 +1,1 @@
+{"version":3,"file":"order-plain.d.ts","sourceRoot":"","sources":["../../../../src/database/query/order-plain.js"],"names":[],"mappings":"AAEA,OAAO,SAAS,MAAM,iBAAiB,CAAA;AAEvC,MAAM,CAAC,OAAO,OAAO,gCAAiC,SAAQ,SAAS;IAQ9D,KAAK;IACL,YAAY;IARnB;;;;OAIG;IACH,YAAY,KAAK,EAHN,OAAO,YAAY,EAAE,OAGf,EAAE,KAAK,EAFb,MAEa,EAIvB;IAED,eAAe,SAEd;IAED,KAAK,WAMJ;CACF"}

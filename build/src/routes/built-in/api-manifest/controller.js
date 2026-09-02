@@ -1,0 +1,13 @@
+import Controller from "../../../controller.js";
+export default class BuiltInApiManifestController extends Controller {
+    /**
+     * Runs show.
+     * @returns {Promise<void>} - Resolves when the manifest has been rendered.
+     */
+    async show() {
+        const manifest = await this.getConfiguration().getApiManifest();
+        this._response.setHeader("Content-Type", "application/json; charset=UTF-8");
+        this._response.setBody(`${JSON.stringify(manifest, null, 2)}\n`);
+    }
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiY29udHJvbGxlci5qcyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbIi4uLy4uLy4uLy4uLy4uL3NyYy9yb3V0ZXMvYnVpbHQtaW4vYXBpLW1hbmlmZXN0L2NvbnRyb2xsZXIuanMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBQUEsT0FBTyxVQUFVLE1BQU0sd0JBQXdCLENBQUE7QUFFL0MsTUFBTSxDQUFDLE9BQU8sT0FBTyw0QkFBNkIsU0FBUSxVQUFVO0lBQ2xFOzs7T0FHRztJQUNILEtBQUssQ0FBQyxJQUFJO1FBQ1IsTUFBTSxRQUFRLEdBQUcsTUFBTSxJQUFJLENBQUMsZ0JBQWdCLEVBQUUsQ0FBQyxjQUFjLEVBQUUsQ0FBQTtRQUUvRCxJQUFJLENBQUMsU0FBUyxDQUFDLFNBQVMsQ0FBQyxjQUFjLEVBQUUsaUNBQWlDLENBQUMsQ0FBQTtRQUMzRSxJQUFJLENBQUMsU0FBUyxDQUFDLE9BQU8sQ0FBQyxHQUFHLElBQUksQ0FBQyxTQUFTLENBQUMsUUFBUSxFQUFFLElBQUksRUFBRSxDQUFDLENBQUMsSUFBSSxDQUFDLENBQUE7SUFDbEUsQ0FBQztDQUNGIiwic291cmNlc0NvbnRlbnQiOlsiaW1wb3J0IENvbnRyb2xsZXIgZnJvbSBcIi4uLy4uLy4uL2NvbnRyb2xsZXIuanNcIlxuXG5leHBvcnQgZGVmYXVsdCBjbGFzcyBCdWlsdEluQXBpTWFuaWZlc3RDb250cm9sbGVyIGV4dGVuZHMgQ29udHJvbGxlciB7XG4gIC8qKlxuICAgKiBSdW5zIHNob3cuXG4gICAqIEByZXR1cm5zIHtQcm9taXNlPHZvaWQ+fSAtIFJlc29sdmVzIHdoZW4gdGhlIG1hbmlmZXN0IGhhcyBiZWVuIHJlbmRlcmVkLlxuICAgKi9cbiAgYXN5bmMgc2hvdygpIHtcbiAgICBjb25zdCBtYW5pZmVzdCA9IGF3YWl0IHRoaXMuZ2V0Q29uZmlndXJhdGlvbigpLmdldEFwaU1hbmlmZXN0KClcblxuICAgIHRoaXMuX3Jlc3BvbnNlLnNldEhlYWRlcihcIkNvbnRlbnQtVHlwZVwiLCBcImFwcGxpY2F0aW9uL2pzb247IGNoYXJzZXQ9VVRGLThcIilcbiAgICB0aGlzLl9yZXNwb25zZS5zZXRCb2R5KGAke0pTT04uc3RyaW5naWZ5KG1hbmlmZXN0LCBudWxsLCAyKX1cXG5gKVxuICB9XG59XG4iXX0=

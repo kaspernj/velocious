@@ -1,0 +1,12 @@
+import BaseCommand from "../../../base-command.js";
+/** CLI command for loading DB structure SQL files. */
+export default class DbSchemaLoad extends BaseCommand {
+    /**
+     * Runs execute.
+     * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
+     */
+    async execute() {
+        return await this.getConfiguration().getEnvironmentHandler().cliCommandsDbSchemaLoad(this);
+    }
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoibG9hZC5qcyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbIi4uLy4uLy4uLy4uLy4uLy4uL3NyYy9jbGkvY29tbWFuZHMvZGIvc2NoZW1hL2xvYWQuanMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBQUEsT0FBTyxXQUFXLE1BQU0sMEJBQTBCLENBQUE7QUFFbEQsc0RBQXNEO0FBQ3RELE1BQU0sQ0FBQyxPQUFPLE9BQU8sWUFBYSxTQUFRLFdBQVc7SUFDbkQ7OztPQUdHO0lBQ0gsS0FBSyxDQUFDLE9BQU87UUFDWCxPQUFPLE1BQU0sSUFBSSxDQUFDLGdCQUFnQixFQUFFLENBQUMscUJBQXFCLEVBQUUsQ0FBQyx1QkFBdUIsQ0FBQyxJQUFJLENBQUMsQ0FBQTtJQUM1RixDQUFDO0NBQ0YiLCJzb3VyY2VzQ29udGVudCI6WyJpbXBvcnQgQmFzZUNvbW1hbmQgZnJvbSBcIi4uLy4uLy4uL2Jhc2UtY29tbWFuZC5qc1wiXG5cbi8qKiBDTEkgY29tbWFuZCBmb3IgbG9hZGluZyBEQiBzdHJ1Y3R1cmUgU1FMIGZpbGVzLiAqL1xuZXhwb3J0IGRlZmF1bHQgY2xhc3MgRGJTY2hlbWFMb2FkIGV4dGVuZHMgQmFzZUNvbW1hbmQge1xuICAvKipcbiAgICogUnVucyBleGVjdXRlLlxuICAgKiBAcmV0dXJucyB7UHJvbWlzZTxSZXR1cm5UeXBlPHR5cGVvZiBKU09OLnBhcnNlPj59IC0gUmVzb2x2ZXMgd2l0aCB0aGUgY29tbWFuZCByZXN1bHQuXG4gICAqL1xuICBhc3luYyBleGVjdXRlKCkge1xuICAgIHJldHVybiBhd2FpdCB0aGlzLmdldENvbmZpZ3VyYXRpb24oKS5nZXRFbnZpcm9ubWVudEhhbmRsZXIoKS5jbGlDb21tYW5kc0RiU2NoZW1hTG9hZCh0aGlzKVxuICB9XG59XG4iXX0=

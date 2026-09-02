@@ -1,0 +1,175 @@
+// @ts-check
+
+import Current from "../current.js"
+import {dropTenantDatabase} from "./default-tenant-database-provisioning.js"
+import TenantAggregator from "./tenant-aggregator.js"
+import TenantHandle from "./tenant-handle.js"
+import TenantIterator from "./tenant-iterator.js"
+
+/**
+ * Apartment-style runtime façade for multi-tenant apps. A "tenant" is whatever descriptor
+ * object the app's `tenantDatabaseResolver` understands (an account, a project, …); this
+ * class is the single discoverable home for switching into a tenant's context, reading the
+ * current one, iterating every tenant of a database identifier, and dropping a tenant's
+ * database. Switching delegates to {@link Current} (which owns the async-context tenant
+ * state) and additionally runs the callback inside `ensureConnections`, initializing registered
+ * tenant-switched models whose tables exist before the callback runs. Entering a tenant therefore
+ * makes its database immediately queryable — the apartment-style "switch" semantics — without
+ * the caller establishing connections or model metadata itself; iteration and drop drive the
+ * app's tenant database provider hooks.
+ */
+export default class Tenant {
+  /**
+   * Captures an immutable tenant/database handle for explicit browser/native
+   * ORM operations. Physical database configurations are resolved now and are
+   * never recomputed from later ambient tenant changes.
+   * @param {object} tenant - Ordinary or null-prototype JSON-compatible descriptor understood by the app's tenant database resolver.
+   * @param {import("../configuration.js").default} [configuration] - Owning configuration.
+   * @returns {TenantHandle} - Immutable captured handle.
+   */
+  static handle(tenant, configuration = Current.configuration()) {
+    return new TenantHandle({configuration, tenant})
+  }
+
+  /**
+   * Runs `callback` with `tenant` as the current tenant, restoring the previous tenant after.
+   * The callback runs inside `ensureConnections`, so every database identifier the tenant
+   * activates (the global database plus the tenant's database) has a checked-out connection
+   * available for the callback's duration. Registered tenant-switched models whose tables exist
+   * are initialized before the callback runs, so switching into a tenant makes it queryable
+   * without the caller wiring up connections or model metadata. Already-checked-out connections
+   * and in-progress model initialization promises are reused. The callback receives the active
+   * connections keyed by identifier, the same as `ensureConnections`.
+   * @template T
+   * @param {object} tenant Descriptor understood by the app's tenantDatabaseResolver.
+   * @param {(connections: Record<string, import("../database/drivers/base.js").default>) => Promise<T>} callback - Operation to run with the tenant's active connections.
+   * @returns {Promise<T>} - Callback result from within the tenant context.
+   */
+  static async with(tenant, callback) {
+    const configuration = Current.configuration()
+
+    return await Current.withTenant(tenant, async () => await configuration.ensureConnections(async (connections) => {
+      await this._ensureCurrentTenantModelsInitialized(configuration)
+
+      return await callback(connections)
+    }))
+  }
+
+  /**
+   * Initializes registered tenant-switched models whose tables exist in the
+   * current tenant before runtime callbacks can build synchronous query scopes.
+   * Models for absent optional tables remain deferred until they are used.
+   * @param {import("../configuration.js").default} configuration - Current configuration.
+   * @returns {Promise<void>} - Resolves when available tenant models are initialized.
+   */
+  static async _ensureCurrentTenantModelsInitialized(configuration) {
+    for (const modelClass of Object.values(configuration.getModelClasses())) {
+      if (modelClass.isInitialized() || !modelClass.hasTenantDatabaseIdentifierResolver()) continue
+
+      const databaseIdentifier = modelClass.getTenantDatabaseIdentifier()
+
+      if (!databaseIdentifier || !configuration.isDatabaseIdentifierActive(databaseIdentifier)) continue
+
+      const connection = modelClass.connection()
+      const table = await connection.getTableByName(modelClass.tableName(), {throwError: false})
+
+      if (!table) continue
+
+      if (Object.keys(modelClass.getTranslationsMap()).length > 0) {
+        const translationsTable = await connection.getTableByName(modelClass.getTranslationsTableName(), {throwError: false})
+
+        if (!translationsTable) continue
+      }
+
+      await modelClass.ensureInitialized({configuration})
+    }
+  }
+
+  /**
+   * The current tenant descriptor, or undefined when running outside any tenant context.
+   * @returns {Record<string, unknown> | undefined} - Current async-context tenant descriptor, if any.
+   */
+  static current() {
+    return Current.tenant()
+  }
+
+  /**
+   * Lists the tenants for a database identifier through the provider and runs `callback`
+   * within each tenant's context, optionally filtered and several at a time. Like
+   * {@link Tenant.with}, the callback runs inside `ensureConnections` after available
+   * tenant-switched models are initialized, so each tenant's database is queryable without the
+   * caller wiring up connections or model metadata. Returns how many tenants the callback ran
+   * for (after filtering).
+   * @param {{identifier: string, callback: (args: {databaseConfiguration: import("../configuration-types.js").DatabaseConfigurationType, tenant: ReturnType<typeof JSON.parse>}) => Promise<void>, parallel?: number, filter?: (tenant: ReturnType<typeof JSON.parse>) => boolean, configuration?: import("../configuration.js").default}} args - Tenant database identifier, per-tenant operation, filtering, and concurrency settings.
+   * @returns {Promise<number>} - Number of processed tenants.
+   */
+  static async each({identifier, callback, parallel = 1, filter, configuration = Current.configuration()}) {
+    const provider = configuration.getTenantDatabaseProvider(identifier)
+    const listedTenants = await configuration.ensureConnections({name: `Tenant.each: ${identifier}`}, async () => {
+      return await provider.listTenants({configuration, identifier})
+    })
+
+    if (!Array.isArray(listedTenants)) {
+      throw new Error(`Tenant database provider for ${identifier} must return an array from listTenants`)
+    }
+
+    const tenants = filter ? listedTenants.filter(filter) : listedTenants
+    const iterator = new TenantIterator({configuration, identifier, parallelCount: parallel})
+
+    // Run each tenant's callback inside ensureConnections so the iterator stays
+    // connection-agnostic (the db:tenants:* CLI commands share TenantIterator and must run
+    // their callbacks, such as create, before the tenant database exists) while runtime
+    // iteration here gets the tenant's connections established the same way Tenant.with does.
+    return await iterator.run(tenants, async (callbackArgs) => {
+      await configuration.ensureConnections({name: `Tenant.each: ${identifier}`}, async () => {
+        await this._ensureCurrentTenantModelsInitialized(configuration)
+        await callback(callbackArgs)
+      })
+    })
+  }
+
+  /**
+   * Runs one aggregate query across many tenant databases and returns the merged result. The
+   * tenants may be co-located on the default server or spread across other servers, and can be
+   * created or dropped at runtime; the live tenant list is resolved (from `tenants` or the
+   * provider's `listTenants`), grouped by server, aggregated with a single cross-database
+   * `UNION ALL` where the driver supports it (MySQL/MSSQL) or one query per tenant otherwise
+   * (PostgreSQL/SQLite), and merged with each aggregate's own operation. The caller writes only one
+   * per-tenant subquery and declares the key columns and aggregates; see
+   * {@link import("./tenant-aggregator.js").TenantAggregateOptions}.
+   * @param {import("./tenant-aggregator.js").TenantAggregateOptions} options - Aggregate configuration.
+   * @returns {Promise<Array<Record<string, ReturnType<typeof JSON.parse>>>>} - One merged row per distinct key-column combination.
+   */
+  static async aggregateAcross(options) {
+    return await new TenantAggregator(options).run()
+  }
+
+  /**
+   * Drops one tenant's database/schema through the provider's `dropDatabase` hook.
+   * @param {{identifier: string, tenant: object, configuration?: import("../configuration.js").default}} args - Tenant descriptor and database identifier to drop.
+   * @returns {Promise<void>}
+   */
+  static async drop({identifier, tenant, configuration = Current.configuration()}) {
+    const provider = configuration.getTenantDatabaseProvider(identifier)
+    const dropDatabase = typeof provider.dropDatabase === "function"
+      ? provider.dropDatabase.bind(provider)
+      : dropTenantDatabase
+
+    await configuration.runWithTenant(tenant, async () => {
+      // Guard against an unresolved tenant. resolveDatabaseConfiguration falls back to the
+      // base (template/default) tenant database when the resolver returns nothing for this
+      // descriptor, so without this check a provider that drops by databaseConfiguration.name
+      // would drop the template database instead of rejecting the bad tenant.
+      if (!configuration.isDatabaseIdentifierActive(identifier)) {
+        throw new Error(`Tenant database identifier ${identifier} is inactive for tenant: ${TenantIterator.tenantLabel(tenant)}`)
+      }
+
+      await dropDatabase({
+        configuration,
+        databaseConfiguration: configuration.resolveDatabaseConfiguration(identifier),
+        identifier,
+        tenant
+      })
+    })
+  }
+}

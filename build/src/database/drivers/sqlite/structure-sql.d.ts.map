@@ -1,0 +1,1 @@
+{"version":3,"file":"structure-sql.d.ts","sourceRoot":"","sources":["../../../../../src/database/drivers/sqlite/structure-sql.js"],"names":[],"mappings":"AAIA,MAAM,CAAC,OAAO,OAAO,0CAA0C;IAOtD,MAAM;IANb;;;;OAIG;IACH,YAAY,EAAC,MAAM,EAAC,EAFjB;QAA2C,MAAM,EAAzC,OAAO,YAAY,EAAE,OAAO,CACtC;KACmB,EAEnB;IAED;;;OAGG;IACG,KAAK,IAFE,OAAO,CAAC,MAAM,GAAG,IAAI,CAAC,CAsClC;CACF"}

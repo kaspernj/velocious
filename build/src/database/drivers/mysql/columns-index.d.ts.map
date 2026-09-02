@@ -1,0 +1,1 @@
+{"version":3,"file":"columns-index.d.ts","sourceRoot":"","sources":["../../../../../src/database/drivers/mysql/columns-index.js"],"names":[],"mappings":"AAEA,OAAO,gBAAgB,MAAM,0BAA0B,CAAA;AAEvD,OAAO,UAAU,MAAM,iCAAiC,CAAA;AAExD,MAAM,CAAC,OAAO,OAAO,yCAA0C,SAAQ,gBAAgB;IACrF,cAAc,QAMb;IAED,iBAAiB,eAKhB;CACF"}

@@ -1,0 +1,27 @@
+// @ts-check
+/**
+ * Registry for the app's current sync client.
+ *
+ * Kept dependency-free so client-bundled modules (like the query layer) can
+ * delegate to a configured sync client without importing the sync stack.
+ */
+/** @type {ReturnType<typeof JSON.parse>} */
+let currentClient = null;
+/**
+ * Registers the current sync client.
+ * @param {ReturnType<typeof JSON.parse>} client - Configured sync client (or null to clear).
+ * @returns {void}
+ */
+export function setCurrentSyncClient(client) {
+    currentClient = client;
+}
+/**
+ * Returns the current sync client.
+ * @returns {ReturnType<typeof JSON.parse>} Current sync client.
+ */
+export function currentSyncClient() {
+    if (!currentClient)
+        throw new Error("No sync client configured - create a SyncClient and call setCurrent() on it first");
+    return currentClient;
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoic3luYy1jbGllbnQtcmVnaXN0cnkuanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuLi8uLi8uLi9zcmMvc3luYy9zeW5jLWNsaWVudC1yZWdpc3RyeS5qcyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQSxZQUFZO0FBRVo7Ozs7O0dBS0c7QUFFSCw0Q0FBNEM7QUFDNUMsSUFBSSxhQUFhLEdBQUcsSUFBSSxDQUFBO0FBRXhCOzs7O0dBSUc7QUFDSCxNQUFNLFVBQVUsb0JBQW9CLENBQUMsTUFBTTtJQUN6QyxhQUFhLEdBQUcsTUFBTSxDQUFBO0FBQ3hCLENBQUM7QUFFRDs7O0dBR0c7QUFDSCxNQUFNLFVBQVUsaUJBQWlCO0lBQy9CLElBQUksQ0FBQyxhQUFhO1FBQUUsTUFBTSxJQUFJLEtBQUssQ0FBQyxtRkFBbUYsQ0FBQyxDQUFBO0lBRXhILE9BQU8sYUFBYSxDQUFBO0FBQ3RCLENBQUMiLCJzb3VyY2VzQ29udGVudCI6WyIvLyBAdHMtY2hlY2tcblxuLyoqXG4gKiBSZWdpc3RyeSBmb3IgdGhlIGFwcCdzIGN1cnJlbnQgc3luYyBjbGllbnQuXG4gKlxuICogS2VwdCBkZXBlbmRlbmN5LWZyZWUgc28gY2xpZW50LWJ1bmRsZWQgbW9kdWxlcyAobGlrZSB0aGUgcXVlcnkgbGF5ZXIpIGNhblxuICogZGVsZWdhdGUgdG8gYSBjb25maWd1cmVkIHN5bmMgY2xpZW50IHdpdGhvdXQgaW1wb3J0aW5nIHRoZSBzeW5jIHN0YWNrLlxuICovXG5cbi8qKiBAdHlwZSB7UmV0dXJuVHlwZTx0eXBlb2YgSlNPTi5wYXJzZT59ICovXG5sZXQgY3VycmVudENsaWVudCA9IG51bGxcblxuLyoqXG4gKiBSZWdpc3RlcnMgdGhlIGN1cnJlbnQgc3luYyBjbGllbnQuXG4gKiBAcGFyYW0ge1JldHVyblR5cGU8dHlwZW9mIEpTT04ucGFyc2U+fSBjbGllbnQgLSBDb25maWd1cmVkIHN5bmMgY2xpZW50IChvciBudWxsIHRvIGNsZWFyKS5cbiAqIEByZXR1cm5zIHt2b2lkfVxuICovXG5leHBvcnQgZnVuY3Rpb24gc2V0Q3VycmVudFN5bmNDbGllbnQoY2xpZW50KSB7XG4gIGN1cnJlbnRDbGllbnQgPSBjbGllbnRcbn1cblxuLyoqXG4gKiBSZXR1cm5zIHRoZSBjdXJyZW50IHN5bmMgY2xpZW50LlxuICogQHJldHVybnMge1JldHVyblR5cGU8dHlwZW9mIEpTT04ucGFyc2U+fSBDdXJyZW50IHN5bmMgY2xpZW50LlxuICovXG5leHBvcnQgZnVuY3Rpb24gY3VycmVudFN5bmNDbGllbnQoKSB7XG4gIGlmICghY3VycmVudENsaWVudCkgdGhyb3cgbmV3IEVycm9yKFwiTm8gc3luYyBjbGllbnQgY29uZmlndXJlZCAtIGNyZWF0ZSBhIFN5bmNDbGllbnQgYW5kIGNhbGwgc2V0Q3VycmVudCgpIG9uIGl0IGZpcnN0XCIpXG5cbiAgcmV0dXJuIGN1cnJlbnRDbGllbnRcbn1cbiJdfQ==

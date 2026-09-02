@@ -1,0 +1,206 @@
+// @ts-check
+/**
+ * Reactive counter-cache driven by a per-record magnitude.
+ *
+ * Maintains a counter column on a `belongsTo` parent as the running sum of each
+ * child's magnitude — a small number derived from one source attribute (e.g.
+ * `1` while a build's `status` is `running`, else `0`). On every create, update
+ * and destroy the change in magnitude is applied to the parent as a single
+ * atomic increment (`SET col = col + delta`), and when the foreign key changes
+ * the magnitude is moved from the old parent to the new one.
+ *
+ * Because the counter is derived from the source attribute and diffed on every
+ * write, it follows that attribute automatically no matter which code path wrote
+ * it — there is no per-transition increment/decrement to forget. The old value is
+ * captured in `beforeSave` (Velocious clears `changes()` during the post-update
+ * reload) and consumed in `afterSave`, so the increment commits atomically with
+ * the row it reflects.
+ * @typedef {{
+ *   belongsTo: string,
+ *   counterColumn: string,
+ *   sourceAttribute: string,
+ *   magnitude: (sourceValue: ReturnType<typeof JSON.parse>) => number
+ * }} MagnitudeCounterCacheDefinition
+ */
+/**
+ * Captured pending magnitude change stashed on a record between beforeSave and afterSave.
+ * @typedef {{newMagnitude: number, oldMagnitude: number, newParentId: ReturnType<typeof JSON.parse>, oldParentId: ReturnType<typeof JSON.parse>}} PendingMagnitudeDelta
+ */
+/**
+ * Registers a reactive magnitude counter-cache on a model class.
+ * @param {typeof import("./index.js").default} modelClass - Model class to add the counter cache to.
+ * @param {MagnitudeCounterCacheDefinition} definition - Counter cache definition.
+ * @returns {void}
+ */
+export function registerMagnitudeCounterCache(modelClass, definition) {
+    /**
+     * Dynamic class.
+     * @type {ReturnType<typeof JSON.parse>} */
+    const dynamicClass = modelClass;
+    const registeredFlag = `_magnitudeCounterCacheRegistered_${definition.counterColumn}`;
+    // Idempotent per counter column: re-declaring (or subclassing) must not double-register.
+    if (Object.prototype.hasOwnProperty.call(dynamicClass, registeredFlag) && dynamicClass[registeredFlag]) {
+        return;
+    }
+    dynamicClass[registeredFlag] = true;
+    const pendingKey = `_magnitudeCounterCachePending_${definition.counterColumn}`;
+    modelClass.beforeSave(async function (record) {
+        /**
+         * Dynamic record.
+         * @type {ReturnType<typeof JSON.parse>} */
+        const dynamicRecord = record;
+        dynamicRecord[pendingKey] = computePendingMagnitudeDelta(record, definition);
+    });
+    modelClass.afterSave(async function (record) {
+        /**
+         * Dynamic record.
+         * @type {ReturnType<typeof JSON.parse>} */
+        const dynamicRecord = record;
+        const pending = /** @type {PendingMagnitudeDelta | null} */ (dynamicRecord[pendingKey]);
+        dynamicRecord[pendingKey] = null;
+        if (pending) {
+            await applyPendingMagnitudeDelta(record, definition, pending);
+        }
+    });
+    modelClass.afterDestroy(async function (record) {
+        const magnitude = definition.magnitude(record.readAttribute(definition.sourceAttribute));
+        const parentId = currentParentId(record, definition);
+        if (parentId && magnitude !== 0) {
+            await incrementParentCounter(record, definition, parentId, -magnitude);
+        }
+    });
+}
+/**
+ * Diffs the source attribute (and foreign key) across the pending save to capture
+ * how the parent counter should move. Runs in beforeSave, where `changes()` still
+ * holds the pre-save values.
+ * @param {import("./index.js").default} record - Record being saved.
+ * @param {MagnitudeCounterCacheDefinition} definition - Counter cache definition.
+ * @returns {PendingMagnitudeDelta} The captured magnitude change.
+ */
+function computePendingMagnitudeDelta(record, definition) {
+    const changes = record.changes();
+    const sourceColumn = columnNameForAttribute(record, definition.sourceAttribute);
+    const foreignKeyColumn = record.getModelClass().getRelationshipByName(definition.belongsTo).getForeignKey();
+    const newSource = record.readAttribute(definition.sourceAttribute);
+    const oldSource = oldSourceValueThroughReadCast(record, definition.sourceAttribute, sourceColumn, changes, newSource);
+    const newParentId = currentParentId(record, definition);
+    const oldParentId = foreignKeyColumn in changes ? changes[foreignKeyColumn][0] : newParentId;
+    return {
+        newMagnitude: definition.magnitude(newSource),
+        oldMagnitude: definition.magnitude(oldSource),
+        newParentId,
+        oldParentId
+    };
+}
+/**
+ * Applies a captured magnitude change to the parent counter(s) as atomic increments.
+ * @param {import("./index.js").default} record - Record that was saved.
+ * @param {MagnitudeCounterCacheDefinition} definition - Counter cache definition.
+ * @param {PendingMagnitudeDelta} pending - The captured magnitude change.
+ * @returns {Promise<void>}
+ */
+async function applyPendingMagnitudeDelta(record, definition, pending) {
+    const { newMagnitude, oldMagnitude, newParentId, oldParentId } = pending;
+    if (oldParentId === newParentId) {
+        const delta = newMagnitude - oldMagnitude;
+        if (newParentId && delta !== 0) {
+            await incrementParentCounter(record, definition, newParentId, delta);
+        }
+        return;
+    }
+    // The foreign key moved: take the old magnitude off the old parent and put the
+    // new magnitude on the new parent.
+    if (oldParentId && oldMagnitude !== 0) {
+        await incrementParentCounter(record, definition, oldParentId, -oldMagnitude);
+    }
+    if (newParentId && newMagnitude !== 0) {
+        await incrementParentCounter(record, definition, newParentId, newMagnitude);
+    }
+}
+/**
+ * Reads the pre-save value of the source attribute through the normal read/cast
+ * path, so `magnitude` receives the old value in the same shape as the new one
+ * (e.g. a declared boolean as `true`/`false`, not the raw stored `1`/`0`). Drops
+ * the pending change so `readAttribute` falls back to the committed value and
+ * applies the same cast a fresh read would, then restores the pending change.
+ * @param {import("./index.js").default} record - Record being saved.
+ * @param {string} sourceAttribute - Source attribute name.
+ * @param {string} sourceColumn - Source column name.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} changes - The record's pre-save changes (column-keyed).
+ * @param {ReturnType<typeof JSON.parse>} currentValue - The current (new) read value, returned when the source did not change.
+ * @returns {ReturnType<typeof JSON.parse>} The read-cast pre-save value.
+ */
+function oldSourceValueThroughReadCast(record, sourceAttribute, sourceColumn, changes, currentValue) {
+    if (!(sourceColumn in changes)) {
+        return currentValue;
+    }
+    /**
+     * Dynamic record.
+     * @type {ReturnType<typeof JSON.parse>} */
+    const dynamicRecord = record;
+    const pendingChange = dynamicRecord._changes[sourceColumn];
+    delete dynamicRecord._changes[sourceColumn];
+    try {
+        return record.readAttribute(sourceAttribute);
+    }
+    finally {
+        dynamicRecord._changes[sourceColumn] = pendingChange;
+    }
+}
+/**
+ * Reads the record's current foreign-key value for the counter-cache parent.
+ * @param {import("./index.js").default} record - Record whose parent is targeted.
+ * @param {MagnitudeCounterCacheDefinition} definition - Counter cache definition.
+ * @returns {ReturnType<typeof JSON.parse>} The current foreign-key value.
+ */
+function currentParentId(record, definition) {
+    const foreignKeyColumn = record.getModelClass().getRelationshipByName(definition.belongsTo).getForeignKey();
+    return record.readAttribute(attributeNameForColumn(record, foreignKeyColumn));
+}
+/**
+ * Atomically adds `amount` to the parent's counter column for one parent row.
+ * @param {import("./index.js").default} record - Child record (for connection + relationship metadata).
+ * @param {MagnitudeCounterCacheDefinition} definition - Counter cache definition.
+ * @param {ReturnType<typeof JSON.parse>} parentId - Parent primary-key value.
+ * @param {number} amount - Signed integer to add.
+ * @returns {Promise<void>}
+ */
+async function incrementParentCounter(record, definition, parentId, amount) {
+    const modelClass = record.getModelClass();
+    const relationship = modelClass.getRelationshipByName(definition.belongsTo);
+    const parentModelClass = relationship.getTargetModelClass();
+    if (!parentModelClass) {
+        throw new Error(`magnitudeCounterCache on ${modelClass.getModelName()} could not resolve the "${definition.belongsTo}" parent model class`);
+    }
+    // Resolve through the record so an operation both owns the parent write and
+    // rejects a relationship whose parent routes to another database.
+    const db = record
+        .queryForModel(parentModelClass)
+        .driver;
+    const counterColumnSql = db.quoteColumn(definition.counterColumn);
+    const truncatedAmount = Math.trunc(amount);
+    await db.query(`UPDATE ${db.quoteTable(parentModelClass.tableName())} ` +
+        `SET ${counterColumnSql} = COALESCE(${counterColumnSql}, 0) + ${truncatedAmount} ` +
+        `WHERE ${db.quoteColumn(relationship.getPrimaryKey())} = ${db.quote(parentId)}`);
+}
+/**
+ * Resolves the column name backing an attribute name.
+ * @param {import("./index.js").default} record - Record.
+ * @param {string} attributeName - Attribute name.
+ * @returns {string} The column name for the attribute (falls back to the attribute name).
+ */
+function columnNameForAttribute(record, attributeName) {
+    return record.getModelClass().getAttributeNameToColumnNameMap()[attributeName] || attributeName;
+}
+/**
+ * Resolves the attribute name backing a column name.
+ * @param {import("./index.js").default} record - Record.
+ * @param {string} columnName - Column name.
+ * @returns {string} The attribute name for the column (falls back to the column name).
+ */
+function attributeNameForColumn(record, columnName) {
+    const map = record.getModelClass().getAttributeNameToColumnNameMap();
+    return Object.keys(map).find((attributeName) => map[attributeName] === columnName) || columnName;
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiY291bnRlci1jYWNoZS1tYWduaXR1ZGUuanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuLi8uLi8uLi8uLi9zcmMvZGF0YWJhc2UvcmVjb3JkL2NvdW50ZXItY2FjaGUtbWFnbml0dWRlLmpzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQUFBLFlBQVk7QUFFWjs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7OztHQXNCRztBQUVIOzs7R0FHRztBQUVIOzs7OztHQUtHO0FBQ0gsTUFBTSxVQUFVLDZCQUE2QixDQUFDLFVBQVUsRUFBRSxVQUFVO0lBQ2xFOzsrQ0FFMkM7SUFDM0MsTUFBTSxZQUFZLEdBQUcsVUFBVSxDQUFBO0lBQy9CLE1BQU0sY0FBYyxHQUFHLG9DQUFvQyxVQUFVLENBQUMsYUFBYSxFQUFFLENBQUE7SUFFckYseUZBQXlGO0lBQ3pGLElBQUksTUFBTSxDQUFDLFNBQVMsQ0FBQyxjQUFjLENBQUMsSUFBSSxDQUFDLFlBQVksRUFBRSxjQUFjLENBQUMsSUFBSSxZQUFZLENBQUMsY0FBYyxDQUFDLEVBQUUsQ0FBQztRQUN2RyxPQUFNO0lBQ1IsQ0FBQztJQUVELFlBQVksQ0FBQyxjQUFjLENBQUMsR0FBRyxJQUFJLENBQUE7SUFFbkMsTUFBTSxVQUFVLEdBQUcsaUNBQWlDLFVBQVUsQ0FBQyxhQUFhLEVBQUUsQ0FBQTtJQUU5RSxVQUFVLENBQUMsVUFBVSxDQUFDLEtBQUssV0FBVyxNQUFNO1FBQzFDOzttREFFMkM7UUFDM0MsTUFBTSxhQUFhLEdBQUcsTUFBTSxDQUFBO1FBRTVCLGFBQWEsQ0FBQyxVQUFVLENBQUMsR0FBRyw0QkFBNEIsQ0FBQyxNQUFNLEVBQUUsVUFBVSxDQUFDLENBQUE7SUFDOUUsQ0FBQyxDQUFDLENBQUE7SUFFRixVQUFVLENBQUMsU0FBUyxDQUFDLEtBQUssV0FBVyxNQUFNO1FBQ3pDOzttREFFMkM7UUFDM0MsTUFBTSxhQUFhLEdBQUcsTUFBTSxDQUFBO1FBQzVCLE1BQU0sT0FBTyxHQUFHLDJDQUEyQyxDQUFDLENBQUMs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Q0FBQTtBQUNqRyxDQUFDO0FBRUQ7Ozs7O0dBS0c7QUFDSCxTQUFTLHNCQUFzQixDQUFDLE1BQU0sRUFBRSxVQUFVO0lBQ2hELE1BQU0sR0FBRyxHQUFHLE1BQU0sQ0FBQyxhQUFhLEVBQUUsQ0FBQywrQkFBK0IsRUFBRSxDQUFBO0lBRXBFLE9BQU8sTUFBTSxDQUFDLElBQUksQ0FBQyxHQUFHLENBQUMsQ0FBQyxJQUFJLENBQUMsQ0FBQyxhQUFhLEVBQUUsRUFBRSxDQUFDLEdBQUcsQ0FBQyxhQUFhLENBQUMsS0FBSyxVQUFVLENBQUMsSUFBSSxVQUFVLENBQUE7QUFDbEcsQ0FBQyIsInNvdXJjZXNDb250ZW50IjpbIi8vIEB0cy1jaGVja1xuXG4vKipcbiAqIFJlYWN0aXZlIGNvdW50ZXItY2FjaGUgZHJpdmVuIGJ5IGEgcGVyLXJlY29yZCBtYWduaXR1ZGUuXG4gKlxuICogTWFpbnRhaW5zIGEgY291bnRlciBjb2x1bW4gb24gYSBgYmVsb25nc1RvYCBwYXJlbnQgYXMgdGhlIHJ1bm5pbmcgc3VtIG9mIGVhY2hcbiAqIGNoaWxkJ3MgbWFnbml0dWRlIOKAlCBhIHNtYWxsIG51bWJlciBkZXJpdmVkIGZyb20gb25lIHNvdXJjZSBhdHRyaWJ1dGUgKGUuZy5cbiAqIGAxYCB3aGlsZSBhIGJ1aWxkJ3MgYHN0YXR1c2AgaXMgYHJ1bm5pbmdgLCBlbHNlIGAwYCkuIE9uIGV2ZXJ5IGNyZWF0ZSwgdXBkYXRlXG4gKiBhbmQgZGVzdHJveSB0aGUgY2hhbmdlIGluIG1hZ25pdHVkZSBpcyBhcHBsaWVkIHRvIHRoZSBwYXJlbnQgYXMgYSBzaW5nbGVcbiAqIGF0b21pYyBpbmNyZW1lbnQgKGBTRVQgY29sID0gY29sICsgZGVsdGFgKSwgYW5kIHdoZW4gdGhlIGZvcmVpZ24ga2V5IGNoYW5nZXNcbiAqIHRoZSBtYWduaXR1ZGUgaXMgbW92ZWQgZnJvbSB0aGUgb2xkIHBhcmVudCB0byB0aGUgbmV3IG9uZS5cbiAqXG4gKiBCZWNhdXNlIHRoZSBjb3VudGVyIGlzIGRlcml2ZWQgZnJvbSB0aGUgc291cmNlIGF0dHJpYnV0ZSBhbmQgZGlmZmVkIG9uIGV2ZXJ5XG4gKiB3cml0ZSwgaXQgZm9sbG93cyB0aGF0IGF0dHJpYnV0ZSBhdXRvbWF0aWNhbGx5IG5vIG1hdHRlciB3aGljaCBjb2RlIHBhdGggd3JvdGVcbiAqIGl0IOKAlCB0aGVyZSBpcyBubyBwZXItdHJhbnNpdGlvbiBpbmNyZW1lbnQvZGVjcmVtZW50IHRvIGZvcmdldC4gVGhlIG9sZCB2YWx1ZSBpc1xuICogY2FwdHVyZWQgaW4gYGJlZm9yZVNhdmVgIChWZWxvY2lvdXMgY2xlYXJzIGBjaGFuZ2VzKClgIGR1cmluZyB0aGUgcG9zdC11cGRhdGVcbiAqIHJlbG9hZCkgYW5kIGNvbnN1bWVkIGluIGBhZnRlclNhdmVgLCBzbyB0aGUgaW5jcmVtZW50IGNvbW1pdHMgYXRvbWljYWxseSB3aXRoXG4gKiB0aGUgcm93IGl0IHJlZmxlY3RzLlxuICogQHR5cGVkZWYge3tcbiAqICAgYmVsb25nc1RvOiBzdHJpbmcsXG4gKiAgIGNvdW50ZXJDb2x1bW46IHN0cmluZyxcbiAqICAgc291cmNlQXR0cmlidXRlOiBzdHJpbmcsXG4gKiAgIG1hZ25pdHVkZTogKHNvdXJjZVZhbHVlOiBSZXR1cm5UeXBlPHR5cGVvZiBKU09OLnBhcnNlPikgPT4gbnVtYmVyXG4gKiB9fSBNYWduaXR1ZGVDb3VudGVyQ2FjaGVEZWZpbml0aW9uXG4gKi9cblxuLyoqXG4gKiBDYXB0dXJlZCBwZW5kaW5nIG1hZ25pdHVkZSBjaGFuZ2Ugc3Rhc2hlZCBvbiBhIHJlY29yZCBiZXR3ZWVuIGJlZm9yZVNhdmUgYW5kIGFmdGVyU2F2ZS5cbiAqIEB0eXBlZGVmIHt7bmV3TWFnbml0dWRlOiBudW1iZXIsIG9sZE1hZ25pdHVkZTogbnVtYmVyLCBuZXdQYXJlbnRJZDogUmV0dXJuVHlwZTx0eXBlb2YgSlNPTi5wYXJzZT4sIG9sZFBhcmVudElkOiBSZXR1cm5UeXBlPHR5cGVvZiBKU09OLnBhcnNlPn19IFBlbmRpbmdNYWduaXR1ZGVEZWx0YVxuICovXG5cbi8qKlxuICogUmVnaXN0ZXJzIGEgcmVhY3RpdmUgbWFnbml0dWRlIGNvdW50ZXItY2FjaGUgb24gYSBtb2RlbCBjbGFzcy5cbiAqIEBwYXJhbSB7dHlwZW9mIGltcG9ydChcIi4vaW5kZXguanNcIikuZGVmYXVsdH0gbW9kZWxDbGFzcyAtIE1vZGVsIGNsYXNzIHRvIGFkZCB0aGUgY291bnRlciBjYWNoZSB0by5cbiAqIEBwYXJhbSB7TWFnbml0dWRlQ291bnRlckNhY2hlRGVmaW5pdGlvbn0gZGVmaW5pdGlvbiAtIENvdW50ZXIgY2FjaGUgZGVmaW5pdGlvbi5cbiAqIEByZXR1cm5zIHt2b2lkfVxuICovXG5leHBvcnQgZnVuY3Rpb24gcmVnaXN0ZXJNYWduaXR1ZGVDb3VudGVyQ2FjaGUobW9kZWxDbGFzcywgZGVmaW5pdGlvbikge1xuICAvKipcbiAgICogRHluYW1pYyBjbGFzcy5cbiAgICogQHR5cGUge1JldHVyblR5cGU8dHlwZW9mIEpTT04ucGFyc2U+fSAqL1xuICBjb25zdCBkeW5hbWljQ2xhc3MgPSBtb2RlbENsYXNzXG4gIGNvbnN0IHJlZ2lzdGVyZWRGbGFnID0gYF9tYWduaXR1ZGVDb3VudGVyQ2FjaGVSZWdpc3RlcmVkXyR7ZGVmaW5pdGlvbi5jb3VudGVyQ29sdW1ufWBcblxuICAvLyBJZGVtcG90ZW50IHBlciBjb3VudGVyIGNvbHVtbjogcmUtZGVjbGFyaW5nIChvciBzdWJjbGFzc2luZykgbXVzdCBub3QgZG91YmxlLXJlZ2lzdGVyLlxuICBpZiAoT2JqZWN0LnByb3RvdHlwZS5oYXNPd25Qcm9wZXJ0eS5jYWxsKGR5bmFtaWNDbGFzcywgcmVnaXN0ZXJlZEZsYWcpICYmIGR5bmFtaWNDbGFzc1tyZWdpc3RlcmVkRmxhZ10pIHtcbiAgICByZXR1cm5cbiAgfVxuXG4gIGR5bmFtaWNDbGFzc1tyZWdpc3RlcmVkRmxhZ10gPSB0cnVlXG5cbiAgY29uc3QgcGVuZGluZ0tleSA9IGBfbWFnbml0dWRlQ291bnRlckNhY2hlUGVuZGluZ18ke2RlZmluaXRpb24uY291bnRlckNvbHVtbn1gXG5cbiAgbW9kZWxDbGFzcy5iZWZvcmVTYXZlKGFzeW5jIGZ1bmN0aW9uIChyZWNvcmQpIHtcbiAgICAvKipcbiAgICAgKiBEeW5hbWljIHJlY29yZC5cbiAgICAgKiBAdHlwZSB7UmV0dXJuVHlwZTx0eXBlb2YgSlNPTi5wYXJzZT59ICovXG4gICAgY29uc3QgZHluYW1pY1JlY29yZCA9IHJlY29yZFxuXG4gICAgZHluYW1pY1JlY29yZFtwZW5kaW5nS2V5XSA9IGNvbXB1dGVQZW5kaW5nTWFnbml0dWRlRGVsdGEocmVjb3JkLCBkZWZpbml0aW9uKVxuICB9KVxuXG4gIG1vZGVsQ2xhc3MuYWZ0ZXJTYXZlKGFzeW5jIGZ1bmN0aW9uIChyZWNvcmQpIHtcbiAgICAvKipcbiAgICAgKiBEeW5hbWljIHJlY29yZC5cbiAgICAgKiBAdHlwZSB7UmV0dXJuVHlwZTx0eXBlb2YgSlNPTi5wYXJzZT59ICovXG4gICAgY29uc3QgZHluYW1pY1JlY29yZCA9IHJlY29yZFxuICAgIGNvbnN0IHBlbmRpbmcgPSAvKiogQHR5cGUge1BlbmRpbmdNYWduaXR1ZGVEZWx0YSB8IG51bGx9ICovIChkeW5hbWljUmVjb3JkW3BlbmRpbmdLZXldKVxuXG4gICAgZHluYW1pY1JlY29yZFtwZW5kaW5nS2V5XSA9IG51bGxcblxuICAgIGlmIChwZW5kaW5nKSB7XG4gICAgICBhd2FpdCBhcHBseVBlbmRpbmdNYWduaXR1ZGVEZWx0YShyZWNvcmQsIGRlZmluaXRpb24sIHBlbmRpbmcpXG4gICAgfVxuICB9KVxuXG4gIG1vZGVsQ2xhc3MuYWZ0ZXJEZXN0cm95KGFzeW5jIGZ1bmN0aW9uIChyZWNvcmQpIHtcbiAgICBjb25zdCBtYWduaXR1ZGUgPSBkZWZpbml0aW9uLm1hZ25pdHVkZShyZWNvcmQucmVhZEF0dHJpYnV0ZShkZWZpbml0aW9uLnNvdXJjZUF0dHJpYnV0ZSkpXG4gICAgY29uc3QgcGFyZW50SWQgPSBjdXJyZW50UGFyZW50SWQocmVjb3JkLCBkZWZpbml0aW9uKVxuXG4gICAgaWYgKHBhcmVudElkICYmIG1hZ25pdHVkZSAhPT0gMCkge1xuICAgICAgYXdhaXQgaW5jcmVtZW50UGFyZW50Q291bnRlcihyZWNvcmQsIGRlZmluaXRpb24sIHBhcmVudElkLCAtbWFnbml0dWRlKVxuICAgIH1cbiAgfSlcbn1cblxuLyoqXG4gKiBEaWZmcyB0aGUgc291cmNlIGF0dHJpYnV0ZSAoYW5kIGZvcmVpZ24ga2V5KSBhY3Jvc3MgdGhlIHBlbmRpbmcgc2F2ZSB0byBjYXB0dXJlXG4gKiBob3cgdGhlIHBhcmVudCBjb3VudGVyIHNob3VsZCBtb3ZlLiBSdW5zIGluIGJlZm9yZVNhdmUsIHdoZXJlIGBjaGFuZ2VzKClgIHN0aWxsXG4gKiBob2xkcyB0aGUgcHJlLXNhdmUgdmFsdWVzLlxuICogQHBhcmFtIHtpbXBvcnQoXCIuL2luZGV4LmpzXCIpLmRlZmF1bHR9IHJlY29yZCAtIFJlY29yZCBiZWluZyBzYXZlZC5cbiAqIEBwYXJhbSB7TWFnbml0dWRlQ291bnRlckNhY2hlRGVmaW5pdGlvbn0gZGVmaW5pdGlvbiAtIENvdW50ZXIgY2FjaGUgZGVmaW5pdGlvbi5cbiAqIEByZXR1cm5zIHtQZW5kaW5nTWFnbml0dWRlRGVsdGF9IFRoZSBjYXB0dXJlZCBtYWduaXR1ZGUgY2hhbmdlLlxuICovXG5mdW5jdGlvbiBjb21wdXRlUGVuZGluZ01hZ25pdHVkZURlbHRhKHJlY29yZCwgZGVmaW5pdGlvbikge1xuICBjb25zdCBjaGFuZ2VzID0gcmVjb3JkLmNoYW5nZXMoKVxuICBjb25zdCBzb3VyY2VDb2x1bW4gPSBjb2x1bW5OYW1lRm9yQXR0cmlidXRlKHJlY29yZCwgZGVmaW5pdGlvbi5zb3VyY2VBdHRyaWJ1dGUpXG4gIGNvbnN0IGZvcmVpZ25LZXlDb2x1bW4gPSByZWNvcmQuZ2V0TW9kZWxDbGFzcygpLmdldFJlbGF0aW9uc2hpcEJ5TmFtZShkZWZpbml0aW9uLmJlbG9uZ3NUbykuZ2V0Rm9yZWlnbktleSgpXG5cbiAgY29uc3QgbmV3U291cmNlID0gcmVjb3JkLnJlYWRBdHRyaWJ1dGUoZGVmaW5pdGlvbi5zb3VyY2VBdHRyaWJ1dGUpXG4gIGNvbnN0IG9sZFNvdXJjZSA9IG9sZFNvdXJjZVZhbHVlVGhyb3VnaFJlYWRDYXN0KHJlY29yZCwgZGVmaW5pdGlvbi5zb3VyY2VBdHRyaWJ1dGUsIHNvdXJjZUNvbHVtbiwgY2hhbmdlcywgbmV3U291cmNlKVxuXG4gIGNvbnN0IG5ld1BhcmVudElkID0gY3VycmVudFBhcmVudElkKHJlY29yZCwgZGVmaW5pdGlvbilcbiAgY29uc3Qgb2xkUGFyZW50SWQgPSBmb3JlaWduS2V5Q29sdW1uIGluIGNoYW5nZXMgPyBjaGFuZ2VzW2ZvcmVpZ25LZXlDb2x1bW5dWzBdIDogbmV3UGFyZW50SWRcblxuICByZXR1cm4ge1xuICAgIG5ld01hZ25pdHVkZTogZGVmaW5pdGlvbi5tYWduaXR1ZGUobmV3U291cmNlKSxcbiAgICBvbGRNYWduaXR1ZGU6IGRlZmluaXRpb24ubWFnbml0dWRlKG9sZFNvdXJjZSksXG4gICAgbmV3UGFyZW50SWQsXG4gICAgb2xkUGFyZW50SWRcbiAgfVxufVxuXG4vKipcbiAqIEFwcGxpZXMgYSBjYXB0dXJlZCBtYWduaXR1ZGUgY2hhbmdlIHRvIHRoZSBwYXJlbnQgY291bnRlcihzKSBhcyBhdG9taWMgaW5jcmVtZW50cy5cbiAqIEBwYXJhbSB7aW1wb3J0KFwiLi9pbmRleC5qc1wiKS5kZWZhdWx0fSByZWNvcmQgLSBSZWNvcmQgdGhhdCB3YXMgc2F2ZWQuXG4gKiBAcGFyYW0ge01hZ25pdHVkZUNvdW50ZXJDYWNoZURlZmluaXRpb259IGRlZmluaXRpb24gLSBDb3VudGVyIGNhY2hlIGRlZmluaXRpb24uXG4gKiBAcGFyYW0ge1BlbmRpbmdNYWduaXR1ZGVEZWx0YX0gcGVuZGluZyAtIFRoZSBjYXB0dXJlZCBtYWduaXR1ZGUgY2hhbmdlLlxuICogQHJldHVybnMge1Byb21pc2U8dm9pZD59XG4gKi9cbmFzeW5jIGZ1bmN0aW9uIGFwcGx5UGVuZGluZ01hZ25pdHVkZURlbHRhKHJlY29yZCwgZGVmaW5pdGlvbiwgcGVuZGluZykge1xuICBjb25zdCB7bmV3TWFnbml0dWRlLCBvbGRNYWduaXR1ZGUsIG5ld1BhcmVudElkLCBvbGRQYXJlbnRJZH0gPSBwZW5kaW5nXG5cbiAgaWYgKG9sZFBhcmVudElkID09PSBuZXdQYXJlbnRJZCkge1xuICAgIGNvbnN0IGRlbHRhID0gbmV3TWFnbml0dWRlIC0gb2xkTWFnbml0dWRlXG5cbiAgICBpZiAobmV3UGFyZW50SWQgJiYgZGVsdGEgIT09IDApIHtcbiAgICAgIGF3YWl0IGluY3JlbWVudFBhcmVudENvdW50ZXIocmVjb3JkLCBkZWZpbml0aW9uLCBuZXdQYXJlbnRJZCwgZGVsdGEpXG4gICAgfVxuXG4gICAgcmV0dXJuXG4gIH1cblxuICAvLyBUaGUgZm9yZWlnbiBrZXkgbW92ZWQ6IHRha2UgdGhlIG9sZCBtYWduaXR1ZGUgb2ZmIHRoZSBvbGQgcGFyZW50IGFuZCBwdXQgdGhlXG4gIC8vIG5ldyBtYWduaXR1ZGUgb24gdGhlIG5ldyBwYXJlbnQuXG4gIGlmIChvbGRQYXJlbnRJZCAmJiBvbGRNYWduaXR1ZGUgIT09IDApIHtcbiAgICBhd2FpdCBpbmNyZW1lbnRQYXJlbnRDb3VudGVyKHJlY29yZCwgZGVmaW5pdGlvbiwgb2xkUGFyZW50SWQsIC1vbGRNYWduaXR1ZGUpXG4gIH1cblxuICBpZiAobmV3UGFyZW50SWQgJiYgbmV3TWFnbml0dWRlICE9PSAwKSB7XG4gICAgYXdhaXQgaW5jcmVtZW50UGFyZW50Q291bnRlcihyZWNvcmQsIGRlZmluaXRpb24sIG5ld1BhcmVudElkLCBuZXdNYWduaXR1ZGUpXG4gIH1cbn1cblxuLyoqXG4gKiBSZWFkcyB0aGUgcHJlLXNhdmUgdmFsdWUgb2YgdGhlIHNvdXJjZSBhdHRyaWJ1dGUgdGhyb3VnaCB0aGUgbm9ybWFsIHJlYWQvY2FzdFxuICogcGF0aCwgc28gYG1hZ25pdHVkZWAgcmVjZWl2ZXMgdGhlIG9sZCB2YWx1ZSBpbiB0aGUgc2FtZSBzaGFwZSBhcyB0aGUgbmV3IG9uZVxuICogKGUuZy4gYSBkZWNsYXJlZCBib29sZWFuIGFzIGB0cnVlYC9gZmFsc2VgLCBub3QgdGhlIHJhdyBzdG9yZWQgYDFgL2AwYCkuIERyb3BzXG4gKiB0aGUgcGVuZGluZyBjaGFuZ2Ugc28gYHJlYWRBdHRyaWJ1dGVgIGZhbGxzIGJhY2sgdG8gdGhlIGNvbW1pdHRlZCB2YWx1ZSBhbmRcbiAqIGFwcGxpZXMgdGhlIHNhbWUgY2FzdCBhIGZyZXNoIHJlYWQgd291bGQsIHRoZW4gcmVzdG9yZXMgdGhlIHBlbmRpbmcgY2hhbmdlLlxuICogQHBhcmFtIHtpbXBvcnQoXCIuL2luZGV4LmpzXCIpLmRlZmF1bHR9IHJlY29yZCAtIFJlY29yZCBiZWluZyBzYXZlZC5cbiAqIEBwYXJhbSB7c3RyaW5nfSBzb3VyY2VBdHRyaWJ1dGUgLSBTb3VyY2UgYXR0cmlidXRlIG5hbWUuXG4gKiBAcGFyYW0ge3N0cmluZ30gc291cmNlQ29sdW1uIC0gU291cmNlIGNvbHVtbiBuYW1lLlxuICogQHBhcmFtIHtSZWNvcmQ8c3RyaW5nLCBSZXR1cm5UeXBlPHR5cGVvZiBKU09OLnBhcnNlPj59IGNoYW5nZXMgLSBUaGUgcmVjb3JkJ3MgcHJlLXNhdmUgY2hhbmdlcyAoY29sdW1uLWtleWVkKS5cbiAqIEBwYXJhbSB7UmV0dXJuVHlwZTx0eXBlb2YgSlNPTi5wYXJzZT59IGN1cnJlbnRWYWx1ZSAtIFRoZSBjdXJyZW50IChuZXcpIHJlYWQgdmFsdWUsIHJldHVybmVkIHdoZW4gdGhlIHNvdXJjZSBkaWQgbm90IGNoYW5nZS5cbiAqIEByZXR1cm5zIHtSZXR1cm5UeXBlPHR5cGVvZiBKU09OLnBhcnNlPn0gVGhlIHJlYWQtY2FzdCBwcmUtc2F2ZSB2YWx1ZS5cbiAqL1xuZnVuY3Rpb24gb2xkU291cmNlVmFsdWVUaHJvdWdoUmVhZENhc3QocmVjb3JkLCBzb3VyY2VBdHRyaWJ1dGUsIHNvdXJjZUNvbHVtbiwgY2hhbmdlcywgY3VycmVudFZhbHVlKSB7XG4gIGlmICghKHNvdXJjZUNvbHVtbiBpbiBjaGFuZ2VzKSkge1xuICAgIHJldHVybiBjdXJyZW50VmFsdWVcbiAgfVxuXG4gIC8qKlxuICAgKiBEeW5hbWljIHJlY29yZC5cbiAgICogQHR5cGUge1JldHVyblR5cGU8dHlwZW9mIEpTT04ucGFyc2U+fSAqL1xuICBjb25zdCBkeW5hbWljUmVjb3JkID0gcmVjb3JkXG4gIGNvbnN0IHBlbmRpbmdDaGFuZ2UgPSBkeW5hbWljUmVjb3JkLl9jaGFuZ2VzW3NvdXJjZUNvbHVtbl1cblxuICBkZWxldGUgZHluYW1pY1JlY29yZC5fY2hhbmdlc1tzb3VyY2VDb2x1bW5dXG5cbiAgdHJ5IHtcbiAgICByZXR1cm4gcmVjb3JkLnJlYWRBdHRyaWJ1dGUoc291cmNlQXR0cmlidXRlKVxuICB9IGZpbmFsbHkge1xuICAgIGR5bmFtaWNSZWNvcmQuX2NoYW5nZXNbc291cmNlQ29sdW1uXSA9IHBlbmRpbmdDaGFuZ2VcbiAgfVxufVxuXG4vKipcbiAqIFJlYWRzIHRoZSByZWNvcmQncyBjdXJyZW50IGZvcmVpZ24ta2V5IHZhbHVlIGZvciB0aGUgY291bnRlci1jYWNoZSBwYXJlbnQuXG4gKiBAcGFyYW0ge2ltcG9ydChcIi4vaW5kZXguanNcIikuZGVmYXVsdH0gcmVjb3JkIC0gUmVjb3JkIHdob3NlIHBhcmVudCBpcyB0YXJnZXRlZC5cbiAqIEBwYXJhbSB7TWFnbml0dWRlQ291bnRlckNhY2hlRGVmaW5pdGlvbn0gZGVmaW5pdGlvbiAtIENvdW50ZXIgY2FjaGUgZGVmaW5pdGlvbi5cbiAqIEByZXR1cm5zIHtSZXR1cm5UeXBlPHR5cGVvZiBKU09OLnBhcnNlPn0gVGhlIGN1cnJlbnQgZm9yZWlnbi1rZXkgdmFsdWUuXG4gKi9cbmZ1bmN0aW9uIGN1cnJlbnRQYXJlbnRJZChyZWNvcmQsIGRlZmluaXRpb24pIHtcbiAgY29uc3QgZm9yZWlnbktleUNvbHVtbiA9IHJlY29yZC5nZXRNb2RlbENsYXNzKCkuZ2V0UmVsYXRpb25zaGlwQnlOYW1lKGRlZmluaXRpb24uYmVsb25nc1RvKS5nZXRGb3JlaWduS2V5KClcblxuICByZXR1cm4gcmVjb3JkLnJlYWRBdHRyaWJ1dGUoYXR0cmlidXRlTmFtZUZvckNvbHVtbihyZWNvcmQsIGZvcmVpZ25LZXlDb2x1bW4pKVxufVxuXG4vKipcbiAqIEF0b21pY2FsbHkgYWRkcyBgYW1vdW50YCB0byB0aGUgcGFyZW50J3MgY291bnRlciBjb2x1bW4gZm9yIG9uZSBwYXJlbnQgcm93LlxuICogQHBhcmFtIHtpbXBvcnQoXCIuL2luZGV4LmpzXCIpLmRlZmF1bHR9IHJlY29yZCAtIENoaWxkIHJlY29yZCAoZm9yIGNvbm5lY3Rpb24gKyByZWxhdGlvbnNoaXAgbWV0YWRhdGEpLlxuICogQHBhcmFtIHtNYWduaXR1ZGVDb3VudGVyQ2FjaGVEZWZpbml0aW9ufSBkZWZpbml0aW9uIC0gQ291bnRlciBjYWNoZSBkZWZpbml0aW9uLlxuICogQHBhcmFtIHtSZXR1cm5UeXBlPHR5cGVvZiBKU09OLnBhcnNlPn0gcGFyZW50SWQgLSBQYXJlbnQgcHJpbWFyeS1rZXkgdmFsdWUuXG4gKiBAcGFyYW0ge251bWJlcn0gYW1vdW50IC0gU2lnbmVkIGludGVnZXIgdG8gYWRkLlxuICogQHJldHVybnMge1Byb21pc2U8dm9pZD59XG4gKi9cbmFzeW5jIGZ1bmN0aW9uIGluY3JlbWVudFBhcmVudENvdW50ZXIocmVjb3JkLCBkZWZpbml0aW9uLCBwYXJlbnRJZCwgYW1vdW50KSB7XG4gIGNvbnN0IG1vZGVsQ2xhc3MgPSByZWNvcmQuZ2V0TW9kZWxDbGFzcygpXG4gIGNvbnN0IHJlbGF0aW9uc2hpcCA9IG1vZGVsQ2xhc3MuZ2V0UmVsYXRpb25zaGlwQnlOYW1lKGRlZmluaXRpb24uYmVsb25nc1RvKVxuICBjb25zdCBwYXJlbnRNb2RlbENsYXNzID0gcmVsYXRpb25zaGlwLmdldFRhcmdldE1vZGVsQ2xhc3MoKVxuXG4gIGlmICghcGFyZW50TW9kZWxDbGFzcykge1xuICAgIHRocm93IG5ldyBFcnJvcihgbWFnbml0dWRlQ291bnRlckNhY2hlIG9uICR7bW9kZWxDbGFzcy5nZXRNb2RlbE5hbWUoKX0gY291bGQgbm90IHJlc29sdmUgdGhlIFwiJHtkZWZpbml0aW9uLmJlbG9uZ3NUb31cIiBwYXJlbnQgbW9kZWwgY2xhc3NgKVxuICB9XG5cbiAgLy8gUmVzb2x2ZSB0aHJvdWdoIHRoZSByZWNvcmQgc28gYW4gb3BlcmF0aW9uIGJvdGggb3ducyB0aGUgcGFyZW50IHdyaXRlIGFuZFxuICAvLyByZWplY3RzIGEgcmVsYXRpb25zaGlwIHdob3NlIHBhcmVudCByb3V0ZXMgdG8gYW5vdGhlciBkYXRhYmFzZS5cbiAgY29uc3QgZGIgPSByZWNvcmRcbiAgICAucXVlcnlGb3JNb2RlbChwYXJlbnRNb2RlbENsYXNzKVxuICAgIC5kcml2ZXJcbiAgY29uc3QgY291bnRlckNvbHVtblNxbCA9IGRiLnF1b3RlQ29sdW1uKGRlZmluaXRpb24uY291bnRlckNvbHVtbilcbiAgY29uc3QgdHJ1bmNhdGVkQW1vdW50ID0gTWF0aC50cnVuYyhhbW91bnQpXG5cbiAgYXdhaXQgZGIucXVlcnkoXG4gICAgYFVQREFURSAke2RiLnF1b3RlVGFibGUocGFyZW50TW9kZWxDbGFzcy50YWJsZU5hbWUoKSl9IGAgK1xuICAgIGBTRVQgJHtjb3VudGVyQ29sdW1uU3FsfSA9IENPQUxFU0NFKCR7Y291bnRlckNvbHVtblNxbH0sIDApICsgJHt0cnVuY2F0ZWRBbW91bnR9IGAgK1xuICAgIGBXSEVSRSAke2RiLnF1b3RlQ29sdW1uKHJlbGF0aW9uc2hpcC5nZXRQcmltYXJ5S2V5KCkpfSA9ICR7ZGIucXVvdGUocGFyZW50SWQpfWBcbiAgKVxufVxuXG4vKipcbiAqIFJlc29sdmVzIHRoZSBjb2x1bW4gbmFtZSBiYWNraW5nIGFuIGF0dHJpYnV0ZSBuYW1lLlxuICogQHBhcmFtIHtpbXBvcnQoXCIuL2luZGV4LmpzXCIpLmRlZmF1bHR9IHJlY29yZCAtIFJlY29yZC5cbiAqIEBwYXJhbSB7c3RyaW5nfSBhdHRyaWJ1dGVOYW1lIC0gQXR0cmlidXRlIG5hbWUuXG4gKiBAcmV0dXJucyB7c3RyaW5nfSBUaGUgY29sdW1uIG5hbWUgZm9yIHRoZSBhdHRyaWJ1dGUgKGZhbGxzIGJhY2sgdG8gdGhlIGF0dHJpYnV0ZSBuYW1lKS5cbiAqL1xuZnVuY3Rpb24gY29sdW1uTmFtZUZvckF0dHJpYnV0ZShyZWNvcmQsIGF0dHJpYnV0ZU5hbWUpIHtcbiAgcmV0dXJuIHJlY29yZC5nZXRNb2RlbENsYXNzKCkuZ2V0QXR0cmlidXRlTmFtZVRvQ29sdW1uTmFtZU1hcCgpW2F0dHJpYnV0ZU5hbWVdIHx8IGF0dHJpYnV0ZU5hbWVcbn1cblxuLyoqXG4gKiBSZXNvbHZlcyB0aGUgYXR0cmlidXRlIG5hbWUgYmFja2luZyBhIGNvbHVtbiBuYW1lLlxuICogQHBhcmFtIHtpbXBvcnQoXCIuL2luZGV4LmpzXCIpLmRlZmF1bHR9IHJlY29yZCAtIFJlY29yZC5cbiAqIEBwYXJhbSB7c3RyaW5nfSBjb2x1bW5OYW1lIC0gQ29sdW1uIG5hbWUuXG4gKiBAcmV0dXJucyB7c3RyaW5nfSBUaGUgYXR0cmlidXRlIG5hbWUgZm9yIHRoZSBjb2x1bW4gKGZhbGxzIGJhY2sgdG8gdGhlIGNvbHVtbiBuYW1lKS5cbiAqL1xuZnVuY3Rpb24gYXR0cmlidXRlTmFtZUZvckNvbHVtbihyZWNvcmQsIGNvbHVtbk5hbWUpIHtcbiAgY29uc3QgbWFwID0gcmVjb3JkLmdldE1vZGVsQ2xhc3MoKS5nZXRBdHRyaWJ1dGVOYW1lVG9Db2x1bW5OYW1lTWFwKClcblxuICByZXR1cm4gT2JqZWN0LmtleXMobWFwKS5maW5kKChhdHRyaWJ1dGVOYW1lKSA9PiBtYXBbYXR0cmlidXRlTmFtZV0gPT09IGNvbHVtbk5hbWUpIHx8IGNvbHVtbk5hbWVcbn1cbiJdfQ==

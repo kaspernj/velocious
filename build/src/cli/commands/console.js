@@ -1,0 +1,12 @@
+import BaseCommand from "../base-command.js";
+/** Velocious console command. */
+export default class VelociousCliCommandsConsole extends BaseCommand {
+    /**
+     * Runs execute.
+     * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
+     */
+    async execute() {
+        return await this.getConfiguration().getEnvironmentHandler().cliCommandsConsole(this);
+    }
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiY29uc29sZS5qcyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbIi4uLy4uLy4uLy4uL3NyYy9jbGkvY29tbWFuZHMvY29uc29sZS5qcyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQSxPQUFPLFdBQVcsTUFBTSxvQkFBb0IsQ0FBQTtBQUU1QyxpQ0FBaUM7QUFDakMsTUFBTSxDQUFDLE9BQU8sT0FBTywyQkFBNEIsU0FBUSxXQUFXO0lBQ2xFOzs7T0FHRztJQUNILEtBQUssQ0FBQyxPQUFPO1FBQ1gsT0FBTyxNQUFNLElBQUksQ0FBQyxnQkFBZ0IsRUFBRSxDQUFDLHFCQUFxQixFQUFFLENBQUMsa0JBQWtCLENBQUMsSUFBSSxDQUFDLENBQUE7SUFDdkYsQ0FBQztDQUNGIiwic291cmNlc0NvbnRlbnQiOlsiaW1wb3J0IEJhc2VDb21tYW5kIGZyb20gXCIuLi9iYXNlLWNvbW1hbmQuanNcIlxuXG4vKiogVmVsb2Npb3VzIGNvbnNvbGUgY29tbWFuZC4gKi9cbmV4cG9ydCBkZWZhdWx0IGNsYXNzIFZlbG9jaW91c0NsaUNvbW1hbmRzQ29uc29sZSBleHRlbmRzIEJhc2VDb21tYW5ke1xuICAvKipcbiAgICogUnVucyBleGVjdXRlLlxuICAgKiBAcmV0dXJucyB7UHJvbWlzZTxSZXR1cm5UeXBlPHR5cGVvZiBKU09OLnBhcnNlPj59IC0gUmVzb2x2ZXMgd2l0aCB0aGUgY29tbWFuZCByZXN1bHQuXG4gICAqL1xuICBhc3luYyBleGVjdXRlKCkge1xuICAgIHJldHVybiBhd2FpdCB0aGlzLmdldENvbmZpZ3VyYXRpb24oKS5nZXRFbnZpcm9ubWVudEhhbmRsZXIoKS5jbGlDb21tYW5kc0NvbnNvbGUodGhpcylcbiAgfVxufVxuIl19

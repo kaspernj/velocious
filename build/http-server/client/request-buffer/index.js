@@ -1,0 +1,598 @@
+// @ts-check
+
+import EventEmitter from "../../../utils/event-emitter.js"
+import FormDataPart from "./form-data-part.js"
+import Header from "./header.js"
+import {incorporate} from "incorporator"
+import Logger from "../../../logger.js"
+import ParamsToObject from "../params-to-object.js"
+import querystring from "querystring"
+
+/**
+ * Runs truncate preview.
+ * @param {string | undefined} input - Input string.
+ * @param {number} [limit] - Max preview length.
+ * @returns {string | undefined} - Truncated preview.
+ */
+function truncatePreview(input, limit = 300) {
+  if (typeof input !== "string") return undefined
+  if (input.length <= limit) return input
+
+  return `${input.slice(0, limit)}...`
+}
+
+export default class RequestBuffer {
+  bodyLength = 0
+
+  /** @type {Buffer[] | undefined} */
+  postBodyBuffers = undefined
+
+  /**
+   * Data.
+   * @type {number[]} */
+  data = []
+
+  events = new EventEmitter()
+
+  /**
+   * Headers by name.
+   * @type {Record<string, Header>} */
+  headersByName = {}
+  /**
+   * Chunked body chars.
+   * @type {number[] | undefined} */
+  chunkedBodyChars = undefined
+
+  multiPartyFormData = false
+
+  completed = false
+  params = {}
+  readingBody = false
+  state = "status"
+
+  /**
+   * Runs constructor.
+   * @param {object} args - Options object.
+   * @param {import("../../../configuration.js").default} args.configuration - Configuration instance.
+   */
+  constructor({configuration}) {
+    this.configuration = configuration
+    this.logger = new Logger(this, {debug: false})
+  }
+
+  destroy() {
+    // Do nothing for now...
+  }
+
+  /**
+   * Runs feed.
+   * @param {Buffer} data - Data payload.
+   * @returns {Buffer | undefined} - Remaining data, if any.
+   */
+  feed(data) {
+    let index = 0
+
+    while (index < data.length) {
+      switch(this.state) {
+        case "status":
+        case "headers":
+        case "multi-part-form-data":
+        case "multi-part-form-data-header":
+        case "chunked-size":
+        case "chunked-trailer":
+          index = this.feedLine(data, index)
+          break
+        case "post-body":
+          index = this.feedPostBody(data, index)
+          break
+        default:
+          index = this.feedByte(data, index)
+      }
+
+      if (this.completed) {
+        return data.subarray(index)
+      }
+    }
+
+    return undefined
+  }
+
+  /**
+   * Consumes bytes for the line-based states up to and including the next newline.
+   * @param {Buffer} data - Data payload.
+   * @param {number} index - Read position.
+   * @returns {number} - New read position.
+   */
+  feedLine(data, index) {
+    const newlineIndex = data.indexOf(10, index)
+
+    if (newlineIndex === -1) {
+      if (this.readingBody) this.bodyLength += data.length - index
+
+      for (let dataIndex = index; dataIndex < data.length; dataIndex += 1) {
+        this.data.push(data[dataIndex])
+      }
+
+      return data.length
+    }
+
+    if (this.readingBody) this.bodyLength += newlineIndex + 1 - index
+
+    let line
+
+    if (this.data.length == 0) {
+      line = data.toString("latin1", index, newlineIndex + 1)
+    } else {
+      // The rest of a line that started in a previous chunk.
+      for (let dataIndex = index; dataIndex <= newlineIndex; dataIndex += 1) {
+        this.data.push(data[dataIndex])
+      }
+
+      line = String.fromCharCode.apply(null, this.data)
+      this.data = []
+    }
+
+    this.parse(line)
+
+    return newlineIndex + 1
+  }
+
+  /**
+   * Consumes fixed-length request body bytes in bulk.
+   * @param {Buffer} data - Data payload.
+   * @param {number} index - Read position.
+   * @returns {number} - New read position.
+   */
+  feedPostBody(data, index) {
+    if (!this.postBodyBuffers) throw new Error("postBodyBuffers not initialized")
+    if (this.contentLength === undefined) throw new Error("Content length not set")
+
+    const remainingBodyBytes = Math.max(1, this.contentLength - this.bodyLength)
+    const endIndex = Math.min(data.length, index + remainingBodyBytes)
+
+    this.postBodyBuffers.push(data.subarray(index, endIndex))
+    this.bodyLength += endIndex - index
+
+    if (this.contentLength && this.bodyLength >= this.contentLength) {
+      this.postRequestDone()
+    }
+
+    return endIndex
+  }
+
+  /**
+   * Consumes a single byte for the byte-based parser states.
+   * @param {Buffer} data - Data payload.
+   * @param {number} index - Read position.
+   * @returns {number} - New read position.
+   */
+  feedByte(data, index) {
+    const char = data[index]
+
+    if (this.readingBody) this.bodyLength += 1
+
+    switch(this.state) {
+      case "chunked-data": {
+        const chunkedBodyChars = this.chunkedBodyChars
+
+        if (this.currentChunkSize === undefined) throw new Error("Chunk size not initialized")
+        if (!chunkedBodyChars) throw new Error("Chunked body not initialized")
+
+        chunkedBodyChars.push(char)
+        /**
+         * Current chunk bytes read.
+         * @type {number} */
+        const currentChunkBytesRead = (this.currentChunkBytesRead || 0) + 1
+
+        this.currentChunkBytesRead = currentChunkBytesRead
+
+        if (currentChunkBytesRead >= this.currentChunkSize) {
+          this.currentChunkCrlfRead = 0
+          this.setState("chunked-data-crlf")
+        }
+
+        break
+      }
+      case "chunked-data-crlf":
+        this.currentChunkCrlfRead = (this.currentChunkCrlfRead || 0) + 1
+
+        if (this.currentChunkCrlfRead >= 2) {
+          this.currentChunkBytesRead = 0
+          this.setState("chunked-size")
+        }
+
+        break
+      case "multi-part-form-data-body": {
+        if (!this.formDataPart) throw new Error("FormData part not initialized")
+        if (!this.boundaryLineEnd) throw new Error("Boundary line end not initialized")
+        if (!this.boundaryLineNext) throw new Error("Boundary line next not initialized")
+
+        const body = this.formDataPart.body
+
+        body.push(char)
+
+        const possibleBoundaryEndPosition = body.length - this.boundaryLineEnd.length
+        const possibleBoundaryEndChars = body.slice(possibleBoundaryEndPosition, body.length)
+        const possibleBoundaryEnd = String.fromCharCode.apply(null, possibleBoundaryEndChars)
+
+        const possibleBoundaryNextPosition = body.length - this.boundaryLineNext.length
+        const possibleBoundaryNextChars = body.slice(possibleBoundaryNextPosition, body.length)
+        const possibleBoundaryNext = String.fromCharCode.apply(null, possibleBoundaryNextChars)
+
+        if (possibleBoundaryEnd == this.boundaryLineEnd) {
+          this.formDataPart.removeFromBody(possibleBoundaryEnd)
+          this.formDataPartDone()
+          this.completeRequest()
+        } else if (possibleBoundaryNext == this.boundaryLineNext) {
+          this.formDataPart.removeFromBody(possibleBoundaryNext)
+          this.formDataPartDone()
+          this.newFormDataPart()
+        } else if (this.contentLength && this.bodyLength >= this.contentLength) {
+          this.formDataPartDone()
+          this.completeRequest()
+        } else if (this.formDataPart.contentLength && this.bodyLength >= this.formDataPart.contentLength) {
+          this.formDataPartDone()
+
+          throw new Error("stub")
+        }
+
+        break
+      }
+      default:
+        this.logger.error(() => [`Unknown state for request buffer`, {state: this.state}])
+    }
+
+    return index + 1
+  }
+
+  /**
+   * Runs get header.
+   * @param {string} name - Name.
+   * @returns {Header} - The header.
+   */
+  getHeader(name) {
+    const result = this.headersByName[name.toLowerCase().trim()]
+
+    this.logger.debugLowLevel(() => [`getHeader ${name}`, {result: result?.toString()}])
+
+    return result
+  }
+
+  /**
+   * Runs get headers hash.
+   * @returns {Record<string, string>} - The headers hash.
+   */
+  getHeadersHash() {
+    /**
+     * Result.
+     * @type {Record<string, string>} */
+    const result = {}
+
+    for (const headerFormattedName in this.headersByName) {
+      const header = this.headersByName[headerFormattedName]
+
+      result[header.getName()] = header.getValue()
+    }
+
+    return result
+  }
+
+  /**
+   * Runs form data part done.
+   * @returns {void} - No return value.
+   */
+  formDataPartDone() {
+    const formDataPart = this.formDataPart
+
+    if (!formDataPart) throw new Error("formDataPart wasnt set")
+
+    this.formDataPart = undefined
+    formDataPart.finish()
+
+    this.events.emit("form-data-part", formDataPart)
+  }
+
+  isMultiPartyFormData() {
+    return this.multiPartyFormData
+  }
+
+  /**
+   * Runs new form data part.
+   * @returns {void} - No return value.
+   */
+  newFormDataPart() {
+    this.formDataPart = new FormDataPart()
+    this.setState("multi-part-form-data-header")
+  }
+
+  /**
+   * Runs parse.
+   * @param {string} line - Line.
+   * @returns {void} - No return value.
+   */
+  parse(line) {
+    if (this.state == "status") {
+      this.parseStatusLine(line)
+    } else if (this.state == "headers") {
+      this.parseHeader(line)
+    } else if (this.state == "chunked-size") {
+      this.parseChunkSizeLine(line)
+    } else if (this.state == "chunked-trailer") {
+      if (line == "\r\n") {
+        this.finishChunkedBody()
+        this.completeRequest()
+      }
+    } else if (this.state == "multi-part-form-data") {
+      if (line == this.boundaryLine) {
+        this.newFormDataPart()
+      } else if (line == "\r\n") {
+        this.setState("done")
+      } else {
+        throw new Error(`Expected boundary line but didn't get it: ${line}`)
+      }
+    } else if (this.state == "multi-part-form-data-header") {
+      const header = this.readHeaderFromLine(line)
+
+      if (header) {
+        if (!this.formDataPart) throw new Error("formDataPart not set")
+
+        this.formDataPart.addHeader(header)
+        //this.state == "multi-part-form-data"
+      } else if (line == "\r\n") {
+        this.setState("multi-part-form-data-body")
+      }
+    } else {
+      throw new Error(`Unknown state parsing line: ${this.state}`)
+    }
+  }
+
+  /**
+   * Runs read header from line.
+   * @param {string} line - Line.
+   * @returns {Header | undefined} - The header from line.
+   */
+  readHeaderFromLine(line) {
+    const match = line.match(/^(.+): (.+)\r\n/)
+
+    if (match) {
+      const header = new Header(match[1], match[2])
+
+      return header
+    }
+  }
+
+  /**
+   * Runs add header.
+   * @param {Header} header - Header value.
+   */
+  addHeader(header) {
+    const formattedName = header.getFormattedName()
+
+    this.headersByName[formattedName] = header
+
+    if (formattedName == "content-length") this.contentLength = parseInt(header.getValue())
+  }
+
+  /**
+   * Runs parse header.
+   * @param {string} line - Line.
+   * @returns {void} - No return value.
+   */
+  parseHeader(line) {
+    const header = this.readHeaderFromLine(line)
+
+    if (header) {
+      this.logger.debugLowLevel(() => `Parsed header: ${header.toString()}`)
+      this.addHeader(header)
+      this.events.emit("header", header)
+    } else if (line == "\r\n") {
+      const httpMethod = this.httpMethod?.toUpperCase()
+
+      if (!httpMethod) throw new Error("HTTP method not set")
+
+      if (!this.expectsRequestBody(httpMethod)) {
+        this.completeRequest()
+      } else if (this.isChunkedEncoding()) {
+        this.readingBody = true
+        this.bodyLength = 0
+        this.initializeChunkedBody()
+      } else {
+        this.readingBody = true
+        this.bodyLength = 0
+
+        const match = this.getHeader("content-type")?.value?.match(/^multipart\/form-data;\s*boundary=(.+)$/i)
+
+        if (match) {
+          this.boundary = match[1]
+          this.boundaryLine = `--${this.boundary}\r\n`
+          this.boundaryLineNext = `\r\n--${this.boundary}\r\n`
+          this.boundaryLineEnd = `\r\n--${this.boundary}--`
+          this.multiPartyFormData = true
+          this.setState("multi-part-form-data")
+        } else if (this.contentLength === 0 || this.contentLength === undefined) {
+          this.completeRequest()
+        } else if (Number.isNaN(this.contentLength)) {
+          throw new Error("Content length is invalid")
+        } else {
+          /**
+           * Narrows the runtime value to the documented type.
+           * @type {Buffer[]} */
+          this.postBodyBuffers = []
+
+          this.setState("post-body")
+        }
+      }
+    }
+  }
+
+  /**
+   * Runs parse status line.
+   * @param {string} line - Line.
+   * @returns {void} - No return value.
+   */
+  parseStatusLine(line) {
+    const match = line.match(/^([A-Z-]+) (.+?) HTTP\/(.+)\r\n/)
+
+    if (!match) {
+      throw new Error(`Couldn't match status line from: ${line}`)
+    }
+
+    this.httpMethod = match[1]
+    this.httpVersion = match[3]
+    this.path = match[2]
+    this.setState("headers")
+    this.logger.debugLowLevel(() => ["Parsed status line", {httpMethod: this.httpMethod, httpVersion: this.httpVersion, path: this.path}])
+  }
+
+  postRequestDone() {
+    if (this.postBodyBuffers) {
+      this.postBody = Buffer.concat(this.postBodyBuffers).toString("utf8")
+    }
+
+    this.postBodyBuffers = undefined
+
+    this.completeRequest()
+  }
+
+  /**
+   * Runs expects request body.
+   * @param {string} httpMethod - HTTP method.
+   * @returns {boolean} - Whether the request expects a body.
+   */
+  expectsRequestBody(httpMethod) {
+    return !["GET", "OPTIONS", "HEAD"].includes(httpMethod)
+  }
+
+  /**
+   * Runs is chunked encoding.
+   * @returns {boolean} - Whether the request uses chunked transfer encoding.
+   */
+  isChunkedEncoding() {
+    const transferEncoding = this.getHeader("transfer-encoding")?.value?.toLowerCase()
+
+    return Boolean(transferEncoding?.includes("chunked"))
+  }
+
+  /**
+   * Runs initialize chunked body.
+   * @returns {void} - No return value.
+   */
+  initializeChunkedBody() {
+    this.chunkedBodyChars = []
+    this.currentChunkSize = undefined
+    this.currentChunkBytesRead = 0
+    this.setState("chunked-size")
+  }
+
+  /**
+   * Runs parse chunk size line.
+   * @param {string} line - Chunk size line.
+   * @returns {void} - No return value.
+   */
+  parseChunkSizeLine(line) {
+    const trimmed = line.trim()
+
+    if (!trimmed) return
+
+    const sizeToken = trimmed.split(";")[0]?.trim()
+
+    if (!sizeToken) throw new Error(`Invalid chunk size line: ${line}`)
+
+    const size = Number.parseInt(sizeToken, 16)
+
+    if (!Number.isFinite(size)) throw new Error(`Invalid chunk size: ${sizeToken}`)
+
+    if (size === 0) {
+      this.setState("chunked-trailer")
+      return
+    }
+
+    this.currentChunkSize = size
+    this.currentChunkBytesRead = 0
+    this.setState("chunked-data")
+  }
+
+  /**
+   * Runs finish chunked body.
+   * @returns {void} - No return value.
+   */
+  finishChunkedBody() {
+    if (this.chunkedBodyChars) {
+      this.postBody = Buffer.from(this.chunkedBodyChars).toString("utf8")
+    }
+
+    delete this.chunkedBodyChars
+  }
+
+  /**
+   * Runs set state.
+   * @param {string} newState - New state.
+   * @returns {void} - No return value.
+   */
+  setState(newState) {
+    this.logger.debugLowLevel(() => `Changing state from ${this.state} to ${newState}`)
+    this.state = newState
+  }
+
+  completeRequest = () => {
+    this.state = "status" // Reset state to new request
+    this.completed = true
+
+    if (this.getHeader("content-type")?.value?.startsWith("application/json")) {
+      this.parseApplicationJsonParams()
+    } else if (this.multiPartyFormData) {
+      // Done after each new form data part
+    } else {
+      this.parseQueryStringPostParams()
+    }
+
+    this.events.emit("completed")
+  }
+
+  parseApplicationJsonParams() {
+    if (this.postBody) {
+      const newParams = JSON.parse(this.postBody)
+
+      incorporate(this.params, newParams)
+    }
+  }
+
+  parseQueryStringPostParams() {
+    if (this.postBody) {
+      try {
+        const parsedQuery = querystring.parse(this.postBody)
+        /**
+         * Unparsed params.
+         * @type {Record<string, string | string[]>} */
+        const unparsedParams = {}
+
+        for (const [key, value] of Object.entries(parsedQuery)) {
+          if (typeof value !== "undefined") {
+            unparsedParams[key] = value
+          }
+        }
+
+        const paramsToObject = new ParamsToObject(unparsedParams)
+        const newParams = paramsToObject.toObject()
+
+        incorporate(this.params, newParams)
+      } catch (error) {
+        const ensuredError = /** @type {Error & {velociousContext?: Record<string, ReturnType<typeof JSON.parse>>}} */ (error)
+
+        ensuredError.velociousContext = {
+          ...(ensuredError.velociousContext || {}),
+          requestParsing: {
+            contentType: this.getHeader("content-type")?.value,
+            httpMethod: this.httpMethod,
+            parameterKeys: Object.keys(querystring.parse(this.postBody)),
+            path: this.path,
+            postBodyPreview: truncatePreview(this.postBody),
+            stage: "query-string-post-params"
+          }
+        }
+
+        throw ensuredError
+      }
+    }
+  }
+}

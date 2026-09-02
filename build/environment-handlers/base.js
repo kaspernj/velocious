@@ -1,0 +1,886 @@
+// @ts-check
+
+import BackgroundJobsAdapterClient from "../background-jobs/adapter-client.js"
+import { validateTimeZone } from "../time-zone.js"
+
+/**
+ * CommandFileObjectType type.
+ * @typedef {object} CommandFileObjectType
+ * @property {string} name - Command name.
+ * @property {string} file - Command file path.
+ */
+
+/**
+ * MigrationObjectType type.
+ * @typedef {object} MigrationObjectType
+ * @property {number} date - Migration timestamp parsed from filename.
+ * @property {string} [fullPath] - Absolute path to the migration file.
+ * @property {string} migrationClassName - Exported migration class name.
+ * @property {string} file - Migration filename.
+ */
+/**
+ * TestDatabaseAccessScopeStorage type.
+ * @typedef {object} TestDatabaseAccessScopeStorage
+ * @property {() => ({revoked: boolean} | undefined)} getStore - Gets the inherited scope.
+ * @property {(scope: {revoked: boolean} | undefined, callback: () => ReturnType<typeof JSON.parse>) => ReturnType<typeof JSON.parse>} run - Runs in the scope.
+ */
+
+export class TestDatabaseAccessRevokedError extends Error {}
+
+export default class VelociousEnvironmentHandlerBase {
+  /**
+   * Resolves the configured database pool type for the current runtime context.
+   * Browser and ordinary server contexts retain the application configuration.
+   * @param {{configuredPoolType: typeof import("../database/pool/base.js").default, databaseIdentifier: string}} args - Configured pool and logical database identifier.
+   * @returns {typeof import("../database/pool/base.js").default} - Pool type for this context.
+   */
+  resolveTestSharedTransactionPoolType({configuredPoolType}) { return configuredPoolType }
+
+  /**
+   * Node test runtimes may replace a physical child connection with a broker
+   * proxy. Other environments never participate in this test-only protocol.
+   * @param {{DriverClass: typeof import("../database/drivers/base.js").default, config: import("../configuration-types.js").DatabaseConfigurationType, configuration: import("../configuration.js").default, databaseIdentifier: string, reuseKey?: string}} _args - Connection details.
+   * @returns {Promise<import("../database/drivers/base.js").default | undefined>} - Optional proxy.
+   */
+  async createTestSharedTransactionConnection(_args) { return undefined }
+
+  /**
+   * Gets the active shared-transaction coordinator owner for a connection.
+   * @param {object} connection - Parent physical connection.
+   * @returns {symbol | undefined} - Active coordinator owner.
+   */
+  getSharedTransactionCoordinatorOwner(connection) {
+    return this._sharedTransactionCoordinatorOwnerStorage?.getStore()?.get(connection)
+  }
+
+  /**
+   * Runs work as the current shared-transaction coordinator owner.
+   * @template T
+   * @param {object} connection - Parent physical connection.
+   * @param {symbol} owner - Coordinator owner.
+   * @param {() => T} callback - Owned work.
+   * @returns {T} - Callback result.
+   */
+  runWithSharedTransactionCoordinatorOwner(connection, owner, callback) {
+    const storage = this._sharedTransactionCoordinatorOwnerStorage
+
+    if (!storage) return callback()
+
+    const owners = new Map(storage.getStore())
+
+    owners.set(connection, owner)
+    return storage.run(owners, callback)
+  }
+
+  /**
+   * Runs work without inherited shared-transaction ownership for one connection.
+   * @template T
+   * @param {import("../database/drivers/base.js").default} connection - Physical connection whose owner is cleared.
+   * @param {() => T} callback - Physical connection work.
+   * @returns {T} - Callback result.
+   */
+  runWithoutSharedTransactionCoordinatorOwner(connection, callback) {
+    const storage = this._sharedTransactionCoordinatorOwnerStorage
+
+    if (!storage) return callback()
+
+    const owners = new Map(storage.getStore())
+
+    owners.delete(connection)
+    return storage.run(owners, callback)
+  }
+
+  /**
+   * Runs work without inherited shared-transaction coordinator ownership.
+   * @template T
+   * @param {() => T} callback - Detached work.
+   * @returns {T} - Callback result.
+   */
+  runWithoutSharedTransactionCoordinatorOwners(callback) {
+    const storage = this._sharedTransactionCoordinatorOwnerStorage
+
+    if (!storage) return callback()
+
+    return storage.run(new Map(), callback)
+  }
+
+  /**
+   * Installs async-context storage when this handler is driven by the Node test runner.
+   * @param {import("node:async_hooks").AsyncLocalStorage<Map<object, symbol>>} storage - Coordinator owner storage.
+   */
+  installSharedTransactionCoordinatorOwnerStorage(storage) {
+    this._sharedTransactionCoordinatorOwnerStorage ??= storage
+  }
+
+  /** @type {import("node:async_hooks").AsyncLocalStorage<Map<object, symbol>> | undefined} */
+  _sharedTransactionCoordinatorOwnerStorage = undefined
+
+  /**
+   * Runs work with test-profile attribution. Runtimes without async-context
+   * storage execute the callback without installing ambient attribution.
+   * @template T
+   * @param {import("../testing/test-profiler.js").TestProfileAsyncContext | undefined} _context - Captured profile context, or an explicit absence of attribution.
+   * @param {() => T} callback - Profiled work.
+   * @returns {T} - Callback result.
+   */
+  runWithTestProfileContext(_context, callback) { return callback() }
+
+  /**
+   * Gets the current test-profile attribution context.
+   * @returns {import("../testing/test-profiler.js").TestProfileAsyncContext | undefined} - Active context.
+   */
+  getCurrentTestProfileContext() { return undefined }
+
+  /**
+   * Runs work in a revocable test database-access scope.
+   * @template T
+   * @param {{revoked: boolean}} scope - Attempt-owned access scope.
+   * @param {() => T | Promise<T>} callback - Attempt work.
+   * @returns {Promise<T>} - Callback result.
+   */
+  async runWithTestDatabaseAccessScope(scope, callback) {
+    return await this.runWithCapturedTestDatabaseAccessScope(scope, callback)
+  }
+
+  /**
+   * Runs work with an explicitly captured test database-access scope.
+   * @template T
+   * @param {{revoked: boolean} | undefined} scope - Captured access scope.
+   * @param {() => T | Promise<T>} callback - Work to run.
+   * @returns {Promise<T>} - Callback result.
+   */
+  async runWithCapturedTestDatabaseAccessScope(scope, callback) {
+    if (this._testDatabaseAccessScopeStorage) {
+      return await this._testDatabaseAccessScopeStorage.run(scope, callback)
+    }
+
+    const entry = {owner: Symbol("test-database-access-scope"), scope}
+
+    this._testDatabaseAccessScopes.push(entry)
+
+    try {
+      return await callback()
+    } finally {
+      const index = this._testDatabaseAccessScopes.findIndex((candidate) => candidate.owner === entry.owner)
+
+      if (index !== -1) this._testDatabaseAccessScopes.splice(index, 1)
+    }
+  }
+
+  /**
+   * Gets the current test database-access scope.
+   * @returns {{revoked: boolean} | undefined} - Current scope.
+   */
+  currentTestDatabaseAccessScope() {
+    if (this._testDatabaseAccessScopeStorage) return this._testDatabaseAccessScopeStorage.getStore()
+
+    return this._testDatabaseAccessScopes[this._testDatabaseAccessScopes.length - 1]?.scope
+  }
+
+  /** Throws when the current test attempt no longer owns database access. */
+  assertTestDatabaseAccessAllowed() {
+    const scope = this.currentTestDatabaseAccessScope()
+
+    if (scope?.revoked) {
+      throw new TestDatabaseAccessRevokedError("Database access is no longer allowed for this test attempt")
+    }
+  }
+
+  /**
+   * Installs async-context storage owned by the first Node test runner.
+   * @param {TestDatabaseAccessScopeStorage} storage - Scope storage.
+   */
+  installTestDatabaseAccessScopeStorage(storage) {
+    this._testDatabaseAccessScopeStorage ??= storage
+  }
+
+  /** @type {Array<{owner: symbol, scope: {revoked: boolean} | undefined}>} */
+  _testDatabaseAccessScopes = []
+
+  /** @type {TestDatabaseAccessScopeStorage | undefined} */
+  _testDatabaseAccessScopeStorage = undefined
+
+  /**
+   * Mutable ambient tenant used by runtimes without async-context storage.
+   * @type {ReturnType<typeof JSON.parse> | undefined}
+   */
+  _currentTenant = undefined
+
+  /**
+   * Active ambient scopes in start order. This prevents a scope that completes
+   * out of order from restoring a tenant belonging to an already-completed scope.
+   * Ambient reads are still shared in browser runtimes; immutable handles remain
+   * the concurrency-safe database API.
+   * @type {Array<{owner: symbol, tenant: ReturnType<typeof JSON.parse>}>}
+   */
+  _tenantScopes = []
+
+  /**
+   * Runs debug endpoint token matches.
+   * @param {string} providedToken - Token from the request.
+   * @param {string} expectedToken - Configured token.
+   * @returns {boolean} - Whether both tokens match.
+   */
+  debugEndpointTokenMatches(providedToken, expectedToken) {
+    let difference = providedToken.length ^ expectedToken.length
+    const maxLength = Math.max(providedToken.length, expectedToken.length)
+
+    for (let index = 0; index < maxLength; index++) {
+      difference |= (providedToken.charCodeAt(index) || 0) ^ (expectedToken.charCodeAt(index) || 0)
+    }
+
+    return difference === 0
+  }
+
+  /**
+   * Runs get framework source directory.
+   * @returns {string | undefined} - Velocious source directory used to filter framework stack frames.
+   */
+  getFrameworkSourceDirectory() {
+    return undefined
+  }
+
+  /**
+   * Auto-discovers resource classes. No-op in base handler; overridden in Node handler.
+   * @param {import("../configuration.js").default} _configuration - Configuration instance.
+   * @returns {Promise<void>}
+   */
+  async autoDiscoverResources(_configuration) {}
+
+  /**
+   * Runs run with timezone offset.
+   * @param {number} _offsetMinutes - Offset in minutes (Date#getTimezoneOffset).
+   * @param {() => Promise<ReturnType<typeof JSON.parse>>} callback - Callback to run.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Result of the callback.
+   */
+  async runWithTimezoneOffset(_offsetMinutes, callback) {
+    if (!this.configuration) throw new Error("Configuration hasn't been set")
+
+    const previousOffsetMinutes = this.configuration._timezoneOffsetMinutes
+
+    this.configuration._timezoneOffsetMinutes = _offsetMinutes
+
+    try {
+      return await callback()
+    } finally {
+      this.configuration._timezoneOffsetMinutes = previousOffsetMinutes
+    }
+  }
+
+  /**
+   * Runs run with timezone.
+   * @param {string} timeZone - IANA timezone identifier.
+   * @param {() => Promise<ReturnType<typeof JSON.parse>>} callback - Callback to run.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Result of the callback.
+   */
+  async runWithTimezone(timeZone, callback) {
+    if (!this.configuration) throw new Error("Configuration hasn't been set")
+
+    const previousTimeZone = this.configuration._timeZone
+
+    this.configuration._timeZone = validateTimeZone(timeZone, "timeZone")
+
+    try {
+      return await callback()
+    } finally {
+      this.configuration._timeZone = previousTimeZone
+    }
+  }
+
+  /**
+   * Runs set timezone offset.
+   * @param {number} _offsetMinutes - Offset in minutes (Date#getTimezoneOffset).
+   * @returns {void} - No return value.
+   */
+  setTimezoneOffset(_offsetMinutes) {
+    if (!this.configuration) throw new Error("Configuration hasn't been set")
+
+    /**
+     * Narrows the runtime value to the documented type.
+     * @type {number} */
+    this.configuration._timezoneOffsetMinutes = _offsetMinutes
+  }
+
+  /**
+   * Runs set timezone.
+   * @param {string} timeZone - IANA timezone identifier.
+   * @returns {void} - No return value.
+   */
+  setTimezone(timeZone) {
+    if (!this.configuration) throw new Error("Configuration hasn't been set")
+
+    this.configuration._timeZone = validateTimeZone(timeZone, "timeZone")
+  }
+
+  /**
+   * Runs get timezone offset minutes.
+   * @param {import("../configuration.js").default | undefined} configuration - Configuration instance.
+   * @returns {number} - Offset in minutes.
+   */
+  getTimezoneOffsetMinutes(configuration) {
+    const activeConfiguration = configuration || this.configuration
+
+    if (!activeConfiguration) throw new Error("Configuration hasn't been set")
+
+    if (typeof activeConfiguration._timezoneOffsetMinutes === "number") {
+      return activeConfiguration._timezoneOffsetMinutes
+    }
+
+    return /** @type {number} */ (activeConfiguration.getTimezoneOffsetMinutes())
+  }
+
+  /**
+   * Runs get timezone.
+   * @param {import("../configuration.js").default | undefined} configuration - Configuration instance.
+   * @returns {string | undefined} - Timezone identifier.
+   */
+  getTimeZone(configuration) {
+    const activeConfiguration = configuration || this.configuration
+
+    if (!activeConfiguration) throw new Error("Configuration hasn't been set")
+
+    return activeConfiguration.getTimeZone()
+  }
+
+  /**
+   * Runs run with request timing.
+   * @param {import("../http-server/client/request-timing.js").default | undefined} requestTiming - Request timing collector.
+   * @param {() => Promise<ReturnType<typeof JSON.parse>>} callback - Callback.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Callback result.
+   */
+  async runWithRequestTiming(requestTiming, callback) {
+    this._currentRequestTiming = requestTiming
+
+    try {
+      return await callback()
+    } finally {
+      this._currentRequestTiming = undefined
+    }
+  }
+
+  /**
+   * Runs get current request timing.
+   * @returns {import("../http-server/client/request-timing.js").default | undefined} - Current request timing collector.
+   */
+  getCurrentRequestTiming() {
+    return this._currentRequestTiming
+  }
+
+  /**
+   * Runs run with ability.
+   * @param {import("../authorization/ability.js").default | undefined} ability - Ability to set for callback scope.
+   * @param {() => Promise<ReturnType<typeof JSON.parse>>} callback - Callback.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Callback result.
+   */
+  async runWithAbility(ability, callback) {
+    this._currentAbility = ability
+
+    try {
+      return await callback()
+    } finally {
+      this._currentAbility = undefined
+    }
+  }
+
+  /**
+   * Runs set current ability.
+   * @param {import("../authorization/ability.js").default | undefined} ability - Ability to set.
+   * @returns {void} - No return value.
+   */
+  setCurrentAbility(ability) {
+    this._currentAbility = ability
+  }
+
+  /**
+   * Runs get current ability.
+   * @returns {import("../authorization/ability.js").default | undefined} - Current ability.
+   */
+  getCurrentAbility() {
+    return this._currentAbility
+  }
+
+  /**
+   * Runs run with tenant.
+   * @param {ReturnType<typeof JSON.parse>} tenant - Tenant to set for callback scope.
+   * @param {() => Promise<ReturnType<typeof JSON.parse>>} callback - Callback.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Callback result.
+   */
+  async runWithTenant(tenant, callback) {
+    const scope = {owner: Symbol("browser-tenant-scope"), tenant}
+
+    this._tenantScopes.push(scope)
+
+    try {
+      return await callback()
+    } finally {
+      const scopeIndex = this._tenantScopes.findIndex((candidate) => candidate.owner === scope.owner)
+
+      if (scopeIndex !== -1) this._tenantScopes.splice(scopeIndex, 1)
+    }
+  }
+
+  /**
+   * Runs set current tenant.
+   * @param {ReturnType<typeof JSON.parse>} tenant - Tenant to set.
+   * @returns {void} - No return value.
+   */
+  setCurrentTenant(tenant) {
+    this._currentTenant = tenant
+  }
+
+  /**
+   * Runs get current tenant.
+   * @returns {ReturnType<typeof JSON.parse>} - Current tenant.
+   */
+  getCurrentTenant() {
+    return this._tenantScopes[this._tenantScopes.length - 1]?.tenant ?? this._currentTenant
+  }
+  /**
+   * Runs cli commands generate base models.
+   * @param {import("../cli/base-command.js").default} _command - Command.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
+   */
+  async cliCommandsGenerateBaseModels(_command) {
+    throw new Error("cliCommandsGenerateBaseModels not implemented")
+  }
+
+  /**
+   * Runs cli commands generate frontend models.
+   * @param {import("../cli/base-command.js").default} _command - Command.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
+   */
+  async cliCommandsGenerateFrontendModels(_command) {
+    throw new Error("cliCommandsGenerateFrontendModels not implemented")
+  }
+
+  /**
+   * Runs cli commands init.
+   * @param {import("../cli/base-command.js").default} command - Command.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
+   */
+  async cliCommandsInit(command) { // eslint-disable-line no-unused-vars
+    throw new Error("cliCommandsInit not implemented")
+  }
+
+  /**
+   * Runs cli commands migration generate.
+   * @param {import("../cli/base-command.js").default} _command - Command.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
+   */
+  async cliCommandsMigrationGenerate(_command) {
+    throw new Error("cliCommandsMigrationGenerate not implemented")
+  }
+
+  /**
+   * Runs cli commands migration destroy.
+   * @param {import("../cli/base-command.js").default} _command - Command.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
+   */
+  async cliCommandsMigrationDestroy(_command) {
+    throw new Error("cliCommandsMigrationDestroy not implemented")
+  }
+
+  /**
+   * Runs cli commands generate model.
+   * @param {import("../cli/base-command.js").default} _command - Command.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
+   */
+  async cliCommandsGenerateModel(_command) {
+    throw new Error("cliCommandsGenerateModel not implemented")
+  }
+
+  /**
+   * Runs cli commands lint relationships.
+   * @abstract
+   * @param {import("../cli/base-command.js").default} _command - Command.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
+   */
+  async cliCommandsLintRelationships(_command) {
+    throw new Error("cliCommandsLintRelationships not implemented")
+  }
+
+  /**
+   * Runs cli commands routes.
+   * @abstract
+   * @param {import("../cli/base-command.js").default} _command - Command.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
+   */
+  async cliCommandsRoutes(_command) {
+    throw new Error("cliCommandsRoutes not implemented")
+  }
+
+  /**
+   * Runs cli commands console.
+   * @param {import("../cli/base-command.js").default} _command - Command.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
+   */
+  async cliCommandsConsole(_command) {
+    throw new Error("cliCommandsConsole not implemented")
+  }
+
+  /**
+   * Runs cli commands server.
+   * @param {import("../cli/base-command.js").default} _command - Command.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
+   */
+  async cliCommandsServer(_command) {
+    throw new Error("cliCommandsServer not implemented")
+  }
+
+  /**
+   * Runs cli commands test.
+   * @param {import("../cli/base-command.js").default} _command - Command.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
+   */
+  async cliCommandsTest(_command) {
+    throw new Error("cliCommandsTest not implemented")
+  }
+
+  /**
+   * Runs cli commands test timing manifest merge.
+   * @param {import("../cli/base-command.js").default} _command - Command.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
+   */
+  async cliCommandsTestTimingManifestMerge(_command) {
+    throw new Error("cliCommandsTestTimingManifestMerge not implemented")
+  }
+
+  /**
+   * Runs cli commands background jobs main.
+   * @param {import("../cli/base-command.js").default} _command - Command.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
+   */
+  async cliCommandsBackgroundJobsMain(_command) {
+    throw new Error("cliCommandsBackgroundJobsMain not implemented")
+  }
+
+  /**
+   * Runs CLI background-jobs activation.
+   * @param {import("../cli/base-command.js").default} _command - Command.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Result.
+   */
+  async cliCommandsBackgroundJobsActivate(_command) {
+    throw new Error("cliCommandsBackgroundJobsActivate not implemented")
+  }
+
+  /**
+   * Runs CLI background-jobs retirement.
+   * @param {import("../cli/base-command.js").default} _command - Command.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Result.
+   */
+  async cliCommandsBackgroundJobsRetire(_command) {
+    throw new Error("cliCommandsBackgroundJobsRetire not implemented")
+  }
+
+  /**
+   * Runs cli commands background jobs worker.
+   * @param {import("../cli/base-command.js").default} _command - Command.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
+   */
+  async cliCommandsBackgroundJobsWorker(_command) {
+    throw new Error("cliCommandsBackgroundJobsWorker not implemented")
+  }
+
+  /**
+   * Runs cli commands background jobs runner.
+   * @param {import("../cli/base-command.js").default} _command - Command.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
+   */
+  async cliCommandsBackgroundJobsRunner(_command) {
+    throw new Error("cliCommandsBackgroundJobsRunner not implemented")
+  }
+
+  /**
+   * Runs cli commands beacon.
+   * @param {import("../cli/base-command.js").default} _command - Command.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
+   */
+  async cliCommandsBeacon(_command) {
+    throw new Error("cliCommandsBeacon not implemented")
+  }
+
+  /**
+   * Loads the TCP-backed Beacon client class. Routed through the
+   * environment handler so the dynamic `import("../beacon/client.js")`
+   * call lives on the Node-only path — keeps Beacon's `node:net` /
+   * `node:crypto` deps out of browser bundles that statically reach
+   * `Configuration` (and therefore previously reached the dynamic
+   * imports).
+   * @returns {Promise<typeof import("../beacon/client.js").default>} - Beacon client class.
+   */
+  async loadBeaconClient() {
+    throw new Error("loadBeaconClient not implemented by this environment handler")
+  }
+
+  /**
+   * Loads the in-process Beacon client class. Same indirection rationale
+   * as `loadBeaconClient`.
+   * @returns {Promise<typeof import("../beacon/in-process-client.js").default>} - In-process client class.
+   */
+  async loadInProcessBeaconClient() {
+    throw new Error("loadInProcessBeaconClient not implemented by this environment handler")
+  }
+
+  /**
+   * Runs cli commands db schema dump.
+   * @param {import("../cli/base-command.js").default} _command - Command.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
+   */
+  async cliCommandsDbSchemaDump(_command) {
+    throw new Error("cliCommandsDbSchemaDump not implemented")
+  }
+
+  /**
+   * Runs cli commands db schema load.
+   * @param {import("../cli/base-command.js").default} _command - Command.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
+   */
+  async cliCommandsDbSchemaLoad(_command) {
+    throw new Error("cliCommandsDbSchemaLoad not implemented")
+  }
+
+  /**
+   * Runs cli commands db seed.
+   * @param {import("../cli/base-command.js").default} _command - Command.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
+   */
+  async cliCommandsDbSeed(_command) {
+    throw new Error("cliCommandsDbSeed not implemented")
+  }
+
+  /**
+   * Runs cli commands runner.
+   * @param {import("../cli/base-command.js").default} _command - Command.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
+   */
+  async cliCommandsRunner(_command) {
+    throw new Error("cliCommandsRunner not implemented")
+  }
+
+  /**
+   * Runs cli commands run script.
+   * @param {import("../cli/base-command.js").default} _command - Command.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
+   */
+  async cliCommandsRunScript(_command) {
+    throw new Error("cliCommandsRunScript not implemented")
+  }
+
+  /**
+   * Runs find commands.
+   * @abstract
+   * @returns {Promise<CommandFileObjectType[]>} - Resolves with the commands.
+   */
+  async findCommands() { throw new Error("findCommands not implemented") }
+
+  /**
+   * Runs find migrations.
+   * @abstract
+   * @returns {Promise<Array<MigrationObjectType>>} - Resolves with the migrations.
+   */
+  async findMigrations() { throw new Error("findMigrations not implemneted") }
+
+  /**
+   * Runs forward command.
+   * @param {import("../cli/base-command.js").default} command - Command.
+   * @param {typeof import("../cli/base-command.js").default} CommandClass - Command class.
+   * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
+   */
+  async forwardCommand(command, CommandClass) {
+    const newCommand = new CommandClass({
+      args: command.args,
+      cli: command.cli
+    })
+
+    return await newCommand.execute()
+  }
+
+  /**
+   * Runs get velocious path.
+   * @abstract
+   * @returns {Promise<string>} - Resolves with the velocious path.
+   */
+  getVelociousPath() { throw new Error("getVelociousPath not implemented") }
+
+  /**
+   * Runs import application routes.
+   * @abstract
+   * @returns {Promise<import("../routes/index.js").default>} - Resolves with the import application routes.
+   */
+  async importApplicationRoutes() { throw new Error("importApplicationRoutes not implemented") }
+
+  /**
+   * Runs import test files.
+   * @abstract
+   * @param {string[]} _testFiles - Test files.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  importTestFiles(_testFiles) { throw new Error("'importTestFiles' not implemented") }
+
+  /**
+   * Runs import testing config path.
+   * @abstract
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  importTestingConfigPath() { throw new Error(`'importTestingConfigPath' not implemented`) }
+
+  /**
+   * Runs after migrations.
+   * @param {object} args - Options object.
+   * @param {Record<string, import("../database/drivers/base.js").default>} args.dbs - Dbs.
+   * @param {"migration" | "schemaDump"} [args.reason] - Why the structure write hook is being invoked.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async afterMigrations(args) { // eslint-disable-line no-unused-vars
+    return
+  }
+
+  /**
+   * Ensures velocious' own framework-owned schema (e.g. the background-jobs
+   * tables) exists after app migrations run, so `db:migrate` produces a complete
+   * schema deterministically instead of it only appearing once a runtime store
+   * boots. Runs before the structure dump. No-op by default; the node handler
+   * overrides it.
+   * @param {object} args - Options object.
+   * @param {Record<string, import("../database/drivers/base.js").default>} args.dbs - Dbs being migrated.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async ensureFrameworkSchema(args) { // eslint-disable-line no-unused-vars
+    return
+  }
+
+  /**
+   * Creates the environment's default persistence adapter.
+   * @abstract
+   * @param {{configuration: import("../configuration.js").default}} _args - Adapter options.
+   * @returns {import("../background-jobs/adapter.js").default} - Default adapter.
+   */
+  createBackgroundJobsAdapter(_args) {
+    throw new Error("This environment requires an explicit backgroundJobs.adapter")
+  }
+
+  /**
+   * Creates the platform-neutral producer path for an explicit adapter.
+   * @param {{configuration: import("../configuration.js").default}} args - Client options.
+   * @returns {import("../background-jobs/types.js").BackgroundJobsProducer} - Adapter-backed producer.
+   */
+  backgroundJobsClient(args) {
+    return new BackgroundJobsAdapterClient(args)
+  }
+
+  /**
+   * Runs require command.
+   * @abstract
+   * @param {object} args - Options object.
+   * @param {string[]} args.commandParts - Command parts.
+   * @returns {Promise<typeof import ("../cli/base-command.js").default>} - Resolves with the require command.
+   */
+  async requireCommand({commandParts}) { throw new Error("'requireCommand' not implemented") } // eslint-disable-line no-unused-vars
+
+  /**
+   * Runs set args.
+   * @param {object} newArgs - New args.
+   * @returns {void} - No return value.
+   */
+  setArgs(newArgs) { this.args = newArgs }
+
+  /**
+   * Runs set configuration.
+   * @param {import("../configuration.js").default} newConfiguration - New configuration.
+   * @returns {void} - No return value.
+   */
+  setConfiguration(newConfiguration) { this.configuration = newConfiguration }
+
+  /**
+   * Runs read attachment input file.
+   * @param {string} _filePath - File path.
+   * @returns {Promise<Buffer>} - File bytes.
+   */
+  async readAttachmentInputFile(_filePath) {
+    throw new Error("Attachment file reads are not supported in this environment")
+  }
+
+  /**
+   * Runs resolve attachment input path.
+   * @param {object} _args - Args.
+   * @param {string[]} _args.allowedPathPrefixes - Allowed path prefixes.
+   * @param {string} _args.inputPath - Input path.
+   * @returns {Promise<import("../database/record/attachments/normalize-input.js").AttachmentPathSource>} - Opened path source.
+   */
+  async resolveAttachmentInputPath(_args) {
+    throw new Error("Attachment path input is not supported in this environment")
+  }
+
+  /**
+   * Runs get configuration.
+   * @returns {import("../configuration.js").default} - The configuration.
+   */
+  getConfiguration() {
+    if (!this.configuration) throw new Error("Configuration hasn't been set")
+
+    return this.configuration
+  }
+
+  /**
+   * Runs set process args.
+   * @param {string[]} newProcessArgs - New process args.
+   * @returns {void} - No return value.
+   */
+  setProcessArgs(newProcessArgs) { this.processArgs = newProcessArgs }
+
+  /**
+   * Runs get default log directory.
+   * @param {object} _args - Options object.
+   * @param {import("../configuration.js").default} _args.configuration - Configuration instance.
+   * @returns {string | undefined} - The default log directory.
+   */
+  getDefaultLogDirectory(_args) {
+    return undefined
+  }
+
+  /**
+   * Runs get log file path.
+   * @param {object} _args - Options object.
+   * @param {import("../configuration.js").default} _args.configuration - Configuration instance.
+   * @param {string | undefined} _args.directory - Directory path.
+   * @param {string} _args.environment - Environment.
+   * @returns {string | undefined} - The log file path.
+   */
+  getLogFilePath(_args) {
+    return undefined
+  }
+
+  /**
+   * Runs write log to file.
+   * @param {object} _args - Options object.
+   * @param {string} _args.filePath - File path.
+   * @param {string} _args.message - Message text.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async writeLogToFile(_args) {
+    return
+  }
+
+  /**
+   * Registers frontend-model websocket channel publishers so lifecycle
+   * event hooks (create/update/destroy) broadcast over the shared
+   * "frontend-models" channel. The base handler is a no-op — only the
+   * Node handler performs the registration because the required
+   * `frontend-model-controller` and `routes/resolver` imports pull in
+   * server-only modules that break browser bundlers.
+   * @param {import("../configuration.js").default} _configuration - Configuration instance.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async initializeFrontendModelWebsocketPublishers(_configuration) {
+    // No-op in base handler; Node handler does the real registration.
+  }
+
+  /**
+   * Loads models contributed by registered packages.
+   * @param {import("../configuration.js").default} _configuration - Configuration instance.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async initializePackageModels(_configuration) {
+    // No-op in base handler; Node handler loads package models from the filesystem.
+  }
+}

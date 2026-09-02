@@ -48,8 +48,7 @@
     "velocious": "asd",
     "verify:docker-dev-environment": "node scripts/verify-docker-dev-environment.js",
     "watch": "tsc -w",
-    "watch:ejs": "chokidar \"src/**/*.ejs\" -c \"npm run copy:ejs\"",
-    "prepare": "npm run build"
+    "watch:ejs": "chokidar \"src/**/*.ejs\" -c \"npm run copy:ejs\""
   },
   "type": "module",
   "repository": {

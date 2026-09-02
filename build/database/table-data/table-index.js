@@ -1,0 +1,46 @@
+// @ts-check
+
+import restArgsError from "../../utils/rest-args-error.js"
+
+/**
+ * TableIndexArgsType type.
+ * @typedef {object} TableIndexArgsType
+ * @property {string} [name] - Explicit index name.
+ * @property {boolean} [unique] - Whether the index should be unique.
+ */
+
+export default class TableIndex {
+  /**
+   * Runs constructor.
+   * @param {Array<string | import("./table-column.js").default>} columns - Column names.
+   * @param {TableIndexArgsType} [args] - Options object.
+   */
+  constructor(columns, args) {
+    if (args) {
+      const {name, unique, ...restArgs} = args // eslint-disable-line no-unused-vars
+
+      restArgsError(restArgs)
+    }
+
+    this.args = args
+    this.columns = columns
+  }
+
+  /**
+   * Runs get columns.
+   * @returns {Array<string | import("./table-column.js").default>} - The columns.
+   */
+  getColumns() { return this.columns }
+
+  /**
+   * Runs get name.
+   * @returns {string | undefined} - The name.
+   */
+  getName() { return this.args?.name }
+
+  /**
+   * Runs get unique.
+   * @returns {boolean} - Whether unique.
+   */
+  getUnique() { return Boolean(this.args?.unique) }
+}

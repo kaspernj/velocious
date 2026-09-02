@@ -1,0 +1,1 @@
+{"version":3,"file":"alter-table.d.ts","sourceRoot":"","sources":["../../../../../../src/database/drivers/mssql/sql/alter-table.js"],"names":[],"mappings":"AAAA,OAAO,cAAc,MAAM,oCAAoC,CAAA;AAE/D,MAAM,CAAC,OAAO,OAAO,oDAAqD,SAAQ,cAAc;CAC/F"}

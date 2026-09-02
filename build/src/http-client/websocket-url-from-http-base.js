@@ -1,0 +1,13 @@
+// @ts-check
+/**
+ * Builds the Velocious websocket URL for a backend HTTP base URL: swaps the
+ * http(s) scheme for ws(s) and appends the framework's `/websocket` mount path.
+ * @param {string} httpBase - Backend HTTP base URL (for example `https://ticketserver.example.com`).
+ * @returns {string} Websocket URL.
+ */
+export function websocketUrlFromHttpBase(httpBase) {
+    const wsScheme = httpBase.startsWith("https://") ? "wss" : "ws";
+    const wsBase = httpBase.replace(/^https?/, wsScheme);
+    return `${wsBase}/websocket`;
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoid2Vic29ja2V0LXVybC1mcm9tLWh0dHAtYmFzZS5qcyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbIi4uLy4uLy4uL3NyYy9odHRwLWNsaWVudC93ZWJzb2NrZXQtdXJsLWZyb20taHR0cC1iYXNlLmpzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQUFBLFlBQVk7QUFFWjs7Ozs7R0FLRztBQUNILE1BQU0sVUFBVSx3QkFBd0IsQ0FBQyxRQUFRO0lBQy9DLE1BQU0sUUFBUSxHQUFHLFFBQVEsQ0FBQyxVQUFVLENBQUMsVUFBVSxDQUFDLENBQUMsQ0FBQyxDQUFDLEtBQUssQ0FBQyxDQUFDLENBQUMsSUFBSSxDQUFBO0lBQy9ELE1BQU0sTUFBTSxHQUFHLFFBQVEsQ0FBQyxPQUFPLENBQUMsU0FBUyxFQUFFLFFBQVEsQ0FBQyxDQUFBO0lBRXBELE9BQU8sR0FBRyxNQUFNLFlBQVksQ0FBQTtBQUM5QixDQUFDIiwic291cmNlc0NvbnRlbnQiOlsiLy8gQHRzLWNoZWNrXG5cbi8qKlxuICogQnVpbGRzIHRoZSBWZWxvY2lvdXMgd2Vic29ja2V0IFVSTCBmb3IgYSBiYWNrZW5kIEhUVFAgYmFzZSBVUkw6IHN3YXBzIHRoZVxuICogaHR0cChzKSBzY2hlbWUgZm9yIHdzKHMpIGFuZCBhcHBlbmRzIHRoZSBmcmFtZXdvcmsncyBgL3dlYnNvY2tldGAgbW91bnQgcGF0aC5cbiAqIEBwYXJhbSB7c3RyaW5nfSBodHRwQmFzZSAtIEJhY2tlbmQgSFRUUCBiYXNlIFVSTCAoZm9yIGV4YW1wbGUgYGh0dHBzOi8vdGlja2V0c2VydmVyLmV4YW1wbGUuY29tYCkuXG4gKiBAcmV0dXJucyB7c3RyaW5nfSBXZWJzb2NrZXQgVVJMLlxuICovXG5leHBvcnQgZnVuY3Rpb24gd2Vic29ja2V0VXJsRnJvbUh0dHBCYXNlKGh0dHBCYXNlKSB7XG4gIGNvbnN0IHdzU2NoZW1lID0gaHR0cEJhc2Uuc3RhcnRzV2l0aChcImh0dHBzOi8vXCIpID8gXCJ3c3NcIiA6IFwid3NcIlxuICBjb25zdCB3c0Jhc2UgPSBodHRwQmFzZS5yZXBsYWNlKC9eaHR0cHM/Lywgd3NTY2hlbWUpXG5cbiAgcmV0dXJuIGAke3dzQmFzZX0vd2Vic29ja2V0YFxufVxuIl19

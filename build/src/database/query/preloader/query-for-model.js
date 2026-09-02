@@ -1,0 +1,29 @@
+// @ts-check
+/**
+ * Binds a preload target to the source records' physical database generation.
+ * @template {typeof import("../../record/index.js").default} MC
+ * @param {import("../../record/index.js").default[]} models - Source records.
+ * @param {MC} ModelClass - Target model class.
+ * @returns {MC} - Generation-bound target model class.
+ */
+export function bindPreloadModelClass(models, ModelClass) {
+    const sourceModel = models[0];
+    if (!sourceModel)
+        throw new Error("Cannot bind a preload model class without source records");
+    return /** @type {MC} */ (sourceModel.getModelClass().bindRecordMetadataModelClass(ModelClass));
+}
+/**
+ * Builds a target query preserving the explicit database operation owned by
+ * the source records.
+ * @template {typeof import("../../record/index.js").default} MC
+ * @param {import("../../record/index.js").default[]} models - Source records.
+ * @param {MC} ModelClass - Target model class.
+ * @returns {import("../model-class-query.js").default<MC>} - Target query.
+ */
+export default function preloadQueryForModel(models, ModelClass) {
+    const sourceModel = models[0];
+    if (!sourceModel)
+        throw new Error("Cannot build a preload query without source records");
+    return sourceModel.queryForModel(bindPreloadModelClass(models, ModelClass));
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoicXVlcnktZm9yLW1vZGVsLmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiLi4vLi4vLi4vLi4vLi4vc3JjL2RhdGFiYXNlL3F1ZXJ5L3ByZWxvYWRlci9xdWVyeS1mb3ItbW9kZWwuanMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBQUEsWUFBWTtBQUVaOzs7Ozs7R0FNRztBQUNILE1BQU0sVUFBVSxxQkFBcUIsQ0FBQyxNQUFNLEVBQUUsVUFBVTtJQUN0RCxNQUFNLFdBQVcsR0FBRyxNQUFNLENBQUMsQ0FBQyxDQUFDLENBQUE7SUFFN0IsSUFBSSxDQUFDLFdBQVc7UUFBRSxNQUFNLElBQUksS0FBSyxDQUFDLDBEQUEwRCxDQUFDLENBQUE7SUFFN0YsT0FBTyxpQkFBaUIsQ0FBQyxDQUFDLFdBQVcsQ0FBQyxhQUFhLEVBQUUsQ0FBQyw0QkFBNEIsQ0FBQyxVQUFVLENBQUMsQ0FBQyxDQUFBO0FBQ2pHLENBQUM7QUFFRDs7Ozs7OztHQU9HO0FBQ0gsTUFBTSxDQUFDLE9BQU8sVUFBVSxvQkFBb0IsQ0FBQyxNQUFNLEVBQUUsVUFBVTtJQUM3RCxNQUFNLFdBQVcsR0FBRyxNQUFNLENBQUMsQ0FBQyxDQUFDLENBQUE7SUFFN0IsSUFBSSxDQUFDLFdBQVc7UUFBRSxNQUFNLElBQUksS0FBSyxDQUFDLHFEQUFxRCxDQUFDLENBQUE7SUFFeEYsT0FBTyxXQUFXLENBQUMsYUFBYSxDQUFDLHFCQUFxQixDQUFDLE1BQU0sRUFBRSxVQUFVLENBQUMsQ0FBQyxDQUFBO0FBQzdFLENBQUMiLCJzb3VyY2VzQ29udGVudCI6WyIvLyBAdHMtY2hlY2tcblxuLyoqXG4gKiBCaW5kcyBhIHByZWxvYWQgdGFyZ2V0IHRvIHRoZSBzb3VyY2UgcmVjb3JkcycgcGh5c2ljYWwgZGF0YWJhc2UgZ2VuZXJhdGlvbi5cbiAqIEB0ZW1wbGF0ZSB7dHlwZW9mIGltcG9ydChcIi4uLy4uL3JlY29yZC9pbmRleC5qc1wiKS5kZWZhdWx0fSBNQ1xuICogQHBhcmFtIHtpbXBvcnQoXCIuLi8uLi9yZWNvcmQvaW5kZXguanNcIikuZGVmYXVsdFtdfSBtb2RlbHMgLSBTb3VyY2UgcmVjb3Jkcy5cbiAqIEBwYXJhbSB7TUN9IE1vZGVsQ2xhc3MgLSBUYXJnZXQgbW9kZWwgY2xhc3MuXG4gKiBAcmV0dXJucyB7TUN9IC0gR2VuZXJhdGlvbi1ib3VuZCB0YXJnZXQgbW9kZWwgY2xhc3MuXG4gKi9cbmV4cG9ydCBmdW5jdGlvbiBiaW5kUHJlbG9hZE1vZGVsQ2xhc3MobW9kZWxzLCBNb2RlbENsYXNzKSB7XG4gIGNvbnN0IHNvdXJjZU1vZGVsID0gbW9kZWxzWzBdXG5cbiAgaWYgKCFzb3VyY2VNb2RlbCkgdGhyb3cgbmV3IEVycm9yKFwiQ2Fubm90IGJpbmQgYSBwcmVsb2FkIG1vZGVsIGNsYXNzIHdpdGhvdXQgc291cmNlIHJlY29yZHNcIilcblxuICByZXR1cm4gLyoqIEB0eXBlIHtNQ30gKi8gKHNvdXJjZU1vZGVsLmdldE1vZGVsQ2xhc3MoKS5iaW5kUmVjb3JkTWV0YWRhdGFNb2RlbENsYXNzKE1vZGVsQ2xhc3MpKVxufVxuXG4vKipcbiAqIEJ1aWxkcyBhIHRhcmdldCBxdWVyeSBwcmVzZXJ2aW5nIHRoZSBleHBsaWNpdCBkYXRhYmFzZSBvcGVyYXRpb24gb3duZWQgYnlcbiAqIHRoZSBzb3VyY2UgcmVjb3Jkcy5cbiAqIEB0ZW1wbGF0ZSB7dHlwZW9mIGltcG9ydChcIi4uLy4uL3JlY29yZC9pbmRleC5qc1wiKS5kZWZhdWx0fSBNQ1xuICogQHBhcmFtIHtpbXBvcnQoXCIuLi8uLi9yZWNvcmQvaW5kZXguanNcIikuZGVmYXVsdFtdfSBtb2RlbHMgLSBTb3VyY2UgcmVjb3Jkcy5cbiAqIEBwYXJhbSB7TUN9IE1vZGVsQ2xhc3MgLSBUYXJnZXQgbW9kZWwgY2xhc3MuXG4gKiBAcmV0dXJucyB7aW1wb3J0KFwiLi4vbW9kZWwtY2xhc3MtcXVlcnkuanNcIikuZGVmYXVsdDxNQz59IC0gVGFyZ2V0IHF1ZXJ5LlxuICovXG5leHBvcnQgZGVmYXVsdCBmdW5jdGlvbiBwcmVsb2FkUXVlcnlGb3JNb2RlbChtb2RlbHMsIE1vZGVsQ2xhc3MpIHtcbiAgY29uc3Qgc291cmNlTW9kZWwgPSBtb2RlbHNbMF1cblxuICBpZiAoIXNvdXJjZU1vZGVsKSB0aHJvdyBuZXcgRXJyb3IoXCJDYW5ub3QgYnVpbGQgYSBwcmVsb2FkIHF1ZXJ5IHdpdGhvdXQgc291cmNlIHJlY29yZHNcIilcblxuICByZXR1cm4gc291cmNlTW9kZWwucXVlcnlGb3JNb2RlbChiaW5kUHJlbG9hZE1vZGVsQ2xhc3MobW9kZWxzLCBNb2RlbENsYXNzKSlcbn1cbiJdfQ==

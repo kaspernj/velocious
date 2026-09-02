@@ -101,8 +101,9 @@ describe("Background jobs main retirement admission boundary", () => {
       const retireMessage = peer.nextMessage()
       expect(main.getLifecycleState()).toEqual("retiring")
       expect(main.readyWorkers.size).toEqual(0)
-      claim.release()
       await retirement
+      claim.release()
+      await main._retirementPromise
 
       expect((await store.getJob(jobId))?.status).toEqual("queued")
       expect(main.getLifecycleState()).toEqual("retired")

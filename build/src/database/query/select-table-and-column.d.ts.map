@@ -1,0 +1,1 @@
+{"version":3,"file":"select-table-and-column.d.ts","sourceRoot":"","sources":["../../../../src/database/query/select-table-and-column.js"],"names":[],"mappings":"AAEA,OAAO,UAAU,MAAM,kBAAkB,CAAA;AAEzC,MAAM,CAAC,OAAO,OAAO,0CAA2C,SAAQ,UAAU;IAQzE,UAAU;IACV,SAAS;IARhB;;;;OAIG;IACH,YAAY,SAAS,EAHV,MAGU,EAAE,UAAU,EAFtB,MAEsB,EAIhC;IAED,aAAa,WAEZ;IAED,YAAY,WAEX;IAED,KAAK,WAEJ;CACF"}

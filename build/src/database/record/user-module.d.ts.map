@@ -1,0 +1,1 @@
+{"version":3,"file":"user-module.d.ts","sourceRoot":"","sources":["../../../../src/database/record/user-module.js"],"names":[],"mappings":"AAKA,MAAM,CAAC,OAAO,OAAO,UAAU;IAWtB,SAAS;IAVhB;;;;OAIG;IACH,YAAY,EAAC,SAAS,EAAE,GAAG,QAAQ,EAAC,EAFjC;QAAqB,SAAS,EAAtB,MAAM,CAChB;KACmC,EAMnC;IAED;;;OAGG;IACH,QAAQ,CAAC,SAAS,EAFP,cAAc,YAAY,EAAE,OAErB,QAkBjB;CACF"}

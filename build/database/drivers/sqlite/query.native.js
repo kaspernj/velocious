@@ -1,0 +1,35 @@
+/**
+ * Run a query using the native SQLite async API.
+ * @param {import("sqlite3").Database & {getAllAsync: (sql: string) => Promise<Record<string, ReturnType<typeof JSON.parse>>[]>}} connection - SQLite connection instance.
+ * @param {string} sql - SQL string to execute.
+ * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>[]>} - Resolves with the result rows.
+ */
+export default async function query(connection, sql) {
+  const rows = []
+  let result
+
+  try {
+    result = await connection.getAllAsync(sql)
+  } catch (error) {
+    let sqlInErrorMessage = `${sql}`
+
+    if (sqlInErrorMessage.length >= 4096) {
+      sqlInErrorMessage = `${sqlInErrorMessage.substring(0, 4096)}...`
+    }
+
+    if (error instanceof Error) {
+      error.message += `\n\n${sqlInErrorMessage}`
+
+      // Re-throw to recover stack trace
+      throw new Error(error.message, {cause: error})
+    }
+
+    throw new Error(`An error occurred: ${error}\n\n${sqlInErrorMessage}`, {cause: error})
+  }
+
+  for await (const entry of result) {
+    rows.push(entry)
+  }
+
+  return rows
+}

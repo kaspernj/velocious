@@ -49,7 +49,7 @@ describe("package scripts", {databaseCleaning: {transaction: true}}, () => {
     const scripts = await readPackageScripts()
 
     expect(scripts.dependencies).toEqual("npm run build")
-    expect(scripts.prepare).toEqual(undefined)
+    expect(scripts.prepare).toEqual("npm run build")
     expect(scripts.prepublishOnly).toEqual(undefined)
     expect(scripts.prepack).toEqual("npm run build")
   })
@@ -80,7 +80,24 @@ describe("package scripts", {databaseCleaning: {transaction: true}}, () => {
     await execFileAsync(process.execPath, [typescriptExecutable, "--ignoreConfig", "--noEmit", "--skipLibCheck", declarationPath])
   })
 
-  it("builds the declared package entry points when installed from Git", {timeoutSeconds: 300}, async () => {
+  it("keeps the checked-in build artifacts current", {timeoutSeconds: 180}, async () => {
+    const npmExecutable = process.env.npm_execpath
+
+    if (!npmExecutable) throw new Error("Expected npm_execpath while running the generated build spec")
+
+    await execFileAsync(process.execPath, [npmExecutable, "run", "build"], {cwd: repositoryDirectory()})
+    await execFileAsync("git", ["diff", "--exit-code", "--", "build"], {cwd: repositoryDirectory()})
+
+    const {stdout: untrackedBuildPaths} = await execFileAsync(
+      "git",
+      ["ls-files", "--others", "--exclude-standard", "--", "build"],
+      {cwd: repositoryDirectory()}
+    )
+
+    expect(untrackedBuildPaths).toEqual("")
+  })
+
+  it("ships declared package entry points when installed from Git without lifecycle scripts", {timeoutSeconds: 300}, async () => {
     const temporaryDirectoryParent = path.join(repositoryDirectory(), "tmp")
 
     await fs.mkdir(temporaryDirectoryParent, {recursive: true})
@@ -93,14 +110,18 @@ describe("package scripts", {databaseCleaning: {transaction: true}}, () => {
     if (!npmExecutable) throw new Error("Expected npm_execpath while running the package lifecycle spec")
 
     try {
-      await execFileAsync("git", ["clone", "--local", "--no-hardlinks", repositoryDirectory(), sourceDirectory])
-      const packageJson = JSON.parse(await fs.readFile(path.join(repositoryDirectory(), "package.json"), "utf8"))
-      packageJson.devDependencies["eslint-plugin-jsdoc-inline-type-casts"] = `file:${path.join(repositoryDirectory(), "node_modules", "eslint-plugin-jsdoc-inline-type-casts")}`
-      await fs.writeFile(path.join(sourceDirectory, "package.json"), JSON.stringify(packageJson, null, 2))
+      for (const buildEntryPoint of ["build/index.js", "build/index.d.ts", "build/bin/velocious.js"]) {
+        await execFileAsync("git", ["ls-files", "--error-unmatch", buildEntryPoint], {cwd: repositoryDirectory()})
+      }
+
+      await fs.mkdir(sourceDirectory)
+      await execFileAsync("git", ["checkout-index", "--all", `--prefix=${sourceDirectory}${path.sep}`], {cwd: repositoryDirectory()})
+      await execFileAsync("git", ["init"], {cwd: sourceDirectory})
+      await execFileAsync("git", ["add", "--all"], {cwd: sourceDirectory})
       await execFileAsync("git", [
         "-c", "user.name=Velocious test",
         "-c", "user.email=velocious@example.invalid",
-        "commit", "--all", "--allow-empty", "--message=Use current package lifecycle"
+        "commit", "--message=Use current package lifecycle"
       ], {cwd: sourceDirectory})
       await fs.mkdir(consumerDirectory)
       await fs.writeFile(path.join(consumerDirectory, "package.json"), JSON.stringify({
@@ -122,7 +143,7 @@ describe("package scripts", {databaseCleaning: {transaction: true}}, () => {
           "install",
           "--allow-git=all",
           "--allow-remote=all",
-          "--ignore-scripts=false",
+          "--ignore-scripts",
           "--no-audit",
           "--no-fund",
           "--prefer-offline"
