@@ -1555,6 +1555,30 @@ class FrontendModelEventSubscription {
   }
 
   /**
+   * Runs register class callback.
+   * @template {FrontendModelModelEventCallbackEntry | FrontendModelDestroyEventCallbackEntry} T
+   * @param {Set<T>} callbacks - Callback set for the event type.
+   * @param {T} entry - Callback entry.
+   * @returns {Promise<() => void>} - Unsubscribe callback.
+   */
+  async registerClassCallback(callbacks, entry) {
+    callbacks.add(entry)
+
+    try {
+      await this.ensureSubscribed()
+    } catch (error) {
+      callbacks.delete(entry)
+      this.maybeTeardown()
+      throw error
+    }
+
+    return () => {
+      callbacks.delete(entry)
+      this.maybeTeardown()
+    }
+  }
+
+  /**
    * Runs ensure subscribed.
    * @returns {Promise<void>} */
   async ensureSubscribed() {
@@ -1599,14 +1623,6 @@ class FrontendModelEventSubscription {
           this.readyPromise = null
           this.subscriptionParamsKey = null
           this.instanceListeners.clear()
-
-          const hasCallbacks = this.classCreateCallbacks.size > 0
-            || this.classUpdateCallbacks.size > 0
-            || this.classDestroyCallbacks.size > 0
-
-          if (hasCallbacks && client.autoReconnect) {
-            void this.ensureSubscribed()
-          }
         }
       })
       await this.channelHandle.ready
@@ -3710,13 +3726,7 @@ export default class FrontendModelBase {
     const sub = ensureFrontendModelEventSubscription(this, frontendModelRequestContext())
     const entry = {callback, ...frontendModelEventOptionsPayload(this, options)}
 
-    sub.classCreateCallbacks.add(entry)
-    await sub.ensureSubscribed()
-
-    return () => {
-      sub.classCreateCallbacks.delete(entry)
-      sub.maybeTeardown()
-    }
+    return await sub.registerClassCallback(sub.classCreateCallbacks, entry)
   }
 
   /**
@@ -3730,13 +3740,7 @@ export default class FrontendModelBase {
     const sub = ensureFrontendModelEventSubscription(this, frontendModelRequestContext())
     const entry = {callback, ...frontendModelEventOptionsPayload(this, options)}
 
-    sub.classUpdateCallbacks.add(entry)
-    await sub.ensureSubscribed()
-
-    return () => {
-      sub.classUpdateCallbacks.delete(entry)
-      sub.maybeTeardown()
-    }
+    return await sub.registerClassCallback(sub.classUpdateCallbacks, entry)
   }
 
   /**
@@ -3752,13 +3756,7 @@ export default class FrontendModelBase {
     const sub = ensureFrontendModelEventSubscription(this, frontendModelRequestContext())
     const entry = {callback}
 
-    sub.classDestroyCallbacks.add(entry)
-    await sub.ensureSubscribed()
-
-    return () => {
-      sub.classDestroyCallbacks.delete(entry)
-      sub.maybeTeardown()
-    }
+    return await sub.registerClassCallback(sub.classDestroyCallbacks, entry)
   }
 
   /**

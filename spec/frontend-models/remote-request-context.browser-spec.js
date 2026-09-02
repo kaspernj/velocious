@@ -4,8 +4,9 @@ import {describe, expect, it} from "../../src/testing/test.js"
 import FrontendModelBase from "../../src/frontend-models/base.js"
 import {resetFrontendModelTransport} from "../helpers/frontend-model-test-helpers.js"
 
-/** @param {{autoReconnect?: boolean}} [args] - Client controls. @returns {{autoReconnect: boolean, subscriptions: Array<Record<string, ReturnType<typeof JSON.parse>>>, subscribeChannel: (channel: string, options: Record<string, ReturnType<typeof JSON.parse>>) => Record<string, ReturnType<typeof JSON.parse>>}} Recording websocket client. */
-function buildWebsocketClient({autoReconnect = true} = {}) {
+/** @param {{autoReconnect?: boolean, firstReadyPromise?: Promise<void>}} [args] - Client controls. @returns {{autoReconnect: boolean, subscriptions: Array<Record<string, ReturnType<typeof JSON.parse>>>, subscribeChannel: (channel: string, options: Record<string, ReturnType<typeof JSON.parse>>) => Record<string, ReturnType<typeof JSON.parse>>}} Recording websocket client. */
+function buildWebsocketClient({autoReconnect = true, firstReadyPromise} = {}) {
+  let nextReadyPromise = firstReadyPromise
   const client = {
     autoReconnect,
     subscriptions: /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */ ([]),
@@ -18,9 +19,10 @@ function buildWebsocketClient({autoReconnect = true} = {}) {
         closed: false,
         isClosed: () => subscription.closed,
         options,
-        ready: Promise.resolve()
+        ready: nextReadyPromise || Promise.resolve()
       }
 
+      nextReadyPromise = undefined
       client.subscriptions.push(subscription)
 
       return subscription
@@ -30,18 +32,8 @@ function buildWebsocketClient({autoReconnect = true} = {}) {
   return client
 }
 
-/** Flushes microtasks until a condition holds. @param {() => boolean} condition - Completion condition. @returns {Promise<void>} */
-async function flushUntil(condition) {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    if (condition()) return
-    await Promise.resolve()
-  }
-
-  throw new Error("Condition was not reached while flushing microtasks")
-}
-
 describe("frontend-model websocket remote request context", () => {
-  it("isolates concurrent contexts and retains captured context on reconnect", async () => {
+  it("isolates concurrent subscription contexts", async () => {
     class RealtimeTask extends FrontendModelBase {
       /** @returns {{attributes: string[], primaryKey: string}} Resource configuration. */
       static resourceConfig() { return {attributes: ["id"], primaryKey: "id"} }
@@ -66,17 +58,54 @@ describe("frontend-model websocket remote request context", () => {
         {model: "RealtimeTask", projectId: "project-beta", routingEpoch: 4}
       ])
 
-      websocketClient.subscriptions[0].options.onClose()
-      await flushUntil(() => websocketClient.subscriptions.length === 3)
-
-      expect(websocketClient.subscriptions[2].options.params).toEqual({
-        model: "RealtimeTask",
-        projectId: "project-alpha",
-        routingEpoch: 3
-      })
-
       unsubscribeAlpha()
       unsubscribeBeta()
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
+  it("does not retry a permanently rejected channel subscription", async () => {
+    class RejectedRealtimeTask extends FrontendModelBase {
+      /** @returns {{attributes: string[], primaryKey: string}} Resource configuration. */
+      static resourceConfig() { return {attributes: ["id"], primaryKey: "id"} }
+    }
+
+    /** @type {((error: Error) => void) | null} */
+    let rejectFirstReady = null
+    const firstReadyPromise = new Promise((resolve, reject) => {
+      rejectFirstReady = reject
+    })
+    const websocketClient = buildWebsocketClient({firstReadyPromise})
+    let rejectedCallbackCount = 0
+    let replacementCallbackCount = 0
+
+    FrontendModelBase.configureTransport({websocketClient})
+
+    try {
+      const rejectedRegistration = RejectedRealtimeTask.onCreate(() => { rejectedCallbackCount += 1 })
+
+      await Promise.resolve()
+
+      websocketClient.subscriptions[0].options.onClose("error: Subscription not authorized")
+      if (!rejectFirstReady) throw new Error("Expected first subscription readiness rejection")
+      rejectFirstReady(new Error("Subscription closed before acknowledgement: error: Subscription not authorized"))
+
+      await expect(async () => await rejectedRegistration).toThrow(/Subscription not authorized/)
+
+      expect(websocketClient.subscriptions.length).toEqual(1)
+
+      const unsubscribe = await RejectedRealtimeTask.onCreate(() => { replacementCallbackCount += 1 })
+
+      websocketClient.subscriptions[1].options.onMessage({
+        action: "create",
+        id: "replacement-task",
+        record: {id: "replacement-task"}
+      })
+
+      expect(rejectedCallbackCount).toEqual(0)
+      expect(replacementCallbackCount).toEqual(1)
+      unsubscribe()
     } finally {
       resetFrontendModelTransport()
     }
