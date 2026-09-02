@@ -7,7 +7,7 @@
 * Connection-scoped advisory locks with automatic cleanup before pooled connections are reused or closed (see [docs/advisory-locks.md](docs/advisory-locks.md))
 * Built-in record auditing for model lifecycle changes (see [docs/auditing.md](docs/auditing.md))
 * Declarative state machines for models, with typed event methods generated into the base model (see [docs/state-machine.md](docs/state-machine.md))
-* Migrations for schema changes and UTC datetime storage, including recorded `changeTable` batches that combine operations into one `ALTER` on bulk-capable drivers (see [docs/database-migrations.md](docs/database-migrations.md) and [docs/change-table.md](docs/change-table.md))
+* Migrations for schema changes and UTC datetime storage, including caller-selected `pre-runtime` and `post-publication` execution sets and recorded `changeTable` batches that combine operations into one `ALTER` on bulk-capable drivers (see [docs/database-migrations.md](docs/database-migrations.md), [docs/migration-execution-phases.md](docs/migration-execution-phases.md), and [docs/change-table.md](docs/change-table.md))
 * Tenant-selected base-model and structure generation with one immutable, fail-closed physical database context; tenant-only model metadata initializes only after that context is active (see [docs/tenant-selected-database-generation.md](docs/tenant-selected-database-generation.md))
 * Read-only tenant migration deploy preflight with stable JSON output and fail-closed ledger reads (see [docs/tenant-migration-deploy-preflight.md](docs/tenant-migration-deploy-preflight.md))
 * External packages (engines) that contribute data models, frontend-model resources and migrations to a consuming app (see [docs/packages.md](docs/packages.md))
@@ -58,6 +58,10 @@ cd project
 npm install velocious
 npx velocious init
 ```
+
+Pinned Git commits can be installed without lifecycle scripts by using a GitHub
+commit archive. Velocious checks in generated `build/` output for this purpose;
+see [Git dependency installation](docs/git-installation.md).
 
 By default, Velocious looks for your configuration in `src/config/configuration.js`. If you keep the configuration elsewhere, make sure your app imports it early and calls `configuration.setCurrent()`.
 
@@ -1428,6 +1432,22 @@ Migrations that must be rerunnable can guard changes with `tableExists(...)`, `c
 ```bash
 npx velocious db:migrate
 ```
+
+Migrations default to the `pre-runtime` phase. A migration can declare
+`Migration.runInPhase("post-publication")`, and callers can run exactly one
+declared set while preserving timestamp order, package migrations, database
+targets, and ledger behavior:
+
+```bash
+npx velocious db:migrate --phase pre-runtime
+npx velocious db:migrate --phase post-publication
+```
+
+Omitting `--phase` remains backward-compatible and runs all pending migrations.
+Velocious does not choose when either set runs; the application or deployment
+caller owns invocation timing. See [migration execution phases](docs/migration-execution-phases.md)
+for the class API, programmatic selector, require-context behavior, and tenant
+commands.
 
 Run project seeds from `src/db/seed.js` (default export should be an async function):
 

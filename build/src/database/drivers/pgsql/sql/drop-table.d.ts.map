@@ -1,0 +1,1 @@
+{"version":3,"file":"drop-table.d.ts","sourceRoot":"","sources":["../../../../../../src/database/drivers/pgsql/sql/drop-table.js"],"names":[],"mappings":"AAEA,OAAO,aAAa,MAAM,mCAAmC,CAAA;AAE7D,MAAM,CAAC,OAAO,OAAO,mDAAoD,SAAQ,aAAa;CAC7F"}

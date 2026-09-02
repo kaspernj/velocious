@@ -1,0 +1,511 @@
+// @ts-check
+
+import {dirname} from "path"
+import {fileURLToPath} from "url"
+import fs from "fs/promises"
+import * as inflection from "inflection"
+import {ensureError} from "typanic"
+import Logger from "../logger.js"
+import UploadedFile from "../http-server/client/uploaded-file/uploaded-file.js"
+import toImportSpecifier from "../utils/to-import-specifier.js"
+
+/**
+ * Runs normalize action name.
+ * @param {string} actionName - Raw action name from route params or route hook.
+ * @returns {string} - Normalized controller method name.
+ */
+function normalizeActionName(actionName) {
+  return inflection.camelize(actionName.replaceAll("-", "_").replaceAll("/", "_"), true)
+}
+
+export default class VelociousRoutesResolver {
+  /**
+   * Narrows the runtime value to the documented type.
+   * @type {Logger | undefined} */
+  logger
+
+  /**
+   * Runs constructor.
+   * @param {object} args - Options object.
+   * @param {import("../configuration.js").default} args.configuration - Configuration instance.
+   * @param {import("../http-server/client/request.js").default | import("../http-server/client/websocket-request.js").default} args.request - Request object.
+   * @param {import("../http-server/client/response.js").default} args.response - Response object.
+   */
+  constructor({configuration, request, response}) {
+    if (!configuration) throw new Error("No configuration given")
+    if (!request) throw new Error("No request given")
+    if (!response) throw new Error("No response given")
+
+    this.configuration = configuration
+    this.logger = new Logger("RoutesResolver", {configuration})
+    const requestParams = request.params() || {}
+    this.params = {...requestParams}
+    delete this.params.action
+    delete this.params.controller
+    this.request = request
+    this.response = response
+    const requestTiming = configuration.getCurrentRequestTiming()
+    const initialSensitiveValues = requestTiming ? requestTiming.getLogSensitiveValues() : new Set()
+
+    this.logSensitiveValues = configuration.getLogRedactor().requestSensitiveValues(request, initialSensitiveValues)
+    if (requestTiming) requestTiming.registerLogSensitiveValues(this.logSensitiveValues)
+  }
+
+  /**
+   * Runs query parameters.
+   * @returns {Record<string, string>} - Flat query params for tenant/ability resolution.
+   */
+  queryParameters() {
+    const query = this.request.path().split("?")[1]
+
+    if (!query) return {}
+
+    /**
+     * Params.
+     * @type {Record<string, string>} */
+    const params = {}
+    const searchParams = new URLSearchParams(query)
+
+    for (const [key, value] of searchParams.entries()) {
+      if (params[key] === undefined) {
+        params[key] = value
+      }
+    }
+
+    return params
+  }
+
+  async resolve() {
+    this.routeHookControllerClass = undefined
+    let controllerPath
+    const configurationRoutes = this.configuration.getRoutes()
+    const currentRoute = configurationRoutes?.rootRoute
+    const rawPath = this.request.path()
+    const currentPath = rawPath.split("?")[0]
+    let viewPath
+
+    const preCheckParams = {...this.params}
+    const hasMatchingCustomRoute = currentRoute ? !!this.matchPathWithRoutes(currentRoute, currentPath) : false
+
+    if (hasMatchingCustomRoute) {
+      this.params = preCheckParams
+    }
+
+    const routeResolverHookMatch = await this.resolveRouteResolverHooks(currentPath, {hasMatchingCustomRoute})
+    let skipControllerConnections = routeResolverHookMatch?.skipControllerConnections === true
+    let skipAbilityResolution = routeResolverHookMatch?.skipAbilityResolution === true
+    let skipTenantResolution = routeResolverHookMatch?.skipTenantResolution === true
+    const matchResult = routeResolverHookMatch || !currentRoute ? undefined : this.matchPathWithRoutes(currentRoute, currentPath)
+    const actionParam = this.params.action
+    const controllerParam = this.params.controller
+    const actionValue = typeof actionParam == "string" ? actionParam : (Array.isArray(actionParam) ? actionParam[0] : undefined)
+    let action = typeof actionValue == "string" ? normalizeActionName(actionValue) : undefined
+    let controller = typeof controllerParam == "string" ? controllerParam : (Array.isArray(controllerParam) ? controllerParam[0] : undefined)
+
+    if (routeResolverHookMatch) {
+      const routeHookControllerClass = routeResolverHookMatch.controllerClass
+      let routeHookControllerPath
+      let routeHookViewPath
+
+      if (typeof routeResolverHookMatch.controllerPath === "string") {
+        routeHookControllerPath = routeResolverHookMatch.controllerPath
+      }
+
+      if (typeof routeResolverHookMatch.viewPath === "string") {
+        routeHookViewPath = routeResolverHookMatch.viewPath
+      }
+
+      controller = routeResolverHookMatch.controller
+      action = normalizeActionName(routeResolverHookMatch.action)
+      this.params.controller = controller
+      this.params.action = routeResolverHookMatch.action
+      controllerPath = routeHookControllerPath || `${this.configuration.getDirectory()}/src/routes/${controller}/controller.js`
+      viewPath = routeHookViewPath || `${this.configuration.getDirectory()}/src/routes/${controller}`
+      this.routeHookControllerClass = routeHookControllerClass
+    } else if (!matchResult) {
+      const __filename = fileURLToPath(import.meta.url)
+      const __dirname = dirname(__filename)
+      const requestedPath = currentPath.replace(/^\//, "") || "_root"
+      const attemptedControllerPath = `${this.configuration.getDirectory()}/src/routes/${requestedPath}/controller.js`
+
+      const logger = this.logger
+
+      if (!logger) throw new Error("Logger not initialized")
+
+      const loggedPath = this.configuration.getLogRedactor().redactPath(rawPath, this.logSensitiveValues)
+
+      await logger.warn(`No route matched for ${loggedPath}. Tried controller at ${attemptedControllerPath}`)
+
+      controller = "errors"
+      controllerPath = "./built-in/errors/controller.js"
+      action = "notFound"
+      skipAbilityResolution = true
+      skipControllerConnections = true
+      skipTenantResolution = true
+      viewPath = await fs.realpath(`${__dirname}/built-in/errors`)
+    } else if (action) {
+      if (!controller) controller = "_root"
+
+      controllerPath = `${this.configuration.getDirectory()}/src/routes/${controller}/controller.js`
+      viewPath = `${this.configuration.getDirectory()}/src/routes/${controller}`
+    } else {
+      throw new Error(`Matched the route but didn't know what to do with it: ${rawPath} (action: ${action}, controller: ${controller}, params: ${JSON.stringify(this.params)})`)
+    }
+
+    const controllerClass = await this.resolveControllerClass({controllerPath})
+    const controllerRequest = /** @type {import("../http-server/client/request.js").default} */ (this.request)
+    const controllerInstance = new controllerClass({
+      action,
+      configuration: this.configuration,
+      controller,
+      params: this.params,
+      request: controllerRequest,
+      response: this.response,
+      viewPath
+    })
+
+    if (!(action in controllerInstance)) {
+      throw new Error(`Missing action on controller: ${controller}#${action}`)
+    }
+
+    const actionHandlers = /** @type {Record<string, () => void | Promise<void>>} */ (/** @type {ReturnType<typeof JSON.parse>} */ (controllerInstance))
+
+    const logMethod = this._logMethod()
+
+    this._setCompletedLogMetadata({controllerClass, logMethod})
+    await this._logActionStart({action, controllerClass, logMethod})
+
+    try {
+      const tenant = skipTenantResolution || !this.configuration.getTenantResolver()
+        ? undefined
+        : await this.configuration.ensureConnections({name: `${controllerClass.name}.${action} tenant resolution`}, async () => {
+            return await this.configuration.resolveTenant({
+              params: {...this.queryParameters(), ...this.params},
+              request: this.request,
+              response: this.response
+            })
+          })
+
+      const runAction = async () => {
+        await this.configuration.runWithTenant(tenant, async () => {
+          const runControllerAction = async () => {
+            const ability = skipAbilityResolution
+              ? undefined
+              : await this.configuration.resolveAbility({
+                  params: this.params,
+                  request: this.request,
+                  response: this.response
+                })
+
+            await this.configuration.runWithAbility(ability, async () => {
+              await this._measureController(async () => {
+                await controllerInstance._runBeforeCallbacks()
+                await actionHandlers[action]()
+              })
+            })
+          }
+
+          if (skipControllerConnections) {
+            await runControllerAction()
+          } else {
+            await this.configuration.ensureConnections({name: `${controllerClass.name}.${action}`}, runControllerAction)
+          }
+        })
+      }
+
+      const aroundAction = this.configuration.getAroundAction?.()
+
+      if (aroundAction) {
+        await aroundAction({request: this.request, response: this.response, next: runAction})
+      } else {
+        await runAction()
+      }
+    } catch (error) {
+      const ensuredError = ensureError(error)
+      const errorContext = {
+        action,
+        controller,
+        httpMethod: this.request.httpMethod(),
+        path: this.request.path(),
+        stage: "controller-action"
+      }
+
+      const errorWithContext = /** @type {{velociousContext?: object}} */ (ensuredError)
+
+      errorWithContext.velociousContext = {
+        ...(errorWithContext.velociousContext || {}),
+        controllerAction: errorContext
+      }
+
+      throw ensuredError
+    }
+  }
+
+  /**
+   * Runs resolve controller class.
+   * @param {object} args - Args.
+   * @param {string} args.controllerPath - Controller import path.
+   * @returns {Promise<typeof import("../controller.js").default>} - The resolved controller class.
+   */
+  async resolveControllerClass({controllerPath}) {
+    if (this.routeHookControllerClass) return this.routeHookControllerClass
+
+    const controllerImportSpecifier = toImportSpecifier(controllerPath)
+
+    return /** @type {typeof import("../controller.js").default} */ ((await import(controllerImportSpecifier)).default)
+  }
+
+  /**
+   * Runs match path with routes.
+   * @param {import("./base-route.js").default} route - Route.
+   * @param {string} path - Path.
+   * @returns {{restPath: string} | undefined} - REST path metadata for this route.
+   */
+  matchPathWithRoutes(route, path) {
+    const pathWithoutSlash = path.replace(/^\//, "").split("?")[0]
+
+    for (const subRoute of route.routes) {
+      const paramsSnapshot = {...this.params}
+      const matchResult = subRoute.matchWithPath({
+        params: this.params,
+        path: pathWithoutSlash,
+        request: this.request
+      })
+
+      if (!matchResult) {
+        this.params = paramsSnapshot
+        continue
+      }
+
+      const {restPath} = matchResult
+
+      if (restPath) {
+        const recursiveMatch = this.matchPathWithRoutes(subRoute, restPath)
+
+        if (recursiveMatch) {
+          return recursiveMatch
+        }
+
+        this.params = paramsSnapshot
+        continue
+      }
+
+      return matchResult
+    }
+  }
+
+  /**
+   * Runs resolve route resolver hooks.
+   * @param {string} currentPath - Request path without query string.
+   * @param {object} options - Resolver hook options.
+   * @param {boolean} [options.hasMatchingCustomRoute] - True when the path matched an explicit custom route.
+   * @returns {Promise<import("../configuration-types.js").RouteResolverHookResult | null>} - Matched action/controller from hooks.
+   */
+  async resolveRouteResolverHooks(currentPath, options = {}) {
+    const {hasMatchingCustomRoute = false} = options
+
+    const hooks = this.configuration.getRouteResolverHooks?.() || []
+
+    for (const hook of hooks) {
+      const hookResult = await hook({
+        configuration: this.configuration,
+        currentPath,
+        hasMatchingCustomRoute,
+        params: this.params,
+        request: this.request,
+        resolver: this,
+        response: this.response
+      })
+
+      if (!hookResult) continue
+
+      if (typeof hookResult.action !== "string" || hookResult.action.length < 1) {
+        throw new Error(`Expected route resolver hook action to be a string, got: ${hookResult.action}`)
+      }
+
+      if (typeof hookResult.controller !== "string" || hookResult.controller.length < 1) {
+        throw new Error(`Expected route resolver hook controller to be a string, got: ${hookResult.controller}`)
+      }
+
+      if (hookResult.params && typeof hookResult.params !== "object") {
+        throw new Error(`Expected route resolver hook params to be an object, got: ${hookResult.params}`)
+      }
+
+      if (hookResult.controllerClass !== undefined && typeof hookResult.controllerClass !== "function") {
+        throw new Error(`Expected route resolver hook controllerClass to be a class/function when provided, got: ${hookResult.controllerClass}`)
+      }
+
+      if (hookResult.controllerPath !== undefined && typeof hookResult.controllerPath !== "string") {
+        throw new Error(`Expected route resolver hook controllerPath to be a string when provided, got: ${hookResult.controllerPath}`)
+      }
+
+      if (hookResult.skipControllerConnections !== undefined && typeof hookResult.skipControllerConnections !== "boolean") {
+        throw new Error(`Expected route resolver hook skipControllerConnections to be a boolean when provided, got: ${hookResult.skipControllerConnections}`)
+      }
+
+      if (hookResult.skipAbilityResolution !== undefined && typeof hookResult.skipAbilityResolution !== "boolean") {
+        throw new Error(`Expected route resolver hook skipAbilityResolution to be a boolean when provided, got: ${hookResult.skipAbilityResolution}`)
+      }
+
+      if (hookResult.skipTenantResolution !== undefined && typeof hookResult.skipTenantResolution !== "boolean") {
+        throw new Error(`Expected route resolver hook skipTenantResolution to be a boolean when provided, got: ${hookResult.skipTenantResolution}`)
+      }
+
+      if (hookResult.viewPath !== undefined && typeof hookResult.viewPath !== "string") {
+        throw new Error(`Expected route resolver hook viewPath to be a string when provided, got: ${hookResult.viewPath}`)
+      }
+
+      if (hookResult.params) {
+        Object.assign(this.params, hookResult.params)
+      }
+
+      return hookResult
+    }
+
+    return null
+  }
+
+  /**
+   * Runs log action start.
+   * @param {object} args - Options object.
+   * @param {string} args.action - Action.
+   * @param {typeof import("../controller.js").default} args.controllerClass - Controller class.
+   * @param {"debug" | "info"} args.logMethod - Logger method.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async _logActionStart({action, controllerClass, logMethod}) {
+    const request = this.request
+    const timestamp = this._formatTimestamp(new Date())
+    const remoteAddress = request.remoteAddress() || "unknown"
+    const redactor = this.configuration.getLogRedactor()
+
+    this.logSensitiveValues = redactor.sensitiveValues(this.params, this.logSensitiveValues)
+
+    const requestTiming = this.configuration.getCurrentRequestTiming()
+
+    if (requestTiming) requestTiming.registerLogSensitiveValues(this.logSensitiveValues)
+
+    const loggedParams = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (this._sanitizeParamsForLogging(this.params))
+
+    delete loggedParams.action
+    delete loggedParams.controller
+
+    const controllerLogger = new Logger(controllerClass.name, {configuration: this.configuration})
+
+    const loggedPath = redactor.redactPath(request.path(), this.logSensitiveValues)
+
+    await controllerLogger[logMethod](() => `Started ${request.httpMethod()} "${loggedPath}" for ${remoteAddress} at ${timestamp}`)
+    await controllerLogger[logMethod](() => `Processing by ${controllerClass.name}#${action}`)
+    await controllerLogger[logMethod](() => [`  Parameters:`, loggedParams])
+  }
+
+  /**
+   * Runs log method.
+   * @returns {"debug" | "info"} - Request log method.
+   */
+  _logMethod() {
+    return this.configuration.getEnvironment() === "test" ? "debug" : "info"
+  }
+
+  /**
+   * Runs measure controller.
+   * @template T
+   * @param {() => Promise<T>} callback - Callback to measure.
+   * @returns {Promise<T>} - Callback result.
+   */
+  async _measureController(callback) {
+    const requestTiming = this.configuration.getCurrentRequestTiming()
+
+    return requestTiming
+      ? await requestTiming.measure("controller", callback)
+      : await callback()
+  }
+
+  /**
+   * Runs set completed log metadata.
+   * @param {object} args - Options object.
+   * @param {typeof import("../controller.js").default} args.controllerClass - Controller class.
+   * @param {"debug" | "info"} args.logMethod - Logger method.
+   * @returns {void} - No return value.
+   */
+  _setCompletedLogMetadata({controllerClass, logMethod}) {
+    const requestTiming = this.configuration.getCurrentRequestTiming()
+
+    if (!requestTiming) return
+
+    requestTiming.completedLogSubject = controllerClass.name
+    requestTiming.completedLogMethod = logMethod
+  }
+
+  /**
+   * Runs format timestamp.
+   * @param {Date} date - Date value.
+   * @returns {string} - The timestamp.
+   */
+  _formatTimestamp(date) {
+    /**
+     * Pad.
+     * @param {number} num - Num.
+     * @returns {string} - The pad.
+     */
+    const pad = (num) => String(num).padStart(2, "0")
+    const year = date.getFullYear()
+    const month = pad(date.getMonth() + 1)
+    const day = pad(date.getDate())
+    const hours = pad(date.getHours())
+    const minutes = pad(date.getMinutes())
+    const seconds = pad(date.getSeconds())
+    const offsetMinutes = date.getTimezoneOffset()
+    const offsetSign = offsetMinutes > 0 ? "-" : "+"
+    const offsetTotalMinutes = Math.abs(offsetMinutes)
+    const offsetHours = pad(Math.floor(offsetTotalMinutes / 60))
+    const offsetRemainingMinutes = pad(offsetTotalMinutes % 60)
+
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds} ${offsetSign}${offsetHours}${offsetRemainingMinutes}`
+  }
+
+  /**
+   * Runs sanitize params for logging.
+   * @param {ReturnType<typeof JSON.parse>} value - Value to use.
+   * @returns {ReturnType<typeof JSON.parse>} - The sanitize params for logging.
+   */
+  _sanitizeParamsForLogging(value) {
+    const preparedValue = this._prepareParamsForLogging(value)
+
+    return this.configuration.getLogRedactor().redactStructured(preparedValue, this.logSensitiveValues)
+  }
+
+  /**
+   * Preserves useful upload metadata before generic structured redaction.
+   * @param {ReturnType<typeof JSON.parse>} value - Value to prepare.
+   * @returns {ReturnType<typeof JSON.parse>} - Logging-safe structural copy.
+   */
+  _prepareParamsForLogging(value) {
+    if (value instanceof UploadedFile) {
+      return {
+        className: value.constructor.name,
+        filename: value.filename(),
+        size: value.size()
+      }
+    }
+
+    if (Array.isArray(value)) {
+      return value.map((item) => this._prepareParamsForLogging(item))
+    }
+
+    if (value && typeof value === "object") {
+      /**
+       * Result.
+       * @type {Record<string, ReturnType<typeof JSON.parse>>} */
+      const result = {}
+
+      for (const key of Object.keys(value)) {
+        result[key] = this._prepareParamsForLogging(value[key])
+      }
+
+      return result
+    }
+
+    return value
+  }
+}

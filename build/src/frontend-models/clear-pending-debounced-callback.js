@@ -1,0 +1,13 @@
+// @ts-check
+/**
+ * Runs clear pending debounced callback.
+ * @param {ReturnType<typeof JSON.parse>} callback - Potentially debounced callback.
+ * @returns {void}
+ */
+export default function clearPendingDebouncedCallback(callback) {
+    const callbackWithClear = /** @type {{clear?: ReturnType<typeof JSON.parse>}} */ (callback);
+    if (typeof callbackWithClear.clear === "function") {
+        callbackWithClear.clear();
+    }
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiY2xlYXItcGVuZGluZy1kZWJvdW5jZWQtY2FsbGJhY2suanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuLi8uLi8uLi9zcmMvZnJvbnRlbmQtbW9kZWxzL2NsZWFyLXBlbmRpbmctZGVib3VuY2VkLWNhbGxiYWNrLmpzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQUFBLFlBQVk7QUFFWjs7OztHQUlHO0FBQ0gsTUFBTSxDQUFDLE9BQU8sVUFBVSw2QkFBNkIsQ0FBQyxRQUFRO0lBQzVELE1BQU0saUJBQWlCLEdBQUcsc0RBQXNELENBQUMsQ0FBQyxRQUFRLENBQUMsQ0FBQTtJQUUzRixJQUFJLE9BQU8saUJBQWlCLENBQUMsS0FBSyxLQUFLLFVBQVUsRUFBRSxDQUFDO1FBQ2xELGlCQUFpQixDQUFDLEtBQUssRUFBRSxDQUFBO0lBQzNCLENBQUM7QUFDSCxDQUFDIiwic291cmNlc0NvbnRlbnQiOlsiLy8gQHRzLWNoZWNrXG5cbi8qKlxuICogUnVucyBjbGVhciBwZW5kaW5nIGRlYm91bmNlZCBjYWxsYmFjay5cbiAqIEBwYXJhbSB7UmV0dXJuVHlwZTx0eXBlb2YgSlNPTi5wYXJzZT59IGNhbGxiYWNrIC0gUG90ZW50aWFsbHkgZGVib3VuY2VkIGNhbGxiYWNrLlxuICogQHJldHVybnMge3ZvaWR9XG4gKi9cbmV4cG9ydCBkZWZhdWx0IGZ1bmN0aW9uIGNsZWFyUGVuZGluZ0RlYm91bmNlZENhbGxiYWNrKGNhbGxiYWNrKSB7XG4gIGNvbnN0IGNhbGxiYWNrV2l0aENsZWFyID0gLyoqIEB0eXBlIHt7Y2xlYXI/OiBSZXR1cm5UeXBlPHR5cGVvZiBKU09OLnBhcnNlPn19ICovIChjYWxsYmFjaylcblxuICBpZiAodHlwZW9mIGNhbGxiYWNrV2l0aENsZWFyLmNsZWFyID09PSBcImZ1bmN0aW9uXCIpIHtcbiAgICBjYWxsYmFja1dpdGhDbGVhci5jbGVhcigpXG4gIH1cbn1cbiJdfQ==

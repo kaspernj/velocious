@@ -1,0 +1,1 @@
+{"version":3,"file":"upsert.d.ts","sourceRoot":"","sources":["../../../../../../src/database/drivers/pgsql/sql/upsert.js"],"names":[],"mappings":"AAEA,OAAO,UAAU,MAAM,+BAA+B,CAAA;AAEtD,MAAM,CAAC,OAAO,OAAO,gDAAiD,SAAQ,UAAU;IACtF,KAAK,WAOJ;CACF"}

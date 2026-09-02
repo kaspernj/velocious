@@ -1,0 +1,1 @@
+{"version":3,"file":"presence.d.ts","sourceRoot":"","sources":["../../../../../src/database/record/validators/presence.js"],"names":[],"mappings":"AAEA,OAAO,IAAI,MAAM,WAAW,CAAA;AAG5B,MAAM,CAAC,OAAO,OAAO,yCAA0C,SAAQ,IAAI;IACzE;;;;;OAKG;IACG,QAAQ,CAAC,EAAC,KAAK,EAAE,aAAa,EAAC,EAHlC;QAA4C,KAAK,EAAzC,OAAO,aAAa,EAAE,OAAO,CACrC;QAAqB,aAAa,EAA1B,MAAM,CAChB;KACoC,iBAWpC;CACF"}

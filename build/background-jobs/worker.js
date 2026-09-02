@@ -1,0 +1,1700 @@
+// @ts-check
+
+import net from "net"
+import { fork, spawn } from "node:child_process"
+import JsonSocket from "./json-socket.js"
+import BackgroundJobRegistry from "./job-registry.js"
+import configurationResolver from "../configuration-resolver.js"
+import BackgroundJobsStatusReporter from "./status-reporter.js"
+import { randomUUID } from "crypto"
+import { fileURLToPath } from "node:url"
+import shutdownLifecycle, { runShutdownSteps } from "../utils/shutdown-lifecycle.js"
+import BackgroundJobRescheduleSignal from "./reschedule-signal.js"
+import performBackgroundJob from "./perform-job.js"
+import { createGenerationWorkerId } from "./generation-identity.js"
+import BackgroundJobsGenerationHandshakeTimeoutError, { DEFAULT_GENERATION_HANDSHAKE_TIMEOUT_MS, validateGenerationHandshakeTimeoutMs } from "./generation-handshake-timeout-error.js"
+
+/**
+ * Per-forked-child timeout bookkeeping.
+ * @typedef {object} ForkedJobTimeoutState
+ * @property {boolean} timedOut - Whether the timeout fired and the child was terminated.
+ * @property {number | null} timeoutMs - The armed timeout in ms, or null when disabled.
+ * @property {ReturnType<typeof setTimeout> | null} timer - The pending timeout timer, cleared on exit.
+ * @property {ReturnType<typeof setTimeout> | null} sigkillTimer - The pending SIGKILL grace timer, cleared on exit.
+ */
+/** Grace period after SIGTERM before a lingering process runner is SIGKILLed. */
+const FORKED_CHILD_SIGKILL_GRACE_MS = 5000
+/**
+ * Largest delay Node's `setTimeout` accepts without overflowing to a 1ms delay
+ * (a 32-bit signed int of ms, ~24.8 days). A `jobTimeoutMs` above this — or a
+ * non-finite one like `Infinity` — is clamped/disabled rather than coerced to
+ * ~1ms, which would otherwise terminate every forked job almost immediately.
+ */
+const MAX_FORKED_JOB_TIMEOUT_MS = 2_147_483_647
+const FORKED_RUNNER_ENTRY_PATH = fileURLToPath(new URL("./forked-runner-child.js", import.meta.url))
+const POOLED_RUNNER_ENTRY_PATH = fileURLToPath(new URL("./pooled-runner-child.js", import.meta.url))
+/** How often the worker sends a liveness heartbeat to the main. */
+const HEARTBEAT_INTERVAL_MS = 15000
+/** TCP keepalive so a half-open connection to the main surfaces as a close. */
+const SOCKET_KEEPALIVE_MS = 10000
+/**
+ * Execution modes.
+ * @type {import("./types.js").BackgroundJobExecutionMode[]} */
+const EXECUTION_MODES = ["inline", "forked", "pooled", "spawned"]
+
+/**
+ * Normalizes a candidate pooled-runner count or job limit.
+ * @param {number | undefined} value - Candidate positive integer.
+ * @returns {number | undefined} - Normalized value.
+ */
+function positiveInteger(value) {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined
+}
+
+/**
+ * Normalizes a candidate pooled-runner resource limit.
+ * @param {number | undefined} value - Candidate positive number.
+ * @returns {number | undefined} - Normalized value.
+ */
+function positiveNumber(value) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined
+}
+
+export default class BackgroundJobsWorker {
+  /**
+   * Runs constructor.
+   * @param {object} [args] - Options.
+   * @param {import("../configuration.js").default} [args.configuration] - Configuration.
+   * @param {string} [args.host] - Hostname.
+   * @param {number} [args.port] - Port.
+   * @param {string} [args.generationId] - Explicit release generation identity.
+   * @param {string} [args.workerInstanceId] - Explicit stable worker UUID.
+   * @param {number} [args.maxConcurrentForkedJobs] - Override the process runner concurrency cap from `configuration.getBackgroundJobsConfig()`.
+   * @param {number} [args.maxConcurrentInlineJobs] - Override the inline-job concurrency cap from `configuration.getBackgroundJobsConfig()`.
+   * @param {number} [args.pooledRunnerCount] - Override the pooled runner count.
+   * @param {number} [args.pooledRunnerConcurrency] - Override the per-runner concurrency.
+   * @param {number} [args.pooledRunnerMaxJobs] - Override the per-runner recycle job count.
+   * @param {number} [args.pooledRunnerMaxRssBytes] - Override the per-runner recycle RSS limit.
+   * @param {number} [args.pooledRunnerMaxLifetimeMs] - Override the per-runner recycle lifetime.
+   * @param {number} [args.forkedChildSigkillGraceMs] - Override the grace period between SIGTERM and SIGKILL when reaping lingering process runners on stop.
+   * @param {number} [args.heartbeatIntervalMs] - Override the liveness heartbeat interval (default 15000ms).
+   * @param {number} [args.generationHandshakeTimeoutMs] - Maximum time to wait for generation acknowledgement (default: 4000).
+   * @param {number} [args.reconnectDelayMs] - Delay before reconnecting an established worker connection (default: 1000).
+   * @param {number} [args.jobTimeoutMs] - Override the wall-clock timeout for forked and pooled jobs from `configuration.getBackgroundJobsConfig()`. `0` disables it.
+   * @param {boolean} [args.closeDatabaseConnectionsOnStop] - Whether stop owns closing the configuration's database pools (default true).
+   * @param {() => void | Promise<void>} [args.onStopped] - Lifecycle hook invoked after the worker finishes stopping.
+   * @param {() => void} [args.onGenerationAccepted] - Explicit generation-acceptance observation hook.
+   * @param {() => void} [args.onRetireMessage] - Explicit retire-message observation hook.
+   */
+  constructor({configuration, host, port, generationId, workerInstanceId, maxConcurrentForkedJobs, maxConcurrentInlineJobs, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, forkedChildSigkillGraceMs, heartbeatIntervalMs, generationHandshakeTimeoutMs = DEFAULT_GENERATION_HANDSHAKE_TIMEOUT_MS, reconnectDelayMs = 1000, jobTimeoutMs, closeDatabaseConnectionsOnStop = true, onStopped, onGenerationAccepted, onRetireMessage} = {}) {
+    /**
+     * Narrows the runtime value to the documented type.
+     * @type {Promise<import("../configuration.js").default>} */
+    this.configurationPromise = configuration ? Promise.resolve(configuration) : configurationResolver()
+    /**
+     * Narrows the runtime value to the documented type.
+     * @type {import("../configuration.js").default | undefined} */
+    this.configuration = undefined
+    this.host = host
+    this.port = port
+    this.explicitGenerationId = generationId
+    this.workerInstanceId = workerInstanceId || randomUUID()
+    /** @type {string | undefined} */
+    this.generationId = undefined
+    this.closeDatabaseConnectionsOnStop = closeDatabaseConnectionsOnStop
+    this.onStopped = onStopped
+    this.onGenerationAccepted = onGenerationAccepted
+    this.onRetireMessage = onRetireMessage
+    /**
+     * Constructor override for the inline-job concurrency cap. When unset
+     * the cap is read from `configuration.getBackgroundJobsConfig()` in
+     * `start()` (default: 4).
+     * @type {number | undefined}
+     */
+    this.maxConcurrentInlineJobsOverride = typeof maxConcurrentInlineJobs === "number" && maxConcurrentInlineJobs >= 1
+      ? maxConcurrentInlineJobs
+      : undefined
+    /**
+     * Narrows the runtime value to the documented type.
+     * @type {number | undefined} */
+    this.maxConcurrentForkedJobsOverride = typeof maxConcurrentForkedJobs === "number" && maxConcurrentForkedJobs >= 1
+      ? maxConcurrentForkedJobs
+      : undefined
+    /**
+     * Resolved cap for inline-job concurrency. Set in `start()`; defaults to
+     * 4 if no configuration value is available.
+     * @type {number}
+     */
+    this.maxConcurrentInlineJobs = this.maxConcurrentInlineJobsOverride || 4
+    /**
+     * Narrows the runtime value to the documented type.
+     * @type {number} */
+    this.maxConcurrentForkedJobs = this.maxConcurrentForkedJobsOverride || 4
+    this.pooledRunnerCountOverride = positiveInteger(pooledRunnerCount)
+    this.pooledRunnerConcurrencyOverride = positiveInteger(pooledRunnerConcurrency)
+    this.pooledRunnerMaxJobsOverride = positiveInteger(pooledRunnerMaxJobs)
+    this.pooledRunnerMaxRssBytesOverride = positiveNumber(pooledRunnerMaxRssBytes)
+    this.pooledRunnerMaxLifetimeMsOverride = positiveNumber(pooledRunnerMaxLifetimeMs)
+    this.pooledRunnerCount = this.pooledRunnerCountOverride || 4
+    this.pooledRunnerConcurrency = this.pooledRunnerConcurrencyOverride || 1
+    this.pooledRunnerMaxJobs = this.pooledRunnerMaxJobsOverride || 100
+    this.pooledRunnerMaxRssBytes = this.pooledRunnerMaxRssBytesOverride || 512 * 1024 * 1024
+    this.pooledRunnerMaxLifetimeMs = this.pooledRunnerMaxLifetimeMsOverride || 60 * 60 * 1000
+    /**
+     * Grace period between SIGTERM and SIGKILL when reaping process runners that
+     * outlast a bounded shutdown drain.
+     * @type {number}
+     */
+    this.forkedChildSigkillGraceMs = typeof forkedChildSigkillGraceMs === "number" && forkedChildSigkillGraceMs >= 0
+      ? forkedChildSigkillGraceMs
+      : FORKED_CHILD_SIGKILL_GRACE_MS
+    /**
+     * Constructor override for the forked and pooled wall-clock job timeout. When unset the
+     * timeout is read from `configuration.getBackgroundJobsConfig().jobTimeoutMs`
+     * at fork time (default: disabled).
+     * @type {number | undefined}
+     */
+    this.jobTimeoutMsOverride = typeof jobTimeoutMs === "number" ? jobTimeoutMs : undefined
+    this.shouldStop = false
+    this.isRetiring = false
+    /** @type {Promise<void> | undefined} */
+    this.stopPromise = undefined
+    /**
+     * Resolves stop observation.
+     * @type {(value?: void) => void}
+     */
+    this._resolveStopped = () => {}
+    /**
+     * Rejects stop observation.
+     * @type {(error: Error) => void}
+     */
+    this._rejectStopped = () => {}
+    /** @type {Promise<void>} */
+    this._stoppedPromise = Promise.resolve()
+    this._resetStoppedPromise()
+    this.workerId = this.workerInstanceId
+    this._generationAccepted = false
+    this.generationHandshakeTimeoutMs = validateGenerationHandshakeTimeoutMs(generationHandshakeTimeoutMs)
+    if (!Number.isInteger(reconnectDelayMs) || reconnectDelayMs < 0 || reconnectDelayMs > MAX_FORKED_JOB_TIMEOUT_MS) {
+      throw new TypeError("reconnectDelayMs must be an integer between 0 and 2147483647")
+    }
+    this.reconnectDelayMs = reconnectDelayMs
+    /** @type {ReturnType<typeof setTimeout> | undefined} */
+    this._reconnectTimer = undefined
+    this.heartbeatIntervalMs = typeof heartbeatIntervalMs === "number" && heartbeatIntervalMs >= 1
+      ? heartbeatIntervalMs
+      : HEARTBEAT_INTERVAL_MS
+    /**
+     * Narrows the runtime value to the documented type.
+     * @type {ReturnType<typeof setInterval> | undefined} */
+    this._heartbeatTimer = undefined
+    /**
+     * In-flight job-result reports to the main. Reporting is decoupled from the
+     * job/child slot (freeing the slot never waits on a report) and retried
+     * durably, so a transient main/DB outage cannot leak slots or lose a
+     * terminal report. Tracked so a graceful `stop()` can drain them.
+     * @type {Set<Promise<void>>}
+     */
+    this.inflightReports = new Set()
+    /**
+     * Narrows the runtime value to the documented type.
+     * @type {JsonSocket | undefined} */
+    this.jsonSocket = undefined
+    /**
+     * Narrows the runtime value to the documented type.
+     * @type {BackgroundJobsStatusReporter | undefined} */
+    this.statusReporter = undefined
+    /**
+     * Up to `this.maxConcurrentInlineJobs` of these run in parallel. They
+     * share the worker's process and DB connection pool, so concurrency is
+     * about overlapping I/O waits — use forking for memory isolation across
+     * long-running jobs and for using more cores.
+     * @type {Set<Promise<void>>}
+     */
+    this.inflightInlineJobs = new Set()
+    /**
+     * In-flight process runner exit promises. Tracked so process-job handoff
+     * stays bounded while running and so a graceful `stop()` can drain them.
+     * @type {Set<Promise<void>>}
+     */
+    this.inflightProcessJobs = new Set()
+    /**
+     * Live process runner child processes, kept so a graceful `stop()` can
+     * terminate any that outlast the shutdown drain instead of orphaning them
+     * across a deploy (where they would keep running against deleted release
+     * code and holding database connections).
+     * @type {Set<import("node:child_process").ChildProcess>}
+     */
+    this.inflightProcessChildren = new Set()
+    /** @type {Set<Promise<void>>} */
+    this.inflightPooledJobs = new Set()
+    /** @type {Map<string, Array<import("./types.js").BackgroundJobPayload & {id: string}>>} */
+    this.pooledJobQueues = new Map()
+    /** @type {Map<string, Promise<void>>} - Per-id outer queue trackers. */
+    this.pooledJobQueueTrackers = new Map()
+    /** @type {Set<import("node:child_process").ChildProcess>} */
+    this.pooledChildren = new Set()
+    /** @type {Map<import("node:child_process").ChildProcess, {createdAtMs: number, jobsRun: number, inflight: Map<string, {payload: import("./types.js").BackgroundJobPayload & {id: string}, resolve?: (value: void) => void, pooledJob?: Promise<void>, timeoutTimer?: ReturnType<typeof setTimeout> | null}>, lastDispatchSeq: number, retiring: boolean, started?: boolean, settling?: boolean, timeoutSigkillTimer?: ReturnType<typeof setTimeout> | null}>} */
+    this.pooledChildStates = new Map()
+    /** @type {WeakSet<Promise<void>>} */
+    this._pooledStartupFailureJobs = new WeakSet()
+    // Monotonic dispatch counter for round-robin child selection: each dispatch stamps
+    // the chosen child, and selection prefers the child dispatched least recently.
+    this._pooledDispatchSeq = 0
+  }
+
+  /**
+   * Runs start.
+   * @returns {Promise<void>} - Resolves when connected.
+   */
+  async start() {
+    this.shouldStop = false
+    this.isRetiring = false
+    this.stopPromise = undefined
+    this._resetStoppedPromise()
+    this.configuration = await this.configurationPromise
+    this.configuration.setCurrent()
+    const resolvedConfig = this.configuration.getBackgroundJobsConfig()
+    this.generationId = this.configuration.resolveBackgroundJobsGenerationConfig({
+      generationId: this.explicitGenerationId,
+      sourceName: "BackgroundJobsWorker"
+    }).generationId
+    this.workerId = this.generationId
+      ? createGenerationWorkerId({generationId: this.generationId, workerInstanceId: this.workerInstanceId})
+      : this.workerInstanceId
+    this.host ||= resolvedConfig.host
+    if (typeof this.port !== "number") this.port = resolvedConfig.port
+    await this.configuration.initialize({type: "background-jobs-worker"})
+    await this.configuration.connectBeacon({peerType: "background-jobs-worker"})
+
+    // Constructor overrides win; otherwise pick up the configured caps.
+    if (typeof this.maxConcurrentInlineJobsOverride !== "number") {
+      const config = this.configuration.getBackgroundJobsConfig()
+
+      this.maxConcurrentInlineJobs = config.maxConcurrentInlineJobs || this.maxConcurrentInlineJobs
+    }
+    if (typeof this.maxConcurrentForkedJobsOverride !== "number") {
+      const config = this.configuration.getBackgroundJobsConfig()
+
+      this.maxConcurrentForkedJobs = config.maxConcurrentForkedJobs || this.maxConcurrentForkedJobs
+    }
+    const poolConfig = this.configuration.getBackgroundJobsConfig()
+    if (typeof this.pooledRunnerCountOverride !== "number") this.pooledRunnerCount = poolConfig.pooledRunnerCount
+    if (typeof this.pooledRunnerConcurrencyOverride !== "number") this.pooledRunnerConcurrency = poolConfig.pooledRunnerConcurrency
+    if (typeof this.pooledRunnerMaxJobsOverride !== "number") this.pooledRunnerMaxJobs = poolConfig.pooledRunnerMaxJobs
+    if (typeof this.pooledRunnerMaxRssBytesOverride !== "number") this.pooledRunnerMaxRssBytes = poolConfig.pooledRunnerMaxRssBytes
+    if (typeof this.pooledRunnerMaxLifetimeMsOverride !== "number") this.pooledRunnerMaxLifetimeMs = poolConfig.pooledRunnerMaxLifetimeMs
+
+    this.statusReporter = new BackgroundJobsStatusReporter({
+      configuration: this.configuration,
+      host: this.host,
+      port: this.port,
+      generationHandshakeTimeoutMs: this.generationHandshakeTimeoutMs,
+      generationId: this.generationId
+    })
+    try {
+      await this._connect({allowReconnect: false})
+    } catch (error) {
+      let cleanupError
+
+      try {
+        await this.stop()
+      } catch (caughtCleanupError) {
+        cleanupError = caughtCleanupError
+      }
+
+      if (cleanupError) {
+        throw new AggregateError(
+          [error, cleanupError],
+          "Background jobs worker startup and cleanup failed",
+          {cause: error}
+        )
+      }
+
+      throw error
+    }
+  }
+
+  /**
+   * Gracefully stops the worker: announces draining to the main process so
+   * no new jobs are dispatched, waits for in-flight inline jobs and process
+   * runners to finish (so their results can be reported), then closes the
+   * socket and disconnects from the beacon.
+   *
+   * Process runners are child processes. When a `timeoutMs` is given (e.g. a
+   * deploy draining the old release) any runner still alive after the drain
+   * window is terminated (SIGTERM, then SIGKILL) rather than left to orphan
+   * across the deploy. With no `timeoutMs` the drain waits for runners to
+   * finish on their own.
+   * @param {object} [args] - Options.
+   * @param {number} [args.timeoutMs] - Max wait for in-flight jobs (per phase) in ms.
+   * @returns {Promise<void>} - Resolves when stopped.
+   */
+  stop({timeoutMs} = {}) {
+    const stopPromise = this.stopPromise || this._stop({timeoutMs})
+
+    if (!this.stopPromise) {
+      this.stopPromise = stopPromise
+      void stopPromise.then(this._resolveStopped, (error) => {
+        this._rejectStopped(error instanceof Error ? error : new Error(String(error)))
+      })
+    }
+
+    return stopPromise
+  }
+
+  /**
+   * Waits for automatic or requested stop.
+   * @returns {Promise<void>} - Resolves when this worker has fully stopped.
+   */
+  waitUntilStopped() { return this._stoppedPromise }
+
+  /** Resets the stop observation promise for a new worker start. */
+  _resetStoppedPromise() {
+    this._stoppedPromise = new Promise((resolve, reject) => {
+      this._resolveStopped = resolve
+      this._rejectStopped = reject
+    })
+    void this._stoppedPromise.catch(() => {})
+  }
+
+  /**
+   * Runs the worker shutdown lifecycle once.
+   * @param {object} [args] - Options.
+   * @param {number} [args.timeoutMs] - Max wait for in-flight jobs (per phase) in ms.
+   * @returns {Promise<void>} - Resolves when stopped.
+   */
+  async _stop({timeoutMs} = {}) {
+    this.shouldStop = true
+    this.isRetiring = true
+    this._stopHeartbeat()
+    if (this._reconnectTimer) {
+      clearTimeout(this._reconnectTimer)
+      this._reconnectTimer = undefined
+    }
+
+    await shutdownLifecycle({
+      onStopped: this.onStopped,
+      shutdown: async () => {
+        // Announce drain so main stops dispatching but keeps the connection
+        // open until we close it ourselves below.
+        if (this.jsonSocket) {
+          try {
+            this.jsonSocket.send({type: "draining"})
+          } catch {
+            // Socket may already be closing; nothing to do.
+          }
+        }
+
+        await this._drainInflight(this.inflightInlineJobs, timeoutMs)
+        await this._drainInflight(this.inflightPooledJobs, timeoutMs)
+        await this._drainInflight(this.inflightProcessJobs, timeoutMs)
+        await this._terminateProcessChildren()
+        // Give in-flight result reports (now decoupled from job slots) a bounded
+        // chance to land before the socket closes.
+        await this._drainInflight(this.inflightReports, timeoutMs)
+
+        if (this.jsonSocket) this.jsonSocket.close()
+        if (!this.configuration) return
+
+        await this._closeConfiguration()
+      }
+    })
+  }
+
+  /** Begins generation retirement without revoking liveness during the drain. */
+  _beginGenerationRetirement() {
+    if (this.stopPromise) return
+
+    this.isRetiring = true
+    const stopPromise = this._stopAfterGenerationDrain()
+    this.stopPromise = stopPromise
+    void stopPromise.then(this._resolveStopped, (error) => {
+      const normalizedError = error instanceof Error ? error : new Error(String(error))
+
+      this._rejectStopped(normalizedError)
+      this._reportLifecycleError(normalizedError)
+    })
+  }
+
+  /**
+   * Drains accepted generation work while retaining the exact connection and
+   * heartbeat, then performs the final terminating stop.
+   * @returns {Promise<void>} - Resolves after the worker has fully closed.
+   */
+  async _stopAfterGenerationDrain() {
+    if (this.jsonSocket) {
+      try {
+        this.jsonSocket.send({type: "draining"})
+      } catch {
+        // The close handler owns exact same-generation reconnect.
+      }
+    }
+
+    await this._drainInflight(this.inflightInlineJobs)
+    await this._drainInflight(this.inflightPooledJobs)
+    await this._drainInflight(this.inflightProcessJobs)
+    await this._drainInflight(this.inflightReports)
+
+    this.shouldStop = true
+    this._stopHeartbeat()
+    if (this._reconnectTimer) {
+      clearTimeout(this._reconnectTimer)
+      this._reconnectTimer = undefined
+    }
+    await this._terminateProcessChildren()
+
+    await shutdownLifecycle({
+      onStopped: this.onStopped,
+      shutdown: async () => {
+        if (this.jsonSocket) this.jsonSocket.close()
+        if (!this.configuration) return
+
+        await this._closeConfiguration()
+      }
+    })
+  }
+
+  /**
+   * Closes application resources before framework resources when this worker owns them.
+   * @returns {Promise<void>} - Resolves after every owned close succeeds.
+   */
+  async _closeConfiguration() {
+    const configuration = this.configuration
+
+    if (!configuration) return
+
+    await runShutdownSteps({
+      message: "Background jobs worker application and framework shutdown failed",
+      steps: [
+        ...(this.closeDatabaseConnectionsOnStop
+          ? [async () => await configuration.shutdown()]
+          : []),
+        async () => await configuration.disconnectBeacon(),
+        ...(this.closeDatabaseConnectionsOnStop
+          ? [async () => await configuration.closeDatabaseConnections()]
+          : [])
+      ]
+    })
+  }
+
+  /**
+   * Waits for a set of in-flight job promises to settle, optionally bounded by
+   * `timeoutMs`.
+   * @param {Set<Promise<void>>} inflight - In-flight job promises.
+   * @param {number} [timeoutMs] - Max wait in ms; unbounded when omitted.
+   * @returns {Promise<void>} - Resolves when settled or the timeout elapses.
+   */
+  async _drainInflight(inflight, timeoutMs) {
+    if (inflight.size === 0) return
+
+    const drain = Promise.allSettled([...inflight])
+
+    if (typeof timeoutMs === "number" && timeoutMs >= 0) {
+      let timer
+      const timeout = new Promise((resolve) => { timer = setTimeout(resolve, timeoutMs) })
+
+      await Promise.race([drain, timeout])
+      clearTimeout(timer)
+    } else {
+      await drain
+    }
+  }
+
+  /**
+   * Terminates any process runner children still alive after the drain window so
+   * they don't outlive the worker as orphans. SIGTERM lets the runner close its
+   * connections cleanly; survivors are SIGKILLed after a short grace.
+   * @returns {Promise<void>} - Resolves once survivors have been signalled.
+   */
+  async _terminateProcessChildren() {
+    if (this.inflightProcessChildren.size === 0) return
+
+    for (const child of this.inflightProcessChildren) {
+      try {
+        child.kill("SIGTERM")
+      } catch {
+        // Child already exited; nothing to do.
+      }
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, this.forkedChildSigkillGraceMs))
+
+    for (const child of this.inflightProcessChildren) {
+      try {
+        child.kill("SIGKILL")
+      } catch {
+        // Child already exited; nothing to do.
+      }
+    }
+  }
+
+  /**
+   * Connects to the worker's resolved endpoint and completes its hello fence.
+   * @param {object} args - Reconnect policy.
+   * @param {boolean} args.allowReconnect - Whether a failed attempt may schedule another connection.
+   * @returns {Promise<void>} - Resolves after generation acknowledgement.
+   */
+  async _connect({allowReconnect}) {
+    const configuration = this.configuration
+    if (!configuration) throw new Error("Background jobs worker configuration not initialized")
+
+    const config = configuration.getBackgroundJobsConfig()
+    if (this.generationId) this._generationAccepted = false
+    const host = this.host || config.host
+    const port = typeof this.port === "number" ? this.port : config.port
+    const socket = net.createConnection({host, port})
+    socket.setKeepAlive(true, SOCKET_KEEPALIVE_MS)
+    const jsonSocket = new JsonSocket(socket)
+    this.jsonSocket = jsonSocket
+    /**
+     * Resolves the generation handshake.
+     * @type {() => void}
+     */
+    let resolveHandshake = () => {}
+    /**
+     * Rejects the generation handshake.
+     * @type {(error: Error) => void}
+     */
+    let rejectHandshake = () => {}
+    let connectionAccepted = false
+    /** @type {ReturnType<typeof setTimeout> | undefined} */
+    let handshakeTimer
+    const handshake = new Promise((/** @type {(value: void) => void} */ resolve, reject) => {
+      resolveHandshake = resolve
+      rejectHandshake = reject
+    })
+
+    /**
+     * Handles a background job socket message.
+     * @param {import("./types.js").BackgroundJobSocketMessage} message - Socket message.
+     */
+    jsonSocket.on("message", async (message) => {
+      if (message?.type === "generation-accepted") {
+        if (!this.generationId || message.generationId !== this.generationId) {
+          rejectHandshake(new Error("Background jobs main acknowledged a different generation"))
+          jsonSocket.destroy()
+          return
+        }
+
+        this._generationAccepted = true
+        connectionAccepted = true
+        if (handshakeTimer) {
+          clearTimeout(handshakeTimer)
+          handshakeTimer = undefined
+        }
+        if (message.lifecycleState === "retiring" || message.lifecycleState === "retired") this.isRetiring = true
+        this.onGenerationAccepted?.()
+        this._sendReadyIfRunning()
+        this._startHeartbeat()
+        resolveHandshake()
+        return
+      }
+
+      if (message?.type === "generation-rejected") {
+        this.shouldStop = true
+        if (handshakeTimer) clearTimeout(handshakeTimer)
+        rejectHandshake(new Error(`Background jobs generation rejected: ${message.reason}`))
+        jsonSocket.destroy()
+        return
+      }
+
+      if (message?.type === "retire") {
+        if (this.generationId && message.generationId === this.generationId) {
+          this.onRetireMessage?.()
+          this._beginGenerationRetirement()
+        }
+        return
+      }
+
+      if (message?.type === "job") {
+        await this._handleJob(message.payload)
+      }
+    })
+
+    jsonSocket.on("error", (error) => {
+      console.error("Background jobs worker socket error:", error)
+      if (this.generationId && !this._generationAccepted) rejectHandshake(error)
+    })
+
+    jsonSocket.on("close", () => {
+      if (handshakeTimer) clearTimeout(handshakeTimer)
+      this._stopHeartbeat()
+      if (this.jsonSocket === jsonSocket) this.jsonSocket = undefined
+      if (this.generationId && !this._generationAccepted) {
+        rejectHandshake(new Error("Background jobs socket closed before generation acknowledgement"))
+      }
+      if (this.shouldStop) return
+      if (connectionAccepted || allowReconnect || !this.generationId) this._scheduleReconnect()
+    })
+
+    if (this.generationId) {
+      handshakeTimer = setTimeout(() => {
+        const error = new BackgroundJobsGenerationHandshakeTimeoutError({
+          endpoint: `${host}:${port}`,
+          generationId: this.generationId || "",
+          role: "worker",
+          timeoutMs: this.generationHandshakeTimeoutMs
+        })
+        rejectHandshake(error)
+        jsonSocket.destroy()
+      }, this.generationHandshakeTimeoutMs)
+    }
+
+    socket.on("connect", () => {
+      jsonSocket.send({type: "hello", role: "worker", ...(this.generationId ? {generationId: this.generationId} : {}), supportsHandoffIdReporting: true, supportsHeartbeat: true, supportsPooled: true, workerId: this.workerId})
+      if (!this.generationId) {
+        connectionAccepted = true
+        this._sendReadyIfRunning()
+        this._startHeartbeat()
+        resolveHandshake()
+      }
+    })
+
+    if (this.generationId) await handshake
+  }
+
+  /** Schedules one fenced reconnect to the worker's unchanged endpoint. */
+  _scheduleReconnect() {
+    if (this.shouldStop || this._reconnectTimer) return
+
+    this._reconnectTimer = setTimeout(() => {
+      this._reconnectTimer = undefined
+      if (this.shouldStop) return
+      void this._connect({allowReconnect: true}).catch((error) => {
+        if (!this.shouldStop) console.error("Background jobs worker reconnect failed:", error)
+      })
+    }, this.reconnectDelayMs)
+    if (typeof this._reconnectTimer.unref === "function") this._reconnectTimer.unref()
+  }
+
+  /**
+   * Surfaces an unexpected worker lifecycle failure through the framework error
+   * channels so a supervisor hook that ignores stdio still has observability.
+   * @param {ReturnType<typeof JSON.parse>} error - Worker lifecycle failure.
+   */
+  _reportLifecycleError(error) {
+    const configuration = this.configuration
+    if (!configuration) return
+    const normalizedError = error instanceof Error ? error : new Error(String(error))
+    const payload = {context: {generationId: this.generationId, stage: "background-jobs-worker-lifecycle"}, error: normalizedError}
+    const errorEvents = configuration.getErrorEvents()
+
+    errorEvents.emit("framework-error", payload)
+    errorEvents.emit("all-error", {...payload, errorType: "framework-error"})
+  }
+
+  /**
+   * Sends periodic liveness heartbeats to the main so a wedged or silent worker
+   * can be detected and dropped there (its leases released) instead of freezing
+   * the queue until a human notices.
+   * @returns {void}
+   */
+  _startHeartbeat() {
+    this._stopHeartbeat()
+
+    this._heartbeatTimer = setInterval(() => this._sendHeartbeat(), this.heartbeatIntervalMs)
+
+    if (typeof this._heartbeatTimer.unref === "function") this._heartbeatTimer.unref()
+  }
+
+  /** Sends one liveness heartbeat while the worker has not finally stopped. */
+  _sendHeartbeat() {
+    if (this.shouldStop || !this.jsonSocket) return
+
+    try {
+      this.jsonSocket.send({type: "heartbeat", workerId: this.workerId})
+    } catch {
+      // Socket is closing/closed; the close handler drives reconnect.
+    }
+  }
+
+  /**
+   * Stops the liveness heartbeat timer.
+   * @returns {void}
+   */
+  _stopHeartbeat() {
+    if (this._heartbeatTimer) {
+      clearInterval(this._heartbeatTimer)
+      this._heartbeatTimer = undefined
+    }
+  }
+
+  /**
+   * Runs handle job.
+   * @param {import("./types.js").BackgroundJobPayload} payload - Payload.
+   * @returns {Promise<void>} - Resolves when done.
+   */
+  async _handleJob(payload) {
+    if (!payload.id) throw new Error("Background job payload missing id")
+    /**
+     * Identified payload.
+     * @type {import("./types.js").BackgroundJobPayload & {id: string}} */
+    const identifiedPayload = /** @type {ReturnType<typeof JSON.parse>} */ (payload)
+
+    const executionMode = this._executionModeForPayload(identifiedPayload)
+
+    if (executionMode === "pooled") {
+      this._queuePooledJob(identifiedPayload)
+      return
+    }
+
+    if (executionMode !== "inline") {
+      this._trackProcessJob(this._startProcessJob({executionMode, payload: identifiedPayload}))
+      return
+    }
+
+    this._handleInlineJob(identifiedPayload)
+  }
+
+  /**
+   * Runs start process job.
+   * @param {object} args - Options.
+   * @param {import("./types.js").BackgroundJobExecutionMode} args.executionMode - Execution mode.
+   * @param {import("./types.js").BackgroundJobPayload & {id: string}} args.payload - Payload.
+   * @returns {Promise<void>} - Resolves when the process job exits.
+   */
+  _startProcessJob({executionMode, payload}) {
+    if (executionMode === "forked") return this._forkJob(payload)
+
+    return this._spawnJob(payload)
+  }
+
+  /**
+   * Runs handle inline job.
+   * @param {import("./types.js").BackgroundJobPayload & {id: string}} payload - Payload.
+   * @returns {void}
+   */
+  _handleInlineJob(payload) {
+    // Inline jobs share the worker's process and DB pool, but each one
+    // is its own async chain — there's no semantic reason to serialize
+    // them. We kick off the job, register it with `inflightInlineJobs`
+    // for shutdown drain, and signal capacity to main:
+    // - If we still have a free slot we ask for the next job right
+    //   away, so a slow job (e.g. a docker alive check that waits 15s
+    //   on a gone server) no longer starves every other inline job.
+    // - When the job finishes, if the worker had been at the cap, we
+    //   ask for the next job to refill the slot.
+    // The bookkeeping in `finally()` ratchets capacity back up
+    // regardless of success or failure.
+    /**
+     * Defines inflight.
+     * @type {Promise<void>} */
+    let inflight
+
+    inflight = this._runInlineJobAndReport(payload).finally(() => {
+      this.inflightInlineJobs.delete(inflight)
+
+      // Re-announce on every completion below cap, not just the cap→cap-1 edge —
+      // see _trackProcessJob for why the knife-edge condition silently wedges.
+      if (!this.shouldStop) this._sendReadyIfRunning()
+    })
+
+    this.inflightInlineJobs.add(inflight)
+
+    if (this.inflightInlineJobs.size < this.maxConcurrentInlineJobs) {
+      this._sendReadyIfRunning()
+    }
+  }
+
+  /**
+   * Runs execution mode for payload.
+   * @param {import("./types.js").BackgroundJobPayload} payload - Payload.
+   * @returns {import("./types.js").BackgroundJobExecutionMode} - Execution mode.
+   */
+  _executionModeForPayload(payload) {
+    const executionMode = payload.options?.executionMode
+
+    return executionMode ? this._normalizeExecutionMode(executionMode) : "pooled"
+  }
+
+  /**
+   * Runs normalize execution mode.
+   * @param {string} executionMode - Execution mode.
+   * @returns {import("./types.js").BackgroundJobExecutionMode} - Normalized execution mode.
+   */
+  _normalizeExecutionMode(executionMode) {
+    for (const mode of EXECUTION_MODES) {
+      if (mode === executionMode) return mode
+    }
+
+    throw new Error(`Invalid background job executionMode: ${executionMode}`)
+  }
+
+  /**
+   * Runs track process job.
+   * @param {Promise<void>} processJob - Process job promise.
+   * @returns {void}
+   */
+  _trackProcessJob(processJob) {
+    /**
+     * Defines inflight.
+     * @type {Promise<void>} */
+    let inflight
+
+    inflight = processJob.finally(() => {
+      this.inflightProcessJobs.delete(inflight)
+
+      // Re-announce readiness on EVERY completion that leaves us below cap — not
+      // just the single cap→cap-1 edge. The main removes a worker from its ready
+      // set on each dispatch (`_drainOnce`) and only re-adds it on a fresh
+      // "ready"; gating the re-announce on one knife-edge transition means a
+      // single missed or lost signal leaves the worker out of the ready set and
+      // wedges dispatch cluster-wide. This was the silent-freeze root cause.
+      // `_sendReadyIfRunning` self-guards (it sends nothing when the worker is
+      // genuinely at capacity), so re-announcing on every freed slot is safe and
+      // idempotent on the main.
+      if (!this.shouldStop) this._sendReadyIfRunning()
+    })
+
+    this.inflightProcessJobs.add(inflight)
+    this._sendReadyIfRunning()
+  }
+
+  /**
+   * Runs run inline job and report.
+   * @param {import("./types.js").BackgroundJobPayload & {id: string}} payload - Payload with required id.
+   * @returns {Promise<void>} - Resolves when complete (success or failure reported).
+   */
+  async _runInlineJobAndReport(payload) {
+    // Report in the background so freeing this inline slot never waits on the
+    // report. Reporting is durable (retried until it lands), so a transient
+    // main/DB outage neither wedges the slot nor loses the terminal result.
+    try {
+      await this._runJobInline(payload)
+      this._reportJobResultInBackground({
+        jobId: payload.id,
+        status: "completed",
+        handoffId: payload.handoffId,
+        handedOffAtMs: payload.handedOffAtMs,
+        workerId: payload.workerId || this.workerId
+      })
+    } catch (error) {
+      if (error instanceof BackgroundJobRescheduleSignal) {
+        this._reportJobResultInBackground({
+          jobId: payload.id,
+          status: "rescheduled",
+          delayMs: error.delayMs,
+          handoffId: payload.handoffId,
+          handedOffAtMs: payload.handedOffAtMs,
+          workerId: payload.workerId || this.workerId
+        })
+        return
+      }
+
+      this._reportJobResultInBackground({
+        jobId: payload.id,
+        status: "failed",
+        error,
+        handoffId: payload.handoffId,
+        handedOffAtMs: payload.handedOffAtMs,
+        workerId: payload.workerId || this.workerId
+      })
+    }
+  }
+
+  /**
+   * Advertises current worker capacity unless the worker is draining.
+   * @param {object} [options] - Advertisement options.
+   * @param {boolean} [options.revokePooledAdmission] - Revoke pooled credits while preserving other execution modes.
+   * @returns {void}
+   */
+  _sendReadyIfRunning({revokePooledAdmission = false} = {}) {
+    if (this.shouldStop || this.isRetiring) return
+    if (!this.jsonSocket) return
+    if (this.generationId && !this._generationAccepted) return
+
+    const readyMessage = this._readyMessage({revokePooledAdmission})
+
+    if (!readyMessage) return
+    this.jsonSocket.send(readyMessage)
+  }
+
+  /**
+   * Runs ready message.
+   * @param {object} [options] - Advertisement options.
+   * @param {boolean} [options.revokePooledAdmission] - Revoke pooled credits while preserving other execution modes.
+   * @returns {import("./types.js").BackgroundJobSocketMessage | null} - Ready message or null when the worker has no capacity.
+   */
+  _readyMessage({revokePooledAdmission = false} = {}) {
+    const acceptsProcessJob = this.inflightProcessJobs.size < this.maxConcurrentForkedJobs
+    const acceptsInline = this.inflightInlineJobs.size < this.maxConcurrentInlineJobs
+    const availablePooledSlots = revokePooledAdmission ? 0 : this._availablePooledSlots()
+    const acceptsPooled = availablePooledSlots > 0
+
+    if (!revokePooledAdmission && !acceptsProcessJob && !acceptsInline && !acceptsPooled) return null
+
+    return {
+      type: "ready",
+      acceptsForked: acceptsProcessJob,
+      acceptsInline,
+      acceptsPooled,
+      availablePooledSlots,
+      acceptsSpawned: acceptsProcessJob
+    }
+  }
+
+  /**
+   * Tracks a pooled job and re-advertises capacity.
+   * @param {Promise<void>} pooledJob - Pooled job promise.
+   * @returns {Promise<void>} - The tracked in-flight promise.
+   */
+  _trackPooledJob(pooledJob) {
+    /** @type {Promise<void>} */
+    let inflight
+    inflight = pooledJob.finally(() => {
+      this.inflightPooledJobs.delete(inflight)
+      if (!this.shouldStop && !this._pooledStartupFailureJobs.has(pooledJob) && !this._pooledStartupFailureJobs.has(inflight)) this._sendReadyIfRunning()
+    })
+    this.inflightPooledJobs.add(inflight)
+    return inflight
+  }
+
+  /**
+   * Serializes repeated leases for one durable row while preserving pooled
+   * concurrency across different job ids.
+   * @param {import("./types.js").BackgroundJobPayload & {id: string}} payload - Pooled job payload.
+   * @returns {void}
+   */
+  _queuePooledJob(payload) {
+    const queue = this.pooledJobQueues.get(payload.id)
+    if (queue) {
+      queue.push(payload)
+      return
+    }
+
+    this.pooledJobQueues.set(payload.id, [payload])
+    const tracker = this._trackPooledJob(this._runPooledJobQueue(payload.id))
+    this.pooledJobQueueTrackers.set(payload.id, tracker)
+  }
+
+  /**
+   * Runs admitted leases for one durable job id in arrival order.
+   * @param {string} jobId - Durable job id.
+   * @returns {Promise<void>} - Resolves after the per-id queue drains.
+   */
+  async _runPooledJobQueue(jobId) {
+    const queue = this.pooledJobQueues.get(jobId)
+    if (!queue) throw new Error(`Pooled job queue missing for job: ${jobId}`)
+
+    try {
+      while (queue.length > 0) {
+        const payload = queue.shift()
+        if (!payload) throw new Error(`Pooled job queue contained an empty payload for job: ${jobId}`)
+        await this._runPooledJob(payload)
+      }
+    } finally {
+      const tracker = this.pooledJobQueueTrackers.get(jobId)
+      if (tracker) {
+        this.inflightPooledJobs.delete(tracker)
+        this.pooledJobQueueTrackers.delete(jobId)
+      }
+      this.pooledJobQueues.delete(jobId)
+    }
+  }
+
+  /**
+   * Free pooled slots across the pool: open slots in non-retiring children plus
+   * the slots we could add by spawning more children up to `pooledRunnerCount`.
+   * Retiring children (draining before replacement) never contribute capacity.
+   * @returns {number} - Number of pooled jobs the worker can accept right now.
+   */
+  _availablePooledSlots() {
+    let openInExisting = 0
+    let nonRetiringChildren = 0
+    let queuedReservations = 0
+
+    for (const child of this.pooledChildren) {
+      const state = this.pooledChildStates.get(child)
+      if (!state || state.retiring) continue
+      nonRetiringChildren += 1
+      openInExisting += this.pooledRunnerConcurrency - state.inflight.size
+    }
+
+    for (const queue of this.pooledJobQueues.values()) queuedReservations += queue.length
+
+    const spawnableChildren = Math.max(0, this.pooledRunnerCount - nonRetiringChildren)
+
+    return Math.max(0, openInExisting + spawnableChildren * this.pooledRunnerConcurrency - queuedReservations)
+  }
+
+  /**
+   * Runs a payload on a pooled child with a free concurrency slot, spawning a
+   * new child when every non-retiring child is full and the pool is below
+   * `pooledRunnerCount`. Each child runs up to `pooledRunnerConcurrency` jobs at
+   * once on its own event loop.
+   * @param {import("./types.js").BackgroundJobPayload & {id: string}} payload - Job payload.
+   * @returns {Promise<void>} - Resolves after the durable report.
+   */
+  _runPooledJob(payload) {
+    const child = this._selectPooledChild() || this._createPooledChild()
+    const state = this.pooledChildStates.get(child)
+    if (!state) throw new Error("Pooled runner state missing")
+
+    // Stamp the round-robin cursor so the next dispatch prefers a different child.
+    state.lastDispatchSeq = ++this._pooledDispatchSeq
+
+    /**
+     * Resolves the pooled job promise.
+     * @type {(value: void) => void}
+     */
+    let resolvePooledJob = () => {}
+    const pooledJob = new Promise((resolve) => { resolvePooledJob = resolve })
+    const timeoutTimer = this._armPooledJobTimeout({child, payload})
+
+    state.inflight.set(payload.id, {payload, resolve: resolvePooledJob, pooledJob, timeoutTimer})
+    try {
+      child.send({type: "job", payload, sharedTransactionBroker: this._pooledJobSharedTransactionBrokerConfig()})
+    } catch (error) {
+      void this._handlePooledChildFailure({child, error})
+    }
+
+    return pooledJob
+  }
+
+  /**
+   * Captures the current test attempt's broker mode at dispatch time. A warm
+   * pooled child must never rely on its immutable fork-time environment.
+   * @returns {import("../testing/shared-transaction-proxy-driver.js").SharedTransactionBrokerJobConfig} - Per-job broker configuration.
+   */
+  _pooledJobSharedTransactionBrokerConfig() {
+    const serialized = process.env.VELOCIOUS_TEST_SHARED_TRANSACTION_BROKER
+    if (!serialized) return {expected: false}
+
+    const config = JSON.parse(Buffer.from(serialized, "base64url").toString("utf8"))
+    return {...config, expected: true}
+  }
+
+  /**
+   * Selects a pooled child to run the next job, or undefined when every non-retiring
+   * child is already full (the caller then lazily spawns one). Among children with a
+   * free concurrency slot, picks the one dispatched least recently — a round-robin that
+   * spreads jobs (notably multi-minute RunBuildJobs, each pinning a tenant connection
+   * for its whole run) evenly across children instead of first-fit packing the earliest
+   * one until it is full. A freshly spawned or replacement child therefore takes its
+   * fair share one job at a time as its turn comes up, rather than absorbing a burst to
+   * "catch up" to the others.
+   * @returns {import("node:child_process").ChildProcess | undefined} - The chosen child, or undefined when all non-retiring children are full.
+   */
+  _selectPooledChild() {
+    /** @type {import("node:child_process").ChildProcess | undefined} */
+    let selected
+    let selectedSeq = Infinity
+
+    for (const child of this.pooledChildren) {
+      const state = this.pooledChildStates.get(child)
+
+      if (!state || state.retiring || state.inflight.size >= this.pooledRunnerConcurrency) continue
+
+      if (state.lastDispatchSeq < selectedSeq) {
+        selected = child
+        selectedSeq = state.lastDispatchSeq
+      }
+    }
+
+    return selected
+  }
+
+  /**
+   * Arms a per-job wall-clock backstop for a pooled job. A pooled child hosts many
+   * concurrent jobs, so a single genuinely-hung job would otherwise pin its
+   * runner's concurrency slot forever — the lifetime recycle only retires a child
+   * once its in-flight set drains, which a hung job never does. On overrun the
+   * whole child is terminated so the hung job (and its siblings) requeue. Returns
+   * the timer, or null when no timeout is configured.
+   * @param {object} args - Options.
+   * @param {import("node:child_process").ChildProcess} args.child - Pooled child.
+   * @param {import("./types.js").BackgroundJobPayload & {id: string}} args.payload - Job payload whose overrun is guarded.
+   * @returns {ReturnType<typeof setTimeout> | null} - The armed timer, or null.
+   */
+  _armPooledJobTimeout({child, payload}) {
+    const timeoutMs = this._resolveJobTimeoutMs(payload.options)
+
+    if (!(typeof timeoutMs === "number" && timeoutMs > 0)) return null
+
+    return setTimeout(() => this._onPooledJobTimeout({child, jobId: payload.id}), timeoutMs)
+  }
+
+  /**
+   * Fired when a pooled job overruns its timeout. Terminates the child running it
+   * (SIGTERM, then SIGKILL after the grace) — a hung JS job cannot be cancelled
+   * any other way. The non-clean exit flows through `_handlePooledChildFailure`,
+   * which reports every in-flight job on the child failed (so they requeue) and
+   * drops it from tracking; the failure path immediately re-advertises the
+   * resulting capacity once the runner has completed startup.
+   * @param {object} args - Options.
+   * @param {import("node:child_process").ChildProcess} args.child - Pooled child.
+   * @param {string} args.jobId - Job id that overran.
+   * @returns {void}
+   */
+  _onPooledJobTimeout({child, jobId}) {
+    const state = this.pooledChildStates.get(child)
+
+    // Already settling/gone, or the job finished in the race with this timer.
+    if (!state || state.settling || !state.inflight.has(jobId)) return
+
+    try {
+      child.kill("SIGTERM")
+    } catch {
+      // Child already exited; nothing to do.
+    }
+
+    state.timeoutSigkillTimer = setTimeout(() => {
+      try {
+        child.kill("SIGKILL")
+      } catch {
+        // Child already exited; nothing to do.
+      }
+    }, this.forkedChildSigkillGraceMs)
+  }
+
+  /**
+   * Creates a reusable pooled child.
+   * @returns {import("node:child_process").ChildProcess} - New pooled child.
+   */
+  _createPooledChild() {
+    const configuration = this.configuration
+    if (!configuration) throw new Error("Background jobs worker configuration not initialized")
+    const child = fork(POOLED_RUNNER_ENTRY_PATH, [], {
+      cwd: configuration.getDirectory(), execArgv: [], stdio: ["ignore", "ignore", "ignore", "ipc"],
+      env: Object.assign({}, process.env, this._childBackgroundJobsEnvironment())
+    })
+    this.pooledChildren.add(child)
+    this.inflightProcessChildren.add(child)
+    this.pooledChildStates.set(child, {createdAtMs: Date.now(), jobsRun: 0, inflight: new Map(), lastDispatchSeq: 0, retiring: false, started: false})
+    child.on("message", (message) => this._handlePooledChildMessage({child, message}))
+    child.once("exit", (code, signal) => this._handlePooledChildFailure({child, error: new Error(`Pooled background job runner exited: code=${code} signal=${signal || "none"}`)}))
+    child.once("error", (error) => this._handlePooledChildFailure({child, error}))
+    return child
+  }
+
+  /**
+   * Handles a pooled child's per-job durable-report acknowledgement. A child
+   * runs jobs concurrently and reports one `job-outcome` per job id.
+   * @param {object} args - Message details.
+   * @param {import("node:child_process").ChildProcess} args.child - Pooled child.
+   * @param {ReturnType<typeof JSON.parse>} args.message - IPC message.
+   * @returns {void}
+   */
+  _handlePooledChildMessage({child, message}) {
+    if (!message || typeof message !== "object") return
+    const record = /** @type {{type?: ReturnType<typeof JSON.parse>, jobId?: ReturnType<typeof JSON.parse>, acknowledged?: ReturnType<typeof JSON.parse>, rssBytes?: ReturnType<typeof JSON.parse>, error?: ReturnType<typeof JSON.parse>}} */ (message)
+    const state = this.pooledChildStates.get(child)
+    if (record.type === "ready") {
+      if (state) state.started = true
+      return
+    }
+    if (record.type !== "job-outcome" || !state || state.settling || typeof record.jobId !== "string") return
+    state.started = true
+    const entry = state.inflight.get(record.jobId)
+    if (!entry) return
+
+    if (entry.timeoutTimer) clearTimeout(entry.timeoutTimer)
+    state.inflight.delete(record.jobId)
+    state.jobsRun += 1
+    const resolve = entry.resolve
+
+    if (record.acknowledged === true) {
+      if (resolve) resolve(undefined)
+    } else {
+      // The child stayed alive but could not confirm this one job's terminal
+      // report; reclaim just this job — its concurrent siblings are unaffected.
+      void this._reportJobResult({
+        jobId: entry.payload.id,
+        status: "failed",
+        error: new Error(typeof record.error === "string" ? record.error : "Pooled runner terminal report was not acknowledged"),
+        handoffId: entry.payload.handoffId,
+        handedOffAtMs: entry.payload.handedOffAtMs,
+        workerId: entry.payload.workerId || this.workerId
+      }).finally(() => { if (resolve) resolve(undefined) })
+    }
+
+    const rssBytes = typeof record.rssBytes === "number" ? record.rssBytes : Number.POSITIVE_INFINITY
+    const runnerAgeMs = Date.now() - state.createdAtMs
+    if (!state.retiring && (state.jobsRun >= this.pooledRunnerMaxJobs || rssBytes >= this.pooledRunnerMaxRssBytes || runnerAgeMs >= this.pooledRunnerMaxLifetimeMs || this.shouldStop)) {
+      this._beginRetirePooledChild(child)
+    }
+    this._terminateIfDrained(child)
+  }
+
+  /**
+   * Marks a pooled child for retirement and eagerly spawns a single replacement
+   * (1-for-1) so its capacity is restored immediately without waiting for it to
+   * finish draining. The retiring child stops receiving new jobs and is
+   * terminated only once its in-flight set drains, so a long-running job (e.g. a
+   * build) is never cut off.
+   * @param {import("node:child_process").ChildProcess} child - Child to retire.
+   * @returns {void}
+   */
+  _beginRetirePooledChild(child) {
+    const state = this.pooledChildStates.get(child)
+    if (!state || state.retiring) return
+
+    state.retiring = true
+    // Best-effort pre-warm: skip when stopping (no new work) or before the
+    // worker is initialized (no configuration to fork a child from).
+    if (!this.shouldStop && this.configuration) this._createPooledChild()
+  }
+
+  /**
+   * Terminates a retiring pooled child once it has no in-flight jobs left.
+   * @param {import("node:child_process").ChildProcess} child - Child to check.
+   * @returns {void}
+   */
+  _terminateIfDrained(child) {
+    const state = this.pooledChildStates.get(child)
+    if (!state || !state.retiring || state.inflight.size > 0) return
+
+    this._retirePooledChild(child)
+  }
+
+  /**
+   * Retires a drained pooled child (removes it from tracking, then SIGTERMs it).
+   * @param {import("node:child_process").ChildProcess} child - Child process to retire.
+   * @returns {void}
+   */
+  _retirePooledChild(child) {
+    this.pooledChildren.delete(child)
+    this.pooledChildStates.delete(child)
+    this.inflightProcessChildren.delete(child)
+    child.kill("SIGTERM")
+  }
+
+  /**
+   * Removes an exited/unhealthy pooled child and reports every job that was
+   * in-flight on it as failed — a process-level crash's blast radius is the
+   * child's whole in-flight set. Once the child has completed startup, its
+   * freed capacity is advertised immediately; the replacement itself is still
+   * spawned lazily by the next dispatch. A child that exits before its startup
+   * handshake does not re-announce, avoiding a tight respawn loop on startup
+   * failure.
+   * @param {object} args - Failure details.
+   * @param {import("node:child_process").ChildProcess} args.child - Pooled child.
+   * @param {ReturnType<typeof JSON.parse>} args.error - Failure.
+   * @returns {Promise<void>}
+   */
+  async _handlePooledChildFailure({child, error}) {
+    const state = this.pooledChildStates.get(child)
+    if (state?.settling) return
+    if (state) {
+      state.settling = true
+      // Cancel this child's pending timers before its in-flight set is reported —
+      // the SIGKILL grace from a timeout kill, and every armed per-job backstop.
+      if (state.timeoutSigkillTimer) clearTimeout(state.timeoutSigkillTimer)
+      for (const inflightEntry of state.inflight.values()) {
+        if (inflightEntry.timeoutTimer) clearTimeout(inflightEntry.timeoutTimer)
+      }
+    }
+    this.pooledChildren.delete(child)
+    this.inflightProcessChildren.delete(child)
+
+    const entries = state ? [...state.inflight.values()] : []
+    if (state) state.inflight.clear()
+    this.pooledChildStates.delete(child)
+
+    const failureReports = entries.map(async (entry) => {
+      await this._reportJobResult({
+        jobId: entry.payload.id,
+        status: "failed",
+        error,
+        handoffId: entry.payload.handoffId,
+        handedOffAtMs: entry.payload.handedOffAtMs,
+        workerId: entry.payload.workerId || this.workerId
+      })
+      if (entry.resolve) entry.resolve(undefined)
+    })
+
+    // Start every fallback report before announcing capacity so the main cannot
+    // observe a replacement slot before the failed jobs' reports are in flight.
+    // The report promises remain tracked below; a slow retry must not hold the
+    // newly freed runner capacity hostage.
+    if (state && state.started !== false) {
+      this._sendReadyIfRunning()
+    } else if (state) {
+      for (const entry of entries) {
+        if (entry.pooledJob) this._pooledStartupFailureJobs.add(entry.pooledJob)
+        const queueTracker = this.pooledJobQueueTrackers.get(entry.payload.id)
+        if (queueTracker) this._pooledStartupFailureJobs.add(queueTracker)
+      }
+      // A previous ready message may still have unconsumed pooled credits at the
+      // main. Revoke them authoritatively without suppressing valid inline or
+      // process-runner readiness; otherwise queued jobs can trigger a startup
+      // crash loop using the stale credits.
+      this._sendReadyIfRunning({revokePooledAdmission: true})
+    }
+
+    await Promise.allSettled(failureReports)
+  }
+
+  /**
+   * Runs run job inline.
+   * @param {import("./types.js").BackgroundJobPayload} payload - Payload.
+   * @returns {Promise<void>} - Resolves when done.
+   */
+  async _runJobInline(payload) {
+    const configuration = this.configuration
+    if (!configuration) throw new Error("Background jobs worker configuration not initialized")
+
+    const registry = new BackgroundJobRegistry({configuration})
+    await registry.load()
+    const JobClass = registry.getJobByName(payload.jobName)
+    await performBackgroundJob({
+      configuration,
+      JobClass,
+      jobArgs: payload.args || [],
+      jobOptions: payload.options || {},
+      name: `Background job worker inline: ${payload.jobName}`,
+      payload
+    })
+  }
+
+  /**
+   * Runs fork job.
+   * @param {import("./types.js").BackgroundJobPayload & {id: string}} payload - Payload.
+   * @returns {Promise<void>} - Resolves when the forked runner exits or fork fails.
+   */
+  _forkJob(payload) {
+    const child = this._createForkedChild()
+
+    this.inflightProcessChildren.add(child)
+
+    const finished = this._waitForForkedChild({child, payload})
+
+    this._sendForkedPayload({child, payload})
+
+    return finished
+  }
+
+  /**
+   * Runs create forked child.
+   * @returns {import("node:child_process").ChildProcess} - Forked child process.
+   */
+  _createForkedChild() {
+    const configuration = this.configuration
+    if (!configuration) throw new Error("Background jobs worker configuration not initialized")
+
+    const directory = configuration.getDirectory()
+    return fork(FORKED_RUNNER_ENTRY_PATH, [], {
+      cwd: directory,
+      execArgv: [],
+      stdio: ["ignore", "ignore", "ignore", "ipc"],
+      env: Object.assign({}, process.env, this._childBackgroundJobsEnvironment())
+    })
+  }
+
+  /**
+   * Runs wait for forked child.
+   * @param {object} args - Options.
+   * @param {import("node:child_process").ChildProcess} args.child - Forked child process.
+   * @param {import("./types.js").BackgroundJobPayload & {id: string}} args.payload - Payload.
+   * @returns {Promise<void>} - Resolves when the child exits.
+   */
+  _waitForForkedChild({child, payload}) {
+    const timeoutState = this._armForkedJobTimeout({child, payload})
+
+    return new Promise((resolve) => {
+      child.once("exit", (code, signal) => {
+        this._clearForkedJobTimeout(timeoutState)
+        this._handleForkedChildExit({child, code, signal, payload, resolve, timeoutState})
+      })
+      child.once("error", (error) => {
+        this._clearForkedJobTimeout(timeoutState)
+        this._handleForkedChildError({child, error, payload, resolve})
+      })
+    })
+  }
+
+  /**
+   * Arms a wall-clock backstop for a forked job runner. A forked job still
+   * running after `jobTimeoutMs` is terminated (SIGTERM, then SIGKILL after the
+   * grace) so a single genuinely-hung runner can't pin a draining worker — and
+   * its full-app boot and database connections — indefinitely. Returns a state
+   * object the exit/error handlers use to cancel the timer and to report a
+   * timeout-specific failure. When no timeout is configured the timer is null
+   * and behavior is unchanged.
+   * @param {object} args - Options.
+   * @param {import("node:child_process").ChildProcess} args.child - Forked child process.
+   * @param {import("./types.js").BackgroundJobPayload & {id: string}} args.payload - Job payload.
+   * @returns {ForkedJobTimeoutState} - Timeout state.
+   */
+  _armForkedJobTimeout({child, payload}) {
+    const timeoutMs = this._resolveJobTimeoutMs(payload.options)
+    /** @type {ForkedJobTimeoutState} */
+    const state = {timedOut: false, timeoutMs, timer: null, sigkillTimer: null}
+
+    if (!(typeof timeoutMs === "number" && timeoutMs > 0)) return state
+
+    state.timer = setTimeout(() => this._onForkedJobTimeout({child, state}), timeoutMs)
+
+    return state
+  }
+
+  /**
+   * Resolves the effective wall-clock job timeout in ms (shared by forked and pooled jobs), or null when disabled. The
+   * per-job override wins, followed by the constructor override, then the value
+   * from the background-jobs configuration. A non-positive value disables the
+   * backstop at whichever level supplied it.
+   * @param {import("./types.js").BackgroundJobOptions} [jobOptions] - Per-job options.
+   * @returns {number | null} - Timeout in ms, or null when disabled.
+   */
+  _resolveJobTimeoutMs(jobOptions) {
+    const raw = typeof jobOptions?.timeoutMs === "number"
+      ? jobOptions.timeoutMs
+      : (typeof this.jobTimeoutMsOverride === "number"
+          ? this.jobTimeoutMsOverride
+          : (this.configuration ? this.configuration.getBackgroundJobsConfig().jobTimeoutMs : null))
+
+    // A non-finite (e.g. Infinity) or non-positive value disables the backstop;
+    // a finite value beyond Node's timer range is clamped to the max rather than
+    // silently coerced to ~1ms (which would kill every forked job immediately).
+    if (typeof raw !== "number" || !Number.isFinite(raw) || raw <= 0) return null
+
+    return Math.min(raw, MAX_FORKED_JOB_TIMEOUT_MS)
+  }
+
+  /**
+   * Fired when a forked runner overruns its timeout. Sends SIGTERM for a clean
+   * shutdown, then SIGKILL after the grace for a runner that ignores it. The
+   * resulting non-clean exit flows through `_handleForkedChildExit`, which frees
+   * the slot and reports the job failed.
+   * @param {object} args - Options.
+   * @param {import("node:child_process").ChildProcess} args.child - Forked child process.
+   * @param {ForkedJobTimeoutState} args.state - Timeout state.
+   * @returns {void}
+   */
+  _onForkedJobTimeout({child, state}) {
+    state.timedOut = true
+
+    try {
+      child.kill("SIGTERM")
+    } catch {
+      // Child already exited; nothing to do.
+    }
+
+    state.sigkillTimer = setTimeout(() => {
+      try {
+        child.kill("SIGKILL")
+      } catch {
+        // Child already exited; nothing to do.
+      }
+    }, this.forkedChildSigkillGraceMs)
+  }
+
+  /**
+   * Cancels any pending timeout/SIGKILL timers for a forked runner that has
+   * exited (or errored) so they never fire against a gone or reused child.
+   * @param {ForkedJobTimeoutState} state - Timeout state.
+   * @returns {void}
+   */
+  _clearForkedJobTimeout(state) {
+    if (state.timer) {
+      clearTimeout(state.timer)
+      state.timer = null
+    }
+
+    if (state.sigkillTimer) {
+      clearTimeout(state.sigkillTimer)
+      state.sigkillTimer = null
+    }
+  }
+
+  /**
+   * Runs handle forked child exit.
+   * @param {object} args - Options.
+   * @param {import("node:child_process").ChildProcess} args.child - Forked child process.
+   * @param {number | null} args.code - Exit code.
+   * @param {keyof typeof import("node:os").constants.signals | null} args.signal - Exit signal.
+   * @param {import("./types.js").BackgroundJobPayload & {id: string}} args.payload - Payload.
+   * @param {(value: void) => void} args.resolve - Promise resolver.
+   * @param {ForkedJobTimeoutState} [args.timeoutState] - Timeout state, when the runner had a wall-clock backstop.
+   * @returns {void}
+   */
+  _handleForkedChildExit({child, code, signal, payload, resolve, timeoutState}) {
+    this.inflightProcessChildren.delete(child)
+
+    // Free the worker slot as soon as the child is gone — never gate it on the
+    // failure report. A hung/slow report must not leak the slot; enough leaked
+    // slots drive `acceptsForked` to false and silently wedge the worker.
+    resolve(undefined)
+
+    if (this._forkedChildExitedCleanly({code, signal})) return
+
+    const error = timeoutState?.timedOut
+      ? new Error(`Forked background job runner timed out after ${timeoutState.timeoutMs}ms and was terminated: code=${code} signal=${signal || "none"}`)
+      : new Error(`Forked background job runner exited before reporting: code=${code} signal=${signal || "none"}`)
+
+    this._reportForkedChildFailure({payload, error})
+  }
+
+  /**
+   * Runs forked child exited cleanly.
+   * @param {object} args - Options.
+   * @param {number | null} args.code - Exit code.
+   * @param {keyof typeof import("node:os").constants.signals | null} args.signal - Exit signal.
+   * @returns {boolean} - Whether the child exited cleanly.
+   */
+  _forkedChildExitedCleanly({code, signal}) {
+    return code === 0 && !signal
+  }
+
+  /**
+   * Runs handle forked child error.
+   * @param {object} args - Options.
+   * @param {import("node:child_process").ChildProcess} args.child - Forked child process.
+   * @param {Error} args.error - Child process error.
+   * @param {import("./types.js").BackgroundJobPayload & {id: string}} args.payload - Payload.
+   * @param {(value: void) => void} args.resolve - Promise resolver.
+   * @returns {void}
+   */
+  _handleForkedChildError({child, error, payload, resolve}) {
+    this.inflightProcessChildren.delete(child)
+    // Free the slot first (see _handleForkedChildExit) — reporting is best-effort.
+    resolve(undefined)
+    console.error("Background jobs forked runner error:", error)
+    this._reportForkedChildFailure({payload, error})
+  }
+
+  /**
+   * Runs send forked payload.
+   * @param {object} args - Options.
+   * @param {import("node:child_process").ChildProcess} args.child - Forked child process.
+   * @param {import("./types.js").BackgroundJobPayload & {id: string}} args.payload - Payload.
+   * @returns {void}
+   */
+  _sendForkedPayload({child, payload}) {
+    try {
+      child.send({type: "job", payload})
+    } catch (error) {
+      child.kill("SIGTERM")
+      this._reportForkedChildFailure({payload, error})
+    }
+  }
+
+  /**
+   * Runs report forked child failure.
+   * @param {object} args - Options.
+   * @param {import("./types.js").BackgroundJobPayload & {id: string}} args.payload - Payload.
+   * @param {ReturnType<typeof JSON.parse>} args.error - Error.
+   * @returns {void}
+   */
+  _reportForkedChildFailure({payload, error}) {
+    this._reportJobResultInBackground({
+      jobId: payload.id,
+      status: "failed",
+      error,
+      handoffId: payload.handoffId,
+      handedOffAtMs: payload.handedOffAtMs,
+      workerId: payload.workerId || this.workerId
+    })
+  }
+
+  /**
+   * Runs spawn job.
+   * @param {import("./types.js").BackgroundJobPayload} payload - Payload.
+   * @returns {Promise<void>} - Resolves when the spawned runner exits or spawn fails.
+   */
+  _spawnJob(payload) {
+    const configuration = this.configuration
+    if (!configuration) throw new Error("Background jobs worker configuration not initialized")
+
+    const directory = configuration.getDirectory()
+    const argvCommand = process.argv[1]
+    const command = argvCommand ? argvCommand : `${directory}/bin/velocious.js`
+    const encodedPayload = Buffer.from(JSON.stringify(payload)).toString("base64")
+    const child = spawn(process.execPath, [command, "background-jobs-runner"], {
+      cwd: directory,
+      detached: true,
+      stdio: "ignore",
+      env: Object.assign({}, process.env, this._childBackgroundJobsEnvironment(), {VELOCIOUS_JOB_PAYLOAD: encodedPayload})
+    })
+
+    this.inflightProcessChildren.add(child)
+
+    const finished = new Promise((resolve) => {
+      child.once("exit", () => {
+        this.inflightProcessChildren.delete(child)
+        resolve(undefined)
+      })
+      child.once("error", (error) => {
+        this.inflightProcessChildren.delete(child)
+        console.error("Background jobs spawned runner error:", error)
+        resolve(undefined)
+      })
+    })
+
+    child.unref()
+
+    return finished
+  }
+
+  /**
+   * Builds the exact main endpoint and generation inherited by every child.
+   * @returns {Record<string, string>} - Child process environment additions.
+   */
+  _childBackgroundJobsEnvironment() {
+    const configuration = this.configuration
+    if (!configuration) throw new Error("Background jobs worker configuration not initialized")
+    if (!this.host || typeof this.port !== "number") throw new Error("Background jobs worker endpoint not resolved")
+
+    return {
+      VELOCIOUS_BACKGROUND_JOB_CHILD: "1",
+      VELOCIOUS_ENV: configuration.getEnvironment(),
+      VELOCIOUS_BACKGROUND_JOBS_HOST: this.host,
+      VELOCIOUS_BACKGROUND_JOBS_PORT: `${this.port}`,
+      ...(this.generationId ? {VELOCIOUS_BACKGROUND_JOBS_GENERATION_ID: this.generationId} : {})
+    }
+  }
+
+  /**
+   * Runs report job result.
+   * @param {object} args - Options.
+   * @param {string} args.jobId - Job id.
+   * @param {"completed" | "failed" | "rescheduled"} args.status - Status.
+   * @param {number} [args.delayMs] - Reschedule delay in milliseconds.
+   * @param {ReturnType<typeof JSON.parse>} [args.error] - Error.
+   * @param {string} [args.handoffId] - Handoff lease id.
+   * @param {number} [args.handedOffAtMs] - Handed off timestamp.
+   * @param {string} [args.workerId] - Worker id.
+   * @returns {Promise<void>} - Resolves when reported.
+   */
+  async _reportJobResult({jobId, status, delayMs, error, handoffId, handedOffAtMs, workerId}) {
+    if (!this.statusReporter) return
+
+    try {
+      // Retry a transient persist failure (`job-update-error`): the worker is
+      // long-lived and cannot exit to trigger orphan reclaim, so dropping the
+      // completion here would strand the job in `handed_off` forever — fatal for a
+      // `max_concurrency: 1` job (a stranded row blocks every future run).
+      await this.statusReporter.reportWithRetry({jobId, status, delayMs, error, handoffId, handedOffAtMs, workerId, retryPersistErrors: true})
+    } catch (reportError) {
+      console.error("Background job status reporting failed:", reportError)
+    }
+  }
+
+  /**
+   * Fires a durable job-result report without blocking the caller (so freeing a
+   * job/child slot never waits on the report). The report is tracked so a
+   * graceful `stop()` can drain in-flight reports before closing the socket.
+   * @param {object} args - Options.
+   * @param {string} args.jobId - Job id.
+   * @param {"completed" | "failed" | "rescheduled"} args.status - Status.
+   * @param {number} [args.delayMs] - Reschedule delay in milliseconds.
+   * @param {ReturnType<typeof JSON.parse>} [args.error] - Error.
+   * @param {string} [args.handoffId] - Handoff lease id.
+   * @param {number} [args.handedOffAtMs] - Handed off timestamp.
+   * @param {string} [args.workerId] - Worker id.
+   * @returns {void}
+   */
+  _reportJobResultInBackground({jobId, status, delayMs, error, handoffId, handedOffAtMs, workerId}) {
+    /**
+     * Defines report.
+     * @type {Promise<void>} */
+    let report
+
+    report = this._reportJobResult({jobId, status, delayMs, error, handoffId, handedOffAtMs, workerId}).finally(() => {
+      this.inflightReports.delete(report)
+    })
+
+    this.inflightReports.add(report)
+  }
+}

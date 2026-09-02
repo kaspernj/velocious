@@ -1,0 +1,29 @@
+// @ts-check
+export const DEFAULT_GENERATION_HANDSHAKE_TIMEOUT_MS = 4000;
+/** Actionable failure for an unacknowledged generation hello. */
+export default class BackgroundJobsGenerationHandshakeTimeoutError extends Error {
+    /**
+     * Creates an actionable generation-handshake deadline failure.
+     * @param {object} args - Timeout context.
+     * @param {string} args.endpoint - Main endpoint.
+     * @param {string} args.generationId - Expected generation.
+     * @param {"worker" | "client" | "reporter"} args.role - Initiating peer role.
+     * @param {number} args.timeoutMs - Handshake deadline.
+     */
+    constructor({ endpoint, generationId, role, timeoutMs }) {
+        super(`Background jobs ${role} generation handshake for ${generationId} timed out after ${timeoutMs}ms at ${endpoint}`);
+        this.name = "BackgroundJobsGenerationHandshakeTimeoutError";
+    }
+}
+/**
+ * Validates a generation handshake deadline.
+ * @param {number} timeoutMs - Candidate deadline.
+ * @returns {number} - Valid deadline.
+ */
+export function validateGenerationHandshakeTimeoutMs(timeoutMs) {
+    if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 2_147_483_647) {
+        throw new TypeError("generationHandshakeTimeoutMs must be an integer between 1 and 2147483647");
+    }
+    return timeoutMs;
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZ2VuZXJhdGlvbi1oYW5kc2hha2UtdGltZW91dC1lcnJvci5qcyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbIi4uLy4uLy4uL3NyYy9iYWNrZ3JvdW5kLWpvYnMvZ2VuZXJhdGlvbi1oYW5kc2hha2UtdGltZW91dC1lcnJvci5qcyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQSxZQUFZO0FBRVosTUFBTSxDQUFDLE1BQU0sdUNBQXVDLEdBQUcsSUFBSSxDQUFBO0FBRTNELGlFQUFpRTtBQUNqRSxNQUFNLENBQUMsT0FBTyxPQUFPLDZDQUE4QyxTQUFRLEtBQUs7SUFDOUU7Ozs7Ozs7T0FPRztJQUNILFlBQVksRUFBQyxRQUFRLEVBQUUsWUFBWSxFQUFFLElBQUksRUFBRSxTQUFTLEVBQUM7UUFDbkQsS0FBSyxDQUFDLG1CQUFtQixJQUFJLDZCQUE2QixZQUFZLG9CQUFvQixTQUFTLFNBQVMsUUFBUSxFQUFFLENBQUMsQ0FBQTtRQUN2SCxJQUFJLENBQUMsSUFBSSxHQUFHLCtDQUErQyxDQUFBO0lBQzdELENBQUM7Q0FDRjtBQUVEOzs7O0dBSUc7QUFDSCxNQUFNLFVBQVUsb0NBQW9DLENBQUMsU0FBUztJQUM1RCxJQUFJLENBQUMsTUFBTSxDQUFDLFNBQVMsQ0FBQyxTQUFTLENBQUMsSUFBSSxTQUFTLEdBQUcsQ0FBQyxJQUFJLFNBQVMsR0FBRyxhQUFhLEVBQUUsQ0FBQztRQUMvRSxNQUFNLElBQUksU0FBUyxDQUFDLDBFQUEwRSxDQUFDLENBQUE7SUFDakcsQ0FBQztJQUVELE9BQU8sU0FBUyxDQUFBO0FBQ2xCLENBQUMiLCJzb3VyY2VzQ29udGVudCI6WyIvLyBAdHMtY2hlY2tcblxuZXhwb3J0IGNvbnN0IERFRkFVTFRfR0VORVJBVElPTl9IQU5EU0hBS0VfVElNRU9VVF9NUyA9IDQwMDBcblxuLyoqIEFjdGlvbmFibGUgZmFpbHVyZSBmb3IgYW4gdW5hY2tub3dsZWRnZWQgZ2VuZXJhdGlvbiBoZWxsby4gKi9cbmV4cG9ydCBkZWZhdWx0IGNsYXNzIEJhY2tncm91bmRKb2JzR2VuZXJhdGlvbkhhbmRzaGFrZVRpbWVvdXRFcnJvciBleHRlbmRzIEVycm9yIHtcbiAgLyoqXG4gICAqIENyZWF0ZXMgYW4gYWN0aW9uYWJsZSBnZW5lcmF0aW9uLWhhbmRzaGFrZSBkZWFkbGluZSBmYWlsdXJlLlxuICAgKiBAcGFyYW0ge29iamVjdH0gYXJncyAtIFRpbWVvdXQgY29udGV4dC5cbiAgICogQHBhcmFtIHtzdHJpbmd9IGFyZ3MuZW5kcG9pbnQgLSBNYWluIGVuZHBvaW50LlxuICAgKiBAcGFyYW0ge3N0cmluZ30gYXJncy5nZW5lcmF0aW9uSWQgLSBFeHBlY3RlZCBnZW5lcmF0aW9uLlxuICAgKiBAcGFyYW0ge1wid29ya2VyXCIgfCBcImNsaWVudFwiIHwgXCJyZXBvcnRlclwifSBhcmdzLnJvbGUgLSBJbml0aWF0aW5nIHBlZXIgcm9sZS5cbiAgICogQHBhcmFtIHtudW1iZXJ9IGFyZ3MudGltZW91dE1zIC0gSGFuZHNoYWtlIGRlYWRsaW5lLlxuICAgKi9cbiAgY29uc3RydWN0b3Ioe2VuZHBvaW50LCBnZW5lcmF0aW9uSWQsIHJvbGUsIHRpbWVvdXRNc30pIHtcbiAgICBzdXBlcihgQmFja2dyb3VuZCBqb2JzICR7cm9sZX0gZ2VuZXJhdGlvbiBoYW5kc2hha2UgZm9yICR7Z2VuZXJhdGlvbklkfSB0aW1lZCBvdXQgYWZ0ZXIgJHt0aW1lb3V0TXN9bXMgYXQgJHtlbmRwb2ludH1gKVxuICAgIHRoaXMubmFtZSA9IFwiQmFja2dyb3VuZEpvYnNHZW5lcmF0aW9uSGFuZHNoYWtlVGltZW91dEVycm9yXCJcbiAgfVxufVxuXG4vKipcbiAqIFZhbGlkYXRlcyBhIGdlbmVyYXRpb24gaGFuZHNoYWtlIGRlYWRsaW5lLlxuICogQHBhcmFtIHtudW1iZXJ9IHRpbWVvdXRNcyAtIENhbmRpZGF0ZSBkZWFkbGluZS5cbiAqIEByZXR1cm5zIHtudW1iZXJ9IC0gVmFsaWQgZGVhZGxpbmUuXG4gKi9cbmV4cG9ydCBmdW5jdGlvbiB2YWxpZGF0ZUdlbmVyYXRpb25IYW5kc2hha2VUaW1lb3V0TXModGltZW91dE1zKSB7XG4gIGlmICghTnVtYmVyLmlzSW50ZWdlcih0aW1lb3V0TXMpIHx8IHRpbWVvdXRNcyA8IDEgfHwgdGltZW91dE1zID4gMl8xNDdfNDgzXzY0Nykge1xuICAgIHRocm93IG5ldyBUeXBlRXJyb3IoXCJnZW5lcmF0aW9uSGFuZHNoYWtlVGltZW91dE1zIG11c3QgYmUgYW4gaW50ZWdlciBiZXR3ZWVuIDEgYW5kIDIxNDc0ODM2NDdcIilcbiAgfVxuXG4gIHJldHVybiB0aW1lb3V0TXNcbn1cbiJdfQ==

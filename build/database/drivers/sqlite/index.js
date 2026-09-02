@@ -1,0 +1,424 @@
+// @ts-check
+
+import {createHash} from "node:crypto"
+import wait from "awaitery/build/wait.js"
+import fs from "fs/promises"
+import os from "node:os"
+import path from "node:path"
+import query from "./query.js"
+import sqlite3 from "sqlite3"
+import {open} from "sqlite"
+
+import Base from "./base.js"
+import fileExists from "../../../utils/file-exists.js"
+
+export default class VelociousDatabaseDriversSqliteNode extends Base {
+  /**
+   * Connection.
+   * @type {import("sqlite").Database | undefined} */
+  connection = undefined
+
+  /**
+   * Advisory lock directory.
+   * @type {string | undefined} */
+  _advisoryLockDirectory = undefined
+
+  async connect() {
+    const args = this.getArgs()
+    const databaseDir = `${this.getConfiguration().getDirectory()}/db`
+    const databasePath = this.databasePath()
+
+    if (!await fileExists(databaseDir)) {
+      await fs.mkdir(databaseDir, {recursive: true})
+    }
+
+    if (args.reset) {
+      await fs.unlink(databasePath)
+    }
+
+    this._advisoryLockDirectory = path.join(databaseDir, `${this.localStorageName()}.velocious-advisory-locks`)
+
+    try {
+      this.connection = await open({
+        filename: databasePath,
+        driver: sqlite3.Database
+      })
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(`Couldn't open database ${databasePath} because of ${error.constructor.name}: ${error.message}`, {cause: error})
+      } else {
+        throw new Error(`Couldn't open database ${databasePath} because of ${typeof error}: ${error}`, {cause: error})
+      }
+    }
+
+    await this.registerVersion()
+  }
+
+  localStorageName() {
+    const args = this.getArgs()
+
+    if (!args.name) throw new Error("No name given for SQLite Node")
+
+    return `VelociousDatabaseDriversSqlite---${args.name}`
+  }
+
+  databasePath() {
+    return `${this.getConfiguration().getDirectory()}/db/${this.localStorageName()}.sqlite`
+  }
+
+  async _close() {
+    await this.connection?.close()
+    this.connection = undefined
+  }
+
+  async deleteDatabaseStorage() {
+    for (const suffix of ["", "-wal", "-shm", "-journal"]) {
+      try {
+        await fs.unlink(`${this.databasePath()}${suffix}`)
+      } catch (error) {
+        if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error
+      }
+    }
+  }
+
+  /**
+   * Runs query actual.
+   * @param {string} sql - SQL string.
+   * @param {import("../base.js").QueryOptions} [options] - Query options.
+   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>[]>} - Resolves with the query actual.
+   */
+  async _queryActual(sql, options = {}) {
+    if (!this.connection) throw new Error("No connection")
+
+    if (options.sqliteScript) {
+      await this.connection.exec(sql)
+      return []
+    }
+
+    return await query(this.connection, sql)
+  }
+
+  /**
+   * Executes a mutation with affected-row metadata.
+   * @param {string} sql - Mutation SQL.
+   * @returns {Promise<number>} - Affected row count.
+   */
+  async _affectedRowsActual(sql) {
+    if (!this.connection) throw new Error("No connection")
+    const result = await this.connection.run(sql)
+    return result.changes || 0
+  }
+
+  /**
+   * Layers a filesystem lock directory on top of the in-process waiter
+   * queue so SQLite deployments with multiple Node processes writing to
+   * the same database file see consistent advisory-lock mutual exclusion
+   * across processes, not just within a single process.
+   *
+   * The in-process queue from the shared SQLite base class is still used
+   * for the fast intra-process path (no polling, waiters wake each other
+   * through the `Set<string>` + waiter queue); the filesystem lock is
+   * only checked once the in-process queue has granted the caller, so
+   * typical single-process traffic pays at most two `fs.mkdir` calls
+   * (create and remove) per critical section.
+   * @param {string} name - Lock name.
+   * @param {{timeoutMs?: number | null}} [args] - Optional timeout in milliseconds; `null`, `undefined`, or negative blocks forever.
+   * @returns {Promise<boolean>} - Whether the advisory lock was acquired.
+   */
+  async _acquireAdvisoryLock(name, {timeoutMs} = {}) {
+    const deadline = typeof timeoutMs === "number" && timeoutMs >= 0 ? Date.now() + timeoutMs : null
+    const remainingForInProcess = deadline !== null ? Math.max(0, deadline - Date.now()) : null
+    const inProcessAcquired = await super._acquireAdvisoryLock(name, {timeoutMs: remainingForInProcess})
+
+    if (!inProcessAcquired) return false
+
+    try {
+      const remainingForFile = deadline !== null ? Math.max(0, deadline - Date.now()) : null
+      const fileAcquired = await this._acquireAdvisoryLockFile(name, {timeoutMs: remainingForFile})
+
+      if (!fileAcquired) {
+        await super._releaseAdvisoryLock(name)
+        return false
+      }
+    } catch (error) {
+      await super._releaseAdvisoryLock(name)
+      throw error
+    }
+
+    return true
+  }
+
+  /**
+   * Runs try acquire advisory lock.
+   * @param {string} name - Lock name.
+   * @returns {Promise<boolean>} - Whether the advisory lock was acquired immediately.
+   */
+  async _tryAcquireAdvisoryLock(name) {
+    const inProcessAcquired = await super._tryAcquireAdvisoryLock(name)
+
+    if (!inProcessAcquired) return false
+
+    try {
+      const fileAcquired = await this._tryAcquireAdvisoryLockFile(name)
+
+      if (!fileAcquired) {
+        await super._releaseAdvisoryLock(name)
+        return false
+      }
+    } catch (error) {
+      await super._releaseAdvisoryLock(name)
+      throw error
+    }
+
+    return true
+  }
+
+  /**
+   * Releases the lock only if **this** driver instance acquired it, both
+   * in the shared in-process owner table and in the on-disk lock
+   * directory. A caller that tries to release a lock it never acquired
+   * (or that was already released by another driver) gets `false` back
+   * and the filesystem state is left alone so we never delete somebody
+   * else's lock directory.
+   * @param {string} name - Lock name.
+   * @returns {Promise<boolean>} - Whether the advisory lock was released.
+   */
+  async _releaseAdvisoryLock(name) {
+    const inProcessReleased = await super._releaseAdvisoryLock(name)
+
+    if (inProcessReleased) {
+      await this._releaseAdvisoryLockFile(name)
+    }
+
+    return inProcessReleased
+  }
+
+  /**
+   * Runs is advisory lock held.
+   * @param {string} name - Lock name.
+   * @returns {Promise<boolean>} - Whether the advisory lock is held.
+   */
+  async isAdvisoryLockHeld(name) {
+    if (await super.isAdvisoryLockHeld(name)) return true
+
+    return await this._isAdvisoryLockFileHeld(name)
+  }
+
+  /**
+   * Runs resolve advisory lock directory.
+   * @returns {string} - The advisory-lock directory.
+   */
+  _resolveAdvisoryLockDirectory() {
+    if (!this._advisoryLockDirectory) {
+      // Fall back to deriving the directory for callers that invoked
+      // advisory lock methods before `connect()` wired the field in.
+      const databaseDir = `${this.getConfiguration().getDirectory()}/db`
+
+      this._advisoryLockDirectory = path.join(databaseDir, `${this.localStorageName()}.velocious-advisory-locks`)
+    }
+
+    return this._advisoryLockDirectory
+  }
+
+  /**
+   * Runs advisory lock path.
+   * @param {string} name - Lock name.
+   * @returns {string} - Filesystem path for the advisory lock.
+   */
+  _advisoryLockPath(name) {
+    const hash = createHash("sha256").update(name).digest("hex").slice(0, 16)
+    const safeName = name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 64)
+
+    return path.join(this._resolveAdvisoryLockDirectory(), `${safeName}-${hash}.lock`)
+  }
+
+  /**
+   * Runs ensure advisory lock directory.
+   * @returns {Promise<void>} */
+  async _ensureAdvisoryLockDirectory() {
+    await fs.mkdir(this._resolveAdvisoryLockDirectory(), {recursive: true})
+  }
+
+  /**
+   * Runs write advisory lock metadata.
+   * @param {string} lockDirPath - Absolute path of the lock directory.
+   * @returns {Promise<void>}
+   */
+  async _writeAdvisoryLockMetadata(lockDirPath) {
+    const ownerPath = path.join(lockDirPath, "owner.json")
+    const payload = JSON.stringify({
+      pid: process.pid,
+      hostname: os.hostname(),
+      acquiredAt: new Date().toISOString()
+    })
+
+    await fs.writeFile(ownerPath, payload)
+  }
+
+  /**
+   * Publishes a fully initialized lock directory with one atomic rename.
+   * A losing candidate is removed in the same call, so concurrent acquisition
+   * cannot observe or delete another process's half-written owner metadata.
+   * @param {string} lockPath - Stable advisory-lock path.
+   * @returns {Promise<boolean>} - Whether this candidate became the lock owner.
+   */
+  async _publishAdvisoryLockDirectory(lockPath) {
+    const candidatePath = await fs.mkdtemp(`${lockPath}.pending-`)
+    let published = false
+
+    try {
+      await this._writeAdvisoryLockMetadata(candidatePath)
+
+      try {
+        await fs.rename(candidatePath, lockPath)
+        published = true
+        return true
+      } catch (error) {
+        const code = /** @type {Error & {code?: string}} */ (error)?.code
+
+        if (code === "EEXIST" || code === "ENOTEMPTY") return false
+        throw error
+      }
+    } finally {
+      if (!published) await fs.rm(candidatePath, {force: true, recursive: true})
+    }
+  }
+
+  /**
+   * Runs acquire advisory lock file.
+   * @param {string} name - Lock name.
+   * @param {{timeoutMs?: number | null}} args - Timeout args.
+   * @returns {Promise<boolean>} - Whether the advisory-lock file was acquired.
+   */
+  async _acquireAdvisoryLockFile(name, {timeoutMs}) {
+    await this._ensureAdvisoryLockDirectory()
+
+    const lockPath = this._advisoryLockPath(name)
+    const deadline = typeof timeoutMs === "number" && timeoutMs >= 0 ? Date.now() + timeoutMs : null
+    const pollIntervalMs = 50
+
+    // Intentionally looping without a fixed iteration cap — either the
+    // mkdir succeeds, the deadline elapses, or an unexpected error is
+    // re-thrown.
+    while (true) {
+      if (await this._publishAdvisoryLockDirectory(lockPath)) return true
+
+      if (await this._isAdvisoryLockStale(lockPath)) {
+        await fs.rm(lockPath, {recursive: true, force: true})
+        continue
+      }
+
+      if (deadline !== null) {
+        const remaining = deadline - Date.now()
+
+        if (remaining <= 0) return false
+
+        await wait(Math.min(pollIntervalMs, remaining))
+      } else {
+        await wait(pollIntervalMs)
+      }
+    }
+  }
+
+  /**
+   * Runs try acquire advisory lock file.
+   * @param {string} name - Lock name.
+   * @returns {Promise<boolean>} - Whether the advisory-lock file was acquired immediately.
+   */
+  async _tryAcquireAdvisoryLockFile(name) {
+    await this._ensureAdvisoryLockDirectory()
+
+    const lockPath = this._advisoryLockPath(name)
+
+    if (await this._publishAdvisoryLockDirectory(lockPath)) return true
+
+    if (await this._isAdvisoryLockStale(lockPath)) {
+      await fs.rm(lockPath, {recursive: true, force: true})
+      return await this._publishAdvisoryLockDirectory(lockPath)
+    }
+
+    return false
+  }
+
+  /**
+   * Runs release advisory lock file.
+   * @param {string} name - Lock name.
+   * @returns {Promise<void>}
+   */
+  async _releaseAdvisoryLockFile(name) {
+    const lockPath = this._advisoryLockPath(name)
+
+    try {
+      await fs.rm(lockPath, {recursive: true, force: true})
+    } catch {
+      // Best-effort release; in-process state is still authoritative and
+      // stale-lock cleanup on the next acquire will remove the directory
+      // if it really is still lingering.
+    }
+  }
+
+  /**
+   * Runs is advisory lock file held.
+   * @param {string} name - Lock name.
+   * @returns {Promise<boolean>} - Whether the advisory-lock file exists and is active.
+   */
+  async _isAdvisoryLockFileHeld(name) {
+    const lockPath = this._advisoryLockPath(name)
+
+    try {
+      await fs.stat(lockPath)
+    } catch {
+      return false
+    }
+
+    return !await this._isAdvisoryLockStale(lockPath)
+  }
+
+  /**
+   * A lock directory is considered stale when its owner metadata names a
+   * PID on this host that is no longer running. Cross-host ownership (a
+   * different `hostname`) is treated as live because we cannot reliably
+   * probe a PID on another machine; operators in that situation should
+   * remove stale lock directories by hand if they linger.
+   * @param {string} lockPath - Absolute path of the lock directory.
+   * @returns {Promise<boolean>} - Whether the advisory-lock file is stale.
+   */
+  async _isAdvisoryLockStale(lockPath) {
+    /**
+     * Defines rawOwner.
+     * @type {string} */
+    let rawOwner
+
+    try {
+      rawOwner = await fs.readFile(path.join(lockPath, "owner.json"), "utf8")
+    } catch {
+      // Missing or unreadable metadata — treat as stale so we can reclaim.
+      return true
+    }
+
+    /**
+     * Defines owner.
+     * @type {{pid?: number, hostname?: string}} */
+    let owner
+
+    try {
+      owner = JSON.parse(rawOwner)
+    } catch {
+      return true
+    }
+
+    if (!owner || typeof owner.pid !== "number") return true
+    if (owner.hostname && owner.hostname !== os.hostname()) return false
+
+    try {
+      // `kill(pid, 0)` is a no-op signal that fails with ESRCH if the
+      // process is not running; permission errors still indicate the
+      // process exists so we treat those as "not stale".
+      process.kill(owner.pid, 0)
+
+      return false
+    } catch (error) {
+      return /** @type {Error & {code?: string}} */ (error)?.code === "ESRCH"
+    }
+  }
+}

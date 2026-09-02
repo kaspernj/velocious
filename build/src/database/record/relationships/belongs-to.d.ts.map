@@ -1,0 +1,1 @@
+{"version":3,"file":"belongs-to.d.ts","sourceRoot":"","sources":["../../../../../src/database/record/relationships/belongs-to.js"],"names":[],"mappings":"AAEA,OAAO,gBAAgB,MAAM,WAAW,CAAA;AAGxC,MAAM,CAAC,OAAO,OAAO,4CAA6C,SAAQ,gBAAgB;IA2B/E,+BAA+B;IA1BxC;;;OAGG;IACH,aAAa,IAFA,MAAM,CAgBlB;IAED;;;OAGG;IACH,YAAY,IAFC,MAAM,GAAG,SAAS,CA2B9B;CACF"}

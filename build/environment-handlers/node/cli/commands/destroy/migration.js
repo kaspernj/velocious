@@ -1,0 +1,47 @@
+import BaseCommand from "../../../../../cli/base-command.js"
+import fs from "fs/promises"
+
+/**
+ * DbDestroyMigration class.
+ * @typedef {{destroyed: string[]}} DestroyMigrationResult
+ */
+
+export default class DbDestroyMigration extends BaseCommand {
+  /**
+   * Runs execute.
+   * @returns {Promise<void | DestroyMigrationResult>} - Resolves with the execute.
+   */
+  async execute() {
+    const migrationName = this.processArgs?.[1]
+
+    if (!migrationName) throw new Error("Expected migration name")
+
+    const migrationDir = `${this.getConfiguration().getDirectory()}/src/database/migrations`
+    const migrationFiles = await fs.readdir(migrationDir)
+    const destroyed = []
+
+    for (const migrationFile of migrationFiles) {
+      const match = migrationFile.match(/^(\d{14})-(.+)\.js$/)
+
+      if (!match) {
+        continue
+      }
+
+      const fileName = match[2]
+
+      if (fileName != migrationName) continue
+
+      const fullFilePath = `${migrationDir}/${migrationFile}`
+      destroyed.push(fileName)
+
+      if (!this.args.testing) {
+        console.log(`Destroy src/database/migrations/${migrationFile}`)
+        await fs.unlink(fullFilePath)
+      }
+    }
+
+    if (this.args.testing) {
+      return {destroyed}
+    }
+  }
+}

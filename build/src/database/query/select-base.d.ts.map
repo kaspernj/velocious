@@ -1,0 +1,1 @@
+{"version":3,"file":"select-base.d.ts","sourceRoot":"","sources":["../../../../src/database/query/select-base.js"],"names":[],"mappings":"AAEA,MAAM,CAAC,OAAO,OAAO,gCAAgC;IAgB5C,KAAK;IAfZ;;;OAGG;IACH,UAAU,IAFG,OAAO,4BAA4B,EAAE,OAAO,CAMxD;IAED;;;OAGG;IACH,QAAQ,CAAC,KAAK,EAFH,OAAO,YAAY,EAAE,OAElB,QAEb;IAED;;;;OAIG;IACH,KAAK,IAFQ,MAAM,CAIlB;CACF"}
