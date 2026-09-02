@@ -2,7 +2,7 @@
 
 import path from "path"
 import {fileURLToPath} from "url"
-import { waitForEvent } from "@velocious/testing"
+import {defaultTestContext, waitForEvent} from "@velocious/testing"
 import EventEmitter from "../utils/event-emitter.js"
 import Expect from "./expect.js"
 import {arrayContaining, objectContaining} from "./expect-utils.js"
@@ -60,6 +60,7 @@ function captureLocation() {
 
     if (!trimmed.includes("at")) continue
     if (trimmed.includes("/src/testing/test.js")) continue
+    if (trimmed.includes("/@velocious/testing/")) continue
 
     const match = trimmed.match(/(?:\(|\s)(file:\/\/.*?|\/.*?):(\d+):(\d+)\)?$/)
 
@@ -79,6 +80,8 @@ function captureLocation() {
 
   return {}
 }
+
+defaultTestContext.setDeclarationLocator(captureLocation)
 
 /**
  * Runs normalize tags.
