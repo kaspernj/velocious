@@ -523,7 +523,7 @@ export default class VelociousDatabaseMigrator {
     if (!migrationClass || typeof migrationClass !== "function") {
       throw new Error(`Migration ${migration.file} must export a default migration class. Type: ${typeof migrationClass}`)
     }
-    if (!migrationRunsInExecutionPhase(migrationClass, this.executionPhase)) return false
+    if (direction == "up" && !migrationRunsInExecutionPhase(migrationClass, this.executionPhase)) return false
 
     const migrationDatabaseIdentifiers = migrationClass.getDatabaseIdentifiers() || ["default"]
 

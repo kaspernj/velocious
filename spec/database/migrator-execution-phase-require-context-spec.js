@@ -101,6 +101,53 @@ describe("Database migrator execution-phase selection for require contexts", () 
     }
   })
 
+  it("keeps rollback phase-agnostic and reverses the latest applied migration", async () => {
+    const {cleanup, configuration} = await buildConfiguration("velocious-migrator-phase-rollback")
+
+    class CreatePreRuntimeRollbackTable extends Migration {
+      async up() { await this.execute("CREATE TABLE pre_runtime_rollback_items(id integer PRIMARY KEY)") }
+      async down() { await this.execute("DROP TABLE pre_runtime_rollback_items") }
+    }
+    class CreatePostPublicationRollbackTable extends Migration {
+      async up() { await this.execute("CREATE TABLE post_publication_rollback_items(id integer PRIMARY KEY)") }
+      async down() { await this.execute("DROP TABLE post_publication_rollback_items") }
+    }
+
+    CreatePostPublicationRollbackTable.runInPhase("post-publication")
+
+    const files = [
+      {date: 20260901002100, file: "20260901002100-create-pre-runtime-rollback-table.js", fullPath: "/pre-runtime", migrationClassName: "CreatePreRuntimeRollbackTable"},
+      {date: 20260901002200, file: "20260901002200-create-post-publication-rollback-table.js", fullPath: "/post-publication", migrationClassName: "CreatePostPublicationRollbackTable"}
+    ]
+    const migrationClasses = new Map([
+      ["/pre-runtime", CreatePreRuntimeRollbackTable],
+      ["/post-publication", CreatePostPublicationRollbackTable]
+    ])
+    const importMigration = async (fullPath) => migrationClasses.get(fullPath)
+
+    try {
+      await configuration.ensureConnections(async (dbs) => {
+        const unfilteredMigrator = new Migrator({configuration})
+
+        await unfilteredMigrator.prepare()
+        await unfilteredMigrator.migrateFiles(files, importMigration)
+
+        const preRuntimeMigrator = new Migrator({configuration, executionPhase: "pre-runtime"})
+
+        await preRuntimeMigrator.prepare()
+        await preRuntimeMigrator.rollback(files, importMigration)
+
+        expect(await dbs.default.tableExists("pre_runtime_rollback_items")).toEqual(true)
+        expect(await dbs.default.tableExists("post_publication_rollback_items")).toEqual(false)
+        expect(await dbs.default.query("SELECT version FROM schema_migrations ORDER BY version")).toEqual([
+          {version: "20260901002100"}
+        ])
+      })
+    } finally {
+      await cleanup()
+    }
+  })
+
   it("applies the same selection to a captured physical database", async () => {
     const {cleanup, configuration} = await buildConfiguration("velocious-migrator-phase-captured")
 
