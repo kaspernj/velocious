@@ -618,7 +618,7 @@ export default class BackgroundJobsMain {
    */
   retire() {
     if (!this.generationId) throw new Error("Background jobs generation retirement requires generation mode")
-    if (this.lifecycleState === "retiring" || this.lifecycleState === "retired") return this._retirementPromise || Promise.resolve()
+    if (this.lifecycleState === "retiring" || this.lifecycleState === "retired") return Promise.resolve()
     if (this.lifecycleState !== "active") throw new Error(`Cannot retire background jobs generation from ${this.lifecycleState}`)
 
     this.lifecycleState = "retiring"
@@ -630,7 +630,7 @@ export default class BackgroundJobsMain {
     this._retirementPromise = this._retire()
     void this._retirementPromise.catch((error) => this._reportConnectionHandlerError(error))
 
-    return this._retirementPromise
+    return Promise.resolve()
   }
 
   /**
