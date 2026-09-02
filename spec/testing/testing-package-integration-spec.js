@@ -46,7 +46,7 @@ describe("@velocious/testing integration", {databaseCleaning: {transaction: fals
   it("uses the exact package version as a runtime dependency", async () => {
     const packageJson = JSON.parse(await fs.readFile(path.join(repositoryDirectory, "package.json"), "utf8"))
 
-    expect(packageJson.dependencies["@velocious/testing"]).toEqual("0.0.2")
+    expect(packageJson.dependencies["@velocious/testing"]).toEqual("0.0.1")
     expect(packageJson.devDependencies["@velocious/testing"]).toEqual(undefined)
   })
 

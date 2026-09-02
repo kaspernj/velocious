@@ -178,7 +178,7 @@ Baselines are generated against a fresh checkout (no generated dummy `configurat
 # Testing
 
 Application tests may import the testing DSL from the independent public package.
-`@velocious/testing` `0.0.2` uses one compatible default registry across installed copies,
+`@velocious/testing` `0.0.1` uses one compatible default registry across installed copies,
 and the framework runner discovers these declarations while retaining its database,
 request, retry, profiling, and cleanup behavior. The existing Velocious facade remains
 supported.

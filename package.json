@@ -64,7 +64,7 @@
   "description": "",
   "dependencies": {
     "@js-temporal/polyfill": "^0.5.1",
-    "@velocious/testing": "0.0.2",
+    "@velocious/testing": "0.0.1",
     "awaitery": "^1.0.19",
     "bcryptjs": "^3.0.2",
     "better-localstorage": "^1.0.7",
