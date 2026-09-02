@@ -1,0 +1,27 @@
+// @ts-check
+/**
+ * Runs normalize background job error.
+ * @param {ReturnType<typeof JSON.parse>} error - Error input.
+ * @returns {string} - Normalized error string.
+ */
+export default function normalizeBackgroundJobError(error) {
+    if (error instanceof Error)
+        return error.stack || error.message;
+    if (typeof error === "string")
+        return error;
+    return stringifyUnknownError(error);
+}
+/**
+ * Runs stringify unknown error.
+ * @param {ReturnType<typeof JSON.parse>} error - Error input.
+ * @returns {string} - Stringified error.
+ */
+function stringifyUnknownError(error) {
+    try {
+        return JSON.stringify(error);
+    }
+    catch {
+        return String(error);
+    }
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoibm9ybWFsaXplLWVycm9yLmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiLi4vLi4vLi4vc3JjL2JhY2tncm91bmQtam9icy9ub3JtYWxpemUtZXJyb3IuanMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBQUEsWUFBWTtBQUVaOzs7O0dBSUc7QUFDSCxNQUFNLENBQUMsT0FBTyxVQUFVLDJCQUEyQixDQUFDLEtBQUs7SUFDdkQsSUFBSSxLQUFLLFlBQVksS0FBSztRQUFFLE9BQU8sS0FBSyxDQUFDLEtBQUssSUFBSSxLQUFLLENBQUMsT0FBTyxDQUFBO0lBQy9ELElBQUksT0FBTyxLQUFLLEtBQUssUUFBUTtRQUFFLE9BQU8sS0FBSyxDQUFBO0lBRTNDLE9BQU8scUJBQXFCLENBQUMsS0FBSyxDQUFDLENBQUE7QUFDckMsQ0FBQztBQUVEOzs7O0dBSUc7QUFDSCxTQUFTLHFCQUFxQixDQUFDLEtBQUs7SUFDbEMsSUFBSSxDQUFDO1FBQ0gsT0FBTyxJQUFJLENBQUMsU0FBUyxDQUFDLEtBQUssQ0FBQyxDQUFBO0lBQzlCLENBQUM7SUFBQyxNQUFNLENBQUM7UUFDUCxPQUFPLE1BQU0sQ0FBQyxLQUFLLENBQUMsQ0FBQTtJQUN0QixDQUFDO0FBQ0gsQ0FBQyIsInNvdXJjZXNDb250ZW50IjpbIi8vIEB0cy1jaGVja1xuXG4vKipcbiAqIFJ1bnMgbm9ybWFsaXplIGJhY2tncm91bmQgam9iIGVycm9yLlxuICogQHBhcmFtIHtSZXR1cm5UeXBlPHR5cGVvZiBKU09OLnBhcnNlPn0gZXJyb3IgLSBFcnJvciBpbnB1dC5cbiAqIEByZXR1cm5zIHtzdHJpbmd9IC0gTm9ybWFsaXplZCBlcnJvciBzdHJpbmcuXG4gKi9cbmV4cG9ydCBkZWZhdWx0IGZ1bmN0aW9uIG5vcm1hbGl6ZUJhY2tncm91bmRKb2JFcnJvcihlcnJvcikge1xuICBpZiAoZXJyb3IgaW5zdGFuY2VvZiBFcnJvcikgcmV0dXJuIGVycm9yLnN0YWNrIHx8IGVycm9yLm1lc3NhZ2VcbiAgaWYgKHR5cGVvZiBlcnJvciA9PT0gXCJzdHJpbmdcIikgcmV0dXJuIGVycm9yXG5cbiAgcmV0dXJuIHN0cmluZ2lmeVVua25vd25FcnJvcihlcnJvcilcbn1cblxuLyoqXG4gKiBSdW5zIHN0cmluZ2lmeSB1bmtub3duIGVycm9yLlxuICogQHBhcmFtIHtSZXR1cm5UeXBlPHR5cGVvZiBKU09OLnBhcnNlPn0gZXJyb3IgLSBFcnJvciBpbnB1dC5cbiAqIEByZXR1cm5zIHtzdHJpbmd9IC0gU3RyaW5naWZpZWQgZXJyb3IuXG4gKi9cbmZ1bmN0aW9uIHN0cmluZ2lmeVVua25vd25FcnJvcihlcnJvcikge1xuICB0cnkge1xuICAgIHJldHVybiBKU09OLnN0cmluZ2lmeShlcnJvcilcbiAgfSBjYXRjaCB7XG4gICAgcmV0dXJuIFN0cmluZyhlcnJvcilcbiAgfVxufVxuIl19

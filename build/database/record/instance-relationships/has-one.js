@@ -1,0 +1,117 @@
+// @ts-check
+
+import BaseInstanceRelationship from "./base.js"
+
+/**
+ * A generic query over some model type.
+ * @template {typeof import("../index.js").default} MC
+ * @template {typeof import("../index.js").default} TMC
+ * @augments {BaseInstanceRelationship<MC, TMC>}
+ */
+export default class VelociousDatabaseRecordHasOneInstanceRelationship extends BaseInstanceRelationship {
+  /**
+   * Runs constructor.
+   * @param {import("./base.js").InstanceRelationshipsBaseArgs<MC, TMC>} args - Options object.
+   */
+  constructor(args) {
+    super(args)
+  }
+
+  /**
+   * Loaded.
+   * @type {InstanceType<TMC> | undefined} */
+  _loaded = undefined
+
+  /**
+   * Runs build.
+   * @param {ConstructorParameters<TMC>[0]} data - Target model write attributes.
+   * @returns {InstanceType<TMC>} - The build.
+   */
+  build(data) {
+    const TargetModelClass = this.getBoundTargetModelClass()
+
+    if (!TargetModelClass) throw new Error("Can't build a new record without a target model class")
+
+    const newInstance = this.getModel().bindRelatedRecord(
+      /** @type {InstanceType<TMC>} */ (new TargetModelClass(data))
+    )
+
+    this._loaded = newInstance
+
+    return newInstance
+  }
+
+  async load() {
+    // Force-reload: discard the cached value and fetch fresh. When the parent
+    // record was loaded as part of a batch, batch the has-one lookup across
+    // cohort siblings that have not preloaded this relationship yet.
+    this._preloaded = false
+    this._loaded = undefined
+
+    const batched = await this._tryCohortPreload()
+
+    if (batched) return this.loaded()
+
+    const foreignKey = this.getForeignKey()
+    const primaryKey = this.getPrimaryKey()
+    const primaryModelID = /** @type {string | number} */ (this.getModel().readColumn(primaryKey))
+    const TargetModelClass = /** @type {TMC} */ (this.getTargetModelClass())
+
+    if (!TargetModelClass) throw new Error("Can't load without a target model class")
+
+    /**
+     * Where args.
+     * @type {Record<string, string | number>} */
+    const whereArgs = {}
+
+    whereArgs[foreignKey] = primaryModelID
+
+    if (this.getRelationship().getPolymorphic()) {
+      const typeColumn = this.getRelationship().getPolymorphicTypeColumn()
+
+      whereArgs[typeColumn] = this.getModel().getModelClass().getModelName()
+    }
+
+    let query = this.getModel().queryForModel(TargetModelClass).where(whereArgs)
+
+    query = this.applyScope(query)
+
+    const foreignModel = await query.first()
+
+    if (foreignModel) {
+      this.setLoaded(foreignModel)
+    } else {
+      this.setLoaded(undefined)
+    }
+    this.setDirty(false)
+    this.setPreloaded(true)
+
+    return this.loaded()
+  }
+
+  /**
+   * Runs loaded.
+   * @returns {InstanceType<TMC> | Array<InstanceType<TMC>> | undefined} The loaded model or models (depending on relationship type)
+   */
+  loaded() {
+    if (!this._preloaded && this.model.isPersisted()) {
+      throw new Error(`${this.model.constructor.name}#${this.relationship.getRelationshipName()} hasn't been preloaded`)
+    }
+
+    return this._loaded
+  }
+
+  getLoadedOrUndefined() { return this._loaded }
+
+  /**
+   * Runs set loaded.
+   * @param {InstanceType<TMC> | Array<InstanceType<TMC>> | undefined} model - Related model(s).
+   */
+  setLoaded(model) {
+    if (Array.isArray(model)) throw new Error(`Argument given to setLoaded was an array: ${typeof model}`)
+
+    this._loaded = model
+  }
+
+  getTargetModelClass() { return /** @type {TMC | undefined} */ (this.relationship.getTargetModelClass()) }
+}

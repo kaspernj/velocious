@@ -1,0 +1,14 @@
+// @ts-check
+/** Internal control flow raised by `VelociousJob#rescheduleIn`. */
+export default class BackgroundJobRescheduleSignal extends Error {
+    /**
+     * Creates a reschedule control signal.
+     * @param {number} delayMs - Reschedule delay in milliseconds.
+     */
+    constructor(delayMs) {
+        super(`Reschedule background job in ${delayMs}ms`);
+        this.name = "BackgroundJobRescheduleSignal";
+        this.delayMs = delayMs;
+    }
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoicmVzY2hlZHVsZS1zaWduYWwuanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuLi8uLi8uLi9zcmMvYmFja2dyb3VuZC1qb2JzL3Jlc2NoZWR1bGUtc2lnbmFsLmpzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQUFBLFlBQVk7QUFFWixtRUFBbUU7QUFDbkUsTUFBTSxDQUFDLE9BQU8sT0FBTyw2QkFBOEIsU0FBUSxLQUFLO0lBQzlEOzs7T0FHRztJQUNILFlBQVksT0FBTztRQUNqQixLQUFLLENBQUMsZ0NBQWdDLE9BQU8sSUFBSSxDQUFDLENBQUE7UUFDbEQsSUFBSSxDQUFDLElBQUksR0FBRywrQkFBK0IsQ0FBQTtRQUMzQyxJQUFJLENBQUMsT0FBTyxHQUFHLE9BQU8sQ0FBQTtJQUN4QixDQUFDO0NBQ0YiLCJzb3VyY2VzQ29udGVudCI6WyIvLyBAdHMtY2hlY2tcblxuLyoqIEludGVybmFsIGNvbnRyb2wgZmxvdyByYWlzZWQgYnkgYFZlbG9jaW91c0pvYiNyZXNjaGVkdWxlSW5gLiAqL1xuZXhwb3J0IGRlZmF1bHQgY2xhc3MgQmFja2dyb3VuZEpvYlJlc2NoZWR1bGVTaWduYWwgZXh0ZW5kcyBFcnJvciB7XG4gIC8qKlxuICAgKiBDcmVhdGVzIGEgcmVzY2hlZHVsZSBjb250cm9sIHNpZ25hbC5cbiAgICogQHBhcmFtIHtudW1iZXJ9IGRlbGF5TXMgLSBSZXNjaGVkdWxlIGRlbGF5IGluIG1pbGxpc2Vjb25kcy5cbiAgICovXG4gIGNvbnN0cnVjdG9yKGRlbGF5TXMpIHtcbiAgICBzdXBlcihgUmVzY2hlZHVsZSBiYWNrZ3JvdW5kIGpvYiBpbiAke2RlbGF5TXN9bXNgKVxuICAgIHRoaXMubmFtZSA9IFwiQmFja2dyb3VuZEpvYlJlc2NoZWR1bGVTaWduYWxcIlxuICAgIHRoaXMuZGVsYXlNcyA9IGRlbGF5TXNcbiAgfVxufVxuIl19

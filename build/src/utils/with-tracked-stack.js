@@ -1,0 +1,29 @@
+// @ts-check
+/**
+ * Tracked stack global.
+ * @type {{withTrackedStack?: {withTrackedStack?: (stack: string | undefined, fn: () => Promise<ReturnType<typeof JSON.parse>>) => Promise<ReturnType<typeof JSON.parse>>, addTrackedStackToError?: (error: Error) => void}}} */
+const trackedStackGlobal = /** @type {ReturnType<typeof JSON.parse>} */ (globalThis);
+/**
+ * Runs add tracked stack to error.
+ * @param {Error} error - Error to annotate with a tracked stack.
+ */
+function addTrackedStackToError(error) {
+    trackedStackGlobal.withTrackedStack?.addTrackedStackToError?.(error);
+}
+/**
+ * Runs with tracked stack.
+ * @param {string | (() => Promise<ReturnType<typeof JSON.parse>>)} stackOrCallback - Stack string or callback.
+ * @param {(() => Promise<ReturnType<typeof JSON.parse>>)} [callback] - Callback to execute.
+ * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with value.
+ */
+async function withTrackedStack(stackOrCallback, callback) {
+    const tracked = trackedStackGlobal.withTrackedStack?.withTrackedStack;
+    const resolvedCallback = callback ?? /** @type {() => Promise<ReturnType<typeof JSON.parse>>} */ (stackOrCallback);
+    const stack = typeof stackOrCallback == "string" ? stackOrCallback : undefined;
+    if (tracked) {
+        return await tracked(stack, resolvedCallback);
+    }
+    return await resolvedCallback();
+}
+export { addTrackedStackToError, withTrackedStack };
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoid2l0aC10cmFja2VkLXN0YWNrLmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiLi4vLi4vLi4vc3JjL3V0aWxzL3dpdGgtdHJhY2tlZC1zdGFjay5qcyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQSxZQUFZO0FBRVo7O2dPQUVnTztBQUNoTyxNQUFNLGtCQUFrQixHQUFHLDRDQUE0QyxDQUFDLENBQUMsVUFBVSxDQUFDLENBQUE7QUFFcEY7OztHQUdHO0FBQ0gsU0FBUyxzQkFBc0IsQ0FBQyxLQUFLO0lBQ25DLGtCQUFrQixDQUFDLGdCQUFnQixFQUFFLHNCQUFzQixFQUFFLENBQUMsS0FBSyxDQUFDLENBQUE7QUFDdEUsQ0FBQztBQUVEOzs7OztHQUtHO0FBQ0gsS0FBSyxVQUFVLGdCQUFnQixDQUFDLGVBQWUsRUFBRSxRQUFRO0lBQ3ZELE1BQU0sT0FBTyxHQUFHLGtCQUFrQixDQUFDLGdCQUFnQixFQUFFLGdCQUFnQixDQUFBO0lBQ3JFLE1BQU0sZ0JBQWdCLEdBQUcsUUFBUSxJQUFJLDJEQUEyRCxDQUFDLENBQUMsZUFBZSxDQUFDLENBQUE7SUFDbEgsTUFBTSxLQUFLLEdBQUcsT0FBTyxlQUFlLElBQUksUUFBUSxDQUFDLENBQUMsQ0FBQyxlQUFlLENBQUMsQ0FBQyxDQUFDLFNBQVMsQ0FBQTtJQUU5RSxJQUFJLE9BQU8sRUFBRSxDQUFDO1FBQ1osT0FBTyxNQUFNLE9BQU8sQ0FBQyxLQUFLLEVBQUUsZ0JBQWdCLENBQUMsQ0FBQTtJQUMvQyxDQUFDO0lBRUQsT0FBTyxNQUFNLGdCQUFnQixFQUFFLENBQUE7QUFDakMsQ0FBQztBQUVELE9BQU8sRUFBQyxzQkFBc0IsRUFBRSxnQkFBZ0IsRUFBQyxDQUFBIiwic291cmNlc0NvbnRlbnQiOlsiLy8gQHRzLWNoZWNrXG5cbi8qKlxuICogVHJhY2tlZCBzdGFjayBnbG9iYWwuXG4gKiBAdHlwZSB7e3dpdGhUcmFja2VkU3RhY2s/OiB7d2l0aFRyYWNrZWRTdGFjaz86IChzdGFjazogc3RyaW5nIHwgdW5kZWZpbmVkLCBmbjogKCkgPT4gUHJvbWlzZTxSZXR1cm5UeXBlPHR5cGVvZiBKU09OLnBhcnNlPj4pID0+IFByb21pc2U8UmV0dXJuVHlwZTx0eXBlb2YgSlNPTi5wYXJzZT4+LCBhZGRUcmFja2VkU3RhY2tUb0Vycm9yPzogKGVycm9yOiBFcnJvcikgPT4gdm9pZH19fSAqL1xuY29uc3QgdHJhY2tlZFN0YWNrR2xvYmFsID0gLyoqIEB0eXBlIHtSZXR1cm5UeXBlPHR5cGVvZiBKU09OLnBhcnNlPn0gKi8gKGdsb2JhbFRoaXMpXG5cbi8qKlxuICogUnVucyBhZGQgdHJhY2tlZCBzdGFjayB0byBlcnJvci5cbiAqIEBwYXJhbSB7RXJyb3J9IGVycm9yIC0gRXJyb3IgdG8gYW5ub3RhdGUgd2l0aCBhIHRyYWNrZWQgc3RhY2suXG4gKi9cbmZ1bmN0aW9uIGFkZFRyYWNrZWRTdGFja1RvRXJyb3IoZXJyb3IpIHtcbiAgdHJhY2tlZFN0YWNrR2xvYmFsLndpdGhUcmFja2VkU3RhY2s/LmFkZFRyYWNrZWRTdGFja1RvRXJyb3I/LihlcnJvcilcbn1cblxuLyoqXG4gKiBSdW5zIHdpdGggdHJhY2tlZCBzdGFjay5cbiAqIEBwYXJhbSB7c3RyaW5nIHwgKCgpID0+IFByb21pc2U8UmV0dXJuVHlwZTx0eXBlb2YgSlNPTi5wYXJzZT4+KX0gc3RhY2tPckNhbGxiYWNrIC0gU3RhY2sgc3RyaW5nIG9yIGNhbGxiYWNrLlxuICogQHBhcmFtIHsoKCkgPT4gUHJvbWlzZTxSZXR1cm5UeXBlPHR5cGVvZiBKU09OLnBhcnNlPj4pfSBbY2FsbGJhY2tdIC0gQ2FsbGJhY2sgdG8gZXhlY3V0ZS5cbiAqIEByZXR1cm5zIHtQcm9taXNlPFJldHVyblR5cGU8dHlwZW9mIEpTT04ucGFyc2U+Pn0gLSBSZXNvbHZlcyB3aXRoIHZhbHVlLlxuICovXG5hc3luYyBmdW5jdGlvbiB3aXRoVHJhY2tlZFN0YWNrKHN0YWNrT3JDYWxsYmFjaywgY2FsbGJhY2spIHtcbiAgY29uc3QgdHJhY2tlZCA9IHRyYWNrZWRTdGFja0dsb2JhbC53aXRoVHJhY2tlZFN0YWNrPy53aXRoVHJhY2tlZFN0YWNrXG4gIGNvbnN0IHJlc29sdmVkQ2FsbGJhY2sgPSBjYWxsYmFjayA/PyAvKiogQHR5cGUgeygpID0+IFByb21pc2U8UmV0dXJuVHlwZTx0eXBlb2YgSlNPTi5wYXJzZT4+fSAqLyAoc3RhY2tPckNhbGxiYWNrKVxuICBjb25zdCBzdGFjayA9IHR5cGVvZiBzdGFja09yQ2FsbGJhY2sgPT0gXCJzdHJpbmdcIiA/IHN0YWNrT3JDYWxsYmFjayA6IHVuZGVmaW5lZFxuXG4gIGlmICh0cmFja2VkKSB7XG4gICAgcmV0dXJuIGF3YWl0IHRyYWNrZWQoc3RhY2ssIHJlc29sdmVkQ2FsbGJhY2spXG4gIH1cblxuICByZXR1cm4gYXdhaXQgcmVzb2x2ZWRDYWxsYmFjaygpXG59XG5cbmV4cG9ydCB7YWRkVHJhY2tlZFN0YWNrVG9FcnJvciwgd2l0aFRyYWNrZWRTdGFja31cbiJdfQ==

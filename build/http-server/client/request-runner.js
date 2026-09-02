@@ -1,0 +1,348 @@
+// @ts-check
+
+import {ensureError} from "typanic"
+import BacktraceCleaner from "../../utils/backtrace-cleaner-node.js"
+import EventEmitter from "../../utils/event-emitter.js"
+import Logger from "../../logger.js"
+import RequestTiming from "./request-timing.js"
+import Response from "./response.js"
+import RoutesResolver from "../../routes/resolver.js"
+import {REQUEST_TIME_ZONE_HEADER} from "../../time-zone.js"
+
+/**
+ * Runs stack frame line.
+ * @param {string | undefined} line - Potential header line.
+ * @returns {boolean} - Whether the line is a stack frame.
+ */
+function stackFrameLine(line) {
+  if (!line) return false
+
+  return /^at\s+/u.test(line.trim())
+}
+
+/**
+ * Runs request error summary.
+ * @param {Error} error - Error to format for logging.
+ * @param {string | undefined} cleanedStackWithHeader - Cleaned stack with header line.
+ * @returns {string} - Error summary line with type information.
+ */
+function requestErrorSummary(error, cleanedStackWithHeader) {
+  const stackHeader = cleanedStackWithHeader?.split("\n")[0]?.trim()
+
+  if (stackHeader && !stackFrameLine(stackHeader)) return stackHeader
+
+  const errorCode = typeof /** @type {ReturnType<typeof JSON.parse>} */ (error).code === "string"
+    ? /** @type {ReturnType<typeof JSON.parse>} */ (error).code
+    : undefined
+  const errorMessage = error.message || String(error)
+
+  if (errorCode) return `${error.name} [${errorCode}]: ${errorMessage}`
+
+  return `${error.name}: ${errorMessage}`
+}
+
+/**
+ * Runs request error log details.
+ * @param {Error} error - Error to format for logging.
+ * @returns {{
+ *   errorSummary: string,
+ *   cleanedBacktrace: string | undefined,
+ * }} - Log details.
+ */
+function requestErrorLogDetails(error) {
+  const cleanedStackWithHeader = BacktraceCleaner.getCleanedStack(error)
+  const errorSummary = requestErrorSummary(error, cleanedStackWithHeader)
+  const cleanedBacktrace = BacktraceCleaner.getCleanedStack(error, {includeErrorHeader: false}) || cleanedStackWithHeader
+
+  return {errorSummary, cleanedBacktrace}
+}
+
+/**
+ * Runs request error log message.
+ * @param {{
+ *   errorSummary: string,
+ *   cleanedBacktrace: string | undefined,
+ * }} logDetails - Log details.
+ * @returns {string} - Single request error log message.
+ */
+function requestErrorLogMessage(logDetails) {
+  if (!logDetails.cleanedBacktrace) {
+    return `Error while running request: ${logDetails.errorSummary}`
+  }
+
+  return `Error while running request: ${logDetails.errorSummary}\nCleaned backtrace:\n${logDetails.cleanedBacktrace}`
+}
+
+/**
+ * Runs response body type for log.
+ * @param {Response} response - Response object.
+ * @returns {string} - Response body type for logging.
+ */
+function responseBodyTypeForLog(response) {
+  if (response.getFilePath()) return "file"
+
+  try {
+    return typeof response.getBody()
+  } catch {
+    return "unset"
+  }
+}
+
+/**
+ * Runs format bucket ms.
+ * @param {number} value - Milliseconds.
+ * @returns {string} - Formatted milliseconds with one decimal place.
+ */
+function formatBucketMs(value) {
+  return `${value.toFixed(1)}ms`
+}
+
+/**
+ * Runs query count label.
+ * @param {number} count - Query count.
+ * @returns {string} - Query count label.
+ */
+function queryCountLabel(count) {
+  return `${count} ${count === 1 ? "query" : "queries"}`
+}
+
+export default class VelociousHttpServerClientRequestRunner {
+  events = new EventEmitter()
+
+  /**
+   * Runs constructor.
+   * @param {object} args - Options object.
+   * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
+   * @param {import("./request.js").default | import("./websocket-request.js").default} args.request - Request object.
+   */
+  constructor({configuration, request}) {
+    if (!configuration) throw new Error("No configuration given")
+    if (!request) throw new Error("No request given")
+
+    this.logger = new Logger(this)
+    this.configuration = configuration
+    this.request = request
+    this.response = new Response({configuration})
+    this.completedRequestLogged = false
+    this.requestTiming = new RequestTiming()
+    this.state = "running"
+  }
+
+  getRequest() { return this.request }
+  getState() { return this.state }
+
+  async run() {
+    this.requestTiming.startedAtMs = Date.now()
+
+    return await this.configuration.runWithRequestTiming(this.requestTiming, async () => {
+      const redactor = this.configuration.getLogRedactor()
+      const sensitiveValues = redactor.requestSensitiveValues(this.request, this.requestTiming.getLogSensitiveValues())
+
+      this.requestTiming.registerLogSensitiveValues(sensitiveValues)
+
+      // Run the whole request inside any per-test shared connection context so an
+      // in-process handler executes on the test's connection (and open transaction).
+      // No shared connection is set outside tests / in worker threads, so this is a
+      // no-op there.
+      await this.configuration.runWithTestSharedConnectionContexts(async () => {
+        await this._run()
+      })
+    })
+  }
+
+  async _run() {
+    const {configuration, request, response} = this
+
+    if (!request) throw new Error("No request?")
+
+    const redactor = configuration.getLogRedactor()
+    const sensitiveValues = this.requestTiming.getLogSensitiveValues()
+    const loggedPath = redactor.redactPath(request.path(), sensitiveValues)
+
+    try {
+      await this.logger.debug(() => ["Run request lifecycle", {
+        httpMethod: request.httpMethod(),
+        httpVersion: request.httpVersion(),
+        origin: request.origin(),
+        path: loggedPath,
+        remoteAddress: request.remoteAddress()
+      }])
+      // Before we checked if the sec-fetch-mode was "cors", but it seems the sec-fetch-mode isn't always present
+      await this.logger.debug(() => ["Run CORS", {httpMethod: request.httpMethod(), secFetchMode: request.header("sec-fetch-mode")}])
+
+      const cors = configuration.getCors()
+
+      if (cors) {
+        await cors({request, response})
+        await this.logger.debug(() => ["CORS handler done", {
+          httpMethod: request.httpMethod(),
+          path: loggedPath,
+          responseStatusCode: response.getStatusCode()
+        }])
+      }
+
+      if (request.httpMethod() == "OPTIONS" && request.header("sec-fetch-mode") == "cors") {
+        response.setStatus(200)
+        response.setBody("")
+        await this.logger.debug(() => ["Handled preflight OPTIONS request", {
+          path: loggedPath,
+          responseStatusCode: response.getStatusCode()
+        }])
+      } else {
+        await this.logger.debug("Run request")
+        const routesResolver = new RoutesResolver({configuration, request, response})
+        const startTimeMs = Date.now()
+        /**
+         * Defines timeoutId.
+         * @type {ReturnType<typeof setTimeout> | undefined} */
+        let timeoutId
+        /**
+         * Defines timeoutReject.
+         * @type {((error: Error) => void) | undefined} */
+        let timeoutReject
+        let timedOut = false
+
+        const setRequestTimeoutSeconds = (/** @type {number | undefined} */ timeoutSeconds) => {
+          if (timeoutId) {
+            clearTimeout(timeoutId)
+            timeoutId = undefined
+          }
+
+          if (typeof timeoutSeconds !== "number" || !Number.isFinite(timeoutSeconds) || timeoutSeconds <= 0) {
+            return
+          }
+
+          const timeoutMs = timeoutSeconds * 1000
+          const elapsedMs = Date.now() - startTimeMs
+          const remainingMs = timeoutMs - elapsedMs
+
+          if (remainingMs <= 0) {
+            timeoutReject?.(new Error(`Request timed out after ${timeoutSeconds}s`))
+            return
+          }
+
+          timeoutId = setTimeout(() => {
+            timeoutReject?.(new Error(`Request timed out after ${timeoutSeconds}s`))
+          }, remainingMs)
+        }
+
+        const timeoutPromise = new Promise((_, reject) => {
+          timeoutReject = (error) => {
+            timedOut = true
+            reject(error)
+          }
+        })
+
+        response.setRequestTimeoutMsChangeHandler((timeoutSeconds) => {
+          setRequestTimeoutSeconds(timeoutSeconds)
+        })
+
+        setRequestTimeoutSeconds(configuration.getRequestTimeoutMs?.())
+
+        /** @type {Promise<void> | undefined} */
+        let resolvePromise
+
+        const runResolvedRequest = async () => {
+          resolvePromise = routesResolver.resolve()
+          // Keep Promise.race here to allow dynamic timeout updates.
+          await Promise.race([resolvePromise, timeoutPromise])
+          await this.logger.debug(() => ["Routes resolver done", {
+            httpMethod: request.httpMethod(),
+            path: loggedPath,
+            responseStatusCode: response.getStatusCode(),
+            hasFilePath: Boolean(response.getFilePath()),
+            bodyType: responseBodyTypeForLog(response)
+          }])
+        }
+
+        try {
+          const requestTimeZone = request.header(REQUEST_TIME_ZONE_HEADER)
+
+          if (requestTimeZone !== undefined && requestTimeZone !== null) {
+            await configuration.runWithTimezone(requestTimeZone, runResolvedRequest)
+          } else {
+            await runResolvedRequest()
+          }
+        } catch (error) {
+          if (timedOut && resolvePromise) {
+            void resolvePromise.catch((resolveError) => {
+              const safeResolveError = redactor.redactError(ensureError(resolveError), sensitiveValues)
+
+              this.logger.warn(() => ["Request finished after timeout", safeResolveError])
+            })
+          }
+          throw error
+        } finally {
+          if (timeoutId) clearTimeout(timeoutId)
+        }
+      }
+    } catch (e) {
+      const error = ensureError(e)
+      const errorWithContext = /** @type {{velociousContext?: object}} */ (error)
+      const errorContext = errorWithContext.velociousContext || {stage: "request-runner"}
+      const logDetails = requestErrorLogDetails(error)
+      const redactedLogDetails = {
+        cleanedBacktrace: logDetails.cleanedBacktrace
+          ? redactor.redactString(logDetails.cleanedBacktrace, sensitiveValues)
+          : undefined,
+        errorSummary: redactor.redactString(logDetails.errorSummary, sensitiveValues)
+      }
+
+      await this.logger.error(() => requestErrorLogMessage(redactedLogDetails))
+
+      const errorPayload = {
+        context: redactor.redactStructured(errorContext, sensitiveValues),
+        error: redactor.redactError(error, sensitiveValues),
+        request,
+        response
+      }
+
+      configuration.getErrorEvents().emit("framework-error", errorPayload)
+      configuration.getErrorEvents().emit("all-error", {
+        ...errorPayload,
+        errorType: "framework-error"
+      })
+
+      response.setStatus(500)
+      response.setErrorBody(error)
+    }
+
+    await this.logger.debug(() => ["Request runner done", {
+      httpMethod: request.httpMethod(),
+      path: loggedPath,
+      responseStatusCode: response.getStatusCode()
+    }])
+    this.state = "done"
+    this.events.emit("done", this)
+  }
+
+  /**
+   * Runs log completed request.
+   * @returns {Promise<void>} - Logs the completed request line after the response has been served.
+   */
+  async logCompletedRequest() {
+    if (this.completedRequestLogged) return
+
+    this.completedRequestLogged = true
+
+    const requestTiming = this.requestTiming
+
+    requestTiming.markResponseServed()
+
+    if (!requestTiming.completedLogSubject || !requestTiming.completedLogMethod) return
+
+    const logger = new Logger(requestTiming.completedLogSubject, {configuration: this.configuration})
+    const summary = requestTiming.summary()
+    const response = this.response
+    const completedMessage = [
+      `Completed ${response.getStatusCode()} ${response.getStatusMessage()} in ${Math.round(summary.totalMs)}ms (`,
+      `Controller: ${formatBucketMs(summary.controllerMs)}`,
+      ` | Views: ${formatBucketMs(summary.viewsMs)}`,
+      ` | DB: ${formatBucketMs(summary.dbMs)} (${queryCountLabel(summary.dbQueryCount)})`,
+      ` | Velocious: ${formatBucketMs(summary.velociousMs)}`,
+      `)`
+    ].join("")
+
+    await logger[requestTiming.completedLogMethod](completedMessage)
+  }
+}

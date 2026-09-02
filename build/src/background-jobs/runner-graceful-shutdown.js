@@ -1,0 +1,84 @@
+// @ts-check
+import timeout from "awaitery/build/timeout.js";
+import Configuration, { CurrentConfigurationNotSetError } from "../configuration.js";
+import { runShutdownSteps } from "../utils/shutdown-lifecycle.js";
+/**
+ * The subset of a configuration a runner closes on shutdown. Typed structurally so
+ * the shutdown path stays typechecked without a broad cast, and a future signature
+ * drift surfaces at the call sites (and in tests) instead of hiding behind `any`.
+ * @typedef {{disconnectBeacon: () => Promise<void>, closeDatabaseConnections: () => Promise<void>, shutdown: () => Promise<void>}} RunnerCloseableConfiguration
+ */
+/** Bounded grace for closing framework connections on shutdown before forcing exit. */
+const SHUTDOWN_CLOSE_TIMEOUT_MS = 5000;
+/**
+ * Gracefully closes a background-job runner's framework connections (beacon +
+ * database) on shutdown, so the database server ends the session and releases any
+ * advisory lock the runner still holds *immediately* — instead of leaving a
+ * half-open session that keeps the lock (e.g. the build-planner lock) held until
+ * the server's idle `wait_timeout` (hours).
+ *
+ * A runner child otherwise exits abruptly on shutdown (`process.exit`) and relies
+ * on the OS tearing down its sockets. A named lock releases only when its owning
+ * session ends, and an abrupt exit / container teardown does not reliably deliver a
+ * clean disconnect to the server — so the lock leaks. Sending a real close here
+ * (`COM_QUIT` via `closeDatabaseConnections`) makes the server end the session and
+ * release the lock deterministically.
+ *
+ * The beacon disconnect and the database close run independently, each bounded by
+ * `closeTimeoutMs`: the database close releases the locks and must still run even if
+ * the beacon disconnect hangs (a wedged beacon socket during teardown), and neither
+ * may block the exit forever. A failed or timed-out close is thrown, not swallowed —
+ * the caller surfaces it (a lock that failed to release must be visible).
+ * @param {RunnerCloseableConfiguration | null} configuration - Configuration whose connections to close; null when none is set (nothing to close).
+ * @param {number} [closeTimeoutMs] - Max time to spend on each close before giving up.
+ * @returns {Promise<void>} - Resolves once both closes have settled; rejects if either failed.
+ */
+export async function closeRunnerConnections(configuration, closeTimeoutMs = SHUTDOWN_CLOSE_TIMEOUT_MS) {
+    if (!configuration)
+        return;
+    await runShutdownSteps({
+        message: "Failed to close background-job runner application and framework resources",
+        steps: [
+            async () => await timeout({ timeout: closeTimeoutMs }, () => configuration.shutdown()),
+            async () => await closeRunnerFrameworkConnections(configuration, closeTimeoutMs)
+        ]
+    });
+}
+/**
+ * Closes only a pooled runner's framework connections while its application
+ * process lifecycle remains active for later jobs.
+ * @param {RunnerCloseableConfiguration | null} configuration - Configuration whose framework connections to close.
+ * @param {number} [closeTimeoutMs] - Max time for each framework close.
+ * @returns {Promise<void>} - Resolves after framework cleanup.
+ */
+export async function closeRunnerFrameworkConnections(configuration, closeTimeoutMs = SHUTDOWN_CLOSE_TIMEOUT_MS) {
+    if (!configuration)
+        return;
+    const results = await Promise.allSettled([
+        timeout({ timeout: closeTimeoutMs }, () => configuration.disconnectBeacon()),
+        timeout({ timeout: closeTimeoutMs }, () => configuration.closeDatabaseConnections())
+    ]);
+    const steps = results.map((result) => async () => {
+        if (result.status === "rejected")
+            throw result.reason;
+    });
+    await runShutdownSteps({ message: "Failed to close background-job runner framework resources", steps });
+}
+/**
+ * The current configuration, or null when none has been set yet — a runner that is
+ * signalled before it runs any job holds no connections (and no locks) to close.
+ * Only that expected "not set yet" case is treated as null; any other error is a real
+ * fault and is rethrown rather than masked.
+ * @returns {Configuration | null} - The current configuration, or null when none is set.
+ */
+export function currentConfigurationOrNull() {
+    try {
+        return Configuration.current();
+    }
+    catch (error) {
+        if (error instanceof CurrentConfigurationNotSetError)
+            return null;
+        throw error;
+    }
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoicnVubmVyLWdyYWNlZnVsLXNodXRkb3duLmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiLi4vLi4vLi4vc3JjL2JhY2tncm91bmQtam9icy9ydW5uZXItZ3JhY2VmdWwtc2h1dGRvd24uanMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBQUEsWUFBWTtBQUVaLE9BQU8sT0FBTyxNQUFNLDJCQUEyQixDQUFBO0FBRS9DLE9BQU8sYUFBYSxFQUFFLEVBQUMsK0JBQStCLEVBQUMsTUFBTSxxQkFBcUIsQ0FBQTtBQUNsRixPQUFPLEVBQUUsZ0JBQWdCLEVBQUUsTUFBTSxnQ0FBZ0MsQ0FBQTtBQUVqRTs7Ozs7R0FLRztBQUNILHVGQUF1RjtBQUN2RixNQUFNLHlCQUF5QixHQUFHLElBQUksQ0FBQTtBQUV0Qzs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7OztHQXNCRztBQUNILE1BQU0sQ0FBQyxLQUFLLFVBQVUsc0JBQXNCLENBQUMsYUFBYSxFQUFFLGNBQWMsR0FBRyx5QkFBeUI7SUFDcEcsSUFBSSxDQUFDLGFBQWE7UUFBRSxPQUFNO0lBRTFCLE1BQU0sZ0JBQWdCLENBQUM7UUFDckIsT0FBTyxFQUFFLDJFQUEyRTtRQUNwRixLQUFLLEVBQUU7WUFDTCxLQUFLLElBQUksRUFBRSxDQUFDLE1BQU0sT0FBTyxDQUFDLEVBQUMsT0FBTyxFQUFFLGNBQWMsRUFBQyxFQUFFLEdBQUcsRUFBRSxDQUFDLGFBQWEsQ0FBQyxRQUFRLEVBQUUsQ0FBQztZQUNwRixLQUFLLElBQUksRUFBRSxDQUFDLE1BQU0sK0JBQStCLENBQUMsYUFBYSxFQUFFLGNBQWMsQ0FBQztTQUNqRjtLQUNGLENBQUMsQ0FBQTtBQUNKLENBQUM7QUFFRDs7Ozs7O0dBTUc7QUFDSCxNQUFNLENBQUMsS0FBSyxVQUFVLCtCQUErQixDQUFDLGFBQWEsRUFBRSxjQUFjLEdBQUcseUJBQXlCO0lBQzdHLElBQUksQ0FBQyxhQUFhO1FBQUUsT0FBTTtJQUUxQixNQUFNLE9BQU8sR0FBRyxNQUFNLE9BQU8sQ0FBQyxVQUFVLENBQUM7UUFDdkMsT0FBTyxDQUFDLEVBQUMsT0FBTyxFQUFFLGNBQWMsRUFBQyxFQUFFLEdBQUcsRUFBRSxDQUFDLGFBQWEsQ0FBQyxnQkFBZ0IsRUFBRSxDQUFDO1FBQzFFLE9BQU8sQ0FBQyxFQUFDLE9BQU8sRUFBRSxjQUFjLEVBQUMsRUFBRSxHQUFHLEVBQUUsQ0FBQyxhQUFhLENBQUMsd0JBQXdCLEVBQUUsQ0FBQztLQUNuRixDQUFDLENBQUE7SUFDRixNQUFNLEtBQUssR0FBRyxPQUFPLENBQUMsR0FBRyxDQUFDLENBQUMsTUFBTSxFQUFFLEVBQUUsQ0FBQyxLQUFLLElBQUksRUFBRTtRQUMvQyxJQUFJLE1BQU0sQ0FBQyxNQUFNLEtBQUssVUFBVTtZQUFFLE1BQU0sTUFBTSxDQUFDLE1BQU0sQ0FBQTtJQUN2RCxDQUFDLENBQUMsQ0FBQTtJQUVGLE1BQU0sZ0JBQWdCLENBQUMsRUFBQyxPQUFPLEVBQUUsMkRBQTJELEVBQUUsS0FBSyxFQUFDLENBQUMsQ0FBQTtBQUN2RyxDQUFDO0FBRUQ7Ozs7OztHQU1HO0FBQ0gsTUFBTSxVQUFVLDBCQUEwQjtJQUN4QyxJQUFJLENBQUM7UUFDSCxPQUFPLGFBQWEsQ0FBQyxPQUFPLEVBQUUsQ0FBQTtJQUNoQyxDQUFDO0lBQUMsT0FBTyxLQUFLLEVBQUUsQ0FBQztRQUNmLElBQUksS0FBSyxZQUFZLCtCQUErQjtZQUFFLE9BQU8sSUFBSSxDQUFBO1FBRWpFLE1BQU0sS0FBSyxDQUFBO0lBQ2IsQ0FBQztBQUNILENBQUMiLCJzb3VyY2VzQ29udGVudCI6WyIvLyBAdHMtY2hlY2tcblxuaW1wb3J0IHRpbWVvdXQgZnJvbSBcImF3YWl0ZXJ5L2J1aWxkL3RpbWVvdXQuanNcIlxuXG5pbXBvcnQgQ29uZmlndXJhdGlvbiwge0N1cnJlbnRDb25maWd1cmF0aW9uTm90U2V0RXJyb3J9IGZyb20gXCIuLi9jb25maWd1cmF0aW9uLmpzXCJcbmltcG9ydCB7IHJ1blNodXRkb3duU3RlcHMgfSBmcm9tIFwiLi4vdXRpbHMvc2h1dGRvd24tbGlmZWN5Y2xlLmpzXCJcblxuLyoqXG4gKiBUaGUgc3Vic2V0IG9mIGEgY29uZmlndXJhdGlvbiBhIHJ1bm5lciBjbG9zZXMgb24gc2h1dGRvd24uIFR5cGVkIHN0cnVjdHVyYWxseSBzb1xuICogdGhlIHNodXRkb3duIHBhdGggc3RheXMgdHlwZWNoZWNrZWQgd2l0aG91dCBhIGJyb2FkIGNhc3QsIGFuZCBhIGZ1dHVyZSBzaWduYXR1cmVcbiAqIGRyaWZ0IHN1cmZhY2VzIGF0IHRoZSBjYWxsIHNpdGVzIChhbmQgaW4gdGVzdHMpIGluc3RlYWQgb2YgaGlkaW5nIGJlaGluZCBgYW55YC5cbiAqIEB0eXBlZGVmIHt7ZGlzY29ubmVjdEJlYWNvbjogKCkgPT4gUHJvbWlzZTx2b2lkPiwgY2xvc2VEYXRhYmFzZUNvbm5lY3Rpb25zOiAoKSA9PiBQcm9taXNlPHZvaWQ+LCBzaHV0ZG93bjogKCkgPT4gUHJvbWlzZTx2b2lkPn19IFJ1bm5lckNsb3NlYWJsZUNvbmZpZ3VyYXRpb25cbiAqL1xuLyoqIEJvdW5kZWQgZ3JhY2UgZm9yIGNsb3NpbmcgZnJhbWV3b3JrIGNvbm5lY3Rpb25zIG9uIHNodXRkb3duIGJlZm9yZSBmb3JjaW5nIGV4aXQuICovXG5jb25zdCBTSFVURE9XTl9DTE9TRV9USU1FT1VUX01TID0gNTAwMFxuXG4vKipcbiAqIEdyYWNlZnVsbHkgY2xvc2VzIGEgYmFja2dyb3VuZC1qb2IgcnVubmVyJ3MgZnJhbWV3b3JrIGNvbm5lY3Rpb25zIChiZWFjb24gK1xuICogZGF0YWJhc2UpIG9uIHNodXRkb3duLCBzbyB0aGUgZGF0YWJhc2Ugc2VydmVyIGVuZHMgdGhlIHNlc3Npb24gYW5kIHJlbGVhc2VzIGFueVxuICogYWR2aXNvcnkgbG9jayB0aGUgcnVubmVyIHN0aWxsIGhvbGRzICppbW1lZGlhdGVseSog4oCUIGluc3RlYWQgb2YgbGVhdmluZyBhXG4gKiBoYWxmLW9wZW4gc2Vzc2lvbiB0aGF0IGtlZXBzIHRoZSBsb2NrIChlLmcuIHRoZSBidWlsZC1wbGFubmVyIGxvY2spIGhlbGQgdW50aWxcbiAqIHRoZSBzZXJ2ZXIncyBpZGxlIGB3YWl0X3RpbWVvdXRgIChob3VycykuXG4gKlxuICogQSBydW5uZXIgY2hpbGQgb3RoZXJ3aXNlIGV4aXRzIGFicnVwdGx5IG9uIHNodXRkb3duIChgcHJvY2Vzcy5leGl0YCkgYW5kIHJlbGllc1xuICogb24gdGhlIE9TIHRlYXJpbmcgZG93biBpdHMgc29ja2V0cy4gQSBuYW1lZCBsb2NrIHJlbGVhc2VzIG9ubHkgd2hlbiBpdHMgb3duaW5nXG4gKiBzZXNzaW9uIGVuZHMsIGFuZCBhbiBhYnJ1cHQgZXhpdCAvIGNvbnRhaW5lciB0ZWFyZG93biBkb2VzIG5vdCByZWxpYWJseSBkZWxpdmVyIGFcbiAqIGNsZWFuIGRpc2Nvbm5lY3QgdG8gdGhlIHNlcnZlciDigJQgc28gdGhlIGxvY2sgbGVha3MuIFNlbmRpbmcgYSByZWFsIGNsb3NlIGhlcmVcbiAqIChgQ09NX1FVSVRgIHZpYSBgY2xvc2VEYXRhYmFzZUNvbm5lY3Rpb25zYCkgbWFrZXMgdGhlIHNlcnZlciBlbmQgdGhlIHNlc3Npb24gYW5kXG4gKiByZWxlYXNlIHRoZSBsb2NrIGRldGVybWluaXN0aWNhbGx5LlxuICpcbiAqIFRoZSBiZWFjb24gZGlzY29ubmVjdCBhbmQgdGhlIGRhdGFiYXNlIGNsb3NlIHJ1biBpbmRlcGVuZGVudGx5LCBlYWNoIGJvdW5kZWQgYnlcbiAqIGBjbG9zZVRpbWVvdXRNc2A6IHRoZSBkYXRhYmFzZSBjbG9zZSByZWxlYXNlcyB0aGUgbG9ja3MgYW5kIG11c3Qgc3RpbGwgcnVuIGV2ZW4gaWZcbiAqIHRoZSBiZWFjb24gZGlzY29ubmVjdCBoYW5ncyAoYSB3ZWRnZWQgYmVhY29uIHNvY2tldCBkdXJpbmcgdGVhcmRvd24pLCBhbmQgbmVpdGhlclxuICogbWF5IGJsb2NrIHRoZSBleGl0IGZvcmV2ZXIuIEEgZmFpbGVkIG9yIHRpbWVkLW91dCBjbG9zZSBpcyB0aHJvd24sIG5vdCBzd2FsbG93ZWQg4oCUXG4gKiB0aGUgY2FsbGVyIHN1cmZhY2VzIGl0IChhIGxvY2sgdGhhdCBmYWlsZWQgdG8gcmVsZWFzZSBtdXN0IGJlIHZpc2libGUpLlxuICogQHBhcmFtIHtSdW5uZXJDbG9zZWFibGVDb25maWd1cmF0aW9uIHwgbnVsbH0gY29uZmlndXJhdGlvbiAtIENvbmZpZ3VyYXRpb24gd2hvc2UgY29ubmVjdGlvbnMgdG8gY2xvc2U7IG51bGwgd2hlbiBub25lIGlzIHNldCAobm90aGluZyB0byBjbG9zZSkuXG4gKiBAcGFyYW0ge251bWJlcn0gW2Nsb3NlVGltZW91dE1zXSAtIE1heCB0aW1lIHRvIHNwZW5kIG9uIGVhY2ggY2xvc2UgYmVmb3JlIGdpdmluZyB1cC5cbiAqIEByZXR1cm5zIHtQcm9taXNlPHZvaWQ+fSAtIFJlc29sdmVzIG9uY2UgYm90aCBjbG9zZXMgaGF2ZSBzZXR0bGVkOyByZWplY3RzIGlmIGVpdGhlciBmYWlsZWQuXG4gKi9cbmV4cG9ydCBhc3luYyBmdW5jdGlvbiBjbG9zZVJ1bm5lckNvbm5lY3Rpb25zKGNvbmZpZ3VyYXRpb24sIGNsb3NlVGltZW91dE1zID0gU0hVVERPV05fQ0xPU0VfVElNRU9VVF9NUykge1xuICBpZiAoIWNvbmZpZ3VyYXRpb24pIHJldHVyblxuXG4gIGF3YWl0IHJ1blNodXRkb3duU3RlcHMoe1xuICAgIG1lc3NhZ2U6IFwiRmFpbGVkIHRvIGNsb3NlIGJhY2tncm91bmQtam9iIHJ1bm5lciBhcHBsaWNhdGlvbiBhbmQgZnJhbWV3b3JrIHJlc291cmNlc1wiLFxuICAgIHN0ZXBzOiBbXG4gICAgICBhc3luYyAoKSA9PiBhd2FpdCB0aW1lb3V0KHt0aW1lb3V0OiBjbG9zZVRpbWVvdXRNc30sICgpID0+IGNvbmZpZ3VyYXRpb24uc2h1dGRvd24oKSksXG4gICAgICBhc3luYyAoKSA9PiBhd2FpdCBjbG9zZVJ1bm5lckZyYW1ld29ya0Nvbm5lY3Rpb25zKGNvbmZpZ3VyYXRpb24sIGNsb3NlVGltZW91dE1zKVxuICAgIF1cbiAgfSlcbn1cblxuLyoqXG4gKiBDbG9zZXMgb25seSBhIHBvb2xlZCBydW5uZXIncyBmcmFtZXdvcmsgY29ubmVjdGlvbnMgd2hpbGUgaXRzIGFwcGxpY2F0aW9uXG4gKiBwcm9jZXNzIGxpZmVjeWNsZSByZW1haW5zIGFjdGl2ZSBmb3IgbGF0ZXIgam9icy5cbiAqIEBwYXJhbSB7UnVubmVyQ2xvc2VhYmxlQ29uZmlndXJhdGlvbiB8IG51bGx9IGNvbmZpZ3VyYXRpb24gLSBDb25maWd1cmF0aW9uIHdob3NlIGZyYW1ld29yayBjb25uZWN0aW9ucyB0byBjbG9zZS5cbiAqIEBwYXJhbSB7bnVtYmVyfSBbY2xvc2VUaW1lb3V0TXNdIC0gTWF4IHRpbWUgZm9yIGVhY2ggZnJhbWV3b3JrIGNsb3NlLlxuICogQHJldHVybnMge1Byb21pc2U8dm9pZD59IC0gUmVzb2x2ZXMgYWZ0ZXIgZnJhbWV3b3JrIGNsZWFudXAuXG4gKi9cbmV4cG9ydCBhc3luYyBmdW5jdGlvbiBjbG9zZVJ1bm5lckZyYW1ld29ya0Nvbm5lY3Rpb25zKGNvbmZpZ3VyYXRpb24sIGNsb3NlVGltZW91dE1zID0gU0hVVERPV05fQ0xPU0VfVElNRU9VVF9NUykge1xuICBpZiAoIWNvbmZpZ3VyYXRpb24pIHJldHVyblxuXG4gIGNvbnN0IHJlc3VsdHMgPSBhd2FpdCBQcm9taXNlLmFsbFNldHRsZWQoW1xuICAgIHRpbWVvdXQoe3RpbWVvdXQ6IGNsb3NlVGltZW91dE1zfSwgKCkgPT4gY29uZmlndXJhdGlvbi5kaXNjb25uZWN0QmVhY29uKCkpLFxuICAgIHRpbWVvdXQoe3RpbWVvdXQ6IGNsb3NlVGltZW91dE1zfSwgKCkgPT4gY29uZmlndXJhdGlvbi5jbG9zZURhdGFiYXNlQ29ubmVjdGlvbnMoKSlcbiAgXSlcbiAgY29uc3Qgc3RlcHMgPSByZXN1bHRzLm1hcCgocmVzdWx0KSA9PiBhc3luYyAoKSA9PiB7XG4gICAgaWYgKHJlc3VsdC5zdGF0dXMgPT09IFwicmVqZWN0ZWRcIikgdGhyb3cgcmVzdWx0LnJlYXNvblxuICB9KVxuXG4gIGF3YWl0IHJ1blNodXRkb3duU3RlcHMoe21lc3NhZ2U6IFwiRmFpbGVkIHRvIGNsb3NlIGJhY2tncm91bmQtam9iIHJ1bm5lciBmcmFtZXdvcmsgcmVzb3VyY2VzXCIsIHN0ZXBzfSlcbn1cblxuLyoqXG4gKiBUaGUgY3VycmVudCBjb25maWd1cmF0aW9uLCBvciBudWxsIHdoZW4gbm9uZSBoYXMgYmVlbiBzZXQgeWV0IOKAlCBhIHJ1bm5lciB0aGF0IGlzXG4gKiBzaWduYWxsZWQgYmVmb3JlIGl0IHJ1bnMgYW55IGpvYiBob2xkcyBubyBjb25uZWN0aW9ucyAoYW5kIG5vIGxvY2tzKSB0byBjbG9zZS5cbiAqIE9ubHkgdGhhdCBleHBlY3RlZCBcIm5vdCBzZXQgeWV0XCIgY2FzZSBpcyB0cmVhdGVkIGFzIG51bGw7IGFueSBvdGhlciBlcnJvciBpcyBhIHJlYWxcbiAqIGZhdWx0IGFuZCBpcyByZXRocm93biByYXRoZXIgdGhhbiBtYXNrZWQuXG4gKiBAcmV0dXJucyB7Q29uZmlndXJhdGlvbiB8IG51bGx9IC0gVGhlIGN1cnJlbnQgY29uZmlndXJhdGlvbiwgb3IgbnVsbCB3aGVuIG5vbmUgaXMgc2V0LlxuICovXG5leHBvcnQgZnVuY3Rpb24gY3VycmVudENvbmZpZ3VyYXRpb25Pck51bGwoKSB7XG4gIHRyeSB7XG4gICAgcmV0dXJuIENvbmZpZ3VyYXRpb24uY3VycmVudCgpXG4gIH0gY2F0Y2ggKGVycm9yKSB7XG4gICAgaWYgKGVycm9yIGluc3RhbmNlb2YgQ3VycmVudENvbmZpZ3VyYXRpb25Ob3RTZXRFcnJvcikgcmV0dXJuIG51bGxcblxuICAgIHRocm93IGVycm9yXG4gIH1cbn1cbiJdfQ==

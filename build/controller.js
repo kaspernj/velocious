@@ -1,0 +1,432 @@
+// @ts-check
+
+import ejs from "ejs"
+import {incorporate} from "incorporator"
+import * as inflection from "inflection"
+import Logger from "./logger.js"
+import Cookie from "./http-server/cookie.js"
+import ParamsToObject from "./http-server/client/params-to-object.js"
+import path from "node:path"
+import restArgsError from "./utils/rest-args-error.js"
+import querystring from "querystring"
+import {serializeFrontendModelTransportValue} from "./frontend-models/transport-serialization.js"
+
+export default class VelociousController {
+  /** @type {Array<string> | undefined} */
+  static _beforeActions = undefined
+
+  /**
+   * Runs before action.
+   * @param {string} methodName - Method name.
+   * @returns {void} - No return value.
+   */
+  static beforeAction(methodName) {
+    if (!this._beforeActions) {
+      /**
+       * Stores the before actions value.
+       * @type {Array<string>}  */
+      this._beforeActions = []
+    }
+
+    this._beforeActions.push(methodName)
+  }
+
+  /**
+   * Runs constructor.
+   * @param {object} args - Options object.
+   * @param {string} args.action - Action.
+   * @param {import("./configuration.js").default} args.configuration - Configuration instance.
+   * @param {string} args.controller - Controller.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} args.params - Parameters object.
+   * @param {import("./http-server/client/request.js").default} args.request - Request object.
+   * @param {import("./http-server/client/response.js").default} args.response - Response object.
+   * @param {string} args.viewPath - View path.
+   */
+  constructor({action, configuration, controller, params, request, response, viewPath}) {
+    if (!action) throw new Error("No action given")
+    if (!configuration) throw new Error("No configuration given")
+    if (!controller) throw new Error("No controller given")
+    if (!params) throw new Error("No params given")
+    if (!request) throw new Error("No request given")
+    if (!response) throw new Error("No response given")
+    if (!viewPath) throw new Error("No viewPath given")
+
+    this._action = action
+    this._controller = controller
+    this._configuration = configuration
+    this.logger = new Logger(this)
+    this._params = params
+    this._request = request
+    this._response = response
+    this.viewParams = {}
+    this._viewPath = viewPath
+  }
+
+  /**
+   * Runs get action.
+   * @returns {string} - The action.
+   */
+  getAction() { return this._action }
+
+  /**
+   * Runs get configuration.
+   * @returns {import("./configuration.js").default} - The configuration.
+   */
+  getConfiguration() { return this._configuration }
+
+  /**
+   * Runs get params.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - The params.
+   */
+  getParams() { return this._params }
+
+  /**
+   * Runs get request.
+   * @returns {import("./http-server/client/request.js").default} - The request.
+   */
+  getRequest() { return this._request }
+
+  /**
+   * Runs transport serialization options.
+   * @returns {import("./frontend-models/transport-serialization.js").FrontendModelTransportSerializationOptions} - Serialization options.
+   */
+  transportSerializationOptions() {
+    const configuration = this.getConfiguration()
+
+    return {
+      timeZone: configuration.getEnvironmentHandler().getTimeZone(configuration)
+    }
+  }
+
+  /**
+   * Runs set cookie.
+   * @param {string} name - Cookie name.
+   * @param {ReturnType<typeof JSON.parse>} value - Cookie value.
+   * @param {object} [args] - Options object.
+   * @param {string} [args.domain] - Domain.
+   * @param {Date} [args.expires] - Expires date.
+   * @param {boolean} [args.httpOnly] - HttpOnly flag.
+   * @param {number} [args.maxAge] - Max-Age in seconds.
+   * @param {string} [args.path] - Path.
+   * @param {boolean} [args.secure] - Secure flag.
+   * @param {"Lax" | "Strict" | "None"} [args.sameSite] - SameSite value.
+   * @param {boolean} [args.encrypted] - Whether to encrypt the cookie value.
+   * @returns {Cookie} - Cookie instance.
+   */
+  setCookie(name, value, args = {}) {
+    const {encrypted = false, ...options} = args
+    /**
+     * Types the following value.
+     * @type {string} */
+    let cookieValue
+
+    if (encrypted) {
+      const secret = this.getConfiguration().getCookieSecret()
+      if (!secret) throw new Error("Missing cookie secret for encrypted cookie")
+      cookieValue = Cookie.encryptValue(value, secret)
+    } else {
+      cookieValue = String(value ?? "")
+    }
+
+    const cookie = new Cookie({name, value: cookieValue, options, encrypted})
+
+    this._response.addHeader("Set-Cookie", cookie.toHeader())
+
+    return cookie
+  }
+
+  /**
+   * Runs get cookies.
+   * @returns {Cookie[]} - Cookies from the request.
+   */
+  getCookies() {
+    if (!this._cookies) {
+      const secret = this.getConfiguration().getCookieSecret()
+      const headerValue = this._request.header("cookie")
+
+      this._cookies = Cookie.parseHeader(headerValue, secret)
+    }
+
+    return this._cookies
+  }
+
+  /**
+   * Runs get controller class.
+   * @private
+   * @returns {typeof VelociousController} - The controller class.
+   */
+  _getControllerClass() {
+    const controllerClass = /** @type {typeof VelociousController} */ (this.constructor)
+
+    return controllerClass
+  }
+
+  async _runBeforeCallbacks() {
+    await this.logger.debug("_runBeforeCallbacks")
+
+    let currentControllerClass = this._getControllerClass()
+
+    while (currentControllerClass) {
+      await this.logger.debug(`Running callbacks for ${currentControllerClass.name}`)
+
+      const beforeActions = currentControllerClass._beforeActions
+
+      if (beforeActions) {
+        const controllerPrototype = /** @type {Record<string, ((...args: Array<ReturnType<typeof JSON.parse>>) => ReturnType<typeof JSON.parse>) | undefined>} */ (/** @type {ReturnType<typeof JSON.parse>} */ (currentControllerClass.prototype))
+
+        for (const beforeActionName of beforeActions) {
+          const beforeAction = controllerPrototype[beforeActionName]
+
+          if (!beforeAction) throw new Error(`No such before action: ${beforeActionName}`)
+
+          const boundBeforeAction = beforeAction.bind(this)
+
+          await boundBeforeAction()
+        }
+      }
+
+      currentControllerClass = Object.getPrototypeOf(currentControllerClass)
+
+      if (!currentControllerClass?.name?.endsWith("Controller")) break
+    }
+
+    await this.logger.debug("After runBeforeCallbacks")
+  }
+
+  /**
+   * Runs params.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - The params.
+   */
+  params() {
+    // Merge query parameters so controllers can read them via params()
+    const mergedParams = {...this.queryParameters(), ...this._params}
+
+    if (!mergedParams.controller) mergedParams.controller = this._controller
+
+    return mergedParams
+  }
+
+  /**
+   * Runs query parameters.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - The query parameters.
+   */
+  queryParameters() {
+    const query = this._request.path().split("?")[1]
+
+    if (!query) return {}
+
+    try {
+      /**
+       * Unparsed params.
+       * @type {Record<string, ReturnType<typeof JSON.parse>>} */
+      const unparsedParams = querystring.parse(query)
+      const paramsToObject = new ParamsToObject(unparsedParams)
+
+      return paramsToObject.toObject()
+    } catch (error) {
+      const ensuredError = /** @type {Error & {velociousContext?: Record<string, ReturnType<typeof JSON.parse>>}} */ (error)
+
+      ensuredError.velociousContext = {
+        ...(ensuredError.velociousContext || {}),
+        requestParsing: {
+          httpMethod: this._request.httpMethod(),
+          parameterKeys: Object.keys(querystring.parse(query)),
+          path: this._request.path(),
+          queryPreview: query.length > 300 ? `${query.slice(0, 300)}...` : query,
+          stage: "query-parameters"
+        }
+      }
+
+      throw ensuredError
+    }
+  }
+
+  /**
+   * Runs render.
+   * @param {object} [args] - Options object.
+   * @param {object} [args.json] - Json.
+   * @param {number | string} [args.status] - Status.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async render({json, status, ...restArgs} = {}) {
+    restArgsError(restArgs)
+
+    // Apply the status BEFORE delegating to renderJsonArg/renderView so
+    // `render({json: {...}, status: 422})` produces a 422 response with
+    // a JSON body. The previous order short-circuited via `return
+    // this.renderJsonArg(json)` and silently dropped the status arg.
+    if (status) {
+      this._response.setStatus(status)
+    }
+
+    if (json) {
+      return this.renderJsonArg(json)
+    }
+
+    return await this.renderView()
+  }
+
+  /**
+   * Runs render json arg.
+   * @param {object} json - JSON payload.
+   * @returns {void} - Sets the response JSON payload.
+   */
+  renderJsonArg(json) {
+    return this._measureViewRender(() => {
+      const body = JSON.stringify(serializeFrontendModelTransportValue(json, this.transportSerializationOptions()))
+
+      this._response.setHeader("Content-Type", "application/json; charset=UTF-8")
+      this._response.setBody(body)
+    })
+  }
+
+  /**
+   * Runs render view.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  renderView() {
+    const requestTiming = this.getConfiguration().getCurrentRequestTiming()
+
+    return requestTiming
+      ? requestTiming.measure("views", async () => await this._renderViewActual())
+      : this._renderViewActual()
+  }
+
+  /**
+   * Runs render view actual.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  _renderViewActual() {
+    return new Promise((resolve, reject) => {
+      const viewPath = `${this._viewPath}/${inflection.dasherize(inflection.underscore(this._action))}.ejs`
+      const actualViewParams = incorporate({controller: this}, this.viewParams)
+
+      ejs.renderFile(viewPath, actualViewParams, {}, (err, str) => {
+        if (err) {
+          const renderError = /** @type {Error & {code?: string}} */ (err)
+
+          if (renderError.code === "ENOENT") {
+            this.logger.warn(`Missing view file: ${viewPath}`)
+
+            if (this._response.getStatusCode() === 200) {
+              this._response.setStatus("internal-server-error")
+            }
+
+            this._response.setHeader("Content-Type", "text/plain; charset=UTF-8")
+            this._response.setBody(`Missing view file: ${viewPath}`)
+
+            resolve(undefined)
+          } else {
+            reject(renderError)
+          }
+        } else {
+          this._response.setHeader("Content-Type", "text/html; charset=UTF-8")
+          this._response.setBody(str)
+
+          resolve(undefined)
+        }
+      })
+    })
+  }
+
+  /**
+   * Runs render text.
+   * @returns {void} - No return value.
+   */
+  renderText() {
+    throw new Error("renderText stub")
+  }
+
+  /**
+   * Streams a file response from disk without loading the full file into controller memory.
+   * @param {string} filePath - File path.
+   * @param {object} [args] - Options object.
+   * @param {string} [args.contentType] - Content type.
+   * @param {number | string} [args.status] - Status.
+   * @param {(result: "completed" | "aborted") => void | Promise<void>} [args.onFinished] - Called once after file delivery completes or aborts.
+   * @returns {void} - No return value.
+   */
+  sendFile(filePath, args = {}) {
+    this._measureViewRender(() => {
+      const {contentType, onFinished, status, ...restArgs} = args
+
+      restArgsError(restArgs)
+
+      if (typeof filePath !== "string" || filePath.length < 1) {
+        throw new Error(`Expected file path to be a non-empty string, got: ${String(filePath)}`)
+      }
+
+      if (onFinished !== undefined && typeof onFinished !== "function") {
+        throw new Error(`Expected onFinished to be a function, got: ${typeof onFinished}`)
+      }
+
+      const detectedContentType = contentType || this.sendFileContentType(filePath)
+
+      if (detectedContentType) {
+        this._response.setHeader("Content-Type", detectedContentType)
+      }
+
+      if (status) {
+        this._response.setStatus(status)
+      }
+
+      this._response.setFilePath(filePath, onFinished || null)
+    })
+  }
+
+  /**
+   * Runs measure view render.
+   * @template T
+   * @param {() => T} callback - Callback to measure.
+   * @returns {T} - Callback result.
+   */
+  _measureViewRender(callback) {
+    const requestTiming = this.getConfiguration().getCurrentRequestTiming()
+
+    return requestTiming
+      ? requestTiming.measureSync("views", callback)
+      : callback()
+  }
+
+  /**
+   * Runs send file content type.
+   * @param {string} filePath - File path.
+   * @returns {string} - Content type value.
+   */
+  sendFileContentType(filePath) {
+    const extension = path.extname(filePath).toLowerCase()
+
+    if (extension === ".wasm") return "application/wasm"
+    if (extension === ".js") return "text/javascript; charset=UTF-8"
+    if (extension === ".json") return "application/json; charset=UTF-8"
+    if (extension === ".css") return "text/css; charset=UTF-8"
+    if (extension === ".html") return "text/html; charset=UTF-8"
+    if (extension === ".txt") return "text/plain; charset=UTF-8"
+    if (extension === ".svg") return "image/svg+xml"
+    if (extension === ".png") return "image/png"
+    if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg"
+    if (extension === ".gif") return "image/gif"
+
+    return "application/octet-stream"
+  }
+
+  /**
+   * Runs current ability.
+   * @returns {import("./authorization/ability.js").default | undefined} - Current ability for request scope.
+   */
+  currentAbility() {
+    return this.getConfiguration().getCurrentAbility()
+  }
+
+  /**
+   * Runs request.
+   * @returns {import("./http-server/client/request.js").default} - The request.
+   */
+  request() { return this._request }
+
+  /**
+   * Runs response.
+   * @returns {import("./http-server/client/response.js").default} - The response.
+   */
+  response() { return this._response }
+}

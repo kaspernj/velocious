@@ -1,0 +1,14 @@
+// @ts-check
+/** @type {TextEncoder | undefined} Shared encoder instance. */
+let sharedEncoder;
+/**
+ * Returns the UTF-8 byte length of a string without Node's `Buffer`, so shared
+ * driver code can bound query chunks in browser and React Native bundles too.
+ * @param {string} value - String to measure.
+ * @returns {number} - UTF-8 byte length.
+ */
+export function utf8ByteLength(value) {
+    sharedEncoder ??= new TextEncoder();
+    return sharedEncoder.encode(value).length;
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoidXRmOC1ieXRlLWxlbmd0aC5qcyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbIi4uLy4uLy4uL3NyYy91dGlscy91dGY4LWJ5dGUtbGVuZ3RoLmpzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQUFBLFlBQVk7QUFFWiwrREFBK0Q7QUFDL0QsSUFBSSxhQUFhLENBQUE7QUFFakI7Ozs7O0dBS0c7QUFDSCxNQUFNLFVBQVUsY0FBYyxDQUFDLEtBQUs7SUFDbEMsYUFBYSxLQUFLLElBQUksV0FBVyxFQUFFLENBQUE7SUFFbkMsT0FBTyxhQUFhLENBQUMsTUFBTSxDQUFDLEtBQUssQ0FBQyxDQUFDLE1BQU0sQ0FBQTtBQUMzQyxDQUFDIiwic291cmNlc0NvbnRlbnQiOlsiLy8gQHRzLWNoZWNrXG5cbi8qKiBAdHlwZSB7VGV4dEVuY29kZXIgfCB1bmRlZmluZWR9IFNoYXJlZCBlbmNvZGVyIGluc3RhbmNlLiAqL1xubGV0IHNoYXJlZEVuY29kZXJcblxuLyoqXG4gKiBSZXR1cm5zIHRoZSBVVEYtOCBieXRlIGxlbmd0aCBvZiBhIHN0cmluZyB3aXRob3V0IE5vZGUncyBgQnVmZmVyYCwgc28gc2hhcmVkXG4gKiBkcml2ZXIgY29kZSBjYW4gYm91bmQgcXVlcnkgY2h1bmtzIGluIGJyb3dzZXIgYW5kIFJlYWN0IE5hdGl2ZSBidW5kbGVzIHRvby5cbiAqIEBwYXJhbSB7c3RyaW5nfSB2YWx1ZSAtIFN0cmluZyB0byBtZWFzdXJlLlxuICogQHJldHVybnMge251bWJlcn0gLSBVVEYtOCBieXRlIGxlbmd0aC5cbiAqL1xuZXhwb3J0IGZ1bmN0aW9uIHV0ZjhCeXRlTGVuZ3RoKHZhbHVlKSB7XG4gIHNoYXJlZEVuY29kZXIgPz89IG5ldyBUZXh0RW5jb2RlcigpXG5cbiAgcmV0dXJuIHNoYXJlZEVuY29kZXIuZW5jb2RlKHZhbHVlKS5sZW5ndGhcbn1cbiJdfQ==

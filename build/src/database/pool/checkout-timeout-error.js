@@ -1,0 +1,15 @@
+// @ts-check
+/** Stable framework error for a database pool checkout that exceeded its wait limit. */
+export default class DatabasePoolCheckoutTimeoutError extends Error {
+    /**
+     * Builds a database pool checkout timeout error.
+     * @param {string} message - Detailed sanitized pool timeout message.
+     * @param {{cause?: unknown}} [args] - Error options.
+     */
+    constructor(message, { cause } = {}) {
+        super(message, cause === undefined ? undefined : { cause });
+        this.name = "DatabasePoolCheckoutTimeoutError";
+        this.code = "VELOCIOUS_DATABASE_POOL_CHECKOUT_TIMEOUT";
+    }
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiY2hlY2tvdXQtdGltZW91dC1lcnJvci5qcyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbIi4uLy4uLy4uLy4uL3NyYy9kYXRhYmFzZS9wb29sL2NoZWNrb3V0LXRpbWVvdXQtZXJyb3IuanMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBQUEsWUFBWTtBQUVaLHdGQUF3RjtBQUN4RixNQUFNLENBQUMsT0FBTyxPQUFPLGdDQUFpQyxTQUFRLEtBQUs7SUFDakU7Ozs7T0FJRztJQUNILFlBQVksT0FBTyxFQUFFLEVBQUMsS0FBSyxFQUFDLEdBQUcsRUFBRTtRQUMvQixLQUFLLENBQUMsT0FBTyxFQUFFLEtBQUssS0FBSyxTQUFTLENBQUMsQ0FBQyxDQUFDLFNBQVMsQ0FBQyxDQUFDLENBQUMsRUFBQyxLQUFLLEVBQUMsQ0FBQyxDQUFBO1FBRXpELElBQUksQ0FBQyxJQUFJLEdBQUcsa0NBQWtDLENBQUE7UUFDOUMsSUFBSSxDQUFDLElBQUksR0FBRywwQ0FBMEMsQ0FBQTtJQUN4RCxDQUFDO0NBQ0YiLCJzb3VyY2VzQ29udGVudCI6WyIvLyBAdHMtY2hlY2tcblxuLyoqIFN0YWJsZSBmcmFtZXdvcmsgZXJyb3IgZm9yIGEgZGF0YWJhc2UgcG9vbCBjaGVja291dCB0aGF0IGV4Y2VlZGVkIGl0cyB3YWl0IGxpbWl0LiAqL1xuZXhwb3J0IGRlZmF1bHQgY2xhc3MgRGF0YWJhc2VQb29sQ2hlY2tvdXRUaW1lb3V0RXJyb3IgZXh0ZW5kcyBFcnJvciB7XG4gIC8qKlxuICAgKiBCdWlsZHMgYSBkYXRhYmFzZSBwb29sIGNoZWNrb3V0IHRpbWVvdXQgZXJyb3IuXG4gICAqIEBwYXJhbSB7c3RyaW5nfSBtZXNzYWdlIC0gRGV0YWlsZWQgc2FuaXRpemVkIHBvb2wgdGltZW91dCBtZXNzYWdlLlxuICAgKiBAcGFyYW0ge3tjYXVzZT86IHVua25vd259fSBbYXJnc10gLSBFcnJvciBvcHRpb25zLlxuICAgKi9cbiAgY29uc3RydWN0b3IobWVzc2FnZSwge2NhdXNlfSA9IHt9KSB7XG4gICAgc3VwZXIobWVzc2FnZSwgY2F1c2UgPT09IHVuZGVmaW5lZCA/IHVuZGVmaW5lZCA6IHtjYXVzZX0pXG5cbiAgICB0aGlzLm5hbWUgPSBcIkRhdGFiYXNlUG9vbENoZWNrb3V0VGltZW91dEVycm9yXCJcbiAgICB0aGlzLmNvZGUgPSBcIlZFTE9DSU9VU19EQVRBQkFTRV9QT09MX0NIRUNLT1VUX1RJTUVPVVRcIlxuICB9XG59XG4iXX0=
