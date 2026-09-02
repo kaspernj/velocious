@@ -14,7 +14,7 @@ Velocious currently has two complementary, but not interchangeable, sync paths:
 
 Do not send a cursor from one path to another or maintain two authoritative pending logs for the same write. A project can roll the paths out in stages, but must designate one owner for each resource and operation.
 
-The architecture document still contains target-language such as peer verification of offline grants and `peerReceivedUnapplied`. The current implementation boundaries are listed under [Peer export, import, and forwarding](#peer-export-import-and-forwarding); target behavior is not an available API merely because it appears in the architecture record.
+The architecture document still contains target-language such as peer verification of offline grants and `peerReceivedUnapplied`. The current implementation boundaries are listed under [Peer export, import, and forwarding](#5-peer-export-import-and-forwarding); target behavior is not an available API merely because it appears in the architecture record.
 
 The minimal app surface is one shared recipe plus thin model-binding wrappers; local-model `static sync` declarations and one `sync.client` block for live-session sync; a `SyncResourceBase` subclass with `authorizeChanges` and `scopeChangesQuery`; and, only for signed/P2P use, a row-storage adapter, authorized device/grant enrollment, and a grant-scoped `abilityFactory`. App code still owns domain commands and genuine authorization decisions. Velocious owns generic resource discovery, queueing, signing formats, peer deduplication, replay routing, cursors, feed paging, and realtime delivery.
 
@@ -293,7 +293,7 @@ const mutation = {
   occurredAt: new Date().toISOString(),
   offlineGrantId: signedOfflineGrant.grant.grantId,
   operation: "update",
-  payload: {id: String(task.id())},
+  payload: {id: task.id()},
   policyHash: syncManifest.Task.policyHash
 }
 
