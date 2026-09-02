@@ -1,0 +1,25 @@
+// @ts-check
+/**
+ * Serializes a JSON-compatible value with recursively sorted object keys.
+ * @param {ReturnType<typeof JSON.parse>} value - JSON-compatible value.
+ * @returns {string} - Stable JSON string.
+ */
+export default function stableJsonStringify(value) {
+    return JSON.stringify(stableJsonValue(value));
+}
+/**
+ * Produces a recursively key-sorted JSON value.
+ * @param {ReturnType<typeof JSON.parse>} value - JSON-compatible value.
+ * @returns {ReturnType<typeof JSON.parse>} - Stable JSON-compatible value.
+ */
+function stableJsonValue(value) {
+    if (Array.isArray(value))
+        return value.map((item) => stableJsonValue(item));
+    if (!value || typeof value !== "object")
+        return value;
+    return Object.keys(value).sort().reduce((memo, key) => {
+        memo[key] = stableJsonValue(value[key]);
+        return memo;
+    }, /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ ({}));
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoic3RhYmxlLWpzb24uanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuLi8uLi8uLi9zcmMvdXRpbHMvc3RhYmxlLWpzb24uanMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBQUEsWUFBWTtBQUVaOzs7O0dBSUc7QUFDSCxNQUFNLENBQUMsT0FBTyxVQUFVLG1CQUFtQixDQUFDLEtBQUs7SUFDL0MsT0FBTyxJQUFJLENBQUMsU0FBUyxDQUFDLGVBQWUsQ0FBQyxLQUFLLENBQUMsQ0FBQyxDQUFBO0FBQy9DLENBQUM7QUFFRDs7OztHQUlHO0FBQ0gsU0FBUyxlQUFlLENBQUMsS0FBSztJQUM1QixJQUFJLEtBQUssQ0FBQyxPQUFPLENBQUMsS0FBSyxDQUFDO1FBQUUsT0FBTyxLQUFLLENBQUMsR0FBRyxDQUFDLENBQUMsSUFBSSxFQUFFLEVBQUUsQ0FBQyxlQUFlLENBQUMsSUFBSSxDQUFDLENBQUMsQ0FBQTtJQUMzRSxJQUFJLENBQUMsS0FBSyxJQUFJLE9BQU8sS0FBSyxLQUFLLFFBQVE7UUFBRSxPQUFPLEtBQUssQ0FBQTtJQUVyRCxPQUFPLE1BQU0sQ0FBQyxJQUFJLENBQUMsS0FBSyxDQUFDLENBQUMsSUFBSSxFQUFFLENBQUMsTUFBTSxDQUFDLENBQUMsSUFBSSxFQUFFLEdBQUcsRUFBRSxFQUFFO1FBQ3BELElBQUksQ0FBQyxHQUFHLENBQUMsR0FBRyxlQUFlLENBQUMsS0FBSyxDQUFDLEdBQUcsQ0FBQyxDQUFDLENBQUE7UUFFdkMsT0FBTyxJQUFJLENBQUE7SUFDYixDQUFDLEVBQUUsNERBQTRELENBQUMsQ0FBQyxFQUFFLENBQUMsQ0FBQyxDQUFBO0FBQ3ZFLENBQUMiLCJzb3VyY2VzQ29udGVudCI6WyIvLyBAdHMtY2hlY2tcblxuLyoqXG4gKiBTZXJpYWxpemVzIGEgSlNPTi1jb21wYXRpYmxlIHZhbHVlIHdpdGggcmVjdXJzaXZlbHkgc29ydGVkIG9iamVjdCBrZXlzLlxuICogQHBhcmFtIHtSZXR1cm5UeXBlPHR5cGVvZiBKU09OLnBhcnNlPn0gdmFsdWUgLSBKU09OLWNvbXBhdGlibGUgdmFsdWUuXG4gKiBAcmV0dXJucyB7c3RyaW5nfSAtIFN0YWJsZSBKU09OIHN0cmluZy5cbiAqL1xuZXhwb3J0IGRlZmF1bHQgZnVuY3Rpb24gc3RhYmxlSnNvblN0cmluZ2lmeSh2YWx1ZSkge1xuICByZXR1cm4gSlNPTi5zdHJpbmdpZnkoc3RhYmxlSnNvblZhbHVlKHZhbHVlKSlcbn1cblxuLyoqXG4gKiBQcm9kdWNlcyBhIHJlY3Vyc2l2ZWx5IGtleS1zb3J0ZWQgSlNPTiB2YWx1ZS5cbiAqIEBwYXJhbSB7UmV0dXJuVHlwZTx0eXBlb2YgSlNPTi5wYXJzZT59IHZhbHVlIC0gSlNPTi1jb21wYXRpYmxlIHZhbHVlLlxuICogQHJldHVybnMge1JldHVyblR5cGU8dHlwZW9mIEpTT04ucGFyc2U+fSAtIFN0YWJsZSBKU09OLWNvbXBhdGlibGUgdmFsdWUuXG4gKi9cbmZ1bmN0aW9uIHN0YWJsZUpzb25WYWx1ZSh2YWx1ZSkge1xuICBpZiAoQXJyYXkuaXNBcnJheSh2YWx1ZSkpIHJldHVybiB2YWx1ZS5tYXAoKGl0ZW0pID0+IHN0YWJsZUpzb25WYWx1ZShpdGVtKSlcbiAgaWYgKCF2YWx1ZSB8fCB0eXBlb2YgdmFsdWUgIT09IFwib2JqZWN0XCIpIHJldHVybiB2YWx1ZVxuXG4gIHJldHVybiBPYmplY3Qua2V5cyh2YWx1ZSkuc29ydCgpLnJlZHVjZSgobWVtbywga2V5KSA9PiB7XG4gICAgbWVtb1trZXldID0gc3RhYmxlSnNvblZhbHVlKHZhbHVlW2tleV0pXG5cbiAgICByZXR1cm4gbWVtb1xuICB9LCAvKiogQHR5cGUge1JlY29yZDxzdHJpbmcsIFJldHVyblR5cGU8dHlwZW9mIEpTT04ucGFyc2U+Pn0gKi8gKHt9KSlcbn1cbiJdfQ==

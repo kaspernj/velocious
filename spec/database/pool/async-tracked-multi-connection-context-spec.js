@@ -11,7 +11,7 @@ function getPool() {
   return pool instanceof AsyncTrackedMultiConnection ? pool : null
 }
 
-describe("AsyncTrackedMultiConnection context handling", () => {
+describe("AsyncTrackedMultiConnection context handling", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("does not return the global fallback when asking for the current context connection", async () => {
     await Dummy.run(async () => {
       const pool = getPool()

@@ -5,7 +5,7 @@ import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 import TestRunner from "../../src/testing/test-runner.js"
 
-describe("TestRunner beforeAll/afterAll", {databaseCleaning: {transaction: true}}, () => {
+describe("TestRunner beforeAll/afterAll", () => {
   it("does not hold a database lease around the whole suite", async () => {
     const environmentHandler = new EnvironmentHandlerNode()
 
@@ -112,6 +112,101 @@ describe("TestRunner beforeAll/afterAll", {databaseCleaning: {transaction: true}
     expect(parentAfterAll).toBe(1)
     expect(childBeforeAll).toBe(1)
     expect(childAfterAll).toBe(1)
+  })
+
+  it("runs same-scope afterAll hooks in reverse registration order without mutating them", async () => {
+    const environmentHandler = new EnvironmentHandlerNode()
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory: process.cwd(),
+      environment: "test",
+      environmentHandler,
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"]
+    })
+    const testRunner = new TestRunner({configuration, testFiles: []})
+    const order = []
+    const tests = {
+      args: {},
+      afterAlls: [
+        {callback: async () => { order.push("framework teardown") }},
+        {callback: async () => { order.push("user afterAll") }}
+      ],
+      afterEaches: [],
+      beforeAlls: [],
+      beforeEaches: [],
+      subs: {},
+      tests: {
+        "runs once": {
+          args: {},
+          function: async () => { order.push("test") }
+        }
+      }
+    }
+
+    await testRunner.runTests({afterEaches: [], beforeEaches: [], tests, descriptions: [], indentLevel: 0})
+    await testRunner.runTests({afterEaches: [], beforeEaches: [], tests, descriptions: [], indentLevel: 0})
+
+    expect(order).toEqual([
+      "test", "user afterAll", "framework teardown",
+      "test", "user afterAll", "framework teardown"
+    ])
+  })
+
+  it("runs framework afterAll teardown and reports every hook failure", async () => {
+    const environmentHandler = new EnvironmentHandlerNode()
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory: process.cwd(),
+      environment: "test",
+      environmentHandler,
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"]
+    })
+    const testRunner = new TestRunner({configuration, testFiles: []})
+    const order = []
+    const tests = {
+      args: {},
+      afterAlls: [
+        {callback: async () => {
+          order.push("framework teardown")
+          throw new Error("expected framework teardown failure")
+        }},
+        {callback: async () => {
+          order.push("user afterAll")
+          throw new Error("expected user teardown failure")
+        }}
+      ],
+      afterEaches: [],
+      beforeAlls: [],
+      beforeEaches: [],
+      subs: {},
+      tests: {
+        "runs once": {
+          args: {},
+          function: async () => { order.push("test") }
+        }
+      }
+    }
+    let caughtError
+
+    try {
+      await testRunner.runTests({afterEaches: [], beforeEaches: [], tests, descriptions: [], indentLevel: 0})
+    } catch (error) {
+      caughtError = error
+    }
+
+    expect(caughtError).toBeInstanceOf(AggregateError)
+    expect(caughtError.cause.message).toEqual("expected user teardown failure")
+    expect(caughtError.errors.map((error) => error.message)).toEqual([
+      "expected user teardown failure",
+      "expected framework teardown failure"
+    ])
+    expect(order).toEqual(["test", "user afterAll", "framework teardown"])
   })
 
   it("skips beforeAll/afterAll when all tests are filtered out", async () => {
@@ -256,5 +351,118 @@ describe("TestRunner beforeAll/afterAll", {databaseCleaning: {transaction: true}
     await runPromise
 
     expect(afterAllRuns).toBe(1)
+  })
+
+  it("continues outer active afterAll scopes after an inner scope fails", async () => {
+    const environmentHandler = new EnvironmentHandlerNode()
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory: process.cwd(),
+      environment: "test",
+      environmentHandler,
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"]
+    })
+    const testRunner = new TestRunner({configuration, testFiles: []})
+    const order = []
+
+    testRunner._activeAfterAllScopes = [
+      {
+        afterAllsRun: false,
+        tests: {
+          args: {},
+          afterAlls: [{callback: async () => {
+            order.push("outer teardown")
+            throw new Error("expected outer teardown failure")
+          }}],
+          afterEaches: [],
+          beforeAlls: [],
+          beforeEaches: [],
+          subs: {},
+          tests: {}
+        }
+      },
+      {
+        afterAllsRun: false,
+        tests: {
+          args: {},
+          afterAlls: [{callback: async () => {
+            order.push("inner teardown")
+            throw new Error("expected inner teardown failure")
+          }}],
+          afterEaches: [],
+          beforeAlls: [],
+          beforeEaches: [],
+          subs: {},
+          tests: {}
+        }
+      }
+    ]
+    let caughtError
+
+    try {
+      await testRunner.runAfterAllsForActiveScopes()
+    } catch (error) {
+      caughtError = error
+    }
+
+    expect(caughtError).toBeInstanceOf(AggregateError)
+    expect(caughtError.cause.message).toEqual("expected inner teardown failure")
+    expect(caughtError.errors.map((error) => error.message)).toEqual([
+      "expected inner teardown failure",
+      "expected outer teardown failure"
+    ])
+    expect(order).toEqual(["inner teardown", "outer teardown"])
+    expect(testRunner._activeAfterAllScopes).toEqual([])
+  })
+
+  it("preserves a child scope failure when the parent afterAll also fails", async () => {
+    const environmentHandler = new EnvironmentHandlerNode()
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory: process.cwd(),
+      environment: "test",
+      environmentHandler,
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"]
+    })
+    const testRunner = new TestRunner({configuration, testFiles: []})
+    const tests = {
+      args: {},
+      afterAlls: [{callback: async () => { throw new Error("expected parent teardown failure") }}],
+      afterEaches: [],
+      beforeAlls: [],
+      beforeEaches: [],
+      subs: {
+        child: {
+          args: {},
+          afterAlls: [{callback: async () => { throw new Error("expected child teardown failure") }}],
+          afterEaches: [],
+          beforeAlls: [],
+          beforeEaches: [],
+          subs: {},
+          tests: {"runs once": {args: {}, function: async () => {}}}
+        }
+      },
+      tests: {}
+    }
+    let caughtError
+
+    try {
+      await testRunner.runTests({afterEaches: [], beforeEaches: [], tests, descriptions: [], indentLevel: 0})
+    } catch (error) {
+      caughtError = error
+    }
+
+    expect(caughtError).toBeInstanceOf(AggregateError)
+    expect(caughtError.cause.message).toEqual("expected child teardown failure")
+    expect(caughtError.errors.map((error) => error.message)).toEqual([
+      "expected child teardown failure",
+      "expected parent teardown failure"
+    ])
   })
 })

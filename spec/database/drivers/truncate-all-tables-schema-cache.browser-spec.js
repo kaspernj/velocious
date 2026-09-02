@@ -69,15 +69,26 @@ describe("database - drivers - truncate all tables - schema cache", {tags: ["dum
           await driver.truncateAllTables()
 
           expect(countSqlMessages(arrayOutput, (message) => isTableListQuery(driver, message))).toEqual(1)
-          const cleanupRequestCount = sqlMessages(arrayOutput)
+          const cleanupMessages = sqlMessages(arrayOutput)
             .filter((message) => isCleanupRequest(driver, cleanupOrder, message))
-            .length
+          const failedCleanupMessages = cleanupMessages.filter((message) => message.includes("FAILED"))
+          const staleTableMessages = cleanupMessages.filter((message) => message.includes(driver.quoteTable(STALE_TABLE)))
+          const liveTableMessages = cleanupMessages.filter((message) => message.includes(driver.quoteTable(STALE_LIVE_TABLE)))
+          const successfulRetry = cleanupMessages[cleanupMessages.length - 1]
 
           if (driver.getType() == "mysql" && !driver.getArgs().multipleStatements) {
-            expect(cleanupRequestCount).toEqual(2)
+            expect(cleanupMessages.length).toEqual(3)
           } else {
-            expect(cleanupRequestCount).toEqual(1)
+            expect(cleanupMessages.length).toEqual(2)
           }
+
+          expect(failedCleanupMessages.length).toEqual(1)
+          expect(failedCleanupMessages[0]).toContain(driver.quoteTable(STALE_TABLE))
+          expect(staleTableMessages.length).toEqual(1)
+          expect(liveTableMessages.length).toEqual(2)
+          expect(successfulRetry).toContain(driver.quoteTable(STALE_LIVE_TABLE))
+          expect(successfulRetry.includes(driver.quoteTable(STALE_TABLE))).toEqual(false)
+          expect(successfulRetry.includes("FAILED")).toEqual(false)
         })
 
         expect(await tableRowCount(driver, STALE_LIVE_TABLE)).toEqual(0)

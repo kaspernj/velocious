@@ -1,0 +1,13 @@
+// @ts-check
+import BaseCommand from "../../../base-command.js";
+/** CLI command for merging complete rich test-profile shards into timing history. */
+export default class TestTimingManifestMerge extends BaseCommand {
+    /**
+     * Runs execute.
+     * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the merged manifest.
+     */
+    async execute() {
+        return await this.getConfiguration().getEnvironmentHandler().cliCommandsTestTimingManifestMerge(this);
+    }
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoibWVyZ2UuanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuLi8uLi8uLi8uLi8uLi8uLi9zcmMvY2xpL2NvbW1hbmRzL3Rlc3QvdGltaW5nLW1hbmlmZXN0L21lcmdlLmpzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQUFBLFlBQVk7QUFFWixPQUFPLFdBQVcsTUFBTSwwQkFBMEIsQ0FBQTtBQUVsRCxxRkFBcUY7QUFDckYsTUFBTSxDQUFDLE9BQU8sT0FBTyx1QkFBd0IsU0FBUSxXQUFXO0lBQzlEOzs7T0FHRztJQUNILEtBQUssQ0FBQyxPQUFPO1FBQ1gsT0FBTyxNQUFNLElBQUksQ0FBQyxnQkFBZ0IsRUFBRSxDQUFDLHFCQUFxQixFQUFFLENBQUMsa0NBQWtDLENBQUMsSUFBSSxDQUFDLENBQUE7SUFDdkcsQ0FBQztDQUNGIiwic291cmNlc0NvbnRlbnQiOlsiLy8gQHRzLWNoZWNrXG5cbmltcG9ydCBCYXNlQ29tbWFuZCBmcm9tIFwiLi4vLi4vLi4vYmFzZS1jb21tYW5kLmpzXCJcblxuLyoqIENMSSBjb21tYW5kIGZvciBtZXJnaW5nIGNvbXBsZXRlIHJpY2ggdGVzdC1wcm9maWxlIHNoYXJkcyBpbnRvIHRpbWluZyBoaXN0b3J5LiAqL1xuZXhwb3J0IGRlZmF1bHQgY2xhc3MgVGVzdFRpbWluZ01hbmlmZXN0TWVyZ2UgZXh0ZW5kcyBCYXNlQ29tbWFuZCB7XG4gIC8qKlxuICAgKiBSdW5zIGV4ZWN1dGUuXG4gICAqIEByZXR1cm5zIHtQcm9taXNlPFJldHVyblR5cGU8dHlwZW9mIEpTT04ucGFyc2U+Pn0gLSBSZXNvbHZlcyB3aXRoIHRoZSBtZXJnZWQgbWFuaWZlc3QuXG4gICAqL1xuICBhc3luYyBleGVjdXRlKCkge1xuICAgIHJldHVybiBhd2FpdCB0aGlzLmdldENvbmZpZ3VyYXRpb24oKS5nZXRFbnZpcm9ubWVudEhhbmRsZXIoKS5jbGlDb21tYW5kc1Rlc3RUaW1pbmdNYW5pZmVzdE1lcmdlKHRoaXMpXG4gIH1cbn1cbiJdfQ==

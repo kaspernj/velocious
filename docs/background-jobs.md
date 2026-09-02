@@ -603,8 +603,9 @@ it created. Requests and acknowledgements carry the exact generation and a UUID;
 server errors preserve their name/message/stack and are also emitted on
 `framework-error` and `all-error` for supervisors whose hooks ignore stdio.
 The client issues one request with no retry and defaults to a hard 10000ms
-deadline (configurable from 1 through 25000ms, deliberately below Rollbridge's
-30-second hook deadline); timeout destroys the socket and exits the CLI nonzero.
+deadline (configurable from 1 through 60000ms so supervised lifecycle transitions
+can use a full-minute deadline); timeout destroys the socket and exits the CLI
+nonzero.
 
 ## Worker shutdown and process-job draining
 
@@ -619,26 +620,42 @@ then `SIGKILL` after a short grace) so they are not orphaned across a deploy —
 an orphaned runner keeps running against deleted release code and holds its
 database connections open.
 
-After a forked or spawned one-shot runner receives the main process's durable
-status acknowledgement, it exits without waiting for graceful Beacon/database
-teardown; the operating system closes those process-owned resources. This keeps
-a completed runner from lingering when a graceful socket close stalls. Inline
-and long-lived worker shutdown still performs graceful framework cleanup. If
-the acknowledgement is missing or rejected through `job-update-error`, the
-one-shot runner exits as failed and does not reinterpret the transport failure
-as a failed job-performance report.
+After a forked runner receives the main process's durable status
+acknowledgement, it invokes application initializer teardown and bounded
+Beacon/database cleanup before exit. Cleanup failure remains visible but does
+not reinterpret the already acknowledged durable job outcome. SIGTERM, SIGINT,
+and parent disconnect use that same cleanup path. The compatible direct spawned
+one-shot command retains its established exit behavior and
+`background-jobs-runner` process type. If acknowledgement is missing or rejected
+through `job-update-error`, the one-shot runner exits as failed and does not
+reinterpret the acknowledgement-delivery failure as a failed job-performance report.
+
+A pooled child initializes once as `background-jobs-pooled-runner`, reuses the
+same application process context across admitted jobs, and never tears
+initializers down per job. Framework connection rotation remains framework-only.
+Final signal/disconnect teardown runs once; a replacement child receives a new
+opaque lifecycle `instanceId`. Forked children use
+`background-jobs-forked-runner`. See
+[application process lifecycle](application-process-lifecycle.md).
 
 `BackgroundJobsMain` and `BackgroundJobsWorker` normally own their configuration
 lifetimes and close its database pools on `stop()`. An embedded process or test
 harness that passes a configuration whose pools are owned by its caller must
 construct either service with `closeDatabaseConnectionsOnStop: false`; shutdown
 still disconnects Beacon and closes the service sockets without invalidating
-the caller's active database connections. Embedded lifecycle coordinators can
+the caller's active database connections or application initializer lifecycle.
+The embedding owner must later call `configuration.shutdown()` and its framework
+cleanup. Embedded lifecycle coordinators can
 also pass an async `onStopped` hook; it runs after service-owned shutdown work
 finishes, without replacing or narrowing either service's `stop()` contract.
 Concurrent and repeated `stop()` calls share one lifecycle and invoke the hook
 once. If shutdown and the hook both fail, `stop()` rejects with an
 `AggregateError` whose errors contain the shutdown failure first.
+
+When the main or worker owns cleanup, initializer teardown runs only after its
+accepted work, durable reports, child runners, and generation-specific drain
+settle, immediately before framework cleanup. Retirement and activation do not
+tear down or transfer the old generation's application lifecycle.
 
 The drain window is controlled by `VELOCIOUS_BACKGROUND_JOBS_WORKER_SHUTDOWN_TIMEOUT_MS`:
 

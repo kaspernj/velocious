@@ -5,16 +5,19 @@ This folder contains implementation learnings and practical guidance discovered 
 ## Index
 - `docs/advisory-locks.md`: Cooperative, connection-scoped advisory lock helpers on every record class.
 - `docs/api-manifest-endpoint.md`: Built-in frontend-model API manifest endpoint — opt-in, token-protectable, returns resource/attribute/command metadata as pretty-printed JSON.
+- `docs/application-process-lifecycle.md`: Initializer startup/teardown, immutable process contexts, promise/race semantics, and process-owner cleanup boundaries.
 - `docs/attachments.md`: Backend record attachment inputs, storage drivers, path allowlisting/streaming, and persistence lifecycle.
 - `docs/auditing.md`: Built-in lifecycle audit rows, manual audit events, and audit-missing scopes.
 - `docs/background-jobs.md`: Background job operational behavior, including failure events for production error reporting.
 - `docs/cli.md`: CLI process exit behavior for successful and rejected commands.
 - `docs/database-migrations.md`: Migration helpers, UTC datetime storage, implicit primary keys, and reference column defaults.
+- `docs/migration-execution-phases.md`: Caller-selected pre-runtime and post-publication migration sets across filesystem, package, require-context, and tenant catalogs.
 - `docs/docker-development-environment.md`: Canonical `dev` Compose service, development-home bind contract, credential boundary, and the static contract verifier.
 - `docs/operation-scoped-transactions.md`: Explicit singular-database transactions with operation-bound models, records, savepoints, commit callbacks, and pool isolation.
 - `docs/http-server.md`: HTTP server worker configuration, socket distribution behavior, buffered response compression, and HEAD response semantics.
 - `docs/expo-metro-compatibility.md`: Expo/Metro integration rules and the repository Expo export check.
 - `docs/frontend-models.md`: Frontend model transport, commands, lookup semantics, and pitfalls.
+- `docs/git-installation.md`: Credential-free installation from pinned Git commits without lifecycle scripts.
 - `docs/query-bulk-operations.md`: `updateAll` for efficient batch updates and `destroyAll` behavior.
 - `docs/rampway-integration.md`: Mounting and operating Rampway's package-owned durable deployment control plane in a Velocious application.
 - `docs/logging.md`: Rails-style request and database query logging behavior.

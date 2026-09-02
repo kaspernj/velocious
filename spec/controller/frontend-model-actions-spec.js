@@ -20,6 +20,7 @@ import Response from "../../src/http-server/client/response.js"
 import Task from "../dummy/src/models/task.js"
 import User from "../dummy/src/models/user.js"
 import VelociousError from "../../src/velocious-error.js"
+import { LOG_REDACTION_MARKER } from "../../src/log-redactor.js"
 
 const FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE = "Request failed."
 
@@ -335,7 +336,7 @@ class AllColumnsPluckTaskFrontendResource extends FrontendModelBaseResource {
   static builtInCollectionCommands = ["index"]
 }
 
-describe("Controller frontend model actions", {databaseCleaning: {transaction: false, truncate: true}}, () => {
+describe("Controller frontend model actions", () => {
   it("does not override scoped distinct when distinct param is omitted", async () => {
     await withTaskReadDistinctAbilityScope(async () => {
       await Dummy.run(async () => {
@@ -413,14 +414,18 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
 
   it("checks shared frontend-model API controller action connections back in", async () => {
     await Dummy.run(async () => {
-      await createTask("Connection checkout release")
+      const defaultPool = dummyConfiguration.getDatabasePool("default")
+
+      // This assertion covers production-style pool checkout rather than the test transaction reuse path.
+      defaultPool.clearTestSharedConnection()
+      expect(defaultPool.testSharedConnection()).toBeUndefined()
 
       const successPayload = await postFrontendModel("/frontend-models", {
         requests: [
           {
             commandType: "index",
             model: "Task",
-            payload: {where: {name: "Connection checkout release"}},
+            payload: {where: {name: "Missing connection checkout record"}},
             requestId: "request-1"
           }
         ]
@@ -682,9 +687,9 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     expect(reporterContexts[0].requestId).toEqual("request-1")
     expect(reporterRequestDetails[0]?.httpMethod).toEqual("POST")
     expect(reporterRequestDetails[0]?.path).toEqual("/frontend-models")
-    expect(reporterRequestDetails[0]?.body?.requests?.[0]?.payload?.authorization).toEqual("[redacted]")
+    expect(reporterRequestDetails[0]?.body?.requests?.[0]?.payload?.authorization).toEqual(LOG_REDACTION_MARKER)
     expect(reporterRequestDetails[0]?.body?.requests?.[0]?.payload?.comments?.[0]).toContain("[truncated ")
-    expect(reporterRequestDetails[0]?.body?.requests?.[0]?.payload?.payload?.contentBase64).toEqual("[redacted]")
+    expect(reporterRequestDetails[0]?.body?.requests?.[0]?.payload?.payload?.contentBase64).toEqual(LOG_REDACTION_MARKER)
   })
 
   it("compacts oversized shared frontend-model request details for client error reporters", async () => {

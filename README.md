@@ -7,7 +7,7 @@
 * Connection-scoped advisory locks with automatic cleanup before pooled connections are reused or closed (see [docs/advisory-locks.md](docs/advisory-locks.md))
 * Built-in record auditing for model lifecycle changes (see [docs/auditing.md](docs/auditing.md))
 * Declarative state machines for models, with typed event methods generated into the base model (see [docs/state-machine.md](docs/state-machine.md))
-* Migrations for schema changes and UTC datetime storage, including recorded `changeTable` batches that combine operations into one `ALTER` on bulk-capable drivers (see [docs/database-migrations.md](docs/database-migrations.md) and [docs/change-table.md](docs/change-table.md))
+* Migrations for schema changes and UTC datetime storage, including caller-selected `pre-runtime` and `post-publication` execution sets and recorded `changeTable` batches that combine operations into one `ALTER` on bulk-capable drivers (see [docs/database-migrations.md](docs/database-migrations.md), [docs/migration-execution-phases.md](docs/migration-execution-phases.md), and [docs/change-table.md](docs/change-table.md))
 * Tenant-selected base-model and structure generation with one immutable, fail-closed physical database context; tenant-only model metadata initializes only after that context is active (see [docs/tenant-selected-database-generation.md](docs/tenant-selected-database-generation.md))
 * Read-only tenant migration deploy preflight with stable JSON output and fail-closed ledger reads (see [docs/tenant-migration-deploy-preflight.md](docs/tenant-migration-deploy-preflight.md))
 * External packages (engines) that contribute data models, frontend-model resources and migrations to a consuming app (see [docs/packages.md](docs/packages.md))
@@ -32,11 +32,12 @@
 * Per-record ability checks via `.abilities(...)` on frontend queries + `record.can(action)` (see [docs/abilities.md](docs/abilities.md))
 * Translated model attributes with current-locale relationship sorting (see [docs/translations.md](docs/translations.md))
 * Cross-process broadcast bus for `broadcastToChannel` via `velocious beacon`, including background job runner processes (see [docs/beacon.md](docs/beacon.md))
+* Rails-style application process initializer teardown with immutable process identity, reverse idempotent shutdown, and explicit HTTP/background-job ownership (see [docs/application-process-lifecycle.md](docs/application-process-lifecycle.md))
 * Configurable HTTP server worker handlers plus backpressured, descriptor-only file responses with completion callbacks (see [docs/http-server.md](docs/http-server.md))
 * Default-on buffered HTTP response compression with Brotli/gzip content negotiation, global and per-response opt-outs, and HEAD-correct representation headers (see [docs/http-server.md](docs/http-server.md#response-compression))
 * Background jobs with Node SQL/TCP workers plus a Browser/Expo local SQLite store and in-process dispatcher, including failure events, authorized database-scoped dashboard counts, and an opt-in release-scoped main/worker generation protocol with acknowledged activation, asynchronous retirement, and retired-main recovery. Production compliance additionally requires downstream supervisor retention/activation ordering and release pins (see [docs/background-jobs.md](docs/background-jobs.md), [docs/local-background-jobs.md](docs/local-background-jobs.md), and [docs/background-jobs-dashboard.md](docs/background-jobs-dashboard.md))
 * Durable one-off background-job scheduling with exact epoch timestamps (see [docs/scheduled-background-job-enqueue.md](docs/scheduled-background-job-enqueue.md))
-* Rails-style request and database query logging (see [docs/logging.md](docs/logging.md))
+* Rails-style request and database query logging with structured credential redaction (see [docs/logging.md](docs/logging.md))
 * EJS-backed mailers with delivery, queueing, and payload rendering support (see [docs/mailers.md](docs/mailers.md))
 * Trusted reverse proxy handling for `request.remoteAddress()` (see [docs/trusted-proxies.md](docs/trusted-proxies.md))
 * In-process driver schema metadata caching (see [docs/schema-metadata-cache.md](docs/schema-metadata-cache.md))
@@ -58,7 +59,17 @@ npm install velocious
 npx velocious init
 ```
 
+Pinned Git commits can be installed without lifecycle scripts by using a GitHub
+commit archive. Velocious checks in generated `build/` output for this purpose;
+see [Git dependency installation](docs/git-installation.md).
+
 By default, Velocious looks for your configuration in `src/config/configuration.js`. If you keep the configuration elsewhere, make sure your app imports it early and calls `configuration.setCurrent()`.
+
+Application initializers may implement `teardown()` and inspect their frozen
+`getProcessContext()` value. Long-lived process owners call
+`configuration.shutdown()` before framework connection cleanup; see the
+[application process lifecycle guide](docs/application-process-lifecycle.md) for
+promise identity, errors, process types, and pooled/forked runner semantics.
 
 # Node SQLite driver
 
@@ -675,8 +686,9 @@ Task.hasOneAttachment("descriptionFile")
 Task.hasOneAttachment("archivedPdf", {driver: "s3"})
 ```
 
-See [Backend record attachments](docs/attachments.md) for the complete input,
-storage-driver, lifecycle, and path-security contracts.
+`db:migrate` provisions the framework-owned attachment table before runtime
+attachment work begins. See [Backend record attachments](docs/attachments.md)
+for the complete input, storage-driver, lifecycle, and path-security contracts.
 
 You can also pass a driver class or instance directly on the attachment:
 
@@ -1435,6 +1447,22 @@ Migrations that must be rerunnable can guard changes with `tableExists(...)`, `c
 npx velocious db:migrate
 ```
 
+Migrations default to the `pre-runtime` phase. A migration can declare
+`Migration.runInPhase("post-publication")`, and callers can run exactly one
+declared set while preserving timestamp order, package migrations, database
+targets, and ledger behavior:
+
+```bash
+npx velocious db:migrate --phase pre-runtime
+npx velocious db:migrate --phase post-publication
+```
+
+Omitting `--phase` remains backward-compatible and runs all pending migrations.
+Velocious does not choose when either set runs; the application or deployment
+caller owns invocation timing. See [migration execution phases](docs/migration-execution-phases.md)
+for the class API, programmatic selector, require-context behavior, and tenant
+commands.
+
 Run project seeds from `src/db/seed.js` (default export should be an async function):
 
 ```bash
@@ -1922,7 +1950,8 @@ const configuration = new Configuration({
     console: false,            // disable console output
     file: true,                // enable file output
     directory: "/custom/logs", // optional, defaults to "<project>/log" in Node
-    filePath: "/tmp/app.log"   // optional explicit path
+    filePath: "/tmp/app.log",  // optional explicit path
+    sensitiveNames: ["integrationPin"] // optional app-specific additions
   }
 })
 ```
@@ -1982,6 +2011,8 @@ Task Load (1.9ms)  SELECT `tasks`.* FROM `tasks` WHERE `tasks`.`id` = 1 LIMIT 1
 Model queries use operation names such as `Task Load`, `Task Count`, `Task Pluck`, `Task Create`, `Task Update`, and `Task Destroy`. Raw driver queries use `SQL`. The source arrow is included only when Velocious can identify an application frame; dependency and framework frames such as `node_modules` are omitted.
 
 Query logging defaults to off in the `test` environment to keep CI output quiet and is skipped when no output emits `info`. Override it with `logging: {queryLogging: true}` when a test build should write SQL timing logs, and use the normal logging output settings to send those logs to console or file.
+
+- **Credential redaction**: Request headers, parsed body/params, nested arrays, URL queries, WebSocket authentication params, rendered SQL diagnostics, and request/frontend-model errors are redacted before formatting and output fan-out. Defaults match common authorization, authentication, credential, password, secret, token, API-key, cookie/session, and base64-content name variants case-insensitively. Add application names with `logging.sensitiveNames`; entries must be non-blank strings. Exact request-scoped values are replaced in SQL/error text while safe fields, SQL shape, timing, source lines, error class/backtrace, and correlation metadata remain visible. Import `LOG_REDACTION_MARKER` from `velocious/build/src/log-redactor.js` when code needs to compare the deterministic marker. See [logging and credential redaction](docs/logging.md#credential-redaction).
 
 ## Listen for framework errors
 
@@ -2044,7 +2075,7 @@ await client.close()
 
 For long-lived Node clients, the constructor also accepts opt-in liveness options (all default off, so browser/Expo usage is unchanged): `webSocketImplementation` (inject Node's `ws`, since the global/undici WebSocket exposes neither protocol ping nor an unref-able socket), `heartbeatIntervalMs` (a ping heartbeat that drops a socket whose peer stops ponging, so a client notices a vanished server), and `unref` (unref the underlying socket so an idle connection can't keep the process alive on its own). See [docs/websocket-channels.md](docs/websocket-channels.md).
 
-`await client.close()` is a final graceful shutdown that releases resumable server-session state; unexpected transport drops first attempt to resume that state. On a multi-worker server, the client automatically puts the prior session identity in the reconnect upgrade URL so the host can route it to its owning worker; routing is session-based and never source-IP-based. A successful resume retains the existing server-side connection and channel instances. If the server instead rejects the old session with `session-gone`, SnapReq promotes the already-established fresh session, reopens still-live one-to-one connection handles, and re-subscribes still-live channel handles. Those public handles remain usable and channel readiness resolves on the fresh session; explicitly closed handles stay closed. See [the WebSocket channel lifecycle guarantees](docs/websocket-channels.md#lifecycle-guarantees-phase-1b).
+`await client.close()` is a final graceful shutdown that releases resumable server-session state; unexpected transport drops first attempt to resume that state. On a multi-worker server, the client automatically puts the prior session identity in the reconnect upgrade URL so the host can route it to its owning worker; routing is session-based and never source-IP-based. A successful resume retains the existing server-side connection and channel instances. If the server instead rejects the old session with `session-gone`, SnapReq promotes the already-established fresh session, reopens still-live one-to-one connection handles, and re-subscribes still-live channel handles. Those public handles remain usable and channel readiness resolves on the fresh session; explicitly closed handles stay closed. A channel that the server permanently closes or rejects remains terminal and is not automatically reopened; register a new listener after changing the authorization or request context. See [the WebSocket channel lifecycle guarantees](docs/websocket-channels.md#lifecycle-guarantees-phase-1b).
 
 ## Subscribe to events
 
@@ -2182,6 +2213,8 @@ If you are developing on Velocious, you can run the tests with:
 ```
 
 Tests default to a 60-second timeout. Override per test with `{timeoutSeconds: 5}` or set a suite-wide default via `configureTests({defaultTimeoutSeconds: 30})`.
+
+Database-backed tests default `testArgs.databaseCleaning` to transaction rollback. The configured testing hook uses this metadata to cover `beforeEach`, the test body, and `afterEach` hooks on one pinned connection. Use `{databaseCleaning: {transaction: false, truncate: true}}` only for behavior that requires physical root transactions, independent commits, DDL that auto-commits or cannot run inside the wrapper transaction, lock contention, or genuine concurrency. Transaction-disabled non-request tests use ordinary independently owned checkouts instead of a runner-pinned connection. Tests that own their pool lifecycle or use only private databases can disable configured cleaning with `{databaseCleaning: {transaction: false, truncate: false}}`. See [database cleanup guidance](docs/testing-guidelines.md#preferred-strategy).
 
 Truncation-based test cleanup batches eligible tables into one request on PostgreSQL,
 SQL Server, and SQLite while preserving each driver's existing identity behavior,
@@ -2465,7 +2498,7 @@ npx velocious background-jobs:retire --generation release-20260828.1 --socket /s
 ```
 
 Each lifecycle command sends one request with no retry and has a hard 10000ms
-deadline; `--timeout-ms` accepts 1 through 25000ms. Generation-aware workers,
+deadline; `--timeout-ms` accepts 1 through 60000ms. Generation-aware workers,
 clients, and reporters require their hello acknowledgement before readiness or
 mutation and bound it to 4000ms by default.
 

@@ -81,7 +81,7 @@ async function expectAdditionsRemoved(table) {
   }
 }
 
-describe("database - migration - changeTable browser integration", {tags: ["dummy"]}, () => {
+describe("database - migration - changeTable browser integration", {databaseCleaning: {transaction: false, truncate: true}, tags: ["dummy"]}, () => {
   it("adds and reverses the bulk example while preserving original columns and data", async () => {
     const configuration = Configuration.current()
 

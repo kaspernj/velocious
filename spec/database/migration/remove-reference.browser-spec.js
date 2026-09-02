@@ -4,7 +4,7 @@ import Configuration from "../../../src/configuration.js"
 import { describe, expect, it } from "../../../src/testing/test.js"
 import Migration from "../../../src/database/migration/index.js"
 
-describe("database - migration - removeReference", {tags: ["dummy"]}, () => {
+describe("database - migration - removeReference", {databaseCleaning: {transaction: false, truncate: true}, tags: ["dummy"]}, () => {
   it("removes a reference column, its ordinary index, and its foreign key", async () => {
     const configuration = Configuration.current()
 

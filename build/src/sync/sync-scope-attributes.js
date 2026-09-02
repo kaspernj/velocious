@@ -1,0 +1,24 @@
+// @ts-check
+/**
+ * Reads and validates a sync/change model's declared scope-partition
+ * attributes (`static syncScopeAttributes`).
+ *
+ * The declaration names the attribute(s) partitioning the app's sync feed —
+ * the same attribute names client pull scopes use as conditions (for example
+ * `["eventId"]` or `["accountId"]`). The publisher persists them onto every
+ * published sync row and broadcasts them as the framework sync channel's
+ * scoping params, and the change feed serializes them onto every changes row
+ * under their own names. Velocious itself has no built-in partition name.
+ * @param {ReturnType<typeof JSON.parse>} syncModel - Sync/change model class.
+ * @returns {string[] | null} Declared scope attributes, or null when the model declares none.
+ */
+export function declaredSyncScopeAttributes(syncModel) {
+    const declared = syncModel.syncScopeAttributes;
+    if (declared === undefined || declared === null)
+        return null;
+    if (!Array.isArray(declared) || declared.length === 0 || declared.some((attributeName) => typeof attributeName !== "string" || !attributeName)) {
+        throw new Error(`${syncModel.name} static syncScopeAttributes must be a non-empty array of attribute-name strings, got: ${String(declared)}`);
+    }
+    return declared;
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoic3luYy1zY29wZS1hdHRyaWJ1dGVzLmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiLi4vLi4vLi4vc3JjL3N5bmMvc3luYy1zY29wZS1hdHRyaWJ1dGVzLmpzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQUFBLFlBQVk7QUFFWjs7Ozs7Ozs7Ozs7O0dBWUc7QUFDSCxNQUFNLFVBQVUsMkJBQTJCLENBQUMsU0FBUztJQUNuRCxNQUFNLFFBQVEsR0FBRyxTQUFTLENBQUMsbUJBQW1CLENBQUE7SUFFOUMsSUFBSSxRQUFRLEtBQUssU0FBUyxJQUFJLFFBQVEsS0FBSyxJQUFJO1FBQUUsT0FBTyxJQUFJLENBQUE7SUFFNUQsSUFBSSxDQUFDLEtBQUssQ0FBQyxPQUFPLENBQUMsUUFBUSxDQUFDLElBQUksUUFBUSxDQUFDLE1BQU0sS0FBSyxDQUFDLElBQUksUUFBUSxDQUFDLElBQUksQ0FBQyxDQUFDLGFBQWEsRUFBRSxFQUFFLENBQUMsT0FBTyxhQUFhLEtBQUssUUFBUSxJQUFJLENBQUMsYUFBYSxDQUFDLEVBQUUsQ0FBQztRQUMvSSxNQUFNLElBQUksS0FBSyxDQUFDLEdBQUcsU0FBUyxDQUFDLElBQUkseUZBQXlGLE1BQU0sQ0FBQyxRQUFRLENBQUMsRUFBRSxDQUFDLENBQUE7SUFDL0ksQ0FBQztJQUVELE9BQU8sUUFBUSxDQUFBO0FBQ2pCLENBQUMiLCJzb3VyY2VzQ29udGVudCI6WyIvLyBAdHMtY2hlY2tcblxuLyoqXG4gKiBSZWFkcyBhbmQgdmFsaWRhdGVzIGEgc3luYy9jaGFuZ2UgbW9kZWwncyBkZWNsYXJlZCBzY29wZS1wYXJ0aXRpb25cbiAqIGF0dHJpYnV0ZXMgKGBzdGF0aWMgc3luY1Njb3BlQXR0cmlidXRlc2ApLlxuICpcbiAqIFRoZSBkZWNsYXJhdGlvbiBuYW1lcyB0aGUgYXR0cmlidXRlKHMpIHBhcnRpdGlvbmluZyB0aGUgYXBwJ3Mgc3luYyBmZWVkIOKAlFxuICogdGhlIHNhbWUgYXR0cmlidXRlIG5hbWVzIGNsaWVudCBwdWxsIHNjb3BlcyB1c2UgYXMgY29uZGl0aW9ucyAoZm9yIGV4YW1wbGVcbiAqIGBbXCJldmVudElkXCJdYCBvciBgW1wiYWNjb3VudElkXCJdYCkuIFRoZSBwdWJsaXNoZXIgcGVyc2lzdHMgdGhlbSBvbnRvIGV2ZXJ5XG4gKiBwdWJsaXNoZWQgc3luYyByb3cgYW5kIGJyb2FkY2FzdHMgdGhlbSBhcyB0aGUgZnJhbWV3b3JrIHN5bmMgY2hhbm5lbCdzXG4gKiBzY29waW5nIHBhcmFtcywgYW5kIHRoZSBjaGFuZ2UgZmVlZCBzZXJpYWxpemVzIHRoZW0gb250byBldmVyeSBjaGFuZ2VzIHJvd1xuICogdW5kZXIgdGhlaXIgb3duIG5hbWVzLiBWZWxvY2lvdXMgaXRzZWxmIGhhcyBubyBidWlsdC1pbiBwYXJ0aXRpb24gbmFtZS5cbiAqIEBwYXJhbSB7UmV0dXJuVHlwZTx0eXBlb2YgSlNPTi5wYXJzZT59IHN5bmNNb2RlbCAtIFN5bmMvY2hhbmdlIG1vZGVsIGNsYXNzLlxuICogQHJldHVybnMge3N0cmluZ1tdIHwgbnVsbH0gRGVjbGFyZWQgc2NvcGUgYXR0cmlidXRlcywgb3IgbnVsbCB3aGVuIHRoZSBtb2RlbCBkZWNsYXJlcyBub25lLlxuICovXG5leHBvcnQgZnVuY3Rpb24gZGVjbGFyZWRTeW5jU2NvcGVBdHRyaWJ1dGVzKHN5bmNNb2RlbCkge1xuICBjb25zdCBkZWNsYXJlZCA9IHN5bmNNb2RlbC5zeW5jU2NvcGVBdHRyaWJ1dGVzXG5cbiAgaWYgKGRlY2xhcmVkID09PSB1bmRlZmluZWQgfHwgZGVjbGFyZWQgPT09IG51bGwpIHJldHVybiBudWxsXG5cbiAgaWYgKCFBcnJheS5pc0FycmF5KGRlY2xhcmVkKSB8fCBkZWNsYXJlZC5sZW5ndGggPT09IDAgfHwgZGVjbGFyZWQuc29tZSgoYXR0cmlidXRlTmFtZSkgPT4gdHlwZW9mIGF0dHJpYnV0ZU5hbWUgIT09IFwic3RyaW5nXCIgfHwgIWF0dHJpYnV0ZU5hbWUpKSB7XG4gICAgdGhyb3cgbmV3IEVycm9yKGAke3N5bmNNb2RlbC5uYW1lfSBzdGF0aWMgc3luY1Njb3BlQXR0cmlidXRlcyBtdXN0IGJlIGEgbm9uLWVtcHR5IGFycmF5IG9mIGF0dHJpYnV0ZS1uYW1lIHN0cmluZ3MsIGdvdDogJHtTdHJpbmcoZGVjbGFyZWQpfWApXG4gIH1cblxuICByZXR1cm4gZGVjbGFyZWRcbn1cbiJdfQ==

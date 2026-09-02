@@ -603,7 +603,8 @@ describe("HttpServer - worker handler", {databaseCleaning: {transaction: true}},
     const handler = new WorkerHandler({
       configuration: {
         debug: false,
-        withoutCurrentConnectionContexts: (callback) => callback()
+        withoutCurrentConnectionContexts: (callback) => callback(),
+        withoutCurrentTestDatabaseAccessScope: (callback) => callback()
       },
       workerCount: 1
     })
@@ -670,11 +671,13 @@ describe("HttpServer - worker handler", {databaseCleaning: {transaction: true}},
     const originalHandlers = new Set(websocketEventsHost.handlers)
     const configurationA = {
       debug: false,
-      withoutCurrentConnectionContexts: (callback) => callback()
+      withoutCurrentConnectionContexts: (callback) => callback(),
+      withoutCurrentTestDatabaseAccessScope: (callback) => callback()
     }
     const configurationB = {
       debug: false,
-      withoutCurrentConnectionContexts: (callback) => callback()
+      withoutCurrentConnectionContexts: (callback) => callback(),
+      withoutCurrentTestDatabaseAccessScope: (callback) => callback()
     }
     const handlers = [
       new WorkerHandler({configuration: configurationA, workerCount: 1}),

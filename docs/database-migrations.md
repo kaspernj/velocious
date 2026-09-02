@@ -1,5 +1,10 @@
 # Database Migrations
 
+Migrations default to the `pre-runtime` execution phase and can opt into
+`post-publication`. Callers may select either declared set without changing
+normal discovery, timestamp ordering, database targeting, package composition,
+or ledger semantics. See [migration execution phases](migration-execution-phases.md).
+
 Velocious migration helpers default new tables to UUID primary keys:
 
 ```js

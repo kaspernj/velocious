@@ -1,0 +1,56 @@
+// @ts-check
+import configurationResolver from "../configuration-resolver.js";
+import PlatformVelociousJob from "./platform-job.js";
+import { cancelScheduledBackgroundJobForConfiguration, enqueueBackgroundJobForConfiguration, replaceScheduledBackgroundJobForConfiguration } from "./runtime.js";
+/**
+ * Node background-job entry. It preserves lazy configuration discovery for
+ * fresh producer processes while the explicit platform entry stays free of
+ * Node-only configuration resolution.
+ * @template {Array<ReturnType<typeof JSON.parse>>} [TArgs=[]]
+ * @augments {PlatformVelociousJob<TArgs>}
+ */
+export default class VelociousJob extends PlatformVelociousJob {
+    /**
+     * Runs perform later.
+     * @param {...ReturnType<typeof JSON.parse>} args - Job args.
+     * @returns {Promise<string>} - Job id.
+     */
+    static async performLater(...args) {
+        const configuration = await configurationResolver();
+        const { jobArgs, jobOptions } = this._splitArgsAndOptions(args);
+        return await enqueueBackgroundJobForConfiguration({ configuration, JobClass: this, jobArgs, jobOptions });
+    }
+    /**
+     * Runs perform later with options.
+     * @param {object} args - Options.
+     * @param {Array<ReturnType<typeof JSON.parse>>} args.args - Job args.
+     * @param {import("./types.js").BackgroundJobOptions} [args.options] - Job options.
+     * @returns {Promise<string>} - Job id.
+     */
+    static async performLaterWithOptions({ args, options }) {
+        const configuration = await configurationResolver();
+        return await enqueueBackgroundJobForConfiguration({ configuration, JobClass: this, jobArgs: args, jobOptions: options });
+    }
+    /**
+     * Atomically replaces this job class's queued owner for a stable schedule key.
+     * @param {object} args - Options.
+     * @param {string} args.scheduleKey - Stable logical schedule key.
+     * @param {Array<ReturnType<typeof JSON.parse>>} args.args - Job args.
+     * @param {import("./types.js").BackgroundJobOptions} [args.options] - Job options.
+     * @returns {Promise<import("./types.js").BackgroundJobReplacementResult>} - Replacement result.
+     */
+    static async replaceScheduled({ scheduleKey, args, options }) {
+        const configuration = await configurationResolver();
+        return await replaceScheduledBackgroundJobForConfiguration({ configuration, JobClass: this, scheduleKey, jobArgs: args, jobOptions: options });
+    }
+    /**
+     * Cancels or detaches the current owner of a stable schedule key.
+     * @param {string} scheduleKey - Stable logical schedule key.
+     * @returns {Promise<import("./types.js").BackgroundJobCancellationResult>} - Cancellation result.
+     */
+    static async cancelScheduled(scheduleKey) {
+        const configuration = await configurationResolver();
+        return await cancelScheduledBackgroundJobForConfiguration({ configuration, scheduleKey });
+    }
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiam9iLmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiLi4vLi4vLi4vc3JjL2JhY2tncm91bmQtam9icy9qb2IuanMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBQUEsWUFBWTtBQUVaLE9BQU8scUJBQXFCLE1BQU0sOEJBQThCLENBQUE7QUFDaEUsT0FBTyxvQkFBb0IsTUFBTSxtQkFBbUIsQ0FBQTtBQUNwRCxPQUFPLEVBQ0wsNENBQTRDLEVBQzVDLG9DQUFvQyxFQUNwQyw2Q0FBNkMsRUFDOUMsTUFBTSxjQUFjLENBQUE7QUFFckI7Ozs7OztHQU1HO0FBQ0gsTUFBTSxDQUFDLE9BQU8sT0FBTyxZQUFhLFNBQVEsb0JBQW9CO0lBQzVEOzs7O09BSUc7SUFDSCxNQUFNLENBQUMsS0FBSyxDQUFDLFlBQVksQ0FBQyxHQUFHLElBQUk7UUFDL0IsTUFBTSxhQUFhLEdBQUcsTUFBTSxxQkFBcUIsRUFBRSxDQUFBO1FBQ25ELE1BQU0sRUFBQyxPQUFPLEVBQUUsVUFBVSxFQUFDLEdBQUcsSUFBSSxDQUFDLG9CQUFvQixDQUFDLElBQUksQ0FBQyxDQUFBO1FBRTdELE9BQU8sTUFBTSxvQ0FBb0MsQ0FBQyxFQUFDLGFBQWEsRUFBRSxRQUFRLEVBQUUsSUFBSSxFQUFFLE9BQU8sRUFBRSxVQUFVLEVBQUMsQ0FBQyxDQUFBO0lBQ3pHLENBQUM7SUFFRDs7Ozs7O09BTUc7SUFDSCxNQUFNLENBQUMsS0FBSyxDQUFDLHVCQUF1QixDQUFDLEVBQUMsSUFBSSxFQUFFLE9BQU8sRUFBQztRQUNsRCxNQUFNLGFBQWEsR0FBRyxNQUFNLHFCQUFxQixFQUFFLENBQUE7UUFFbkQsT0FBTyxNQUFNLG9DQUFvQyxDQUFDLEVBQUMsYUFBYSxFQUFFLFFBQVEsRUFBRSxJQUFJLEVBQUUsT0FBTyxFQUFFLElBQUksRUFBRSxVQUFVLEVBQUUsT0FBTyxFQUFDLENBQUMsQ0FBQTtJQUN4SCxDQUFDO0lBRUQ7Ozs7Ozs7T0FPRztJQUNILE1BQU0sQ0FBQyxLQUFLLENBQUMsZ0JBQWdCLENBQUMsRUFBQyxXQUFXLEVBQUUsSUFBSSxFQUFFLE9BQU8sRUFBQztRQUN4RCxNQUFNLGFBQWEsR0FBRyxNQUFNLHFCQUFxQixFQUFFLENBQUE7UUFFbkQsT0FBTyxNQUFNLDZDQUE2QyxDQUFDLEVBQUMsYUFBYSxFQUFFLFFBQVEsRUFBRSxJQUFJLEVBQUUsV0FBVyxFQUFFLE9BQU8sRUFBRSxJQUFJLEVBQUUsVUFBVSxFQUFFLE9BQU8sRUFBQyxDQUFDLENBQUE7SUFDOUksQ0FBQztJQUVEOzs7O09BSUc7SUFDSCxNQUFNLENBQUMsS0FBSyxDQUFDLGVBQWUsQ0FBQyxXQUFXO1FBQ3RDLE1BQU0sYUFBYSxHQUFHLE1BQU0scUJBQXFCLEVBQUUsQ0FBQTtRQUVuRCxPQUFPLE1BQU0sNENBQTRDLENBQUMsRUFBQyxhQUFhLEVBQUUsV0FBVyxFQUFDLENBQUMsQ0FBQTtJQUN6RixDQUFDO0NBQ0YiLCJzb3VyY2VzQ29udGVudCI6WyIvLyBAdHMtY2hlY2tcblxuaW1wb3J0IGNvbmZpZ3VyYXRpb25SZXNvbHZlciBmcm9tIFwiLi4vY29uZmlndXJhdGlvbi1yZXNvbHZlci5qc1wiXG5pbXBvcnQgUGxhdGZvcm1WZWxvY2lvdXNKb2IgZnJvbSBcIi4vcGxhdGZvcm0tam9iLmpzXCJcbmltcG9ydCB7XG4gIGNhbmNlbFNjaGVkdWxlZEJhY2tncm91bmRKb2JGb3JDb25maWd1cmF0aW9uLFxuICBlbnF1ZXVlQmFja2dyb3VuZEpvYkZvckNvbmZpZ3VyYXRpb24sXG4gIHJlcGxhY2VTY2hlZHVsZWRCYWNrZ3JvdW5kSm9iRm9yQ29uZmlndXJhdGlvblxufSBmcm9tIFwiLi9ydW50aW1lLmpzXCJcblxuLyoqXG4gKiBOb2RlIGJhY2tncm91bmQtam9iIGVudHJ5LiBJdCBwcmVzZXJ2ZXMgbGF6eSBjb25maWd1cmF0aW9uIGRpc2NvdmVyeSBmb3JcbiAqIGZyZXNoIHByb2R1Y2VyIHByb2Nlc3NlcyB3aGlsZSB0aGUgZXhwbGljaXQgcGxhdGZvcm0gZW50cnkgc3RheXMgZnJlZSBvZlxuICogTm9kZS1vbmx5IGNvbmZpZ3VyYXRpb24gcmVzb2x1dGlvbi5cbiAqIEB0ZW1wbGF0ZSB7QXJyYXk8UmV0dXJuVHlwZTx0eXBlb2YgSlNPTi5wYXJzZT4+fSBbVEFyZ3M9W11dXG4gKiBAYXVnbWVudHMge1BsYXRmb3JtVmVsb2Npb3VzSm9iPFRBcmdzPn1cbiAqL1xuZXhwb3J0IGRlZmF1bHQgY2xhc3MgVmVsb2Npb3VzSm9iIGV4dGVuZHMgUGxhdGZvcm1WZWxvY2lvdXNKb2Ige1xuICAvKipcbiAgICogUnVucyBwZXJmb3JtIGxhdGVyLlxuICAgKiBAcGFyYW0gey4uLlJldHVyblR5cGU8dHlwZW9mIEpTT04ucGFyc2U+fSBhcmdzIC0gSm9iIGFyZ3MuXG4gICAqIEByZXR1cm5zIHtQcm9taXNlPHN0cmluZz59IC0gSm9iIGlkLlxuICAgKi9cbiAgc3RhdGljIGFzeW5jIHBlcmZvcm1MYXRlciguLi5hcmdzKSB7XG4gICAgY29uc3QgY29uZmlndXJhdGlvbiA9IGF3YWl0IGNvbmZpZ3VyYXRpb25SZXNvbHZlcigpXG4gICAgY29uc3Qge2pvYkFyZ3MsIGpvYk9wdGlvbnN9ID0gdGhpcy5fc3BsaXRBcmdzQW5kT3B0aW9ucyhhcmdzKVxuXG4gICAgcmV0dXJuIGF3YWl0IGVucXVldWVCYWNrZ3JvdW5kSm9iRm9yQ29uZmlndXJhdGlvbih7Y29uZmlndXJhdGlvbiwgSm9iQ2xhc3M6IHRoaXMsIGpvYkFyZ3MsIGpvYk9wdGlvbnN9KVxuICB9XG5cbiAgLyoqXG4gICAqIFJ1bnMgcGVyZm9ybSBsYXRlciB3aXRoIG9wdGlvbnMuXG4gICAqIEBwYXJhbSB7b2JqZWN0fSBhcmdzIC0gT3B0aW9ucy5cbiAgICogQHBhcmFtIHtBcnJheTxSZXR1cm5UeXBlPHR5cGVvZiBKU09OLnBhcnNlPj59IGFyZ3MuYXJncyAtIEpvYiBhcmdzLlxuICAgKiBAcGFyYW0ge2ltcG9ydChcIi4vdHlwZXMuanNcIikuQmFja2dyb3VuZEpvYk9wdGlvbnN9IFthcmdzLm9wdGlvbnNdIC0gSm9iIG9wdGlvbnMuXG4gICAqIEByZXR1cm5zIHtQcm9taXNlPHN0cmluZz59IC0gSm9iIGlkLlxuICAgKi9cbiAgc3RhdGljIGFzeW5jIHBlcmZvcm1MYXRlcldpdGhPcHRpb25zKHthcmdzLCBvcHRpb25zfSkge1xuICAgIGNvbnN0IGNvbmZpZ3VyYXRpb24gPSBhd2FpdCBjb25maWd1cmF0aW9uUmVzb2x2ZXIoKVxuXG4gICAgcmV0dXJuIGF3YWl0IGVucXVldWVCYWNrZ3JvdW5kSm9iRm9yQ29uZmlndXJhdGlvbih7Y29uZmlndXJhdGlvbiwgSm9iQ2xhc3M6IHRoaXMsIGpvYkFyZ3M6IGFyZ3MsIGpvYk9wdGlvbnM6IG9wdGlvbnN9KVxuICB9XG5cbiAgLyoqXG4gICAqIEF0b21pY2FsbHkgcmVwbGFjZXMgdGhpcyBqb2IgY2xhc3MncyBxdWV1ZWQgb3duZXIgZm9yIGEgc3RhYmxlIHNjaGVkdWxlIGtleS5cbiAgICogQHBhcmFtIHtvYmplY3R9IGFyZ3MgLSBPcHRpb25zLlxuICAgKiBAcGFyYW0ge3N0cmluZ30gYXJncy5zY2hlZHVsZUtleSAtIFN0YWJsZSBsb2dpY2FsIHNjaGVkdWxlIGtleS5cbiAgICogQHBhcmFtIHtBcnJheTxSZXR1cm5UeXBlPHR5cGVvZiBKU09OLnBhcnNlPj59IGFyZ3MuYXJncyAtIEpvYiBhcmdzLlxuICAgKiBAcGFyYW0ge2ltcG9ydChcIi4vdHlwZXMuanNcIikuQmFja2dyb3VuZEpvYk9wdGlvbnN9IFthcmdzLm9wdGlvbnNdIC0gSm9iIG9wdGlvbnMuXG4gICAqIEByZXR1cm5zIHtQcm9taXNlPGltcG9ydChcIi4vdHlwZXMuanNcIikuQmFja2dyb3VuZEpvYlJlcGxhY2VtZW50UmVzdWx0Pn0gLSBSZXBsYWNlbWVudCByZXN1bHQuXG4gICAqL1xuICBzdGF0aWMgYXN5bmMgcmVwbGFjZVNjaGVkdWxlZCh7c2NoZWR1bGVLZXksIGFyZ3MsIG9wdGlvbnN9KSB7XG4gICAgY29uc3QgY29uZmlndXJhdGlvbiA9IGF3YWl0IGNvbmZpZ3VyYXRpb25SZXNvbHZlcigpXG5cbiAgICByZXR1cm4gYXdhaXQgcmVwbGFjZVNjaGVkdWxlZEJhY2tncm91bmRKb2JGb3JDb25maWd1cmF0aW9uKHtjb25maWd1cmF0aW9uLCBKb2JDbGFzczogdGhpcywgc2NoZWR1bGVLZXksIGpvYkFyZ3M6IGFyZ3MsIGpvYk9wdGlvbnM6IG9wdGlvbnN9KVxuICB9XG5cbiAgLyoqXG4gICAqIENhbmNlbHMgb3IgZGV0YWNoZXMgdGhlIGN1cnJlbnQgb3duZXIgb2YgYSBzdGFibGUgc2NoZWR1bGUga2V5LlxuICAgKiBAcGFyYW0ge3N0cmluZ30gc2NoZWR1bGVLZXkgLSBTdGFibGUgbG9naWNhbCBzY2hlZHVsZSBrZXkuXG4gICAqIEByZXR1cm5zIHtQcm9taXNlPGltcG9ydChcIi4vdHlwZXMuanNcIikuQmFja2dyb3VuZEpvYkNhbmNlbGxhdGlvblJlc3VsdD59IC0gQ2FuY2VsbGF0aW9uIHJlc3VsdC5cbiAgICovXG4gIHN0YXRpYyBhc3luYyBjYW5jZWxTY2hlZHVsZWQoc2NoZWR1bGVLZXkpIHtcbiAgICBjb25zdCBjb25maWd1cmF0aW9uID0gYXdhaXQgY29uZmlndXJhdGlvblJlc29sdmVyKClcblxuICAgIHJldHVybiBhd2FpdCBjYW5jZWxTY2hlZHVsZWRCYWNrZ3JvdW5kSm9iRm9yQ29uZmlndXJhdGlvbih7Y29uZmlndXJhdGlvbiwgc2NoZWR1bGVLZXl9KVxuICB9XG59XG4iXX0=

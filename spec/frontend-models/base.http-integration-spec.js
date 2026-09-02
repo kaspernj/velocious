@@ -567,7 +567,7 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
     })
   })
 
-  it("delivers Phase 3 model lifecycle events via onCreate/onUpdate/onDestroy", async () => {
+  it("delivers Phase 3 model lifecycle events across a transport reconnect", async () => {
     await Dummy.run(async () => {
       const websocketClient = new WebsocketClient()
       const project = await ProjectRecord.create({name: "Phase 3 project"})
@@ -592,6 +592,13 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
           if (creates.length < 1) throw new Error(`Expected onCreate but got ${creates.length}`)
         })
         expect(creates[0].model.name()).toEqual("Phase 3 task")
+
+        await websocketClient.dropConnection()
+        await waitFor(() => {
+          if (!websocketClient.isOpen() || !websocketClient.isSessionReady()) {
+            throw new Error("Expected websocket session to reconnect")
+          }
+        })
 
         task.setName("Phase 3 task renamed")
         await task.save()

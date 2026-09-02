@@ -1,7 +1,39 @@
 // @ts-check
 
 import VelociousHttpServerClientRequestRunner from "../../src/http-server/client/request-runner.js"
+import LogRedactor from "../../src/log-redactor.js"
 import {describe, expect, it} from "../../src/testing/test.js"
+
+/**
+ * @param {Error} error - Error raised by the CORS hook.
+ * @returns {import("../../src/configuration.js").default} - Request-runner configuration contract.
+ */
+function buildConfiguration(error) {
+  const logRedactor = new LogRedactor()
+
+  return /** @type {import("../../src/configuration.js").default} */ ({
+    getCors: () => async () => {
+      throw error
+    },
+    getErrorEvents: () => ({emit: () => {}}),
+    getLogRedactor: () => logRedactor,
+    runWithRequestTiming: async (_requestTiming, callback) => await callback(),
+    runWithTestSharedConnectionContexts: (callback) => callback()
+  })
+}
+
+/** @returns {import("../../src/http-server/client/request.js").default} - Minimal request contract. */
+function buildRequest() {
+  return /** @type {import("../../src/http-server/client/request.js").default} */ ({
+    header: () => undefined,
+    headers: () => ({}),
+    httpMethod: () => "GET",
+    metadata: () => ({}),
+    params: () => ({}),
+    path: () => "/",
+    queryParams: () => ({})
+  })
+}
 
 describe("HttpServer - request runner", {databaseCleaning: {transaction: false, truncate: false}}, async () => {
   it("logs a cleaned backtrace when request processing fails", async () => {
@@ -22,20 +54,8 @@ describe("HttpServer - request runner", {databaseCleaning: {transaction: false, 
         consoleErrorWrites.push(String(message))
       }
 
-      const configuration = /** @type {any} */ ({
-        getCors: () => async () => {
-          throw error
-        },
-        getErrorEvents: () => ({
-          emit: () => {}
-        }),
-        runWithRequestTiming: async (_requestTiming, callback) => await callback(),
-        runWithTestSharedConnectionContexts: (callback) => callback()
-      })
-      const request = /** @type {any} */ ({
-        header: () => undefined,
-        httpMethod: () => "GET"
-      })
+      const configuration = buildConfiguration(error)
+      const request = buildRequest()
       const requestRunner = new VelociousHttpServerClientRequestRunner({configuration, request})
 
       await requestRunner.run()
@@ -69,20 +89,8 @@ describe("HttpServer - request runner", {databaseCleaning: {transaction: false, 
         consoleErrorWrites.push(String(message))
       }
 
-      const configuration = /** @type {any} */ ({
-        getCors: () => async () => {
-          throw error
-        },
-        getErrorEvents: () => ({
-          emit: () => {}
-        }),
-        runWithRequestTiming: async (_requestTiming, callback) => await callback(),
-        runWithTestSharedConnectionContexts: (callback) => callback()
-      })
-      const request = /** @type {any} */ ({
-        header: () => undefined,
-        httpMethod: () => "GET"
-      })
+      const configuration = buildConfiguration(error)
+      const request = buildRequest()
       const requestRunner = new VelociousHttpServerClientRequestRunner({configuration, request})
 
       await requestRunner.run()
@@ -115,20 +123,8 @@ describe("HttpServer - request runner", {databaseCleaning: {transaction: false, 
         consoleErrorWrites.push(String(message))
       }
 
-      const configuration = /** @type {any} */ ({
-        getCors: () => async () => {
-          throw error
-        },
-        getErrorEvents: () => ({
-          emit: () => {}
-        }),
-        runWithRequestTiming: async (_requestTiming, callback) => await callback(),
-        runWithTestSharedConnectionContexts: (callback) => callback()
-      })
-      const request = /** @type {any} */ ({
-        header: () => undefined,
-        httpMethod: () => "GET"
-      })
+      const configuration = buildConfiguration(error)
+      const request = buildRequest()
       const requestRunner = new VelociousHttpServerClientRequestRunner({configuration, request})
 
       await requestRunner.run()

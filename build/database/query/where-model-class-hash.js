@@ -1,0 +1,501 @@
+// @ts-check
+
+import * as inflection from "inflection"
+import {isPlainObject} from "is-plain-object"
+import WhereBase from "./where-base.js"
+
+/**
+ * No match.
+ * @typedef {{[key: string]: string | number | boolean | null | Array<string | number | boolean | null> | Record<string, ReturnType<typeof JSON.parse>>}} WhereHash
+ */
+
+const NO_MATCH = Symbol("no-match")
+const relationshipWhereOperators = new Set(["eq", "notEq", "gt", "gteq", "lt", "lteq", "like", ">", ">=", "<", "<="])
+
+/**
+ * Runs normalize relationship where operator.
+ * @param {string} operator - Raw relationship where operator.
+ * @returns {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like"} - Normalized operator.
+ */
+function normalizeRelationshipWhereOperator(operator) {
+  const operatorAliases = {
+    "<": "lt",
+    "<=": "lteq",
+    ">": "gt",
+    ">=": "gteq"
+  }
+
+  return /** @type {"eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like"} */ (
+    operatorAliases[/** @type {"<" | "<=" | ">" | ">="} */ (operator)] || operator
+  )
+}
+
+export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase {
+  /**
+   * Runs constructor.
+   * @param {object} args - Options object.
+   * @param {import("./index.js").default} args.query - Query instance.
+   * @param {WhereHash} args.hash - Hash.
+   * @param {typeof import("../record/index.js").default} args.modelClass - Model class.
+   * @param {boolean} [args.qualifyBaseTable] - Whether to qualify base table columns.
+   */
+  constructor({query, hash, modelClass, qualifyBaseTable = false}) {
+    super()
+    this.hash = hash
+    this.modelClass = modelClass
+    this.qualifyBaseTable = qualifyBaseTable
+    this.query = query
+  }
+
+  /**
+   * Runs get model class.
+   * @returns {typeof import("../record/index.js").default} - The model class.
+   */
+  getModelClass() {
+    if (!this.modelClass) throw new Error("modelClass not set")
+
+    return this.modelClass
+  }
+
+  /**
+   * Runs to sql.
+   * @returns {string} - SQL string.
+   */
+  toSql() {
+    let sql = "("
+
+    const modelQuery = /** @type {import("./model-class-query.js").default} */ (this.query)
+    const baseTableName = this.qualifyBaseTable
+      ? modelQuery.getTableReferenceForJoin()
+      : undefined
+
+    sql += this._whereSQLFromHash(this.hash, this.getModelClass(), [], baseTableName)
+    sql += ")"
+
+    return sql
+  }
+
+  /**
+   * Runs resolve column name.
+   * @param {typeof import("../record/index.js").default} modelClass - Model class.
+   * @param {string} key - Attribute or column name.
+   * @returns {string | undefined} - The resolved column name.
+   */
+  _resolveColumnName(modelClass, key) {
+    const attributeMap = modelClass.getAttributeNameToColumnNameMap()
+
+    if (attributeMap[key]) return attributeMap[key]
+
+    const columnMap = modelClass.getColumnNameToAttributeNameMap()
+    const underscored = inflection.underscore(key)
+
+    if (columnMap[key]) return key
+    if (columnMap[underscored]) return underscored
+
+    return undefined
+  }
+
+  /**
+   * Runs get relationship.
+   * @param {typeof import("../record/index.js").default} modelClass - Model class.
+   * @param {string} relationshipName - Relationship name.
+   * @returns {import("../record/relationships/base.js").default | undefined} - The relationship.
+   */
+  _getRelationship(modelClass, relationshipName) {
+    return modelClass.getRelationshipsMap()[relationshipName]
+  }
+
+  /**
+   * Runs is relationship where operator tuple.
+   * @param {ReturnType<typeof JSON.parse>} tupleValue - Candidate tuple.
+   * @returns {boolean} - Whether this is a relationship where tuple.
+   */
+  _isRelationshipWhereOperatorTuple(tupleValue) {
+    if (!Array.isArray(tupleValue) || tupleValue.length < 3) {
+      return false
+    }
+
+    return typeof tupleValue[0] === "string" &&
+      typeof tupleValue[1] === "string" &&
+      relationshipWhereOperators.has(tupleValue[1])
+  }
+
+  /**
+   * Runs normalize relationship where operator tuples.
+   * @param {ReturnType<typeof JSON.parse>} value - Candidate relationship where value.
+   * @returns {Array<[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like", unknown]>} - Normalized tuples.
+   */
+  _normalizeRelationshipWhereOperatorTuples(value) {
+    if (!Array.isArray(value)) {
+      throw new Error(`Invalid relationship where tuple container type: ${typeof value}`)
+    }
+
+    /**
+     * Normalized.
+     * @type {Array<[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like", unknown]>} */
+    const normalized = []
+    /**
+     * Add condition.
+     * @param {ReturnType<typeof JSON.parse>} conditionValue - Candidate nested condition.
+     */
+    const addCondition = (conditionValue) => {
+      if (this._isRelationshipWhereOperatorTuple(conditionValue)) {
+        const tuple = /** @type {[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like" | ">" | ">=" | "<" | "<=", unknown, ...Array<unknown>]} */ (conditionValue)
+        const normalizedOperator = normalizeRelationshipWhereOperator(tuple[1])
+
+        normalized.push([
+          tuple[0],
+          normalizedOperator,
+          tuple[2]
+        ])
+
+        if (tuple.length > 3) {
+          for (let index = 3; index < tuple.length; index += 1) {
+            addCondition(tuple[index])
+          }
+        }
+
+        return
+      }
+
+      if (!Array.isArray(conditionValue)) {
+        throw new Error("Relationship where conditions must be tuples")
+      }
+
+      conditionValue.forEach((nestedConditionValue) => {
+        addCondition(nestedConditionValue)
+      })
+    }
+
+    addCondition(value)
+
+    if (normalized.length < 1) {
+      throw new Error("Relationship where tuple container cannot be empty")
+    }
+
+    return normalized
+  }
+
+  /**
+   * Runs is relationship where operator tuple container.
+   * @param {ReturnType<typeof JSON.parse>} value - Candidate relationship where value.
+   * @returns {boolean} - Whether value can be normalized to relationship tuples.
+   */
+  _isRelationshipWhereOperatorTupleContainer(value) {
+    try {
+      this._normalizeRelationshipWhereOperatorTuples(value)
+
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * Runs where sqlfrom relationship where operator tuples.
+   * @param {object} args - Relationship where options.
+   * @param {typeof import("../record/index.js").default} args.modelClass - Relationship model class.
+   * @param {string} args.tableName - Relationship table reference name.
+   * @param {Array<[string, "eq" | "notEq" | "gt" | "gteq" | "lt" | "lteq" | "like", unknown]>} args.tuples - Operator tuples.
+   * @returns {string} - SQL where fragment.
+   */
+  _whereSQLFromRelationshipWhereOperatorTuples({modelClass, tableName, tuples}) {
+    const options = this.getOptions()
+    let sql = ""
+    let index = 0
+
+    tuples.forEach(([attributeName, operator, whereValue]) => {
+      if (index > 0) sql += " AND "
+
+      const columnName = this._resolveColumnName(modelClass, attributeName)
+
+      if (!columnName) throw new Error(`Unknown attribute "${attributeName}" for ${modelClass.name}`)
+
+      const normalizedValue = this._normalizeSqliteBooleanValue({
+        columnName,
+        modelClass,
+        value: whereValue
+      })
+      const typedValue = this._normalizeValueForColumnType({
+        columnName,
+        modelClass,
+        value: normalizedValue
+      })
+      const columnType = modelClass.getColumnTypeByName(columnName)
+      const driverType = this.getQuery().driver.getType()
+
+      if (typedValue === NO_MATCH) {
+        if (operator === "notEq") {
+          sql += "1=1"
+        } else {
+          sql += "1=0"
+        }
+        index += 1
+        return
+      }
+
+      let columnSql = `${options.quoteTableName(tableName)}.${options.quoteColumnName(columnName)}`
+
+      if (driverType == "mssql" && typeof whereValue === "string" && columnType?.toLowerCase() == "text") {
+        columnSql = `CAST(${columnSql} AS NVARCHAR(MAX))`
+      }
+
+      if (operator === "eq") {
+        if (Array.isArray(typedValue)) {
+          if (typedValue.length < 1) {
+            sql += "1=0"
+          } else {
+            sql += `${columnSql} IN (${typedValue.map((value) => options.quote(value)).join(", ")})`
+          }
+        } else if (typedValue === null) {
+          sql += `${columnSql} IS NULL`
+        } else {
+          sql += `${columnSql} = ${options.quote(typedValue)}`
+        }
+
+        index += 1
+        return
+      }
+
+      if (operator === "notEq") {
+        if (Array.isArray(typedValue)) {
+          if (typedValue.length < 1) {
+            sql += "1=1"
+          } else {
+            sql += `${columnSql} NOT IN (${typedValue.map((value) => options.quote(value)).join(", ")})`
+          }
+        } else if (typedValue === null) {
+          sql += `${columnSql} IS NOT NULL`
+        } else {
+          sql += `${columnSql} != ${options.quote(typedValue)}`
+        }
+
+        index += 1
+        return
+      }
+
+      if (Array.isArray(typedValue)) {
+        throw new Error(`Operator "${operator}" does not support array values for ${modelClass.name}.${attributeName}`)
+      }
+
+      if (typedValue === null) {
+        throw new Error(`Operator "${operator}" does not support null values for ${modelClass.name}.${attributeName}`)
+      }
+
+      const operatorMap = {
+        gt: ">",
+        gteq: ">=",
+        like: "LIKE",
+        lt: "<",
+        lteq: "<="
+      }
+
+      sql += `${columnSql} ${operatorMap[operator]} ${options.quote(typedValue)}`
+      index += 1
+    })
+
+    return sql
+  }
+
+  /**
+   * Runs normalize sqlite boolean value.
+   * @param {object} args - Options object.
+   * @param {typeof import("../record/index.js").default} args.modelClass - Model class.
+   * @param {string} args.columnName - Column name.
+   * @param {ReturnType<typeof JSON.parse>} args.value - Value to normalize.
+   * @returns {ReturnType<typeof JSON.parse>} - Normalized value.
+   */
+  _normalizeSqliteBooleanValue({modelClass, columnName, value}) {
+    if (modelClass.getDatabaseType() != "sqlite") return value
+
+    const columnType = modelClass.getColumnTypeByName(columnName)
+
+    if (!columnType) return value
+    if (columnType.toLowerCase() !== "boolean") return value
+
+    /**
+     * Normalize.
+     * @param {ReturnType<typeof JSON.parse>} entry - Value to normalize.
+     * @returns {ReturnType<typeof JSON.parse>} - SQLite predicate value with booleans encoded as 1 or 0.
+     */
+    const normalize = (entry) => {
+      if (entry === true) return 1
+      if (entry === false) return 0
+      return entry
+    }
+
+    if (Array.isArray(value)) {
+      return value.map((entry) => normalize(entry))
+    }
+
+    return normalize(value)
+  }
+
+  /**
+   * Runs normalize value for column type.
+   * @param {object} args - Options object.
+   * @param {typeof import("../record/index.js").default} args.modelClass - Model class.
+   * @param {string} args.columnName - Column name.
+   * @param {ReturnType<typeof JSON.parse>} args.value - Value to normalize.
+   * @returns {ReturnType<typeof JSON.parse>} - Normalized value.
+   */
+  _normalizeValueForColumnType({modelClass, columnName, value}) {
+    const columnType = modelClass.getColumnTypeByName(columnName)
+
+    if (!columnType) return value
+
+    const normalizedType = columnType.toLowerCase()
+    const stringTypes = new Set(["char", "varchar", "nvarchar", "string", "enum", "json", "jsonb", "citext", "binary", "varbinary"])
+    const isUuidType = normalizedType.includes("uuid")
+    const shouldCoerceToString = normalizedType.includes("uuid") ||
+      normalizedType.includes("text") ||
+      stringTypes.has(normalizedType)
+
+    /**
+     * Normalize.
+     * @param {ReturnType<typeof JSON.parse>} entry - Value to normalize.
+     * @returns {ReturnType<typeof JSON.parse>} - Column-compatible predicate value, or the no-match sentinel for numeric UUIDs.
+     */
+    const normalize = (entry) => {
+      if (isUuidType && typeof entry === "number") return NO_MATCH
+      if (!shouldCoerceToString || typeof entry !== "number") return entry
+
+      return String(entry)
+    }
+
+    if (Array.isArray(value)) {
+      const normalized = value.map((entry) => normalize(entry)).filter((entry) => entry !== NO_MATCH)
+
+      if (isUuidType && normalized.length === 0) return NO_MATCH
+
+      return normalized
+    }
+
+    const normalized = normalize(value)
+
+    if (normalized === NO_MATCH) return NO_MATCH
+
+    return normalized
+  }
+
+  /**
+   * Runs where sqlfrom hash.
+   * @param {WhereHash} hash - Hash.
+   * @param {typeof import("../record/index.js").default} modelClass - Model class.
+   * @param {string[]} path - Join path.
+   * @param {string} [tableName] - Table name.
+   * @param {number} index - Index value.
+   * @returns {string} - SQL string.
+   */
+  _whereSQLFromHash(hash, modelClass, path, tableName, index = 0) {
+    const options = this.getOptions()
+    const modelQuery = /** @type {import("./model-class-query.js").default} */ (this.query)
+    let sql = ""
+
+    for (const whereKey in hash) {
+      const whereValue = hash[whereKey]
+      const relationship = this._getRelationship(modelClass, whereKey)
+      const tuples = this._isRelationshipWhereOperatorTupleContainer(whereValue)
+        ? this._normalizeRelationshipWhereOperatorTuples(whereValue)
+        : null
+      const resolvedColumnName = this._resolveColumnName(modelClass, whereKey)
+
+      if (relationship && tuples) {
+        if (index > 0) sql += " AND "
+
+        const rawTargetModelClass = relationship.getTargetModelClass()
+
+        if (!rawTargetModelClass) throw new Error(`Relationship "${whereKey}" for ${modelClass.name} has no target model class`)
+
+        const targetModelClass = modelClass.bindRecordMetadataModelClass(rawTargetModelClass)
+
+        const nestedPath = path.concat([whereKey])
+        const nestedTableName = modelQuery.getTableReferenceForJoin(...nestedPath)
+
+        sql += this._whereSQLFromRelationshipWhereOperatorTuples({
+          modelClass: targetModelClass,
+          tableName: nestedTableName,
+          tuples
+        })
+      } else if (resolvedColumnName && tuples) {
+        if (index > 0) sql += " AND "
+
+        sql += this._whereSQLFromRelationshipWhereOperatorTuples({
+          modelClass,
+          tableName: tableName || modelQuery.getTableReferenceForJoin(...path),
+          tuples
+        })
+      } else if (Array.isArray(whereValue) && whereValue.length === 0) {
+        if (index > 0) sql += " AND "
+        sql += "1=0"
+      } else if (isPlainObject(whereValue)) {
+        if (!relationship) {
+          throw new Error(`Unknown relationship "${whereKey}" for ${modelClass.name}`)
+        }
+
+        const rawTargetModelClass = relationship.getTargetModelClass()
+
+        if (!rawTargetModelClass) throw new Error(`Relationship "${whereKey}" for ${modelClass.name} has no target model class`)
+
+        const targetModelClass = modelClass.bindRecordMetadataModelClass(rawTargetModelClass)
+
+        const nestedHash = /** @type {WhereHash} */ (whereValue)
+        const nestedPath = path.concat([whereKey])
+        const nestedTableName = modelQuery.getTableReferenceForJoin(...nestedPath)
+
+        sql += this._whereSQLFromHash(nestedHash, targetModelClass, nestedPath, nestedTableName, index)
+      } else {
+        if (index > 0) sql += " AND "
+
+        const columnName = this._resolveColumnName(modelClass, whereKey)
+
+        if (!columnName) throw new Error(`Unknown attribute "${whereKey}" for ${modelClass.name}`)
+
+        const columnType = modelClass.getColumnTypeByName(columnName)
+
+        const normalizedValue = this._normalizeSqliteBooleanValue({
+          columnName,
+          modelClass,
+          value: whereValue
+        })
+        const typedValue = this._normalizeValueForColumnType({
+          columnName,
+          modelClass,
+          value: normalizedValue
+        })
+
+        if (typedValue === NO_MATCH) {
+          sql += "1=0"
+          index++
+          continue
+        }
+
+        let columnSql = `${options.quoteColumnName(columnName)}`
+
+        if (tableName) {
+          columnSql = `${options.quoteTableName(tableName)}.${columnSql}`
+        }
+
+        const driverType = this.getQuery().driver.getType()
+
+        if (driverType == "mssql" && typeof whereValue === "string" && columnType?.toLowerCase() == "text") {
+          columnSql = `CAST(${columnSql} AS NVARCHAR(MAX))`
+        }
+
+        sql += columnSql
+
+        if (Array.isArray(typedValue)) {
+          sql += ` IN (${typedValue.map((value) => options.quote(value)).join(", ")})`
+        } else if (typedValue === null) {
+          sql += " IS NULL"
+        } else {
+          sql += ` = ${options.quote(typedValue)}`
+        }
+      }
+
+      index++
+    }
+
+    return sql
+  }
+}

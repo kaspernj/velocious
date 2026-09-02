@@ -37,7 +37,7 @@ describe("Configuration - initialize after close", () => {
 
         expect(configuration.isInitialized()).toBe(true)
         expect(modelPhases).toEqual(generation)
-        expect(initializerPhases).toEqual(generation)
+        expect(initializerPhases).toEqual(1)
 
         if (generation < 3) {
           await configuration.closeDatabaseConnections()

@@ -27,34 +27,6 @@ class CrashWindowMailer extends VelociousMailer {
   }
 }
 
-/**
- * Waits for one persisted job state without a timing sleep.
- * @param {object} args - Wait input.
- * @param {string} args.jobId - Job id.
- * @param {(job: import("../../src/background-jobs/types.js").BackgroundJobRow) => boolean} args.predicate - Completion predicate.
- * @param {BackgroundJobsStore} args.store - Store.
- * @returns {Promise<import("../../src/background-jobs/types.js").BackgroundJobRow>} - Matching job.
- */
-async function waitForJob({jobId, predicate, store}) {
-  /** @type {import("../../src/background-jobs/types.js").BackgroundJobRow | null} */
-  let matchingJob = null
-
-  await timeout({timeout: 5000}, async () => {
-    while (!matchingJob) {
-      const job = await store.getJob(jobId)
-
-      if (job && predicate(job)) {
-        matchingJob = job
-      } else {
-        await new Promise((resolve) => setImmediate(resolve))
-      }
-    }
-  })
-
-  if (!matchingJob) throw new Error(`Expected background job state: ${jobId}`)
-  return matchingJob
-}
-
 describe("Mailers - idempotent delivery background job crash window", {databaseCleaning: {transaction: true}}, () => {
   it("suppresses provider-visible duplication when a pooled runner exits after DATA acceptance", async () => {
     const fakeServer = await startFakeSmtpServer({idempotencyHeader: "Resend-Idempotency-Key", requireAuth: false})
@@ -128,10 +100,25 @@ export default new Configuration({
 
       configuration = (await import(pathToFileURL(configurationPath).href)).default
       configuration.setCurrent()
-      main = new BackgroundJobsMain({closeDatabaseConnectionsOnStop: false, configuration, host: "127.0.0.1", port: 0})
+      const failedUpdate = Promise.withResolvers()
+      const completedUpdate = Promise.withResolvers()
+
+      main = new BackgroundJobsMain({
+        closeDatabaseConnectionsOnStop: false,
+        configuration,
+        host: "127.0.0.1",
+        onJobUpdated: ({accepted, jobId, status}) => {
+          if (!accepted) return
+          if (status === "failed") failedUpdate.resolve(jobId)
+          if (status === "completed") completedUpdate.resolve(jobId)
+        },
+        port: 0
+      })
       await main.start()
       configuration.setBackgroundJobsConfig({host: "127.0.0.1", port: main.getPort()})
-      const store = new BackgroundJobsStore({configuration})
+      const store = main.store
+
+      if (!(store instanceof BackgroundJobsStore)) throw new Error("Expected SQL background jobs store")
 
       await store.clearAll()
 
@@ -150,16 +137,18 @@ export default new Configuration({
       if (typeof jobId !== "string") throw new Error("Expected native mail job id")
 
       await timeout({timeout: 2000}, async () => await fakeServer.quitReceived)
-      await waitForJob({jobId, predicate: (job) => job.status === "queued" && job.attempts === 1, store})
+      expect(await timeout({timeout: 5000}, async () => await failedUpdate.promise)).toEqual(jobId)
 
       await store._withDb(async (db) => {
         await db.update({tableName: "background_jobs", data: {scheduled_at_ms: 0}, conditions: {id: jobId}})
       })
       await main._drain()
 
-      const completed = await waitForJob({jobId, predicate: (job) => job.status === "completed", store})
+      expect(await timeout({timeout: 5000}, async () => await completedUpdate.promise)).toEqual(jobId)
+      const completed = await store.getJob(jobId)
       const operationRows = await store._withDb(async (db) => await db.newQuery().from("mailer_delivery_operations").results())
 
+      if (!completed) throw new Error(`Expected completed background job: ${jobId}`)
       expect(completed.attempts).toEqual(1)
       expect(fakeServer.messages.length).toEqual(2)
       expect(fakeServer.messages[1]).toEqual(fakeServer.messages[0])

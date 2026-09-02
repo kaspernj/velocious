@@ -1,0 +1,65 @@
+// @ts-check
+
+import BaseColumn from "../base-column.js"
+import {digg} from "diggerize"
+
+export default class VelociousDatabaseDriversPgsqlColumn extends BaseColumn {
+  /**
+   * Runs constructor.
+   * @param {import("../base-table.js").default} table - Table.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} data - Data payload.
+   */
+  constructor(table, data) {
+    super()
+    this.data = data
+    this.table = table
+  }
+
+  getAutoIncrement() {
+    return this.getDefault() == `nextval('${this.getTable().getName()}_${this.getName()}_seq'::regclass)`
+  }
+
+  getPrimaryKey() {
+    return digg(this, "data", "is_primary_key") === 1
+  }
+
+  async getIndexes() {
+    const indexes = await this.getTable().getIndexes()
+
+    return indexes.filter((index) => index.getColumnNames().includes(this.getName()))
+  }
+
+  getDefault() {
+    return digg(this, "data", "column_default")
+  }
+
+  getMaxLength() {
+    return digg(this, "data", "character_maximum_length")
+  }
+
+  getName() {
+    return digg(this, "data", "column_name")
+  }
+
+  getNotes() {
+    return digg(this, "data", "column_comment") || undefined
+  }
+
+  getNull() {
+    const nullValue = digg(this, "data", "is_nullable")
+
+    if (nullValue == "NO") {
+      return false
+    } else {
+      return true
+    }
+  }
+
+  getType() {
+    const typeHint = this.getTypeHintFromNotes()
+
+    if (typeHint == "boolean") return "boolean"
+
+    return digg(this, "data", "data_type")
+  }
+}

@@ -33,6 +33,9 @@ export default async function configureTesting() {
     const truncate = testArgs.databaseCleaning?.truncate
     const useTransaction = transaction === undefined ? false : transaction
     const shouldTruncate = truncate === undefined ? !useTransaction : truncate
+
+    if (!useTransaction && !shouldTruncate) return
+
     await dummyConfiguration.ensureConnections(async (dbs) => {
       for (const dbIdentifier in dbs) {
         const db = dbs[dbIdentifier]

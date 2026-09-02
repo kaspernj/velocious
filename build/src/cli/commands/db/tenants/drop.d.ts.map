@@ -1,0 +1,1 @@
+{"version":3,"file":"drop.d.ts","sourceRoot":"","sources":["../../../../../../src/cli/commands/db/tenants/drop.js"],"names":[],"mappings":"AAEA,OAAO,WAAW,MAAM,0BAA0B,CAAA;AAIlD,MAAM,CAAC,OAAO,OAAO,aAAc,SAAQ,WAAW;IACpD;;;;OAIG;IACG,OAAO,IAFA,OAAO,CAAC;QAAC,UAAU,EAAE,MAAM,CAAC;QAAC,WAAW,EAAE,MAAM,CAAA;KAAC,GAAG,IAAI,CAAC,CAsBrE;CACF"}

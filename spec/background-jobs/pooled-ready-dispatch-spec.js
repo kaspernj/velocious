@@ -1,12 +1,12 @@
 // @ts-check
 
+import {deferred} from "awaitery"
 import timeout from "awaitery/build/timeout.js"
 import wait from "awaitery/build/wait.js"
 import {afterAll, beforeAll, describe, expect, it} from "../../src/testing/test.js"
 import createBackgroundJobsSocketBarrier from "../helpers/background-jobs-socket-barrier.js"
 import SocketBarrierTestJob from "../dummy/src/jobs/socket-barrier-test-job.js"
 import SlowTestJob from "../dummy/src/jobs/slow-test-job.js"
-import TestJob from "../dummy/src/jobs/test-job.js"
 import {outputPathFor, startBackgroundJobs, waitForOutputJson} from "../helpers/background-jobs-helper.js"
 
 /** @type {Awaited<ReturnType<typeof startBackgroundJobs>> | undefined} */
@@ -70,39 +70,49 @@ describe("Background jobs - pooled ready dispatch", {tags: ["dummy"], databaseCl
     })
 
     const secondOutputPath = await outputPathFor("pooled-ready-crash-second")
-    await TestJob.performLaterWithOptions({
+    const secondId = await backgroundJobs.store.enqueue({
       args: ["admitted", secondOutputPath],
+      jobName: "TestJob",
       options: {executionMode: "pooled"}
     })
-    await backgroundJobs.main._drain()
+    expect((await backgroundJobs.store.getJob(secondId))?.status).toEqual("queued")
 
-    /** @type {() => void} */
-    let releaseFailureReport = () => {}
-    let failureReportStarted = false
+    const failureReportStarted = deferred()
+    const failureReportCompleted = deferred()
+    const releaseFailureReport = deferred()
     const originalReporter = backgroundJobs.worker.statusReporter
     if (!originalReporter) throw new Error("Expected a worker status reporter")
     backgroundJobs.worker.statusReporter = /** @type {import("../../src/background-jobs/status-reporter.js").default} */ (/** @type {unknown} */ ({
       reportWithRetry: async (args) => {
-        if (args.status !== "failed") return await originalReporter.reportWithRetry(args)
+        if (args.status !== "failed" || args.jobId !== firstId) return await originalReporter.reportWithRetry(args)
 
-        failureReportStarted = true
-        await new Promise((resolve) => { releaseFailureReport = resolve })
-        return await originalReporter.reportWithRetry(args)
+        failureReportStarted.resolve(undefined)
+        await releaseFailureReport.promise
+        const result = await originalReporter.reportWithRetry(args)
+
+        failureReportCompleted.resolve(undefined)
+        return result
       }
     }))
 
-    child.kill("SIGKILL")
+    try {
+      child.kill("SIGKILL")
 
-    await timeout({timeout: 2000}, async () => {
-      while (!failureReportStarted) await wait(0.01)
-    })
-    await waitForOutputJson({outputPath: secondOutputPath})
+      await timeout({errorMessage: "Killed pooled job failure report did not start", timeout: 2000}, async () => {
+        await failureReportStarted.promise
+      })
+      await waitForOutputJson({outputPath: secondOutputPath})
 
-    expect((await backgroundJobs.store.getJob(firstId))?.status).toEqual("handed_off")
+      expect((await backgroundJobs.store.getJob(firstId))?.status).toEqual("handed_off")
 
-    releaseFailureReport()
-    await timeout({timeout: 2000}, async () => {
-      while ((await backgroundJobs.store.getJob(firstId))?.status === "handed_off") await wait(0.01)
-    })
+      releaseFailureReport.resolve(undefined)
+      await timeout({errorMessage: "Killed pooled job failure report did not complete", timeout: 2000}, async () => {
+        await failureReportCompleted.promise
+      })
+      expect((await backgroundJobs.store.getJob(firstId))?.status).toEqual("failed")
+    } finally {
+      releaseFailureReport.resolve(undefined)
+      backgroundJobs.worker.statusReporter = originalReporter
+    }
   })
 })

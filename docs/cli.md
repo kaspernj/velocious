@@ -26,9 +26,9 @@ an already completed activation or retirement while that generation socket is
 still available is idempotent.
 
 The request deadline defaults to 10000ms. `--timeout-ms` accepts an integer from
-1 through 25000 so the acknowledged one-shot command always remains below a
-30-second supervisor hook deadline. A timeout destroys the connection and exits
-nonzero; it never polls or retries the request.
+1 through 60000 so supervisors can allow a full minute for an acknowledged
+activation or retirement while keeping the one-shot request bounded. A timeout
+destroys the connection and exits nonzero; it never polls or retries the request.
 
 Start release-local processes with matching identity and endpoint values:
 

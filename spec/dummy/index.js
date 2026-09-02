@@ -88,8 +88,6 @@ export default class Dummy {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async run(callback, options) {
-    if (options?.fresh) await this.teardown()
-
     // Always re-assert the dummy as the current configuration before running.
     // Why: other specs (e.g. spec/mailers/mailer-spec.js) call setCurrent on
     // their own throwaway Configuration and never restore it, so the shared
@@ -99,8 +97,17 @@ export default class Dummy {
     // so force it here on every call.
     dummyConfiguration.setCurrent()
 
+    const environmentHandler = dummyConfiguration.getEnvironmentHandler()
+
+    await environmentHandler.runWithCapturedTestDatabaseAccessScope(undefined, async () => {
+      await dummyConfiguration.withoutCurrentConnectionContexts(async () => {
+        if (options?.fresh) await this.teardown()
+        await this.start()
+      })
+    })
+    dummyConfiguration.assertDatabaseAccessAllowed()
+
     await dummyConfiguration.ensureConnections(async () => {
-      await this.start()
       await callback()
     })
   }

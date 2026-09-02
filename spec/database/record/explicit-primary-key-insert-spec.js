@@ -35,7 +35,7 @@ function buildIdentityInsertConnection({insertedRow}) {
   return {connection, queries}
 }
 
-describe("Database - record - explicit primary key insert", {databaseCleaning: {transaction: false, truncate: false}, tags: ["dummy"]}, () => {
+describe("Database - record - explicit primary key insert", {tags: ["dummy"]}, () => {
   it("does not use the explicit primary-key insert for a non-identity UUID primary key", async () => {
     const {connection, queries} = buildIdentityInsertConnection({insertedRow: {id: "7f0a1b2c-3d4e-4f5a-8b6c-9d0e1f2a3b4c"}})
     const uuidItem = new UuidItem({id: "7f0a1b2c-3d4e-4f5a-8b6c-9d0e1f2a3b4c", title: "Explicit UUID key"})

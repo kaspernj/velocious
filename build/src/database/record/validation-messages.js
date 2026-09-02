@@ -1,0 +1,45 @@
+// @ts-check
+/**
+ * Translates a validation message ID into a localized message.
+ * @callback ValidationMessageTranslator
+ * @param {string} msgID - Stable message ID (e.g. "velocious.errors.messages.blank").
+ * @param {Record<string, string | number> & {defaultValue?: string}} [args] - Interpolation variables plus the English default message.
+ * @returns {string} Localized message.
+ */
+/**
+ * English default validation message predicates keyed by message type,
+ * matching Rails' `errors.messages.*` where an equivalent exists. Values may
+ * contain `%{variable}` placeholders.
+ * @type {Record<string, string>}
+ */
+export const VALIDATION_MESSAGE_DEFAULTS = {
+    blank: "can't be blank",
+    taken: "has already been taken",
+    too_long: "is too long (maximum is %{count} characters)",
+    too_short: "is too short (minimum is %{count} characters)"
+};
+/**
+ * Builds a validation message predicate through the framework's translation
+ * layer. The message is looked up under `velocious.errors.messages.<type>`
+ * with the English default as fallback; `%{variable}` placeholders are
+ * interpolated from the given variables. Without a translator the English
+ * default is interpolated directly.
+ * @param {object} args - Options.
+ * @param {ValidationMessageTranslator | null} [args.translator] - Translator resolving message IDs (usually `configuration.getTranslator()`).
+ * @param {string} args.type - Message type key in {@link VALIDATION_MESSAGE_DEFAULTS}.
+ * @param {Record<string, string | number>} [args.variables] - Interpolation variables.
+ * @returns {string} Localized message predicate.
+ */
+export default function validationMessage({ translator, type, variables }) {
+    const defaultMessage = VALIDATION_MESSAGE_DEFAULTS[type];
+    if (!defaultMessage)
+        throw new Error(`Unknown validation message type: ${String(type)}`);
+    if (translator)
+        return translator(`velocious.errors.messages.${type}`, { ...variables, defaultValue: defaultMessage });
+    let message = defaultMessage;
+    for (const [variableName, variableValue] of Object.entries(variables ?? {})) {
+        message = message.replaceAll(`%{${variableName}}`, String(variableValue));
+    }
+    return message;
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoidmFsaWRhdGlvbi1tZXNzYWdlcy5qcyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbIi4uLy4uLy4uLy4uL3NyYy9kYXRhYmFzZS9yZWNvcmQvdmFsaWRhdGlvbi1tZXNzYWdlcy5qcyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQSxZQUFZO0FBRVo7Ozs7OztHQU1HO0FBRUg7Ozs7O0dBS0c7QUFDSCxNQUFNLENBQUMsTUFBTSwyQkFBMkIsR0FBRztJQUN6QyxLQUFLLEVBQUUsZ0JBQWdCO0lBQ3ZCLEtBQUssRUFBRSx3QkFBd0I7SUFDL0IsUUFBUSxFQUFFLDhDQUE4QztJQUN4RCxTQUFTLEVBQUUsK0NBQStDO0NBQzNELENBQUE7QUFFRDs7Ozs7Ozs7Ozs7R0FXRztBQUNILE1BQU0sQ0FBQyxPQUFPLFVBQVUsaUJBQWlCLENBQUMsRUFBQyxVQUFVLEVBQUUsSUFBSSxFQUFFLFNBQVMsRUFBQztJQUNyRSxNQUFNLGNBQWMsR0FBRywyQkFBMkIsQ0FBQyxJQUFJLENBQUMsQ0FBQTtJQUV4RCxJQUFJLENBQUMsY0FBYztRQUFFLE1BQU0sSUFBSSxLQUFLLENBQUMsb0NBQW9DLE1BQU0sQ0FBQyxJQUFJLENBQUMsRUFBRSxDQUFDLENBQUE7SUFFeEYsSUFBSSxVQUFVO1FBQUUsT0FBTyxVQUFVLENBQUMsNkJBQTZCLElBQUksRUFBRSxFQUFFLEVBQUMsR0FBRyxTQUFTLEVBQUUsWUFBWSxFQUFFLGNBQWMsRUFBQyxDQUFDLENBQUE7SUFFcEgsSUFBSSxPQUFPLEdBQUcsY0FBYyxDQUFBO0lBRTVCLEtBQUssTUFBTSxDQUFDLFlBQVksRUFBRSxhQUFhLENBQUMsSUFBSSxNQUFNLENBQUMsT0FBTyxDQUFDLFNBQVMsSUFBSSxFQUFFLENBQUMsRUFBRSxDQUFDO1FBQzVFLE9BQU8sR0FBRyxPQUFPLENBQUMsVUFBVSxDQUFDLEtBQUssWUFBWSxHQUFHLEVBQUUsTUFBTSxDQUFDLGFBQWEsQ0FBQyxDQUFDLENBQUE7SUFDM0UsQ0FBQztJQUVELE9BQU8sT0FBTyxDQUFBO0FBQ2hCLENBQUMiLCJzb3VyY2VzQ29udGVudCI6WyIvLyBAdHMtY2hlY2tcblxuLyoqXG4gKiBUcmFuc2xhdGVzIGEgdmFsaWRhdGlvbiBtZXNzYWdlIElEIGludG8gYSBsb2NhbGl6ZWQgbWVzc2FnZS5cbiAqIEBjYWxsYmFjayBWYWxpZGF0aW9uTWVzc2FnZVRyYW5zbGF0b3JcbiAqIEBwYXJhbSB7c3RyaW5nfSBtc2dJRCAtIFN0YWJsZSBtZXNzYWdlIElEIChlLmcuIFwidmVsb2Npb3VzLmVycm9ycy5tZXNzYWdlcy5ibGFua1wiKS5cbiAqIEBwYXJhbSB7UmVjb3JkPHN0cmluZywgc3RyaW5nIHwgbnVtYmVyPiAmIHtkZWZhdWx0VmFsdWU/OiBzdHJpbmd9fSBbYXJnc10gLSBJbnRlcnBvbGF0aW9uIHZhcmlhYmxlcyBwbHVzIHRoZSBFbmdsaXNoIGRlZmF1bHQgbWVzc2FnZS5cbiAqIEByZXR1cm5zIHtzdHJpbmd9IExvY2FsaXplZCBtZXNzYWdlLlxuICovXG5cbi8qKlxuICogRW5nbGlzaCBkZWZhdWx0IHZhbGlkYXRpb24gbWVzc2FnZSBwcmVkaWNhdGVzIGtleWVkIGJ5IG1lc3NhZ2UgdHlwZSxcbiAqIG1hdGNoaW5nIFJhaWxzJyBgZXJyb3JzLm1lc3NhZ2VzLipgIHdoZXJlIGFuIGVxdWl2YWxlbnQgZXhpc3RzLiBWYWx1ZXMgbWF5XG4gKiBjb250YWluIGAle3ZhcmlhYmxlfWAgcGxhY2Vob2xkZXJzLlxuICogQHR5cGUge1JlY29yZDxzdHJpbmcsIHN0cmluZz59XG4gKi9cbmV4cG9ydCBjb25zdCBWQUxJREFUSU9OX01FU1NBR0VfREVGQVVMVFMgPSB7XG4gIGJsYW5rOiBcImNhbid0IGJlIGJsYW5rXCIsXG4gIHRha2VuOiBcImhhcyBhbHJlYWR5IGJlZW4gdGFrZW5cIixcbiAgdG9vX2xvbmc6IFwiaXMgdG9vIGxvbmcgKG1heGltdW0gaXMgJXtjb3VudH0gY2hhcmFjdGVycylcIixcbiAgdG9vX3Nob3J0OiBcImlzIHRvbyBzaG9ydCAobWluaW11bSBpcyAle2NvdW50fSBjaGFyYWN0ZXJzKVwiXG59XG5cbi8qKlxuICogQnVpbGRzIGEgdmFsaWRhdGlvbiBtZXNzYWdlIHByZWRpY2F0ZSB0aHJvdWdoIHRoZSBmcmFtZXdvcmsncyB0cmFuc2xhdGlvblxuICogbGF5ZXIuIFRoZSBtZXNzYWdlIGlzIGxvb2tlZCB1cCB1bmRlciBgdmVsb2Npb3VzLmVycm9ycy5tZXNzYWdlcy48dHlwZT5gXG4gKiB3aXRoIHRoZSBFbmdsaXNoIGRlZmF1bHQgYXMgZmFsbGJhY2s7IGAle3ZhcmlhYmxlfWAgcGxhY2Vob2xkZXJzIGFyZVxuICogaW50ZXJwb2xhdGVkIGZyb20gdGhlIGdpdmVuIHZhcmlhYmxlcy4gV2l0aG91dCBhIHRyYW5zbGF0b3IgdGhlIEVuZ2xpc2hcbiAqIGRlZmF1bHQgaXMgaW50ZXJwb2xhdGVkIGRpcmVjdGx5LlxuICogQHBhcmFtIHtvYmplY3R9IGFyZ3MgLSBPcHRpb25zLlxuICogQHBhcmFtIHtWYWxpZGF0aW9uTWVzc2FnZVRyYW5zbGF0b3IgfCBudWxsfSBbYXJncy50cmFuc2xhdG9yXSAtIFRyYW5zbGF0b3IgcmVzb2x2aW5nIG1lc3NhZ2UgSURzICh1c3VhbGx5IGBjb25maWd1cmF0aW9uLmdldFRyYW5zbGF0b3IoKWApLlxuICogQHBhcmFtIHtzdHJpbmd9IGFyZ3MudHlwZSAtIE1lc3NhZ2UgdHlwZSBrZXkgaW4ge0BsaW5rIFZBTElEQVRJT05fTUVTU0FHRV9ERUZBVUxUU30uXG4gKiBAcGFyYW0ge1JlY29yZDxzdHJpbmcsIHN0cmluZyB8IG51bWJlcj59IFthcmdzLnZhcmlhYmxlc10gLSBJbnRlcnBvbGF0aW9uIHZhcmlhYmxlcy5cbiAqIEByZXR1cm5zIHtzdHJpbmd9IExvY2FsaXplZCBtZXNzYWdlIHByZWRpY2F0ZS5cbiAqL1xuZXhwb3J0IGRlZmF1bHQgZnVuY3Rpb24gdmFsaWRhdGlvbk1lc3NhZ2Uoe3RyYW5zbGF0b3IsIHR5cGUsIHZhcmlhYmxlc30pIHtcbiAgY29uc3QgZGVmYXVsdE1lc3NhZ2UgPSBWQUxJREFUSU9OX01FU1NBR0VfREVGQVVMVFNbdHlwZV1cblxuICBpZiAoIWRlZmF1bHRNZXNzYWdlKSB0aHJvdyBuZXcgRXJyb3IoYFVua25vd24gdmFsaWRhdGlvbiBtZXNzYWdlIHR5cGU6ICR7U3RyaW5nKHR5cGUpfWApXG5cbiAgaWYgKHRyYW5zbGF0b3IpIHJldHVybiB0cmFuc2xhdG9yKGB2ZWxvY2lvdXMuZXJyb3JzLm1lc3NhZ2VzLiR7dHlwZX1gLCB7Li4udmFyaWFibGVzLCBkZWZhdWx0VmFsdWU6IGRlZmF1bHRNZXNzYWdlfSlcblxuICBsZXQgbWVzc2FnZSA9IGRlZmF1bHRNZXNzYWdlXG5cbiAgZm9yIChjb25zdCBbdmFyaWFibGVOYW1lLCB2YXJpYWJsZVZhbHVlXSBvZiBPYmplY3QuZW50cmllcyh2YXJpYWJsZXMgPz8ge30pKSB7XG4gICAgbWVzc2FnZSA9IG1lc3NhZ2UucmVwbGFjZUFsbChgJXske3ZhcmlhYmxlTmFtZX19YCwgU3RyaW5nKHZhcmlhYmxlVmFsdWUpKVxuICB9XG5cbiAgcmV0dXJuIG1lc3NhZ2Vcbn1cbiJdfQ==

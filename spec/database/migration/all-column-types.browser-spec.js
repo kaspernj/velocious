@@ -4,7 +4,7 @@ import Configuration from "../../../src/configuration.js"
 import {describe, expect, it} from "../../../src/testing/test.js"
 import Migration from "../../../src/database/migration/index.js"
 
-describe("database - migration - column types", {tags: ["dummy"]}, () => {
+describe("database - migration - column types", {databaseCleaning: {transaction: false, truncate: true}, tags: ["dummy"]}, () => {
   it("creates all supported column types including bigint", async () => {
     const configuration = Configuration.current()
     await configuration.ensureConnections(async (dbs) => {

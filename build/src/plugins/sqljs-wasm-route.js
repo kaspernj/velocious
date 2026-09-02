@@ -1,0 +1,61 @@
+import { createRequire } from "node:module";
+import path from "node:path";
+import SqlJsWasmRouteController from "./sqljs-wasm-route-controller.js";
+/**
+ * InstallSqlJsWasmRouteArgs type.
+ * @typedef {object} InstallSqlJsWasmRouteArgs
+ * @property {import("../configuration.js").default} configuration - Velocious configuration instance.
+ * @property {string} [routePrefix] - Route prefix used for sql.js asset serving.
+ */
+/**
+ * SqlJsLocateFileFromBackendArgs type.
+ * @typedef {object} SqlJsLocateFileFromBackendArgs
+ * @property {string} backendBaseUrl - Backend base URL (for example `https://api.example.com`).
+ * @property {string} [routePrefix] - Route prefix used for sql.js asset serving.
+ */
+const require = createRequire(import.meta.url);
+const sqlJsEntryPath = require.resolve("sql.js");
+const sqlJsDistDirectory = path.dirname(sqlJsEntryPath);
+/**
+ * Runs normalize route prefix.
+ * @param {string} routePrefix - Route prefix input.
+ * @returns {string} - Normalized route prefix.
+ */
+function normalizeRoutePrefix(routePrefix) {
+    if (!routePrefix.startsWith("/")) {
+        throw new Error(`Expected route prefix to start with '/', got: ${routePrefix}`);
+    }
+    if (routePrefix.length > 1 && routePrefix.endsWith("/")) {
+        return routePrefix.slice(0, -1);
+    }
+    return routePrefix;
+}
+/**
+ * Installs a route-resolver hook that serves `sql.js/dist/*` files from the running Velocious backend.
+ * @param {InstallSqlJsWasmRouteArgs} args - Options object.
+ * @returns {void} - No return value.
+ */
+export default function installSqlJsWasmRoute(args) {
+    const { configuration, routePrefix = "/velocious/sqljs" } = args;
+    if (!configuration)
+        throw new Error("No configuration given");
+    const normalizedRoutePrefix = normalizeRoutePrefix(routePrefix);
+    configuration.routes((routes) => {
+        routes.get(`${normalizedRoutePrefix}/:sqlJsAssetFileName`, {
+            params: { sqlJsDistDirectory },
+            to: [SqlJsWasmRouteController, "show"]
+        });
+    });
+}
+/**
+ * Creates a sqlite-web `locateFile(file)` callback pointing to a Velocious backend route.
+ * @param {SqlJsLocateFileFromBackendArgs} args - Options object.
+ * @returns {(file: string) => string} - sql.js locateFile callback.
+ */
+export function sqlJsLocateFileFromBackend(args) {
+    const { backendBaseUrl, routePrefix = "/velocious/sqljs" } = args;
+    const normalizedRoutePrefix = normalizeRoutePrefix(routePrefix);
+    const baseUrl = backendBaseUrl.replace(/\/+$/, "");
+    return (file) => `${baseUrl}${normalizedRoutePrefix}/${encodeURIComponent(file)}`;
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoic3FsanMtd2FzbS1yb3V0ZS5qcyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbIi4uLy4uLy4uL3NyYy9wbHVnaW5zL3NxbGpzLXdhc20tcm91dGUuanMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBQUEsT0FBTyxFQUFDLGFBQWEsRUFBQyxNQUFNLGFBQWEsQ0FBQTtBQUN6QyxPQUFPLElBQUksTUFBTSxXQUFXLENBQUE7QUFDNUIsT0FBTyx3QkFBd0IsTUFBTSxrQ0FBa0MsQ0FBQTtBQUV2RTs7Ozs7R0FLRztBQUNIOzs7OztHQUtHO0FBQ0gsTUFBTSxPQUFPLEdBQUcsYUFBYSxDQUFDLE9BQU8sSUFBSSxDQUFDLEdBQUcsQ0FBQyxDQUFBO0FBQzlDLE1BQU0sY0FBYyxHQUFHLE9BQU8sQ0FBQyxPQUFPLENBQUMsUUFBUSxDQUFDLENBQUE7QUFDaEQsTUFBTSxrQkFBa0IsR0FBRyxJQUFJLENBQUMsT0FBTyxDQUFDLGNBQWMsQ0FBQyxDQUFBO0FBRXZEOzs7O0dBSUc7QUFDSCxTQUFTLG9CQUFvQixDQUFDLFdBQVc7SUFDdkMsSUFBSSxDQUFDLFdBQVcsQ0FBQyxVQUFVLENBQUMsR0FBRyxDQUFDLEVBQUUsQ0FBQztRQUNqQyxNQUFNLElBQUksS0FBSyxDQUFDLGlEQUFpRCxXQUFXLEVBQUUsQ0FBQyxDQUFBO0lBQ2pGLENBQUM7SUFFRCxJQUFJLFdBQVcsQ0FBQyxNQUFNLEdBQUcsQ0FBQyxJQUFJLFdBQVcsQ0FBQyxRQUFRLENBQUMsR0FBRyxDQUFDLEVBQUUsQ0FBQztRQUN4RCxPQUFPLFdBQVcsQ0FBQyxLQUFLLENBQUMsQ0FBQyxFQUFFLENBQUMsQ0FBQyxDQUFDLENBQUE7SUFDakMsQ0FBQztJQUVELE9BQU8sV0FBVyxDQUFBO0FBQ3BCLENBQUM7QUFFRDs7OztHQUlHO0FBQ0gsTUFBTSxDQUFDLE9BQU8sVUFBVSxxQkFBcUIsQ0FBQyxJQUFJO0lBQ2hELE1BQU0sRUFBQyxhQUFhLEVBQUUsV0FBVyxHQUFHLGtCQUFrQixFQUFDLEdBQUcsSUFBSSxDQUFBO0lBRTlELElBQUksQ0FBQyxhQUFhO1FBQUUsTUFBTSxJQUFJLEtBQUssQ0FBQyx3QkFBd0IsQ0FBQyxDQUFBO0lBRTdELE1BQU0scUJBQXFCLEdBQUcsb0JBQW9CLENBQUMsV0FBVyxDQUFDLENBQUE7SUFFL0QsYUFBYSxDQUFDLE1BQU0sQ0FBQyxDQUFDLE1BQU0sRUFBRSxFQUFFO1FBQzlCLE1BQU0sQ0FBQyxHQUFHLENBQUMsR0FBRyxxQkFBcUIsc0JBQXNCLEVBQUU7WUFDekQsTUFBTSxFQUFFLEVBQUMsa0JBQWtCLEVBQUM7WUFDNUIsRUFBRSxFQUFFLENBQUMsd0JBQXdCLEVBQUUsTUFBTSxDQUFDO1NBQ3ZDLENBQUMsQ0FBQTtJQUNKLENBQUMsQ0FBQyxDQUFBO0FBQ0osQ0FBQztBQUVEOzs7O0dBSUc7QUFDSCxNQUFNLFVBQVUsMEJBQTBCLENBQUMsSUFBSTtJQUM3QyxNQUFNLEVBQUMsY0FBYyxFQUFFLFdBQVcsR0FBRyxrQkFBa0IsRUFBQyxHQUFHLElBQUksQ0FBQTtJQUMvRCxNQUFNLHFCQUFxQixHQUFHLG9CQUFvQixDQUFDLFdBQVcsQ0FBQyxDQUFBO0lBQy9ELE1BQU0sT0FBTyxHQUFHLGNBQWMsQ0FBQyxPQUFPLENBQUMsTUFBTSxFQUFFLEVBQUUsQ0FBQyxDQUFBO0lBRWxELE9BQU8sQ0FBQyxJQUFJLEVBQUUsRUFBRSxDQUFDLEdBQUcsT0FBTyxHQUFHLHFCQUFxQixJQUFJLGtCQUFrQixDQUFDLElBQUksQ0FBQyxFQUFFLENBQUE7QUFDbkYsQ0FBQyIsInNvdXJjZXNDb250ZW50IjpbImltcG9ydCB7Y3JlYXRlUmVxdWlyZX0gZnJvbSBcIm5vZGU6bW9kdWxlXCJcbmltcG9ydCBwYXRoIGZyb20gXCJub2RlOnBhdGhcIlxuaW1wb3J0IFNxbEpzV2FzbVJvdXRlQ29udHJvbGxlciBmcm9tIFwiLi9zcWxqcy13YXNtLXJvdXRlLWNvbnRyb2xsZXIuanNcIlxuXG4vKipcbiAqIEluc3RhbGxTcWxKc1dhc21Sb3V0ZUFyZ3MgdHlwZS5cbiAqIEB0eXBlZGVmIHtvYmplY3R9IEluc3RhbGxTcWxKc1dhc21Sb3V0ZUFyZ3NcbiAqIEBwcm9wZXJ0eSB7aW1wb3J0KFwiLi4vY29uZmlndXJhdGlvbi5qc1wiKS5kZWZhdWx0fSBjb25maWd1cmF0aW9uIC0gVmVsb2Npb3VzIGNvbmZpZ3VyYXRpb24gaW5zdGFuY2UuXG4gKiBAcHJvcGVydHkge3N0cmluZ30gW3JvdXRlUHJlZml4XSAtIFJvdXRlIHByZWZpeCB1c2VkIGZvciBzcWwuanMgYXNzZXQgc2VydmluZy5cbiAqL1xuLyoqXG4gKiBTcWxKc0xvY2F0ZUZpbGVGcm9tQmFja2VuZEFyZ3MgdHlwZS5cbiAqIEB0eXBlZGVmIHtvYmplY3R9IFNxbEpzTG9jYXRlRmlsZUZyb21CYWNrZW5kQXJnc1xuICogQHByb3BlcnR5IHtzdHJpbmd9IGJhY2tlbmRCYXNlVXJsIC0gQmFja2VuZCBiYXNlIFVSTCAoZm9yIGV4YW1wbGUgYGh0dHBzOi8vYXBpLmV4YW1wbGUuY29tYCkuXG4gKiBAcHJvcGVydHkge3N0cmluZ30gW3JvdXRlUHJlZml4XSAtIFJvdXRlIHByZWZpeCB1c2VkIGZvciBzcWwuanMgYXNzZXQgc2VydmluZy5cbiAqL1xuY29uc3QgcmVxdWlyZSA9IGNyZWF0ZVJlcXVpcmUoaW1wb3J0Lm1ldGEudXJsKVxuY29uc3Qgc3FsSnNFbnRyeVBhdGggPSByZXF1aXJlLnJlc29sdmUoXCJzcWwuanNcIilcbmNvbnN0IHNxbEpzRGlzdERpcmVjdG9yeSA9IHBhdGguZGlybmFtZShzcWxKc0VudHJ5UGF0aClcblxuLyoqXG4gKiBSdW5zIG5vcm1hbGl6ZSByb3V0ZSBwcmVmaXguXG4gKiBAcGFyYW0ge3N0cmluZ30gcm91dGVQcmVmaXggLSBSb3V0ZSBwcmVmaXggaW5wdXQuXG4gKiBAcmV0dXJucyB7c3RyaW5nfSAtIE5vcm1hbGl6ZWQgcm91dGUgcHJlZml4LlxuICovXG5mdW5jdGlvbiBub3JtYWxpemVSb3V0ZVByZWZpeChyb3V0ZVByZWZpeCkge1xuICBpZiAoIXJvdXRlUHJlZml4LnN0YXJ0c1dpdGgoXCIvXCIpKSB7XG4gICAgdGhyb3cgbmV3IEVycm9yKGBFeHBlY3RlZCByb3V0ZSBwcmVmaXggdG8gc3RhcnQgd2l0aCAnLycsIGdvdDogJHtyb3V0ZVByZWZpeH1gKVxuICB9XG5cbiAgaWYgKHJvdXRlUHJlZml4Lmxlbmd0aCA+IDEgJiYgcm91dGVQcmVmaXguZW5kc1dpdGgoXCIvXCIpKSB7XG4gICAgcmV0dXJuIHJvdXRlUHJlZml4LnNsaWNlKDAsIC0xKVxuICB9XG5cbiAgcmV0dXJuIHJvdXRlUHJlZml4XG59XG5cbi8qKlxuICogSW5zdGFsbHMgYSByb3V0ZS1yZXNvbHZlciBob29rIHRoYXQgc2VydmVzIGBzcWwuanMvZGlzdC8qYCBmaWxlcyBmcm9tIHRoZSBydW5uaW5nIFZlbG9jaW91cyBiYWNrZW5kLlxuICogQHBhcmFtIHtJbnN0YWxsU3FsSnNXYXNtUm91dGVBcmdzfSBhcmdzIC0gT3B0aW9ucyBvYmplY3QuXG4gKiBAcmV0dXJucyB7dm9pZH0gLSBObyByZXR1cm4gdmFsdWUuXG4gKi9cbmV4cG9ydCBkZWZhdWx0IGZ1bmN0aW9uIGluc3RhbGxTcWxKc1dhc21Sb3V0ZShhcmdzKSB7XG4gIGNvbnN0IHtjb25maWd1cmF0aW9uLCByb3V0ZVByZWZpeCA9IFwiL3ZlbG9jaW91cy9zcWxqc1wifSA9IGFyZ3NcblxuICBpZiAoIWNvbmZpZ3VyYXRpb24pIHRocm93IG5ldyBFcnJvcihcIk5vIGNvbmZpZ3VyYXRpb24gZ2l2ZW5cIilcblxuICBjb25zdCBub3JtYWxpemVkUm91dGVQcmVmaXggPSBub3JtYWxpemVSb3V0ZVByZWZpeChyb3V0ZVByZWZpeClcblxuICBjb25maWd1cmF0aW9uLnJvdXRlcygocm91dGVzKSA9PiB7XG4gICAgcm91dGVzLmdldChgJHtub3JtYWxpemVkUm91dGVQcmVmaXh9LzpzcWxKc0Fzc2V0RmlsZU5hbWVgLCB7XG4gICAgICBwYXJhbXM6IHtzcWxKc0Rpc3REaXJlY3Rvcnl9LFxuICAgICAgdG86IFtTcWxKc1dhc21Sb3V0ZUNvbnRyb2xsZXIsIFwic2hvd1wiXVxuICAgIH0pXG4gIH0pXG59XG5cbi8qKlxuICogQ3JlYXRlcyBhIHNxbGl0ZS13ZWIgYGxvY2F0ZUZpbGUoZmlsZSlgIGNhbGxiYWNrIHBvaW50aW5nIHRvIGEgVmVsb2Npb3VzIGJhY2tlbmQgcm91dGUuXG4gKiBAcGFyYW0ge1NxbEpzTG9jYXRlRmlsZUZyb21CYWNrZW5kQXJnc30gYXJncyAtIE9wdGlvbnMgb2JqZWN0LlxuICogQHJldHVybnMgeyhmaWxlOiBzdHJpbmcpID0+IHN0cmluZ30gLSBzcWwuanMgbG9jYXRlRmlsZSBjYWxsYmFjay5cbiAqL1xuZXhwb3J0IGZ1bmN0aW9uIHNxbEpzTG9jYXRlRmlsZUZyb21CYWNrZW5kKGFyZ3MpIHtcbiAgY29uc3Qge2JhY2tlbmRCYXNlVXJsLCByb3V0ZVByZWZpeCA9IFwiL3ZlbG9jaW91cy9zcWxqc1wifSA9IGFyZ3NcbiAgY29uc3Qgbm9ybWFsaXplZFJvdXRlUHJlZml4ID0gbm9ybWFsaXplUm91dGVQcmVmaXgocm91dGVQcmVmaXgpXG4gIGNvbnN0IGJhc2VVcmwgPSBiYWNrZW5kQmFzZVVybC5yZXBsYWNlKC9cXC8rJC8sIFwiXCIpXG5cbiAgcmV0dXJuIChmaWxlKSA9PiBgJHtiYXNlVXJsfSR7bm9ybWFsaXplZFJvdXRlUHJlZml4fS8ke2VuY29kZVVSSUNvbXBvbmVudChmaWxlKX1gXG59XG4iXX0=

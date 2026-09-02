@@ -17,6 +17,7 @@ describe("Background jobs generation adapter capability", () => {
   it("rejects an unsupported adapter before listening in generation mode", async () => {
     dummyConfiguration.setBackgroundJobsConfig({generationId: undefined, initialGenerationState: undefined, lifecycleSocketPath: undefined})
     const main = new BackgroundJobsMain({
+      closeDatabaseConnectionsOnStop: false,
       configuration: dummyConfiguration,
       generationId: "release-unsupported",
       host: "127.0.0.1",
@@ -34,6 +35,7 @@ describe("Background jobs generation adapter capability", () => {
     const sqlAdapter = new SqlBackgroundJobsAdapter({configuration: dummyConfiguration})
     const legacyAdapter = new LegacyStartableAdapter()
     const main = new BackgroundJobsMain({
+      closeDatabaseConnectionsOnStop: false,
       configuration: dummyConfiguration,
       host: "127.0.0.1",
       port: 0

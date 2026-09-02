@@ -4,7 +4,7 @@ import Configuration from "../../../src/configuration.js"
 import {describe, expect, it} from "../../../src/testing/test.js"
 import Migration from "../../../src/database/migration/index.js"
 
-describe("database - migration - removeIndex", {tags: ["dummy"]}, () => {
+describe("database - migration - removeIndex", {databaseCleaning: {transaction: false, truncate: true}, tags: ["dummy"]}, () => {
   it("removes an existing index by name", async () => {
     const configuration = Configuration.current()
 

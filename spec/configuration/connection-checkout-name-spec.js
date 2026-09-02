@@ -14,7 +14,7 @@ function getDefaultPool() {
   return pool
 }
 
-describe("connection checkout names", () => {
+describe("connection checkout names", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("sets and clears names for configuration connection scopes", async () => {
     await Dummy.run(async () => {
       /** @type {import("../../src/database/drivers/base.js").default | undefined} */
