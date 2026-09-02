@@ -1033,10 +1033,16 @@ closure without overlapping stale and current bootstrap side effects.
 
 ## Lifecycle callbacks
 
-Register lifecycle callbacks with either a function or an instance method name. Registrations run in order, so you can stack multiple callbacks on the same lifecycle hook.
+Records support implicit same-named lifecycle methods plus explicit function or
+string method-name registrations. Registrations run in order, so independent
+responsibilities can use multiple small named callbacks.
 
 ```js
 class Task extends Record {
+  beforeSave() {
+    this.setName(this.name().trim())
+  }
+
   async validateSomething() {
     await doSomethingElse()
   }
@@ -1048,6 +1054,14 @@ Task.beforeValidation(async (task) => {
 
 Task.beforeValidation("validateSomething")
 ```
+
+Function registrations receive the record argument; arrow-function `this` is
+lexical and is not rebound to the record. Keep implicit hooks cohesive, use
+multiple explicit registrations when concerns or ordering should be visible, and
+put irreversible effects behind `afterCommit` rather than directly in
+`afterSave`. See [Record lifecycle callbacks](docs/lifecycle-callbacks.md) for
+phase ordering, transaction boundaries, bulk-operation caveats, and testing
+guidance.
 
 ## Preloading relationships
 

@@ -6,6 +6,9 @@ Velocious model queries support bulk operations that execute a single SQL statem
 
 `Query#updateAll(data)` executes a single `UPDATE ... SET ... WHERE ...` statement. It bypasses model lifecycle callbacks (`beforeUpdate`, `afterUpdate`, validations) — use it for efficient batch updates where per-row hooks aren't needed.
 
+See [Record lifecycle callbacks](lifecycle-callbacks.md) before choosing a bulk
+operation when correctness may depend on per-record behavior.
+
 ### Usage
 
 ```js
