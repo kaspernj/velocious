@@ -16,6 +16,7 @@ import {pathToFileURL} from "url"
 import {clearDeliveries} from "../mailer.js"
 import SharedTransactionBroker from "./shared-transaction-broker.js"
 import { SHARED_TRANSACTION_BROKER_ENV } from "./shared-transaction-proxy-driver.js"
+import {synchronizeTestingPackageTests} from "./testing-package-adapter.js"
 
 /**
  * ConsoleMethodName type.
@@ -1127,6 +1128,7 @@ export default class TestRunner {
 
     if (!this._profiler) {
       await environmentHandler.importTestFiles(this.getTestFiles())
+      synchronizeTestingPackageTests(tests)
       return
     }
 
@@ -1136,6 +1138,7 @@ export default class TestRunner {
       await this._profiler.measurePhase("imports", async () => {
         await environmentHandler.importTestFiles([testFile])
       }, {filePath: testFile})
+      synchronizeTestingPackageTests(tests)
       this.assignTestRegistrationOwnership(tests, existingRegistrations, testFile)
     }
   }

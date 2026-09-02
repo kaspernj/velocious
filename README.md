@@ -177,6 +177,20 @@ Baselines are generated against a fresh checkout (no generated dummy `configurat
 
 # Testing
 
+Application tests may import the testing DSL from the independent public package.
+`@velocious/testing` `0.0.2` uses one compatible default registry across installed copies,
+and the framework runner discovers these declarations while retaining its database,
+request, retry, profiling, and cleanup behavior. The existing Velocious facade remains
+supported.
+
+```js
+import {describe, expect, it} from "@velocious/testing"
+
+describe("Tasks", () => {
+  it("adds a task", () => expect(1 + 1).toEqual(2))
+})
+```
+
 The dummy database configurations require `MSSQL_SA_PASSWORD` whenever they include
 the shared MSSQL test database. Set it in the local process environment rather than
 writing the password into `spec/dummy/src/config/configuration*.js`. TensorBuzz CI
@@ -280,7 +294,7 @@ npx velocious test:timing-manifest:merge --output tmp/test-timings.json \
 See [test profiling](docs/test-profiling.md) for lifecycle accounting, custom
 activity spans, schema, and privacy guarantees.
 
-Prefer waiting for a real signal or condition over sleeping a fixed duration. `waitForEvent(emitter, eventName, {timeoutMs, filter})` resolves the instant a matching event fires (a background job finishing, a model update, a websocket message) and rejects on timeout; for polling an arbitrary condition, use awaitery's `waitFor`. The stable Velocious import remains `velocious/build/src/testing/test.js`; its generic `waitForEvent` primitive comes from `@velocious/testing`, while the keyed testing DSL and framework runner remain owned by Velocious.
+Prefer waiting for a real signal or condition over sleeping a fixed duration. `waitForEvent(emitter, eventName, {timeoutMs, filter})` resolves the instant a matching event fires (a background job finishing, a model update, a websocket message) and rejects on timeout; for polling an arbitrary condition, use awaitery's `waitFor`. Both `@velocious/testing` and the backward-compatible `velocious/build/src/testing/test.js` facade are supported imports; the Velocious runner consumes public-package declarations and adds the framework-specific database, request, profiling, and cleanup behavior.
 
 ```js
 import {waitForEvent} from "velocious/build/src/testing/test.js"
@@ -2205,6 +2219,9 @@ If you are using Velocious for an app, Velocious has a built-in testing framewor
 ```bash
 npx velocious test
 ```
+
+Test declarations can be imported from `@velocious/testing`; the legacy
+`velocious/build/src/testing/test.js` facade remains supported.
 
 If you are developing on Velocious, you can run the tests with:
 
