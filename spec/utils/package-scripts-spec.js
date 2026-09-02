@@ -49,7 +49,7 @@ describe("package scripts", {databaseCleaning: {transaction: true}}, () => {
     const scripts = await readPackageScripts()
 
     expect(scripts.dependencies).toEqual("npm run build")
-    expect(scripts.prepare).toEqual(undefined)
+    expect(scripts.prepare).toEqual("npm run build")
     expect(scripts.prepublishOnly).toEqual(undefined)
     expect(scripts.prepack).toEqual("npm run build")
   })
