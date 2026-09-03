@@ -5,6 +5,12 @@
  */
 export declare function captureFrontendModelRemoteRequestContext(value: ReturnType<typeof JSON.parse> | undefined): import("../remote-request-context.js").RemoteRequestContext;
 /**
+ * Builds the canonical identity for one frontend-model remote request context.
+ * @param {ReturnType<typeof JSON.parse> | undefined} value - Context value.
+ * @returns {string} Stable serialized context key.
+ */
+export declare function frontendModelRemoteRequestContextKey(value: ReturnType<typeof JSON.parse> | undefined): string;
+/**
  * Merges captured context into frontend-model command or subscription params.
  * @template {Record<string, ReturnType<typeof JSON.parse>>} TParams
  * @param {import("../remote-request-context.js").RemoteRequestContext} context - Captured context.

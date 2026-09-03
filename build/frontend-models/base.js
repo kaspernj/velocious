@@ -1780,6 +1780,17 @@ function frontendModelRequestContext() {
 }
 
 /**
+ * Captures the explicit lifecycle context or falls back to the configured transport context.
+ * @param {import("../remote-request-context.js").RemoteRequestContext | undefined} requestContext - Registration-local context.
+ * @returns {import("../remote-request-context.js").RemoteRequestContext} Frozen context snapshot.
+ */
+function frontendModelEventRequestContext(requestContext) {
+  if (requestContext === undefined) return frontendModelRequestContext()
+
+  return captureFrontendModelRemoteRequestContext(requestContext)
+}
+
+/**
  * Runs ensure frontend model instance listener.
  * @param {FrontendModelEventSubscription} sub - Event subscription bucket.
  * @param {string} id - Model id.
@@ -1797,6 +1808,27 @@ function ensureFrontendModelInstanceListener(sub, id, instance) {
   }
 
   return listener
+}
+
+/**
+ * Removes one instance callback entry and tears down an empty listener/subscription bucket.
+ * @param {FrontendModelEventSubscription} sub - Event subscription bucket.
+ * @param {string} id - Model id.
+ * @param {(listener: {instance: FrontendModelBase, updateCallbacks: Set<FrontendModelModelEventCallbackEntry>, destroyCallbacks: Set<FrontendModelDestroyEventCallbackEntry>}) => void} removeEntry - Callback entry removal.
+ * @returns {void}
+ */
+function removeFrontendModelInstanceListenerEntry(sub, id, removeEntry) {
+  const current = sub.instanceListeners.get(id)
+
+  if (!current) return
+
+  removeEntry(current)
+
+  if (current.updateCallbacks.size === 0 && current.destroyCallbacks.size === 0) {
+    sub.instanceListeners.delete(id)
+  }
+
+  sub.maybeTeardown()
 }
 
 /**
@@ -3723,8 +3755,9 @@ export default class FrontendModelBase {
    * @returns {Promise<() => void>} - Unsubscribe callback.
    */
   static async onCreate(callback, options = {}) {
-    const sub = ensureFrontendModelEventSubscription(this, frontendModelRequestContext())
-    const entry = {callback, ...frontendModelEventOptionsPayload(this, options)}
+    const {requestContext, ...eventOptionsPayload} = frontendModelEventOptionsPayload(this, options)
+    const sub = ensureFrontendModelEventSubscription(this, frontendModelEventRequestContext(requestContext))
+    const entry = {callback, ...eventOptionsPayload}
 
     return await sub.registerClassCallback(sub.classCreateCallbacks, entry)
   }
@@ -3737,8 +3770,9 @@ export default class FrontendModelBase {
    * @returns {Promise<() => void>} - Unsubscribe callback.
    */
   static async onUpdate(callback, options = {}) {
-    const sub = ensureFrontendModelEventSubscription(this, frontendModelRequestContext())
-    const entry = {callback, ...frontendModelEventOptionsPayload(this, options)}
+    const {requestContext, ...eventOptionsPayload} = frontendModelEventOptionsPayload(this, options)
+    const sub = ensureFrontendModelEventSubscription(this, frontendModelEventRequestContext(requestContext))
+    const entry = {callback, ...eventOptionsPayload}
 
     return await sub.registerClassCallback(sub.classUpdateCallbacks, entry)
   }
@@ -3753,7 +3787,8 @@ export default class FrontendModelBase {
   static async onDestroy(callback, options = {}) {
     assertNoDestroyEventFilter(this, options)
 
-    const sub = ensureFrontendModelEventSubscription(this, frontendModelRequestContext())
+    const {requestContext} = frontendModelEventOptionsPayload(this, options)
+    const sub = ensureFrontendModelEventSubscription(this, frontendModelEventRequestContext(requestContext))
     const entry = {callback}
 
     return await sub.registerClassCallback(sub.classDestroyCallbacks, entry)
@@ -3771,24 +3806,23 @@ export default class FrontendModelBase {
   async onUpdate(callback, options = {}) {
     const self = /** @type {ReturnType<typeof JSON.parse>} */ (this)
     const ModelClass = frontendModelClassFor(this)
-    const sub = ensureFrontendModelEventSubscription(ModelClass, frontendModelRequestContext())
+    const {requestContext, ...eventOptionsPayload} = frontendModelEventOptionsPayload(ModelClass, options)
+    const sub = ensureFrontendModelEventSubscription(ModelClass, frontendModelEventRequestContext(requestContext))
     const id = String(self.id())
-    const entry = {callback, ...frontendModelEventOptionsPayload(ModelClass, options)}
+    const entry = {callback, ...eventOptionsPayload}
     const listener = ensureFrontendModelInstanceListener(sub, id, this)
 
     listener.updateCallbacks.add(entry)
-    await sub.ensureSubscribed()
+
+    try {
+      await sub.ensureSubscribed()
+    } catch (error) {
+      removeFrontendModelInstanceListenerEntry(sub, id, (current) => current.updateCallbacks.delete(entry))
+      throw error
+    }
 
     return () => {
-      const current = sub.instanceListeners.get(id)
-
-      if (!current) return
-      current.updateCallbacks.delete(entry)
-
-      if (current.updateCallbacks.size === 0 && current.destroyCallbacks.size === 0) {
-        sub.instanceListeners.delete(id)
-      }
-      sub.maybeTeardown()
+      removeFrontendModelInstanceListenerEntry(sub, id, (current) => current.updateCallbacks.delete(entry))
     }
   }
 
@@ -3804,24 +3838,23 @@ export default class FrontendModelBase {
 
     assertNoDestroyEventFilter(ModelClass, options)
 
-    const sub = ensureFrontendModelEventSubscription(ModelClass, frontendModelRequestContext())
+    const {requestContext} = frontendModelEventOptionsPayload(ModelClass, options)
+    const sub = ensureFrontendModelEventSubscription(ModelClass, frontendModelEventRequestContext(requestContext))
     const id = String(self.id())
     const entry = {callback}
     const listener = ensureFrontendModelInstanceListener(sub, id, this)
 
     listener.destroyCallbacks.add(entry)
-    await sub.ensureSubscribed()
+
+    try {
+      await sub.ensureSubscribed()
+    } catch (error) {
+      removeFrontendModelInstanceListenerEntry(sub, id, (current) => current.destroyCallbacks.delete(entry))
+      throw error
+    }
 
     return () => {
-      const current = sub.instanceListeners.get(id)
-
-      if (!current) return
-      current.destroyCallbacks.delete(entry)
-
-      if (current.updateCallbacks.size === 0 && current.destroyCallbacks.size === 0) {
-        sub.instanceListeners.delete(id)
-      }
-      sub.maybeTeardown()
+      removeFrontendModelInstanceListenerEntry(sub, id, (current) => current.destroyCallbacks.delete(entry))
     }
   }
 

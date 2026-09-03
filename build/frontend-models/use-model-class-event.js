@@ -4,6 +4,7 @@ import debounceFunction from "debounce"
 import {useEffect, useMemo, useRef} from "react"
 
 import clearPendingDebouncedCallback from "./clear-pending-debounced-callback.js"
+import {frontendModelRemoteRequestContextKey} from "./remote-request-context.js"
 
 /**
  * FrontendModelClass type.
@@ -46,7 +47,7 @@ function assertNoUnknownOptions(restOptions) {
 /**
  * Runs event query dependency payload.
  * @param {import("./query.js").default<FrontendModelClass> | undefined} query - Event query option.
- * @returns {import("./query.js").FrontendModelEventOptionsPayload | null} Stable dependency payload.
+ * @returns {import("./query.js").FrontendModelEventQueryPayload | null} Stable dependency payload.
  */
 function eventQueryDependencyPayload(query) {
   if (!query) return null
@@ -97,14 +98,14 @@ async function subscribeToModelClassEvent(modelClass, eventName, callback, optio
  * @returns {void}
  */
 export default function useModelClassEvent(modelClass, eventOrEvents, callback, options = {}) {
-  const {active = true, abilities, debounce = false, onConnected, preload, query, queryData, select, selectsExtra, withCount, ...restOptions} = options
+  const {active = true, abilities, debounce = false, onConnected, preload, query, queryData, requestContext, select, selectsExtra, withCount, ...restOptions} = options
   assertNoUnknownOptions(restOptions)
 
-  const projectionKey = JSON.stringify({abilities, preload, query: eventQueryDependencyPayload(query), queryData, select, selectsExtra, withCount})
-  const projectionOptionsRef = useRef({abilities, preload, query, queryData, select, selectsExtra, withCount})
+  const projectionKey = JSON.stringify({abilities, preload, query: eventQueryDependencyPayload(query), queryData, requestContext: frontendModelRemoteRequestContextKey(requestContext), select, selectsExtra, withCount})
+  const projectionOptionsRef = useRef({abilities, preload, query, queryData, requestContext, select, selectsExtra, withCount})
   const callbackRef = useRef(callback)
   const activeRef = useRef(active)
-  projectionOptionsRef.current = {abilities, preload, query, queryData, select, selectsExtra, withCount}
+  projectionOptionsRef.current = {abilities, preload, query, queryData, requestContext, select, selectsExtra, withCount}
   callbackRef.current = callback
   activeRef.current = active
 

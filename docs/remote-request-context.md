@@ -16,9 +16,18 @@ FrontendModelBase.configureTransport({
 })
 ```
 
-Velocious invokes `requestContext` synchronously when each CRUD or custom command begins and when each frontend-model event or public `subscribeWebsocketChannel(...)` subscription is created. It copies, validates, sorts, and freezes the returned scalar object immediately. Changing the source object or switching the active project afterward cannot retarget that operation.
+Velocious invokes the configured `requestContext` synchronously when each CRUD or custom command begins and when each frontend-model event or public `subscribeWebsocketChannel(...)` subscription is created. Lifecycle methods and React event hooks can instead pass `{requestContext: {projectId, routingEpoch}}` for one registration; an explicit registration-local context replaces the configured resolver for that registration. Velocious copies, validates, sorts, and freezes the selected scalar object immediately. Changing the source object or switching the active project afterward cannot retarget that operation.
 
-Shared frontend-model batches retain a separate captured context on every entry. The backend validates each entry, merges its context into that entry's command params, and resolves the tenant and ability inside that context. Two project operations queued in the same microtask therefore remain independent. Frontend-model event subscriptions are partitioned by model and captured context; reconnect and framework resubscribe reuse the original snapshot instead of consulting a later active-project value.
+Shared frontend-model batches retain a separate captured context on every entry. The backend validates each entry, merges its context into that entry's command params, and resolves the tenant and ability inside that context. Two project operations queued in the same microtask therefore remain independent. Frontend-model event subscriptions are partitioned by model and captured context value: equal contexts keep normal multiplexing, while distinct contexts can never share one server subscription or its combined event-filter list. Reconnect and framework resubscribe reuse the original snapshots instead of consulting a later active-project value; unsubscribing or rejecting one context bucket does not tear down another.
+
+```js
+useUpdatedEvent(Task, onTaskUpdated, {
+  requestContext: {projectId, routingEpoch},
+  query: Task.where({projectId})
+})
+```
+
+The query still controls which records match the callback. The request context is delivered as top-level subscription params so the tenant resolver does not need to infer one routing identity from a multiplexed filter list. Destroy subscriptions, which intentionally cannot use record filters after deletion, can use the same registration-local context.
 
 ## Sync clients
 

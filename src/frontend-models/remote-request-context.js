@@ -1,6 +1,6 @@
 // @ts-check
 
-import {captureRemoteRequestContext, mergeRemoteRequestContext} from "../remote-request-context.js"
+import {captureRemoteRequestContext, mergeRemoteRequestContext, remoteRequestContextKey} from "../remote-request-context.js"
 
 const RESERVED_KEYS = ["commandType", "customPath", "model", "payload", "requestContext", "requestId", "requests"]
 const REQUEST_CONTEXT_LABEL = "Frontend model request context"
@@ -15,6 +15,15 @@ export function captureFrontendModelRemoteRequestContext(value) {
     label: REQUEST_CONTEXT_LABEL,
     reservedKeys: RESERVED_KEYS
   })
+}
+
+/**
+ * Builds the canonical identity for one frontend-model remote request context.
+ * @param {ReturnType<typeof JSON.parse> | undefined} value - Context value.
+ * @returns {string} Stable serialized context key.
+ */
+export function frontendModelRemoteRequestContextKey(value) {
+  return remoteRequestContextKey(captureFrontendModelRemoteRequestContext(value))
 }
 
 /**

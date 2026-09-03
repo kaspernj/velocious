@@ -358,6 +358,7 @@ async function projectionOptionsScenario() {
   const classQuery = ModelClass
     .where({id: "task-1"})
     .select(["id"])
+  const requestContext = {workspaceId: "workspace-alpha"}
 
   /**
    * Runs test component.
@@ -367,14 +368,17 @@ async function projectionOptionsScenario() {
     useCreatedEvent(ModelClass, () => {}, {
       preload: "project",
       query: classQuery,
+      requestContext,
       select: {Task: ["id", "nameUppercase"]}
     })
     useUpdatedEvent(model, () => {}, {
+      requestContext,
       select: ["id"],
       withCount: "comments"
     })
     useDestroyedEvent(model, () => {}, {
       preload: "project",
+      requestContext,
       select: ["id"]
     })
 
@@ -393,9 +397,12 @@ async function projectionOptionsScenario() {
   return {
     classCreatePreloadProject: createOptions.preload === "project" ? 1 : 0,
     classCreateQueryPassed: createOptions.query === classQuery ? 1 : 0,
+    classCreateRequestContextPassed: createOptions.requestContext === requestContext ? 1 : 0,
     classCreateSelectCount: createOptions.select && typeof createOptions.select === "object" && !Array.isArray(createOptions.select) && Array.isArray(createOptions.select.Task) ? createOptions.select.Task.length : 0,
     instanceDestroyPreloadProject: destroyOptions.preload === "project" ? 1 : 0,
+    instanceDestroyRequestContextPassed: destroyOptions.requestContext === requestContext ? 1 : 0,
     instanceDestroySelectCount: Array.isArray(destroyOptions.select) ? destroyOptions.select.length : 0,
+    instanceUpdateRequestContextPassed: updateOptions.requestContext === requestContext ? 1 : 0,
     instanceUpdateSelectCount: Array.isArray(updateOptions.select) ? updateOptions.select.length : 0,
     instanceUpdateWithCountComments: updateOptions.withCount === "comments" ? 1 : 0
   }

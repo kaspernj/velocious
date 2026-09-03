@@ -1,0 +1,1 @@
+Allow each frontend-model lifecycle registration to provide immutable request context, keeping different tenant/routing identities in isolated server subscriptions while preserving same-context multiplexing, reconnect, unsubscribe, and failed-acknowledgement cleanup.
