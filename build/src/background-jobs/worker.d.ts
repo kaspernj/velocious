@@ -18,6 +18,68 @@ export type ForkedJobTimeoutState = {
      */
     sigkillTimer: ReturnType<typeof setTimeout> | null;
 };
+export type PooledJobEntry = {
+    /**
+     * - Durable job payload.
+     */
+    payload: import("./types.js").BackgroundJobPayload & {
+        id: string;
+    };
+    /**
+     * - Completion resolver.
+     */
+    resolve?: (value: void) => void;
+    /**
+     * - Tracked pooled-job promise.
+     */
+    pooledJob?: Promise<void>;
+    /**
+     * - Per-job timeout timer.
+     */
+    timeoutTimer?: ReturnType<typeof setTimeout> | null;
+};
+export type PooledChildState = {
+    /**
+     * - Child creation timestamp.
+     */
+    createdAtMs: number;
+    /**
+     * - Acknowledged jobs completed by this child.
+     */
+    jobsRun: number;
+    /**
+     * - Jobs currently owned by this child.
+     */
+    inflight: Map<string, PooledJobEntry>;
+    /**
+     * - Round-robin dispatch sequence.
+     */
+    lastDispatchSeq: number;
+    /**
+     * - Whether this child is draining before retirement.
+     */
+    retiring: boolean;
+    /**
+     * - Whether the child completed its startup handshake.
+     */
+    started?: boolean;
+    /**
+     * - Whether failure handling already owns this child.
+     */
+    settling?: boolean;
+    /**
+     * - Pending timeout SIGKILL timer.
+     */
+    timeoutSigkillTimer?: ReturnType<typeof setTimeout> | null;
+    /**
+     * - Expected termination reason.
+     */
+    terminationReason?: import("./types.js").PooledRunnerTerminationReason;
+    /**
+     * - Job whose timeout initiated termination.
+     */
+    timeoutJobId?: string;
+};
 export default class BackgroundJobsWorker {
     /**
      * Narrows the runtime value to the documented type.
@@ -156,24 +218,8 @@ export default class BackgroundJobsWorker {
     pooledJobQueueTrackers: Map<string, Promise<void>>;
     /** @type {Set<import("node:child_process").ChildProcess>} */
     pooledChildren: Set<import("node:child_process").ChildProcess>;
-    /** @type {Map<import("node:child_process").ChildProcess, {createdAtMs: number, jobsRun: number, inflight: Map<string, {payload: import("./types.js").BackgroundJobPayload & {id: string}, resolve?: (value: void) => void, pooledJob?: Promise<void>, timeoutTimer?: ReturnType<typeof setTimeout> | null}>, lastDispatchSeq: number, retiring: boolean, started?: boolean, settling?: boolean, timeoutSigkillTimer?: ReturnType<typeof setTimeout> | null}>} */
-    pooledChildStates: Map<import("node:child_process").ChildProcess, {
-        createdAtMs: number;
-        jobsRun: number;
-        inflight: Map<string, {
-            payload: import("./types.js").BackgroundJobPayload & {
-                id: string;
-            };
-            resolve?: (value: void) => void;
-            pooledJob?: Promise<void>;
-            timeoutTimer?: ReturnType<typeof setTimeout> | null;
-        }>;
-        lastDispatchSeq: number;
-        retiring: boolean;
-        started?: boolean;
-        settling?: boolean;
-        timeoutSigkillTimer?: ReturnType<typeof setTimeout> | null;
-    }>;
+    /** @type {Map<import("node:child_process").ChildProcess, PooledChildState>} */
+    pooledChildStates: Map<import("node:child_process").ChildProcess, PooledChildState>;
     /** @type {WeakSet<Promise<void>>} */
     _pooledStartupFailureJobs: WeakSet<Promise<void>>;
     _pooledDispatchSeq: number;
@@ -535,12 +581,35 @@ export default class BackgroundJobsWorker {
      * @param {object} args - Failure details.
      * @param {import("node:child_process").ChildProcess} args.child - Pooled child.
      * @param {ReturnType<typeof JSON.parse>} args.error - Failure.
+     * @param {number | null} [args.exitCode] - Child exit code when observed.
+     * @param {import("./types.js").PooledRunnerFailureOrigin} [args.origin] - Worker observation that initiated recovery.
+     * @param {import("node:child_process").ChildProcess["signalCode"]} [args.signal] - Child termination signal when observed.
      * @returns {Promise<void>}
      */
-    _handlePooledChildFailure({ child, error }: {
+    _handlePooledChildFailure({ child, error, exitCode, origin, signal }: {
         child: import("node:child_process").ChildProcess;
         error: ReturnType<typeof JSON.parse>;
+        exitCode?: number | null;
+        origin?: import("./types.js").PooledRunnerFailureOrigin;
+        signal?: import("node:child_process").ChildProcess["signalCode"];
     }): Promise<void>;
+    /**
+     * Captures one stable process snapshot before the failed child's state is removed.
+     * @param {object} args - Failure details.
+     * @param {import("node:child_process").ChildProcess} args.child - Failed pooled child.
+     * @param {number | null} args.exitCode - Child exit code when observed.
+     * @param {import("./types.js").PooledRunnerFailureOrigin} args.origin - Worker observation that initiated recovery.
+     * @param {import("node:child_process").ChildProcess["signalCode"]} args.signal - Child termination signal when observed.
+     * @param {PooledChildState} args.state - Child state immediately before recovery.
+     * @returns {import("./types.js").PooledRunnerFailure} - Shared failure provenance.
+     */
+    _pooledRunnerFailure({ child, exitCode, origin, signal, state }: {
+        child: import("node:child_process").ChildProcess;
+        exitCode: number | null;
+        origin: import("./types.js").PooledRunnerFailureOrigin;
+        signal: import("node:child_process").ChildProcess["signalCode"];
+        state: PooledChildState;
+    }): import("./types.js").PooledRunnerFailure;
     /**
      * Runs run job inline.
      * @param {import("./types.js").BackgroundJobPayload} payload - Payload.
@@ -718,9 +787,10 @@ export default class BackgroundJobsWorker {
      * @param {string} [args.handoffId] - Handoff lease id.
      * @param {number} [args.handedOffAtMs] - Handed off timestamp.
      * @param {string} [args.workerId] - Worker id.
+     * @param {import("./types.js").PooledRunnerFailure} [args.runnerFailure] - Pooled-child process failure provenance.
      * @returns {Promise<void>} - Resolves when reported.
      */
-    _reportJobResult({ jobId, status, delayMs, error, handoffId, handedOffAtMs, workerId }: {
+    _reportJobResult({ jobId, status, delayMs, error, handoffId, handedOffAtMs, workerId, runnerFailure }: {
         jobId: string;
         status: "completed" | "failed" | "rescheduled";
         delayMs?: number;
@@ -728,6 +798,7 @@ export default class BackgroundJobsWorker {
         handoffId?: string;
         handedOffAtMs?: number;
         workerId?: string;
+        runnerFailure?: import("./types.js").PooledRunnerFailure;
     }): Promise<void>;
     /**
      * Fires a durable job-result report without blocking the caller (so freeing a
@@ -741,9 +812,10 @@ export default class BackgroundJobsWorker {
      * @param {string} [args.handoffId] - Handoff lease id.
      * @param {number} [args.handedOffAtMs] - Handed off timestamp.
      * @param {string} [args.workerId] - Worker id.
+     * @param {import("./types.js").PooledRunnerFailure} [args.runnerFailure] - Pooled-child process failure provenance.
      * @returns {void}
      */
-    _reportJobResultInBackground({ jobId, status, delayMs, error, handoffId, handedOffAtMs, workerId }: {
+    _reportJobResultInBackground({ jobId, status, delayMs, error, handoffId, handedOffAtMs, workerId, runnerFailure }: {
         jobId: string;
         status: "completed" | "failed" | "rescheduled";
         delayMs?: number;
@@ -751,6 +823,7 @@ export default class BackgroundJobsWorker {
         handoffId?: string;
         handedOffAtMs?: number;
         workerId?: string;
+        runnerFailure?: import("./types.js").PooledRunnerFailure;
     }): void;
 }
 //# sourceMappingURL=worker.d.ts.map

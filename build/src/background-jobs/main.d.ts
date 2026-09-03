@@ -284,9 +284,10 @@ export default class BackgroundJobsMain {
     _generationOwnedHandoffSnapshot(): Promise<import("./types.js").BackgroundJobHandoffSnapshot[]>;
     /**
      * Acquires scheduling and dispatch ownership for an active generation.
-     * @returns {Promise<void>} - Resolves after active ownership is established.
+     * @param {"active" | "candidate"} expectedLifecycleState - State that still owns activation.
+     * @returns {Promise<boolean>} - Whether active ownership was established.
      */
-    _startActiveOwnership(): Promise<void>;
+    _startActiveOwnership(expectedLifecycleState: "active" | "candidate"): Promise<boolean>;
     /** Starts exact recovery duties without acquiring global dispatch ownership. */
     _startGenerationRecoveryOwnership(): void;
     /** Starts the generation-fenced orphan sweep. */
@@ -682,14 +683,15 @@ export default class BackgroundJobsMain {
     }): Promise<void>;
     /**
      * Runs emit background job failed.
-     * @param {{error: ReturnType<typeof JSON.parse>, handoffId?: string, handedOffAtMs?: number, job: import("./types.js").BackgroundJobRow, workerId?: string}} args - Failure event data.
+     * @param {{error: ReturnType<typeof JSON.parse>, handoffId?: string, handedOffAtMs?: number, job: import("./types.js").BackgroundJobRow, runnerFailure?: import("./types.js").PooledRunnerFailure, workerId?: string}} args - Failure event data.
      * @returns {void}
      */
-    _emitBackgroundJobFailed({ error, handoffId, handedOffAtMs, job, workerId }: {
+    _emitBackgroundJobFailed({ error, handoffId, handedOffAtMs, job, runnerFailure, workerId }: {
         error: ReturnType<typeof JSON.parse>;
         handoffId?: string;
         handedOffAtMs?: number;
         job: import("./types.js").BackgroundJobRow;
+        runnerFailure?: import("./types.js").PooledRunnerFailure;
         workerId?: string;
     }): void;
     /**

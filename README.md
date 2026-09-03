@@ -13,7 +13,7 @@
 * External packages (engines) that contribute data models, frontend-model resources and migrations to a consuming app (see [docs/packages.md](docs/packages.md))
 * Optional Rampway-owned durable deployment control plane mounted through the standard routes DSL on Velocious 1.0.577 or newer (see [docs/rampway-integration.md](docs/rampway-integration.md))
 * Controllers and views for HTTP endpoints
-* Frontend-model transport for creating, updating, querying, and subscribing to query-filtered lifecycle events over HTTP/WebSocket, with structured per-attribute validation error responses, immutable per-operation remote request context, and one-budget WebSocket startup controls (see [docs/frontend-models.md](docs/frontend-models.md), [docs/remote-request-context.md](docs/remote-request-context.md), and [docs/websocket-channels.md](docs/websocket-channels.md))
+* Frontend-model transport for creating, updating, querying, and subscribing to query-filtered lifecycle events over HTTP/WebSocket, with structured per-attribute validation error responses, immutable per-operation remote request context, registration-local tenant subscription partitioning, and one-budget WebSocket startup controls (see [docs/frontend-models.md](docs/frontend-models.md), [docs/remote-request-context.md](docs/remote-request-context.md), and [docs/websocket-channels.md](docs/websocket-channels.md))
 * Client-side offline sync mutation logs and frontend-model optimistic queueing primitives (see the [shared-resource sync developer guide](docs/shared-resource-sync-guide.md) and [offline sync architecture](docs/offline-sync.md))
 * Declarative client sync scopes with per-scope cursors, automatic mutation tracking, opt-in durable base-version conflict replay, realtime delivery, and immutable-handle project clients whose local database state plus remote pull/replay/realtime request context stay tenant-bound through reconnect (see [docs/sync-client.md](docs/sync-client.md), [docs/remote-request-context.md](docs/remote-request-context.md), and [docs/offline-sync.md](docs/offline-sync.md))
 * Reactive `useLiveQuery(Model.where(...))` queries for default databases plus immutable-handle tenant live-query sources whose committed events and refreshes stay on the captured physical tenant (see [docs/live-queries.md](docs/live-queries.md))
@@ -674,10 +674,13 @@ import useModelClassEvent from "velocious/build/src/frontend-models/use-model-cl
 
 useModelClassEvent(Subscription, ["create", "update"], () => {
   void loadSubscriptionStatus()
+}, {
+  query: Subscription.where({workspaceId}),
+  requestContext: {workspaceId}
 })
 ```
 
-`useCreatedEvent`, `useUpdatedEvent`, and `useDestroyedEvent` are also available. `useUpdatedEvent` and `useDestroyedEvent` accept either a model class or model instance. Lifecycle subscriptions accept the same projection options as frontend-model queries for event records, including `select`, `preload`, `withCount`, `abilities`, and `queryData`.
+`useCreatedEvent`, `useUpdatedEvent`, and `useDestroyedEvent` are also available. `useUpdatedEvent` and `useDestroyedEvent` accept either a model class or model instance. Lifecycle subscriptions accept the same projection options as frontend-model queries for event records, including `select`, `preload`, `withCount`, `abilities`, and `queryData`. Pass a registration-local `requestContext` when several tenant routes for the same model can be mounted concurrently. Omitting it inherits the configured transport context; passing `{}` explicitly replaces that context with an unscoped registration. Velocious captures it immutably, sends it to the tenant resolver, and partitions server subscriptions by its value: equal contexts retain multiplexing, while distinct contexts never share an event-filter request. The backend must still authorize the resolved tenant; request context is not proof of access.
 
 Frontend-model `group(...)` is attribute/path based and does not accept raw SQL fragments. Use model/relationship shapes (for example `Task.group({project: {account: ["id"]}})`) so grouping resolves through known relationships and mapped columns.
 Frontend-model `where(...)` supports nested relationship descriptors (for example `Task.where({project: {creatingUser: {reference: "owner-b"}}})`) and does not accept raw SQL fragments.
@@ -2390,9 +2393,18 @@ supervisor that preserves old generation units and release pins, and a deploy
 coordinator that retires the old generation before activating the healthy
 candidate without waiting for retired work to finish.
 
+Candidate activation performs bounded durable concurrency reconciliation: it
+examines queue-derived keys and counters that are active or stale instead of
+running a job-table count query for every historical key. If recovery retires a
+candidate while that work is still in flight, the retirement fence wins and
+activation cannot later restore ownership or acknowledge success. The SQL store
+also repairs secondary indexes missed by older background-job add-column
+upgrades through a one-time internal migration, with conflict-safe SQLite index
+creation across generation processes.
+
 Jobs can opt into cross-worker durable concurrency limits by pairing a non-empty `concurrencyKey` with a positive-integer `maxConcurrency` in their background-job options, or by deriving the key in a hydrated job instance's non-static `concurrencyKey()` method. Explicit enqueue options win. The first cap registered for a key is stable; conflicting caps are rejected. See [durable concurrency limits](docs/background-jobs.md#durable-concurrency-limits).
 
-Production apps can listen for `background-job-failed` (or its `all-error` mirror) to report accepted failed attempts, including retry and terminal-state metadata, and for `background-job-orphaned` to react to a specific job the main process reclaimed after its worker died mid-run — e.g. enqueue a targeted recovery for the work it left behind, instead of only polling for the aftermath. Orphan handlers run before the sweep waits for reclaimed jobs to be dispatched, so a stalled dispatcher does not delay application recovery. See [docs/background-jobs.md](docs/background-jobs.md#failure-events).
+Production apps can listen for `background-job-failed` (or its `all-error` mirror) to report accepted failed attempts, including retry and terminal-state metadata. Process-level pooled-runner failures also carry one shared `context.runnerFailure` snapshot for every affected job, with active handoff identities, runner/worker lifecycle and PIDs, exit code/signal, termination reason, and an explicit nullable OOM verdict. Listen for `background-job-orphaned` to react to a specific job the main process reclaimed after its worker died mid-run — e.g. enqueue a targeted recovery for the work it left behind, instead of only polling for the aftermath. Orphan handlers run before the sweep waits for reclaimed jobs to be dispatched, so a stalled dispatcher does not delay application recovery. See [docs/background-jobs.md](docs/background-jobs.md#failure-events).
 
 ## Setup
 

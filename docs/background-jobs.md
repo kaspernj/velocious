@@ -436,6 +436,21 @@ The `background-job-failed` payload has:
 - `context.terminal`: whether this failure ended the job.
 - `context.willRetry`: whether this failure returned the job to the queue.
 - `context.workerId`: the worker id included in the accepted report.
+- `context.runnerFailure`: present when a pooled runner process failure affected
+  this job. Every job lost with the same child receives the same snapshot. It
+  contains `activeJobs` (job, handoff, timestamp, and worker identities), the
+  runner and worker PIDs, release generation, runner/worker lifecycle states,
+  runner age and completed-job count, process-group ownership through
+  `runnerDetached`, failure `origin`, expected `terminationReason`, timeout job
+  id, exit code, signal, and `oomKilled`.
+
+`oomKilled` is `false` when Velocious initiated or observed a termination that
+rules OOM out. It is `null` for an unexplained `SIGKILL`, because Node cannot
+distinguish an operator/supervisor kill from the kernel OOM killer; correlate the
+snapshot with supervisor and kernel logs before classifying it. Pooled runners
+are attached children (`runnerDetached: false`) and therefore remain in the
+worker-owned process group rather than creating an independently supervised
+group.
 
 The mirrored `all-error` payload includes the same `error` and `context` plus `errorType: "background-job-failed"`.
 
@@ -560,13 +575,17 @@ testing; each connection sends exactly one hello.
 
 `candidate` is quiescent: it performs no schedule ownership, concurrency
 reconciliation, dispatch, reclaim, or orphan sweep. Activation transitions it
-to `active`. Retirement installs its admission fence synchronously, stops new
-schedules/dispatch/admission/handoffs, then transitions through `retiring` to
-`retired` while preserving accepted workers, reports, acknowledgements,
-timeouts, child reaping, and durable transitions. A restarted `retired` main
-recovers only exact durable handoffs for its own generation and never dispatches
-global queue work. It reaches `stopped` only after its exact workers, handoffs,
-reports, worker connections, and lifecycle acknowledgements drain.
+to `active`. If an operational recovery retires the candidate while activation
+is still reconciling durable queue state, that retirement fence wins and the
+in-flight activation cannot restore active ownership or return a successful
+lifecycle acknowledgement. Retirement installs its admission fence
+synchronously, stops new schedules/dispatch/admission/handoffs, then transitions
+through `retiring` to `retired` while preserving accepted workers, reports,
+acknowledgements, timeouts, child reaping, and durable transitions. A restarted
+`retired` main recovers only exact durable handoffs for its own generation and
+never dispatches global queue work. It reaches `stopped` only after its exact
+workers, handoffs, reports, worker connections, and lifecycle acknowledgements
+drain.
 
 Worker ownership is stored as `<generationId>:<workerUuid>` (maximum 165
 characters). The built-in SQL schema already gives `worker_id` 255 characters
@@ -575,6 +594,15 @@ no migration. Generation mode requires an adapter whose
 `supportsReleaseScopedGenerations()` returns `true`; the built-in SQL adapter
 does. Unsupported third-party adapters are rejected before listening, while
 legacy mode remains compatible with them.
+
+The built-in SQL adapter bounds activation-time queue reconciliation to
+queue-derived concurrency keys plus counters that are active or stale. It does
+not execute a job-table count query for every historical concurrency key. Its
+internal schema migration also repairs missing single-column job indexes from
+older `queue`, `schedule_key`, and `concurrency_key` add-column upgrades before
+activation uses them. SQLite emits conflict-safe index creation for that repair,
+so independent generation processes remain safe even if both observed a missing
+index before database serialization.
 
 ### Lifecycle control socket
 

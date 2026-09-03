@@ -18,11 +18,12 @@ const cliEntryPath = path.join(repositoryRoot, "bin", "velocious.js")
 /**
  * Runs one real lifecycle CLI process.
  * @param {string[]} args - Command arguments.
+ * @param {string} [cwd] - Application directory whose configuration the CLI loads.
  * @returns {Promise<{code: number | null, stderr: string, stdout: string}>} - Process result.
  */
-async function runCli(args) {
+async function runCli(args, cwd = dummyConfiguration.getDirectory()) {
   const child = spawn(process.execPath, [cliEntryPath, ...args], {
-    cwd: dummyConfiguration.getDirectory(),
+    cwd,
     env: {...process.env, VELOCIOUS_ENV: "test"},
     stdio: ["ignore", "pipe", "pipe"]
   })
@@ -116,6 +117,7 @@ function activeRecoveryEnvironment() {
 
 describe("Background jobs lifecycle CLI", () => {
   it("exits nonzero after one bounded request to a stalled lifecycle socket", async () => {
+    const project = await createBackgroundJobsLifecycleCliProject()
     const paths = await releaseLifecyclePaths()
     const stalled = await stalledSocketServer({socketPath: paths.socketPath})
 
@@ -128,7 +130,7 @@ describe("Background jobs lifecycle CLI", () => {
         paths.socketPath,
         "--timeout-ms",
         "25"
-      ])
+      ], project.directory)
       await timeout({errorMessage: "Lifecycle CLI never sent its single request", timeout: 2000}, async () => await stalled.requestReceived)
       const result = await resultPromise
 
@@ -139,6 +141,7 @@ describe("Background jobs lifecycle CLI", () => {
     } finally {
       await stalled.close()
       await fs.rm(paths.directory, {recursive: true})
+      await project.cleanup()
     }
   })
 
