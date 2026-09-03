@@ -101,7 +101,26 @@ function buildCompositeRoutedTaskClass() {
     static resourceConfig() {
       return {
         attributes: ["name", "workspaceId", "state"],
+        commands: ["update"],
         primaryKey: ["name", "workspaceId"]
+      }
+    }
+
+    /**
+     * Returns the re-keyed record for the listener-routing save regression.
+     * @param {string} commandType - Frontend-model command type.
+     * @param {Record<string, ReturnType<typeof JSON.parse>>} payload - Command payload.
+     * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} - Saved model response.
+     */
+    static async executeCommand(commandType, payload) {
+      if (commandType !== "update") throw new Error(`Unexpected command: ${commandType}`)
+
+      return {
+        model: {
+          name: payload.attributes.name,
+          state: "saved",
+          workspaceId: payload.id.workspaceId
+        }
       }
     }
 
@@ -136,6 +155,51 @@ describe("Frontend model lifecycle subscription routing", () => {
       expect(task.state()).toEqual("closed")
 
       unsubscribe()
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
+  it("re-keys composite instance listeners and their unsubscribe callbacks after save", async () => {
+    const CompositeRoutedTask = buildCompositeRoutedTaskClass()
+    const websocketClient = buildWebsocketClient()
+    const task = CompositeRoutedTask.instantiateFromResponse({name: "Composite task", state: "open", workspaceId: "alpha"})
+    /** @type {Array<string | import("../../src/utils/model-primary-key.js").CompositeModelPrimaryKeyValue>} */
+    const updateIds = []
+    /** @type {Array<string | import("../../src/utils/model-primary-key.js").CompositeModelPrimaryKeyValue>} */
+    const removedUpdateIds = []
+    /** @type {Array<string | import("../../src/utils/model-primary-key.js").CompositeModelPrimaryKeyValue>} */
+    const destroyIds = []
+
+    FrontendModelBase.configureTransport({websocketClient})
+
+    try {
+      const unsubscribeUpdate = await task.onUpdate(({id}) => updateIds.push(id))
+      const unsubscribeRemovedUpdate = await task.onUpdate(({id}) => removedUpdateIds.push(id))
+      const unsubscribeDestroy = await task.onDestroy(({id}) => destroyIds.push(id))
+      const subscription = websocketClient.subscriptions[0]
+
+      if (!subscription) throw new Error("Expected composite model subscription")
+
+      task.setAttribute("name", "Composite renamed")
+      await task.save()
+      unsubscribeRemovedUpdate()
+
+      const rekeyedIdentity = {name: "Composite renamed", workspaceId: "alpha"}
+
+      subscription.options.onMessage({
+        action: "update",
+        id: rekeyedIdentity,
+        record: {...rekeyedIdentity, state: "closed"}
+      })
+      subscription.options.onMessage({action: "destroy", id: rekeyedIdentity})
+
+      expect(updateIds).toEqual([rekeyedIdentity])
+      expect(removedUpdateIds).toEqual([])
+      expect(destroyIds).toEqual([rekeyedIdentity])
+
+      unsubscribeUpdate()
+      unsubscribeDestroy()
     } finally {
       resetFrontendModelTransport()
     }

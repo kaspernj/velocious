@@ -21,7 +21,7 @@ The database record declaration uses database column names. The resource and gen
 A composite identity is a plain object containing every configured field exactly once. Values must be strings or numbers:
 
 ```js
-const identity = {tenantId: "tenant-a", externalId: 42}
+const identity = {tenant_id: "tenant-a", external_id: 42}
 const item = await ExternalItem.find(identity)
 ```
 

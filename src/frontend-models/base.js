@@ -1818,22 +1818,58 @@ function ensureFrontendModelInstanceListener(sub, id, instance) {
 /**
  * Removes one instance callback entry and tears down an empty listener/subscription bucket.
  * @param {FrontendModelEventSubscription} sub - Event subscription bucket.
- * @param {string} id - Model id.
- * @param {(listener: {instance: FrontendModelBase, updateCallbacks: Set<FrontendModelModelEventCallbackEntry>, destroyCallbacks: Set<FrontendModelDestroyEventCallbackEntry>}) => void} removeEntry - Callback entry removal.
+ * @param {(listener: ReturnType<typeof ensureFrontendModelInstanceListener>) => boolean} removeEntry - Callback entry removal.
  * @returns {void}
  */
-function removeFrontendModelInstanceListenerEntry(sub, id, removeEntry) {
-  const current = sub.instanceListeners.get(id)
+function removeFrontendModelInstanceListenerEntry(sub, removeEntry) {
+  for (const [id, current] of sub.instanceListeners) {
+    if (!removeEntry(current)) continue
 
-  if (!current) return
-
-  removeEntry(current)
-
-  if (current.updateCallbacks.size === 0 && current.destroyCallbacks.size === 0) {
-    sub.instanceListeners.delete(id)
+    if (current.updateCallbacks.size === 0 && current.destroyCallbacks.size === 0) {
+      sub.instanceListeners.delete(id)
+    }
+    break
   }
 
   sub.maybeTeardown()
+}
+
+/**
+ * Moves callbacks registered on an instance to its newly persisted identity.
+ * @param {FrontendModelClass} ModelClass - Frontend model class.
+ * @param {FrontendModelBase} instance - Re-keyed instance.
+ * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} previousIdentity - Previous persisted identity.
+ * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} nextIdentity - New persisted identity.
+ * @returns {void}
+ */
+function rekeyFrontendModelInstanceListeners(ModelClass, instance, previousIdentity, nextIdentity) {
+  const primaryKey = ModelClass.primaryKey()
+  const previousId = modelPrimaryKeyCacheKey(primaryKey, previousIdentity)
+  const nextId = modelPrimaryKeyCacheKey(primaryKey, nextIdentity)
+
+  if (previousId === nextId) return
+
+  const subscriptions = frontendModelEventSubscriptions.get(ModelClass)
+
+  if (!subscriptions) return
+
+  for (const sub of subscriptions.values()) {
+    const listener = sub.instanceListeners.get(previousId)
+
+    if (!listener || listener.instance !== instance) continue
+
+    const nextListener = sub.instanceListeners.get(nextId)
+
+    sub.instanceListeners.delete(previousId)
+
+    if (nextListener) {
+      nextListener.instance = instance
+      for (const entry of listener.updateCallbacks) nextListener.updateCallbacks.add(entry)
+      for (const entry of listener.destroyCallbacks) nextListener.destroyCallbacks.add(entry)
+    } else {
+      sub.instanceListeners.set(nextId, listener)
+    }
+  }
 }
 
 /**
@@ -3847,12 +3883,12 @@ export default class FrontendModelBase {
     try {
       await sub.ensureSubscribed()
     } catch (error) {
-      removeFrontendModelInstanceListenerEntry(sub, id, (current) => current.updateCallbacks.delete(entry))
+      removeFrontendModelInstanceListenerEntry(sub, (current) => current.updateCallbacks.delete(entry))
       throw error
     }
 
     return () => {
-      removeFrontendModelInstanceListenerEntry(sub, id, (current) => current.updateCallbacks.delete(entry))
+      removeFrontendModelInstanceListenerEntry(sub, (current) => current.updateCallbacks.delete(entry))
     }
   }
 
@@ -3878,12 +3914,12 @@ export default class FrontendModelBase {
     try {
       await sub.ensureSubscribed()
     } catch (error) {
-      removeFrontendModelInstanceListenerEntry(sub, id, (current) => current.destroyCallbacks.delete(entry))
+      removeFrontendModelInstanceListenerEntry(sub, (current) => current.destroyCallbacks.delete(entry))
       throw error
     }
 
     return () => {
-      removeFrontendModelInstanceListenerEntry(sub, id, (current) => current.destroyCallbacks.delete(entry))
+      removeFrontendModelInstanceListenerEntry(sub, (current) => current.destroyCallbacks.delete(entry))
     }
   }
 
@@ -4285,6 +4321,7 @@ export default class FrontendModelBase {
   async save() {
     const ModelClass = frontendModelClassFor(this)
     const isNew = this.isNewRecord()
+    const previousIdentity = isNew ? null : this.persistedPrimaryKeyValue()
     const commandType = isNew ? "create" : "update"
     /**
      * Payload.
@@ -4352,6 +4389,11 @@ export default class FrontendModelBase {
 
     this.assignAttributes(ModelClass.attributesFromResponse(response))
     this.setIsNewRecord(false)
+
+    if (previousIdentity !== null) {
+      rekeyFrontendModelInstanceListeners(ModelClass, this, previousIdentity, this.primaryKeyValue())
+    }
+
     this._persistedAttributes = cloneFrontendModelAttributes(this.attributes())
     this._pendingNestedAttributes = {}
     this._clearPendingAttachments()

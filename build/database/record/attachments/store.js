@@ -507,6 +507,35 @@ export default class RecordAttachmentsStore {
   }
 
   /**
+   * Moves every attachment row to a record's new primary-key identity.
+   * @param {object} args - Options.
+   * @param {import("../index.js").default} args.model - Attachment owner after the key change.
+   * @param {import("../../../utils/model-primary-key.js").ModelPrimaryKeyValue} args.nextIdentity - New owner identity.
+   * @param {import("../../../utils/model-primary-key.js").ModelPrimaryKeyValue} args.previousIdentity - Persisted owner identity.
+   * @returns {Promise<void>} - Resolves after ownership is migrated.
+   */
+  async migrateRecordIdentity({model, nextIdentity, previousIdentity}) {
+    const primaryKey = model.getModelClass().primaryKey()
+    const nextRecordId = modelPrimaryKeyCacheKey(primaryKey, nextIdentity)
+    const previousRecordId = modelPrimaryKeyCacheKey(primaryKey, previousIdentity)
+
+    if (nextRecordId === previousRecordId) return
+
+    await this._withDb(async (db) => {
+      if (!await db.tableExists(ATTACHMENTS_TABLE)) return
+
+      await db.update({
+        conditions: {
+          record_id: previousRecordId,
+          record_type: model.getModelClass().getModelName()
+        },
+        data: {record_id: nextRecordId},
+        tableName: ATTACHMENTS_TABLE
+      })
+    }, model)
+  }
+
+  /**
    * Runs delete attachment row storage.
    * @param {object} args - Options.
    * @param {import("../index.js").default} args.model - Model instance.

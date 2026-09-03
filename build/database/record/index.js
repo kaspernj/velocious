@@ -41,6 +41,7 @@ import HasManyRelationship from "./relationships/has-many.js"
 import HasOneInstanceRelationship from "./instance-relationships/has-one.js"
 import HasOneRelationship from "./relationships/has-one.js"
 import RecordAttachmentHandle from "./attachments/handle.js"
+import {recordAttachmentsStoreForModel} from "./attachments/store.js"
 import * as inflection from "inflection"
 import deburrColumnName from "../../utils/deburr-column-name.js"
 import ModelClassQuery from "../query/model-class-query.js"
@@ -52,7 +53,7 @@ import singularizeModelName from "../../utils/singularize-model-name.js"
 import {defineModelScope} from "../../utils/model-scope.js"
 import { normalizeDateStringForWrite, normalizeDateValueForRead, normalizeDateValueForWrite } from "../datetime-storage.js"
 import {formatValue} from "../../utils/format-value.js"
-import {modelPrimaryKeyConditions, readModelPrimaryKeyValue, scalarModelPrimaryKey, scalarModelPrimaryKeyValue} from "../../utils/model-primary-key.js"
+import {modelPrimaryKeyCacheKey, modelPrimaryKeyConditions, readModelPrimaryKeyValue, scalarModelPrimaryKey, scalarModelPrimaryKeyValue} from "../../utils/model-primary-key.js"
 import {captureCreateAuditChanges, captureUpdateAuditChanges, createAudit, createCreateAudit, createDestroyAudit, createUpdateAudit, initializeAuditing, registerAuditCallback, registerAuditing, withoutAudit} from "./auditing.js"
 import {registerMagnitudeCounterCache} from "./counter-cache-magnitude.js"
 import {stateMachine} from "./state-machine.js"
@@ -2541,10 +2542,25 @@ class VelociousDatabaseRecord {
 
   /**
    * Runs set primary key.
-   * @param {string | string[]} primaryKey - Primary key.
+   * @param {string | string[] | null} primaryKey - Primary key.
    * @returns {void} - No return value.
    */
   static setPrimaryKey(primaryKey) {
+    if (Array.isArray(primaryKey)) {
+      if (primaryKey.length === 0) throw new TypeError("Composite primary keys require at least one column.")
+
+      const seenColumns = new Set()
+
+      for (const columnName of primaryKey) {
+        if (seenColumns.has(columnName)) throw new TypeError(`Composite primary key has duplicate column: ${columnName}.`)
+
+        seenColumns.add(columnName)
+      }
+
+      this._primaryKey = [...primaryKey]
+      return
+    }
+
     this._primaryKey = primaryKey
   }
 
@@ -4657,12 +4673,15 @@ class VelociousDatabaseRecord {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async _updateRecordWithChanges() {
+    const primaryKey = this.getModelClass().primaryKey()
+    const persistedPrimaryKeyValue = this._persistedPrimaryKeyValue()
+    const nextPrimaryKeyValue = this.id()
     /**
      * Conditions.
      * @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const conditions = {}
 
-    Object.assign(conditions, modelPrimaryKeyConditions(this.getModelClass().primaryKey(), this._persistedPrimaryKeyValue()))
+    Object.assign(conditions, modelPrimaryKeyConditions(primaryKey, persistedPrimaryKeyValue))
 
     const changes = Object.assign({}, this._belongsToChanges(), this._changes)
     const updatedAtColumn = this.getModelClass().getColumns().find((column) => column.getName() == "updated_at")
@@ -4680,7 +4699,19 @@ class VelociousDatabaseRecord {
         conditions
       })
       await this._connection().query(sql, {logName: `${this.getModelClass().name} Update`})
-      await this._reloadWithId(this.id())
+
+      if (
+        Object.keys(this.getModelClass().getAttachments()).length > 0
+        && modelPrimaryKeyCacheKey(primaryKey, persistedPrimaryKeyValue) !== modelPrimaryKeyCacheKey(primaryKey, nextPrimaryKeyValue)
+      ) {
+        await recordAttachmentsStoreForModel(this).migrateRecordIdentity({
+          model: this,
+          nextIdentity: nextPrimaryKeyValue,
+          previousIdentity: persistedPrimaryKeyValue
+        })
+      }
+
+      await this._reloadWithId(nextPrimaryKeyValue)
     }
   }
 

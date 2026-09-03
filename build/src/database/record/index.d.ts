@@ -126,7 +126,7 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
         modelClass: typeof VelociousDatabaseRecord;
         tenant: Record<string, unknown> | null | undefined;
     }) => string | undefined) | undefined;
-    static _primaryKey: string | string[] | undefined;
+    static _primaryKey: string | string[] | null | undefined;
     static _tableName: string | undefined;
     static _translationClass: {
         new (changes?: Record<string, any>): {
@@ -1649,11 +1649,11 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
         nextPrimaryKey(): Promise<number>;
         /**
          * Runs set primary key.
-         * @param {string | string[]} primaryKey - Primary key.
+         * @param {string | string[] | null} primaryKey - Primary key.
          * @returns {void} - No return value.
          */
-        setPrimaryKey(primaryKey: string | string[]): void;
-        _primaryKey: string | string[] | undefined;
+        setPrimaryKey(primaryKey: string | string[] | null): void;
+        _primaryKey: string | string[] | null | undefined;
         /**
          * Returns this class's own attribute-cast map, creating it on the class itself
          * (never inherited from a parent) so subclasses don't share the same object.
@@ -3078,10 +3078,10 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
     static nextPrimaryKey(): Promise<number>;
     /**
      * Runs set primary key.
-     * @param {string | string[]} primaryKey - Primary key.
+     * @param {string | string[] | null} primaryKey - Primary key.
      * @returns {void} - No return value.
      */
-    static setPrimaryKey(primaryKey: string | string[]): void;
+    static setPrimaryKey(primaryKey: string | string[] | null): void;
     /**
      * Returns this class's own attribute-cast map, creating it on the class itself
      * (never inherited from a parent) so subclasses don't share the same object.

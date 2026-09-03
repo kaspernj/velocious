@@ -54,7 +54,7 @@ export default class VelociousDatabaseRecordValidatorsUniqueness extends Base {
       .where(whereArgs)
 
     if (model.isPersisted()) {
-      existingRecordQuery.whereNot(modelPrimaryKeyConditions(modelClass.primaryKey(), model.id()))
+      existingRecordQuery.whereNot(modelPrimaryKeyConditions(modelClass.primaryKey(), model._persistedPrimaryKeyValue()))
     }
 
     const existingRecord = await existingRecordQuery.first()

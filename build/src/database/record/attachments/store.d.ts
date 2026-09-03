@@ -146,6 +146,19 @@ export default class RecordAttachmentsStore {
         name: string;
     }): Promise<Array<Record<string, ReturnType<typeof JSON.parse>>>>;
     /**
+     * Moves every attachment row to a record's new primary-key identity.
+     * @param {object} args - Options.
+     * @param {import("../index.js").default} args.model - Attachment owner after the key change.
+     * @param {import("../../../utils/model-primary-key.js").ModelPrimaryKeyValue} args.nextIdentity - New owner identity.
+     * @param {import("../../../utils/model-primary-key.js").ModelPrimaryKeyValue} args.previousIdentity - Persisted owner identity.
+     * @returns {Promise<void>} - Resolves after ownership is migrated.
+     */
+    migrateRecordIdentity({ model, nextIdentity, previousIdentity }: {
+        model: import("../index.js").default;
+        nextIdentity: import("../../../utils/model-primary-key.js").ModelPrimaryKeyValue;
+        previousIdentity: import("../../../utils/model-primary-key.js").ModelPrimaryKeyValue;
+    }): Promise<void>;
+    /**
      * Runs delete attachment row storage.
      * @param {object} args - Options.
      * @param {import("../index.js").default} args.model - Model instance.
