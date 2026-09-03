@@ -73,9 +73,10 @@ import VelociousError from "../velocious-error.js"
 
 /**
  * FrontendModelResourceControllerArgs type.
+ * @template {typeof import("../database/record/index.js").default} [TDatabaseModelClass=typeof import("../database/record/index.js").default]
  * @typedef {object} FrontendModelResourceControllerArgs
  * @property {FrontendModelResourceController} controller - Frontend-model controller instance.
- * @property {typeof import("../database/record/index.js").default} modelClass - Backing model class.
+ * @property {TDatabaseModelClass} modelClass - Backing model class.
  * @property {string} modelName - Model name.
  * @property {import("../configuration-types.js").VelociousParams} params - Request params.
  * @property {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration | import("../configuration-types.js").FrontendModelResourceConfiguration} resourceConfiguration - Normalized resource configuration (or raw input shape during early bootstrap).
@@ -93,6 +94,14 @@ import VelociousError from "../velocious-error.js"
  * @property {string} [modelName] - Optional model name override.
  * @property {import("../configuration-types.js").VelociousParams} [params] - Optional params override.
  * @property {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration | import("../configuration-types.js").FrontendModelResourceConfiguration} [resourceConfiguration] - Optional normalized resource configuration.
+ */
+
+/**
+ * Internal constructor contract used when a resource instantiates its shared
+ * counterpart across the frontend/backend model boundary.
+ * @template {FrontendModelResourceModelClass} TModelClass
+ * @template {typeof import("../database/record/index.js").default} TDatabaseModelClass
+ * @typedef {{new (args: FrontendModelResourceAbilityArgs<FrontendModelResourceModelClass> | FrontendModelResourceControllerArgs): FrontendModelBaseResource<TModelClass, TDatabaseModelClass>}} FrontendModelResourceInternalConstructor
  */
 
 /**
@@ -170,6 +179,16 @@ import VelociousError from "../velocious-error.js"
  */
 
 /**
+ * Narrows an unbound resource registry entry at framework-owned construction
+ * sites where the backing database model has already been resolved.
+ * @param {import("../configuration-types.js").FrontendModelResourceClassType} ResourceClass - Unbound resource class.
+ * @returns {FrontendModelResourceInternalConstructor<typeof import("../database/record/index.js").default, typeof import("../database/record/index.js").default>} Runtime constructor.
+ */
+export function frontendModelResourceInternalConstructor(ResourceClass) {
+  return /** @type {FrontendModelResourceInternalConstructor<typeof import("../database/record/index.js").default, typeof import("../database/record/index.js").default>} */ (/** @type {unknown} */ (ResourceClass))
+}
+
+/**
  * Base class for backend frontend-model resources.
  * @template {FrontendModelResourceModelClass} [TModelClass=typeof import("../database/record/index.js").default]
  * @template {typeof import("../database/record/index.js").default} [TDatabaseModelClass=Extract<TModelClass, typeof import("../database/record/index.js").default>]
@@ -221,7 +240,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
   /**
    * Runs constructor.
-   * @param {FrontendModelResourceAbilityArgs<FrontendModelResourceModelClass> | FrontendModelResourceControllerArgs} args - Resource args.
+   * @param {FrontendModelResourceAbilityArgs<TModelClass> | FrontendModelResourceControllerArgs<TDatabaseModelClass>} args - Resource args.
    */
   constructor(args) {
     super({
@@ -236,7 +255,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
     this.controller = "controller" in args ? args.controller : undefined
     this.configurationValue = "configuration" in args ? args.configuration : undefined
-    // Narrows an explicit model override to the resource subclass's declared model generic.
+    // Narrows the internal controller/shared-resource construction path to the resource's declared model generic.
     this.modelClassValue = /** @type {TModelClass} */ ("modelClass" in args ? args.modelClass : ResourceClass.modelClass())
     this.modelNameValue = "modelName" in args ? args.modelName : this.modelClass().getModelName()
     this.paramsValue = "params" in args ? args.params : undefined
@@ -319,7 +338,8 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
       throw new Error(`${ResourceClass.name}.SharedResource cannot point to itself.`)
     }
 
-    const sharedResource = new SharedResource({
+    const SharedResourceConstructor = /** @type {FrontendModelResourceInternalConstructor<TModelClass, TDatabaseModelClass>} */ (/** @type {unknown} */ (SharedResource))
+    const sharedResource = new SharedResourceConstructor({
       ability: this.ability,
       controller: this.controller,
       context: this.context,
@@ -496,8 +516,6 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @returns {TDatabaseModelClass} - Database model class.
    */
   databaseModelClass() {
-    if (!this.isBackend()) throw new Error(`${this.constructor.name} database operations require the backend resource runtime.`)
-
     // Narrows the portable resource generic at the explicit backend-operation boundary.
     return /** @type {TDatabaseModelClass} */ (/** @type {unknown} */ (this.modelClass()))
   }
@@ -1305,7 +1323,8 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
       throw new Error(`No frontend-model resource registered for child model '${targetModelClass.getModelName()}' under relationship '${relationshipName}'.`)
     }
 
-    const childResource = new childResourceConfig.resourceClass({
+    const ChildResource = frontendModelResourceInternalConstructor(childResourceConfig.resourceClass)
+    const childResource = new ChildResource({
       ability: this.ability,
       controller,
       context: this.context || {},

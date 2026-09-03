@@ -27,6 +27,8 @@ describe("FrontendModelBaseResource types", {databaseCleaning: {transaction: fal
         }
       }
 
+      class LocalProject extends FrontendModelBase {}
+
       /** @extends {FrontendModelBaseResource<typeof LocalUser>} */
       class LocalUserResource extends FrontendModelBaseResource {
         static ModelClass = LocalUser
@@ -43,6 +45,9 @@ describe("FrontendModelBaseResource types", {databaseCleaning: {transaction: fal
       })
 
       resource.modelClass().localOnly()
+
+      // @ts-expect-error A typed resource must reject a different model class override.
+      new ResourceClass({modelClass: LocalProject})
     `
 
     await fs.writeFile(sourcePath, sourceText)

@@ -330,6 +330,20 @@ describe("FrontendModelBaseResource", {databaseCleaning: {transaction: true}}, (
     })
   })
 
+  it("keeps the database model available in offline policy contexts", {databaseCleaning: {transaction: false, truncate: false}}, () => {
+    class ProjectResource extends FrontendModelBaseResource {
+      static ModelClass = Project
+    }
+
+    const resource = new ProjectResource({
+      context: {resourceRuntime: "offline"},
+      modelName: "Project",
+      params: {}
+    })
+
+    expect(resource.databaseModelClass()).toEqual(Project)
+  })
+
   it("applies shared virtual setters", async () => {
     class SharedProjectResource extends FrontendModelBaseResource {
       /** @returns {string[]} */

@@ -90,7 +90,7 @@ export type FrontendModelResourceSort = {
      */
     path: string[];
 };
-export type FrontendModelResourceControllerArgs = {
+export type FrontendModelResourceControllerArgs<TDatabaseModelClass extends typeof import("../database/record/index.js").default = typeof import("../database/record/index.js").default> = {
     /**
      * - Frontend-model controller instance.
      */
@@ -98,7 +98,7 @@ export type FrontendModelResourceControllerArgs = {
     /**
      * - Backing model class.
      */
-    modelClass: typeof import("../database/record/index.js").default;
+    modelClass: TDatabaseModelClass;
     /**
      * - Model name.
      */
@@ -145,6 +145,9 @@ export type FrontendModelResourceAbilityArgs<TModelClass extends FrontendModelRe
      * - Optional normalized resource configuration.
      */
     resourceConfiguration?: import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration | import("../configuration-types.js").FrontendModelResourceConfiguration;
+};
+export type FrontendModelResourceInternalConstructor<TModelClass extends FrontendModelResourceModelClass, TDatabaseModelClass extends typeof import("../database/record/index.js").default> = {
+    new (args: FrontendModelResourceAbilityArgs<FrontendModelResourceModelClass> | FrontendModelResourceControllerArgs): FrontendModelBaseResource<TModelClass, TDatabaseModelClass>;
 };
 export type FrontendModelSyncMutation = import("../sync/sync-envelope-replay-service.js").SyncReplayMutation;
 export type FrontendModelSyncAuthorization = {
@@ -297,9 +300,10 @@ export type FrontendModelResourceNestedEntry = FrontendModelResourceAttributePay
  */
 /**
  * FrontendModelResourceControllerArgs type.
+ * @template {typeof import("../database/record/index.js").default} [TDatabaseModelClass=typeof import("../database/record/index.js").default]
  * @typedef {object} FrontendModelResourceControllerArgs
  * @property {FrontendModelResourceController} controller - Frontend-model controller instance.
- * @property {typeof import("../database/record/index.js").default} modelClass - Backing model class.
+ * @property {TDatabaseModelClass} modelClass - Backing model class.
  * @property {string} modelName - Model name.
  * @property {import("../configuration-types.js").VelociousParams} params - Request params.
  * @property {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration | import("../configuration-types.js").FrontendModelResourceConfiguration} resourceConfiguration - Normalized resource configuration (or raw input shape during early bootstrap).
@@ -316,6 +320,13 @@ export type FrontendModelResourceNestedEntry = FrontendModelResourceAttributePay
  * @property {string} [modelName] - Optional model name override.
  * @property {import("../configuration-types.js").VelociousParams} [params] - Optional params override.
  * @property {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration | import("../configuration-types.js").FrontendModelResourceConfiguration} [resourceConfiguration] - Optional normalized resource configuration.
+ */
+/**
+ * Internal constructor contract used when a resource instantiates its shared
+ * counterpart across the frontend/backend model boundary.
+ * @template {FrontendModelResourceModelClass} TModelClass
+ * @template {typeof import("../database/record/index.js").default} TDatabaseModelClass
+ * @typedef {{new (args: FrontendModelResourceAbilityArgs<FrontendModelResourceModelClass> | FrontendModelResourceControllerArgs): FrontendModelBaseResource<TModelClass, TDatabaseModelClass>}} FrontendModelResourceInternalConstructor
  */
 /**
  * Normalized sync replay mutation passed to the resource sync hooks.
@@ -381,6 +392,13 @@ export type FrontendModelResourceNestedEntry = FrontendModelResourceAttributePay
  * @typedef {FrontendModelResourceAttributePayload & {id?: string | number, _destroy?: boolean, attributes?: FrontendModelResourceAttributePayload, attachments?: FrontendModelResourceAttributePayload, nestedAttributes?: FrontendModelResourceAttributePayload}} FrontendModelResourceNestedEntry
  */
 /**
+ * Narrows an unbound resource registry entry at framework-owned construction
+ * sites where the backing database model has already been resolved.
+ * @param {import("../configuration-types.js").FrontendModelResourceClassType} ResourceClass - Unbound resource class.
+ * @returns {FrontendModelResourceInternalConstructor<typeof import("../database/record/index.js").default, typeof import("../database/record/index.js").default>} Runtime constructor.
+ */
+export declare function frontendModelResourceInternalConstructor(ResourceClass: import("../configuration-types.js").FrontendModelResourceClassType): FrontendModelResourceInternalConstructor<typeof import("../database/record/index.js").default, typeof import("../database/record/index.js").default>;
+/**
  * Base class for backend frontend-model resources.
  * @template {FrontendModelResourceModelClass} [TModelClass=typeof import("../database/record/index.js").default]
  * @template {typeof import("../database/record/index.js").default} [TDatabaseModelClass=Extract<TModelClass, typeof import("../database/record/index.js").default>]
@@ -437,9 +455,9 @@ export default class FrontendModelBaseResource<TModelClass extends FrontendModel
     static writableAttributes: string[] | null | undefined;
     /**
      * Runs constructor.
-     * @param {FrontendModelResourceAbilityArgs<FrontendModelResourceModelClass> | FrontendModelResourceControllerArgs} args - Resource args.
+     * @param {FrontendModelResourceAbilityArgs<TModelClass> | FrontendModelResourceControllerArgs<TDatabaseModelClass>} args - Resource args.
      */
-    constructor(args: FrontendModelResourceAbilityArgs<FrontendModelResourceModelClass> | FrontendModelResourceControllerArgs);
+    constructor(args: FrontendModelResourceAbilityArgs<TModelClass> | FrontendModelResourceControllerArgs<TDatabaseModelClass>);
     /**
      * Returns the configured shared resource class.
      * @returns {ReturnType<typeof JSON.parse>} - Shared resource class.

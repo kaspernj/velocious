@@ -132,7 +132,7 @@ export default class SyncEnvelopeReplayService {
         strategy?: "optimisticVersion" | "serverWins";
         versionAttribute: string;
     } | null;
-    resourceTypeOverrides: Record<string, string | import("../configuration-types.js").FrontendModelResourceClassType<typeof import("../database/record/index.js").default, typeof import("../database/record/index.js").default>> | null;
+    resourceTypeOverrides: Record<string, string | import("../configuration-types.js").UnboundFrontendModelResourceClassType> | null;
     ability: import("../authorization/ability.js").default | null;
     abilityContext: Record<string, any> | null;
     locals: Record<string, any> | null;

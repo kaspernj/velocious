@@ -591,13 +591,25 @@
  */
 
 /**
- * @template {import("./frontend-model-resource/base-resource.js").FrontendModelResourceModelClass} [TModelClass=typeof import("./database/record/index.js").default]
- * @template {typeof import("./database/record/index.js").default} [TDatabaseModelClass=Extract<TModelClass, typeof import("./database/record/index.js").default>]
- * @typedef {Omit<typeof import("./frontend-model-resource/base-resource.js").default, "ModelClass" | "modelClass"> & {ModelClass: TModelClass | undefined, modelClass: () => TModelClass, new (args: import("./frontend-model-resource/base-resource.js").FrontendModelResourceAbilityArgs<import("./frontend-model-resource/base-resource.js").FrontendModelResourceModelClass> | import("./frontend-model-resource/base-resource.js").FrontendModelResourceControllerArgs): import("./frontend-model-resource/base-resource.js").default<TModelClass, TDatabaseModelClass>}} FrontendModelResourceClassType
+ * Unbound resource class used by model-agnostic registries.
+ * @typedef {Omit<typeof import("./frontend-model-resource/base-resource.js").default, "modelClass"> & {modelClass: () => typeof import("./database/record/index.js").default, new (args: never): import("./frontend-model-resource/base-resource.js").default<typeof import("./database/record/index.js").default>}} UnboundFrontendModelResourceClassType
  */
 
 /**
- * @template {import("./frontend-model-resource/base-resource.js").FrontendModelResourceModelClass} [TModelClass=typeof import("./database/record/index.js").default]
+ * Resource class bound to a specific model class.
+ * @template {import("./frontend-model-resource/base-resource.js").FrontendModelResourceModelClass} TModelClass
+ * @template {typeof import("./database/record/index.js").default} TDatabaseModelClass
+ * @typedef {Omit<typeof import("./frontend-model-resource/base-resource.js").default, "ModelClass" | "modelClass"> & {ModelClass: TModelClass | undefined, modelClass: () => TModelClass, new (args: import("./frontend-model-resource/base-resource.js").FrontendModelResourceAbilityArgs<TModelClass> | import("./frontend-model-resource/base-resource.js").FrontendModelResourceControllerArgs<TDatabaseModelClass>): import("./frontend-model-resource/base-resource.js").default<TModelClass, TDatabaseModelClass>}} BoundFrontendModelResourceClassType
+ */
+
+/**
+ * @template {import("./frontend-model-resource/base-resource.js").FrontendModelResourceModelClass} [TModelClass=never]
+ * @template {typeof import("./database/record/index.js").default} [TDatabaseModelClass=Extract<TModelClass, typeof import("./database/record/index.js").default>]
+ * @typedef {[TModelClass] extends [never] ? UnboundFrontendModelResourceClassType : BoundFrontendModelResourceClassType<TModelClass, TDatabaseModelClass>} FrontendModelResourceClassType
+ */
+
+/**
+ * @template {import("./frontend-model-resource/base-resource.js").FrontendModelResourceModelClass} [TModelClass=never]
  * @typedef {FrontendModelResourceClassType<TModelClass>} FrontendModelResourceDefinition
  */
 
