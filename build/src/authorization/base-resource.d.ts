@@ -1,3 +1,11 @@
+export type AuthorizationResourceModelClass = {
+    new (): import("../database/record/index.js").default | import("../frontend-models/base.js").default;
+    getModelName: () => string;
+};
+/**
+ * Model class supported by authorization and shared frontend-model resources.
+ * @typedef {{new (): import("../database/record/index.js").default | import("../frontend-models/base.js").default, getModelName: () => string}} AuthorizationResourceModelClass
+ */
 /** Base class for authorization resources defining abilities for a model. */
 export default class AuthorizationBaseResource {
     ability: import("./ability.js").default | undefined;
@@ -5,8 +13,8 @@ export default class AuthorizationBaseResource {
     locals: import("../configuration-types.js").VelociousLooseObject;
     /**
      * Model class.
-     * @type {typeof import("../database/record/index.js").default | undefined} */
-    static ModelClass: typeof import("../database/record/index.js").default | undefined;
+     * @type {AuthorizationResourceModelClass | undefined} */
+    static ModelClass: AuthorizationResourceModelClass | undefined;
     /**
      * Runs constructor.
      * @param {object} args - Resource args.
@@ -21,9 +29,14 @@ export default class AuthorizationBaseResource {
     });
     /**
      * Runs model class.
-     * @returns {typeof import("../database/record/index.js").default} - Model class handled by this resource.
+     * @template {AuthorizationResourceModelClass} TModelClass
+     * @this {{ModelClass: TModelClass | undefined, name: string}}
+     * @returns {TModelClass} - Model class handled by this resource.
      */
-    static modelClass(): typeof import("../database/record/index.js").default;
+    static modelClass<TModelClass extends AuthorizationResourceModelClass>(this: {
+        ModelClass: TModelClass | undefined;
+        name: string;
+    }): TModelClass;
     /**
      * Runs can.
      * @template {typeof import("../database/record/index.js").default} MC
@@ -47,9 +60,9 @@ export default class AuthorizationBaseResource {
     requiredAbility(): import("./ability.js").default;
     /**
      * Runs required model class.
-     * @returns {typeof import("../database/record/index.js").default} - Model class handled by this resource.
+     * @returns {AuthorizationResourceModelClass} - Model class handled by this resource.
      */
-    requiredModelClass(): typeof import("../database/record/index.js").default;
+    requiredModelClass(): AuthorizationResourceModelClass;
     /**
      * Runs assert resource conditions signature.
      * @param {object} args - Signature args.

@@ -101,6 +101,7 @@ import SharedTaskResource from "../../../shared/resources/task-resource.js"
 import LocalComment from "../models/comment.js"
 import LocalTask from "../models/task.js"
 
+/** @augments {FrontendModelBaseResource<typeof LocalTask>} */
 export default class LocalTaskResource extends FrontendModelBaseResource {
   static ModelClass = LocalTask
   static SharedResource = SharedTaskResource
@@ -120,6 +121,10 @@ export function localTaskResource({currentDevice, currentUser, offlineGrant}) {
   })
 }
 ```
+
+The resource generic preserves the local model class through `modelClass()` and
+`FrontendModelResourceClassType<typeof LocalTask>`, so this wrapper does not
+need to cast `LocalTask` to a backend record class.
 
 Shared code resolves model classes through `this.model("Task")`; it must not import a backend model. Context helpers available to a shared recipe are `currentUser()`, `currentDevice()`, `offlineGrant()`, `now()`, `resourceRuntime()`, `isBackend()`, `isFrontend()`, and `isOffline()`.
 

@@ -38,6 +38,9 @@ const QUICK_SEARCH_COLUMN = "quickSearch"
  * @augments {FrontendModelBaseResource<TModelClass>}
  */
 export default class SyncResourceBase extends FrontendModelBaseResource {
+  /** @type {typeof import("../database/record/index.js").default | undefined} */
+  static ModelClass = undefined
+
   /**
    * Replay service class handling replay mutations for this resource,
    * declared instead of overriding {@link SyncResourceBase#replayServiceClass}.

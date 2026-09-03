@@ -86,7 +86,7 @@ export type FrontendModelIndexQueryOptions = {
     /**
      * - Resource providing query hooks.
      */
-    resource?: import("./frontend-model-resource/base-resource.js").default;
+    resource?: Pick<import("./frontend-model-resource/base-resource.js").default<import("./frontend-model-resource/base-resource.js").FrontendModelResourceModelClass>, "applyFrontendModelIndexPagination" | "applyFrontendModelIndexSearch" | "applyFrontendModelIndexSort">;
 };
 export type FrontendModelQueryMetadata = import("./database/query/model-class-query.js").default & Record<symbol, Set<string> | undefined>;
 export type FrontendModelSerializationResourceInstanceHook = (model: import("./database/record/index.js").default, resource: import("./frontend-model-resource/base-resource.js").default | null) => void;

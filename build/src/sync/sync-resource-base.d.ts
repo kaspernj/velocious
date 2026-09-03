@@ -27,6 +27,8 @@ export type ChangeDeliverableSyncEntry = Record<string, ReturnType<typeof JSON.p
  * @augments {FrontendModelBaseResource<TModelClass>}
  */
 export default class SyncResourceBase<TModelClass extends typeof import("../database/record/index.js").default = typeof import("../database/record/index.js").default> extends FrontendModelBaseResource<TModelClass> {
+    /** @type {typeof import("../database/record/index.js").default | undefined} */
+    static ModelClass: typeof import("../database/record/index.js").default | undefined;
     /**
      * Replay service class handling replay mutations for this resource,
      * declared instead of overriding {@link SyncResourceBase#replayServiceClass}.

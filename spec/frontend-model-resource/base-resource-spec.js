@@ -73,7 +73,7 @@ describe("FrontendModelBaseResource", {databaseCleaning: {transaction: true}}, (
     })
   })
 
-  it("derives attachment config from a frontend model class", () => {
+  it("derives attachment config from a frontend model class", {databaseCleaning: {transaction: false, truncate: false}}, () => {
     class LocalUser extends FrontendModelBase {
       /** @returns {import("../../src/frontend-models/base.js").FrontendModelResourceConfig} - Resource config. */
       static resourceConfig() {
@@ -94,7 +94,7 @@ describe("FrontendModelBaseResource", {databaseCleaning: {transaction: true}}, (
     }
 
     class LocalUserResource extends FrontendModelBaseResource {
-      static ModelClass = /** @type {typeof DatabaseRecord} */ (/** @type {unknown} */ (LocalUser))
+      static ModelClass = LocalUser
     }
 
     expect(LocalUserResource.resourceConfig()).toEqual({

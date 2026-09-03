@@ -70,7 +70,7 @@ import {RansackQueryError, normalizeRansackGroup, parseRansackSort} from "./util
  * @typedef {object} FrontendModelIndexQueryOptions
  * @property {boolean} [includePagination] - Whether frontend-model pagination params should be applied.
  * @property {boolean} [includeSort] - Whether frontend-model sort params should be applied.
- * @property {import("./frontend-model-resource/base-resource.js").default} [resource] - Resource providing query hooks.
+ * @property {Pick<import("./frontend-model-resource/base-resource.js").default<import("./frontend-model-resource/base-resource.js").FrontendModelResourceModelClass>, "applyFrontendModelIndexPagination" | "applyFrontendModelIndexSearch" | "applyFrontendModelIndexSort">} [resource] - Resource providing query hooks.
  */
 /** @typedef {import("./database/query/model-class-query.js").default & Record<symbol, Set<string> | undefined>} FrontendModelQueryMetadata */
 /**

@@ -591,11 +591,14 @@
  */
 
 /**
- * @typedef {Omit<typeof import("./frontend-model-resource/base-resource.js").default, never> & {new (args: import("./frontend-model-resource/base-resource.js").FrontendModelResourceAbilityArgs | import("./frontend-model-resource/base-resource.js").FrontendModelResourceControllerArgs): import("./frontend-model-resource/base-resource.js").default<typeof import("./database/record/index.js").default>}} FrontendModelResourceClassType
+ * @template {import("./frontend-model-resource/base-resource.js").FrontendModelResourceModelClass} [TModelClass=typeof import("./database/record/index.js").default]
+ * @template {typeof import("./database/record/index.js").default} [TDatabaseModelClass=Extract<TModelClass, typeof import("./database/record/index.js").default>]
+ * @typedef {Omit<typeof import("./frontend-model-resource/base-resource.js").default, "ModelClass" | "modelClass"> & {ModelClass: TModelClass | undefined, modelClass: () => TModelClass, new (args: import("./frontend-model-resource/base-resource.js").FrontendModelResourceAbilityArgs<import("./frontend-model-resource/base-resource.js").FrontendModelResourceModelClass> | import("./frontend-model-resource/base-resource.js").FrontendModelResourceControllerArgs): import("./frontend-model-resource/base-resource.js").default<TModelClass, TDatabaseModelClass>}} FrontendModelResourceClassType
  */
 
 /**
- * @typedef {FrontendModelResourceClassType} FrontendModelResourceDefinition
+ * @template {import("./frontend-model-resource/base-resource.js").FrontendModelResourceModelClass} [TModelClass=typeof import("./database/record/index.js").default]
+ * @typedef {FrontendModelResourceClassType<TModelClass>} FrontendModelResourceDefinition
  */
 
 /**

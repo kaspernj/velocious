@@ -1,4 +1,8 @@
 import AuthorizationBaseResource from "../authorization/base-resource.js";
+export type FrontendModelResourceModelClass = import("../authorization/base-resource.js").AuthorizationResourceModelClass & {
+    attachmentDefinitions: () => Record<string, import("../configuration-types.js").FrontendModelAttachmentConfiguration>;
+    primaryKey: () => string;
+};
 export type FrontendModelResourceAction = "index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url";
 export type FrontendModelResourceController = import("../controller.js").default & {
     currentAbility: () => import("../authorization/ability.js").default | undefined;
@@ -18,7 +22,7 @@ export type FrontendModelResourceController = import("../controller.js").default
     frontendModelAbilityAuthorizedQuery: (action: FrontendModelResourceAction) => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>;
     frontendModelAuthorizedQuery: (action: FrontendModelResourceAction) => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>;
     frontendModelIndexQuery: (options?: FrontendModelResourceIndexQueryOptions & {
-        resource?: FrontendModelBaseResource;
+        resource?: Pick<FrontendModelBaseResource<FrontendModelResourceModelClass>, "applyFrontendModelIndexPagination" | "applyFrontendModelIndexSearch" | "applyFrontendModelIndexSort">;
     }) => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>;
     frontendModelParams: () => import("../configuration-types.js").VelociousParams;
     frontendModelPreload: () => import("../database/query/index.js").NestedPreloadRecord | null;
@@ -108,7 +112,7 @@ export type FrontendModelResourceControllerArgs = {
      */
     resourceConfiguration: import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration | import("../configuration-types.js").FrontendModelResourceConfiguration;
 };
-export type FrontendModelResourceAbilityArgs = {
+export type FrontendModelResourceAbilityArgs<TModelClass extends FrontendModelResourceModelClass = FrontendModelResourceModelClass> = {
     /**
      * - Ability instance when the resource is used directly for authorization.
      */
@@ -128,7 +132,7 @@ export type FrontendModelResourceAbilityArgs = {
     /**
      * - Optional backing model class override.
      */
-    modelClass?: typeof import("../database/record/index.js").default;
+    modelClass?: TModelClass;
     /**
      * - Optional model name override.
      */
@@ -234,6 +238,10 @@ export type FrontendModelResourceNestedEntry = FrontendModelResourceAttributePay
     nestedAttributes?: FrontendModelResourceAttributePayload;
 };
 /**
+ * Backend or frontend model class bound to a frontend-model resource.
+ * @typedef {import("../authorization/base-resource.js").AuthorizationResourceModelClass & {attachmentDefinitions: () => Record<string, import("../configuration-types.js").FrontendModelAttachmentConfiguration>, primaryKey: () => string}} FrontendModelResourceModelClass
+ */
+/**
  * Built-in frontend-model resource action.
  * @typedef {"index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url"} FrontendModelResourceAction
  */
@@ -247,7 +255,7 @@ export type FrontendModelResourceNestedEntry = FrontendModelResourceAttributePay
  *   frontendModelAbilityAction: (action: FrontendModelResourceAction) => string,
  *   frontendModelAbilityAuthorizedQuery: (action: FrontendModelResourceAction) => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>,
  *   frontendModelAuthorizedQuery: (action: FrontendModelResourceAction) => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>,
- *   frontendModelIndexQuery: (options?: FrontendModelResourceIndexQueryOptions & {resource?: FrontendModelBaseResource}) => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>,
+ *   frontendModelIndexQuery: (options?: FrontendModelResourceIndexQueryOptions & {resource?: Pick<FrontendModelBaseResource<FrontendModelResourceModelClass>, "applyFrontendModelIndexPagination" | "applyFrontendModelIndexSearch" | "applyFrontendModelIndexSort">}) => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>,
  *   frontendModelParams: () => import("../configuration-types.js").VelociousParams,
  *   frontendModelPreload: () => import("../database/query/index.js").NestedPreloadRecord | null,
  *   frontendModelResourceConfigurationForModelClass: (modelClass: typeof import("../database/record/index.js").default) => FrontendModelResolvedResourceConfiguration | null,
@@ -298,12 +306,13 @@ export type FrontendModelResourceNestedEntry = FrontendModelResourceAttributePay
  */
 /**
  * FrontendModelResourceAbilityArgs type.
+ * @template {FrontendModelResourceModelClass} [TModelClass=FrontendModelResourceModelClass]
  * @typedef {object} FrontendModelResourceAbilityArgs
  * @property {import("../authorization/ability.js").default} [ability] - Ability instance when the resource is used directly for authorization.
  * @property {import("../configuration.js").default} [configuration] - Velocious configuration for controller-less construction (for example the sync websocket channel); the controller path derives it from the controller instead.
  * @property {import("../configuration-types.js").VelociousLooseObject} [context] - Ability context.
  * @property {import("../configuration-types.js").VelociousLooseObject} [locals] - Ability locals.
- * @property {typeof import("../database/record/index.js").default} [modelClass] - Optional backing model class override.
+ * @property {TModelClass} [modelClass] - Optional backing model class override.
  * @property {string} [modelName] - Optional model name override.
  * @property {import("../configuration-types.js").VelociousParams} [params] - Optional params override.
  * @property {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration | import("../configuration-types.js").FrontendModelResourceConfiguration} [resourceConfiguration] - Optional normalized resource configuration.
@@ -373,19 +382,20 @@ export type FrontendModelResourceNestedEntry = FrontendModelResourceAttributePay
  */
 /**
  * Base class for backend frontend-model resources.
- * @template {typeof import("../database/record/index.js").default} [TModelClass=typeof import("../database/record/index.js").default]
+ * @template {FrontendModelResourceModelClass} [TModelClass=typeof import("../database/record/index.js").default]
+ * @template {typeof import("../database/record/index.js").default} [TDatabaseModelClass=Extract<TModelClass, typeof import("../database/record/index.js").default>]
  */
-export default class FrontendModelBaseResource<TModelClass extends typeof import("../database/record/index.js").default = typeof import("../database/record/index.js").default> extends AuthorizationBaseResource {
+export default class FrontendModelBaseResource<TModelClass extends FrontendModelResourceModelClass = typeof import("../database/record/index.js").default, TDatabaseModelClass extends typeof import("../database/record/index.js").default = Extract<TModelClass, typeof import("../database/record/index.js").default>> extends AuthorizationBaseResource {
     controller: FrontendModelResourceController | undefined;
     configurationValue: import("../configuration.js").default | undefined;
-    modelClassValue: typeof import("../database/record/index.js").default | undefined;
+    modelClassValue: TModelClass;
     modelNameValue: string | undefined;
     paramsValue: import("../configuration-types.js").VelociousParams | undefined;
     resourceConfigurationValue: import("../configuration-types.js").FrontendModelResourceConfiguration | import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration | undefined;
-    /** @type {FrontendModelBaseResource | null | undefined} */
-    sharedResourceInstanceValue: FrontendModelBaseResource | null | undefined;
-    /** @type {typeof import("../database/record/index.js").default | undefined} */
-    static ModelClass: typeof import("../database/record/index.js").default | undefined;
+    /** @type {FrontendModelBaseResource<TModelClass, TDatabaseModelClass> | null | undefined} */
+    sharedResourceInstanceValue: FrontendModelBaseResource<TModelClass, TDatabaseModelClass> | null | undefined;
+    /** @type {FrontendModelResourceModelClass | undefined} */
+    static ModelClass: FrontendModelResourceModelClass | undefined;
     /** @type {Record<string, ReturnType<typeof JSON.parse>> | string[] | undefined} */
     static attributes: Record<string, ReturnType<typeof JSON.parse>> | string[] | undefined;
     /** @type {string[] | undefined} */
@@ -427,9 +437,9 @@ export default class FrontendModelBaseResource<TModelClass extends typeof import
     static writableAttributes: string[] | null | undefined;
     /**
      * Runs constructor.
-     * @param {FrontendModelResourceAbilityArgs | FrontendModelResourceControllerArgs} args - Resource args.
+     * @param {FrontendModelResourceAbilityArgs<FrontendModelResourceModelClass> | FrontendModelResourceControllerArgs} args - Resource args.
      */
-    constructor(args: FrontendModelResourceAbilityArgs | FrontendModelResourceControllerArgs);
+    constructor(args: FrontendModelResourceAbilityArgs<FrontendModelResourceModelClass> | FrontendModelResourceControllerArgs);
     /**
      * Returns the configured shared resource class.
      * @returns {ReturnType<typeof JSON.parse>} - Shared resource class.
@@ -455,9 +465,9 @@ export default class FrontendModelBaseResource<TModelClass extends typeof import
     static attachmentConfigurations(): Record<string, import("../configuration-types.js").FrontendModelAttachmentConfiguration>;
     /**
      * Builds a resource instance for shared-resource fallback calls.
-     * @returns {FrontendModelBaseResource | null} - Shared resource instance when configured.
+     * @returns {FrontendModelBaseResource<TModelClass, TDatabaseModelClass> | null} - Shared resource instance when configured.
      */
-    sharedResourceInstance(): FrontendModelBaseResource | null;
+    sharedResourceInstance(): FrontendModelBaseResource<TModelClass, TDatabaseModelClass> | null;
     /**
      * Calls a shared-resource method only when the shared resource overrides the framework default.
      * @param {string} methodName - Method name to resolve.
@@ -480,11 +490,11 @@ export default class FrontendModelBaseResource<TModelClass extends typeof import
     /**
      * Resolves a method on this resource or its shared fallback.
      * @param {string} methodName - Method name.
-     * @returns {{method: (...methodArgs: unknown[]) => unknown, resource: FrontendModelBaseResource} | null} - Resolved method and receiver.
+     * @returns {{method: (...methodArgs: unknown[]) => unknown, resource: FrontendModelBaseResource<TModelClass, TDatabaseModelClass>} | null} - Resolved method and receiver.
      */
     resourceMethod(methodName: string): {
         method: (...methodArgs: unknown[]) => unknown;
-        resource: FrontendModelBaseResource;
+        resource: FrontendModelBaseResource<TModelClass, TDatabaseModelClass>;
     } | null;
     /**
      * Runs abilities.
@@ -502,11 +512,6 @@ export default class FrontendModelBaseResource<TModelClass extends typeof import
      */
     static resourceConfig(): import("../configuration-types.js").FrontendModelResourceConfiguration;
     /**
-     * Runs static model class.
-     * @returns {typeof import("../database/record/index.js").default} - Backing model class.
-     */
-    static modelClass(): typeof import("../database/record/index.js").default;
-    /**
      * Runs controller instance.
      * @returns {import("../controller.js").default} - Controller instance.
      */
@@ -523,6 +528,11 @@ export default class FrontendModelBaseResource<TModelClass extends typeof import
      * @returns {TModelClass} - Model class.
      */
     modelClass(): TModelClass;
+    /**
+     * Returns the database model class used by server-only resource operations.
+     * @returns {TDatabaseModelClass} - Database model class.
+     */
+    databaseModelClass(): TDatabaseModelClass;
     /**
      * Runs required model class for authorization helpers.
      * @returns {TModelClass} - Backing model class.
@@ -763,15 +773,15 @@ export default class FrontendModelBaseResource<TModelClass extends typeof import
     /**
      * Runs authorized query.
      * @param {FrontendModelResourceAction} action - Ability action.
-     * @returns {import("../database/query/model-class-query.js").default<TModelClass>} - Authorized query.
+     * @returns {import("../database/query/model-class-query.js").default<TDatabaseModelClass>} - Authorized query.
      */
-    authorizedQuery(action: FrontendModelResourceAction): import("../database/query/model-class-query.js").default<TModelClass>;
+    authorizedQuery(action: FrontendModelResourceAction): import("../database/query/model-class-query.js").default<TDatabaseModelClass>;
     /**
      * Runs index query.
      * @param {FrontendModelResourceIndexQueryOptions} [options] - Query options.
-     * @returns {import("../database/query/model-class-query.js").default<TModelClass>} - Frontend-model index query.
+     * @returns {import("../database/query/model-class-query.js").default<TDatabaseModelClass>} - Frontend-model index query.
      */
-    indexQuery(options?: FrontendModelResourceIndexQueryOptions): import("../database/query/model-class-query.js").default<TModelClass>;
+    indexQuery(options?: FrontendModelResourceIndexQueryOptions): import("../database/query/model-class-query.js").default<TDatabaseModelClass>;
     /**
      * Applies frontend-model index pagination.
      * @param {object} args - Pagination args.

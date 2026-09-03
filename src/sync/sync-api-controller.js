@@ -137,7 +137,7 @@ export default class SyncApiController extends Controller {
    * @returns {import("../configuration-types.js").FrontendModelResourceClassType} Sync resource class.
    */
   missingSyncResourceClass() {
-    return /** @type {typeof FrontendModelBaseResource} */ (/** @type {unknown} */ (this.raiseMissingSyncResourceClass()))
+    return /** @type {import("../configuration-types.js").FrontendModelResourceClassType} */ (/** @type {unknown} */ (this.raiseMissingSyncResourceClass()))
   }
 
   /** Raises a configuration error for subclasses that do not provide a resource. */
@@ -178,4 +178,3 @@ export default class SyncApiController extends Controller {
     })
   }
 }
-
