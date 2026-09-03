@@ -575,13 +575,17 @@ testing; each connection sends exactly one hello.
 
 `candidate` is quiescent: it performs no schedule ownership, concurrency
 reconciliation, dispatch, reclaim, or orphan sweep. Activation transitions it
-to `active`. Retirement installs its admission fence synchronously, stops new
-schedules/dispatch/admission/handoffs, then transitions through `retiring` to
-`retired` while preserving accepted workers, reports, acknowledgements,
-timeouts, child reaping, and durable transitions. A restarted `retired` main
-recovers only exact durable handoffs for its own generation and never dispatches
-global queue work. It reaches `stopped` only after its exact workers, handoffs,
-reports, worker connections, and lifecycle acknowledgements drain.
+to `active`. If an operational recovery retires the candidate while activation
+is still reconciling durable queue state, that retirement fence wins and the
+in-flight activation cannot restore active ownership or return a successful
+lifecycle acknowledgement. Retirement installs its admission fence
+synchronously, stops new schedules/dispatch/admission/handoffs, then transitions
+through `retiring` to `retired` while preserving accepted workers, reports,
+acknowledgements, timeouts, child reaping, and durable transitions. A restarted
+`retired` main recovers only exact durable handoffs for its own generation and
+never dispatches global queue work. It reaches `stopped` only after its exact
+workers, handoffs, reports, worker connections, and lifecycle acknowledgements
+drain.
 
 Worker ownership is stored as `<generationId>:<workerUuid>` (maximum 165
 characters). The built-in SQL schema already gives `worker_id` 255 characters
@@ -590,6 +594,15 @@ no migration. Generation mode requires an adapter whose
 `supportsReleaseScopedGenerations()` returns `true`; the built-in SQL adapter
 does. Unsupported third-party adapters are rejected before listening, while
 legacy mode remains compatible with them.
+
+The built-in SQL adapter bounds activation-time queue reconciliation to
+queue-derived concurrency keys plus counters that are active or stale. It does
+not execute a job-table count query for every historical concurrency key. Its
+internal schema migration also repairs missing single-column job indexes from
+older `queue`, `schedule_key`, and `concurrency_key` add-column upgrades before
+activation uses them. SQLite emits conflict-safe index creation for that repair,
+so independent generation processes remain safe even if both observed a missing
+index before database serialization.
 
 ### Lifecycle control socket
 

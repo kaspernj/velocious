@@ -4,6 +4,7 @@ import BackgroundJobsMain from "../../src/background-jobs/main.js"
 import Configuration from "../../src/configuration.js"
 import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
 import BackgroundJobsTestAdapter from "../helpers/background-jobs-test-adapter.js"
+import promiseBarrier from "../helpers/promise-barrier.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 
 class StartupAdapter extends BackgroundJobsTestAdapter {
@@ -15,6 +16,9 @@ class StartupAdapter extends BackgroundJobsTestAdapter {
     this.reconcile = reconcile
     this.reconcileCount = 0
   }
+
+  /** @returns {boolean} - Supports release-scoped lifecycle tests. */
+  supportsReleaseScopedGenerations() { return true }
 
   /** @returns {Promise<void>} - Resolves after reconciliation. */
   async reconcileQueueConcurrency() {
@@ -72,6 +76,51 @@ function buildMain(configuration) {
 }
 
 describe("Background jobs - main startup adapter lifecycle", () => {
+  it("fences an in-flight candidate activation before reconciliation can enable ownership", async () => {
+    const reconciliation = promiseBarrier()
+    const adapter = new StartupAdapter({
+      reconcile: async () => {
+        reconciliation.entered()
+        await reconciliation.blocked
+      }
+    })
+    const configuration = buildConfiguration(() => adapter)
+    const main = new MainWithAssignedStore({
+      closeDatabaseConnectionsOnStop: false,
+      configuration,
+      generationId: "release-candidate",
+      host: "127.0.0.1",
+      initialGenerationState: "candidate",
+      port: 0,
+      store: adapter
+    })
+    let activation
+
+    try {
+      await main.start()
+      activation = main.activate()
+      await reconciliation.waiting
+
+      await main.retire()
+      expect(main.getLifecycleState()).toEqual("retiring")
+      expect(main._activeOwnershipReady).toEqual(false)
+
+      reconciliation.release()
+      await expect(async () => await activation).toThrow("Background jobs generation retirement started before activation acquired ownership")
+      await main._retirementPromise
+
+      expect(main.getLifecycleState()).toEqual("retired")
+      expect(main.scheduler).toBeUndefined()
+      expect(main._activeOwnershipReady).toEqual(false)
+      expect(main.readyWorkers.size).toEqual(0)
+    } finally {
+      reconciliation.release()
+      await Promise.allSettled([activation, main._retirementPromise].filter(Boolean))
+      await main.stop()
+      await configuration.closeBackgroundJobsAdapter()
+    }
+  })
+
   it("preserves a store assigned by a subclass before start", async () => {
     const assignedStore = new StartupAdapter()
     let configuredAdapterCount = 0

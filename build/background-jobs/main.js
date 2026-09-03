@@ -325,7 +325,7 @@ export default class BackgroundJobsMain {
       }, this.workerLivenessSweepMs)
 
       if (this.lifecycleState === "active") {
-        await this._startActiveOwnership()
+        await this._startActiveOwnership("active")
       } else if (this.lifecycleState === "retired") {
         this._startGenerationRecoveryOwnership()
       }
@@ -519,17 +519,27 @@ export default class BackgroundJobsMain {
 
   /**
    * Acquires scheduling and dispatch ownership for an active generation.
-   * @returns {Promise<void>} - Resolves after active ownership is established.
+   * @param {"active" | "candidate"} expectedLifecycleState - State that still owns activation.
+   * @returns {Promise<boolean>} - Whether active ownership was established.
    */
-  async _startActiveOwnership() {
+  async _startActiveOwnership(expectedLifecycleState) {
     await this.store.reconcileQueueConcurrency()
+    if (this.lifecycleState !== expectedLifecycleState) return false
     this._setupDispatchTriggers()
     this._setupStartupHandoffReclaim()
     this._startOrphanSweep()
     await this._startScheduler()
+    if (this.lifecycleState !== expectedLifecycleState) {
+      if (this.scheduler) await this.scheduler.stop()
+      this.scheduler = undefined
+      this._clearDispatchTimers()
+      this._disconnectBeaconHandlers()
+      return false
+    }
     this._activeOwnershipReady = true
     this._creditReadyWorkers()
     await this._drain()
+    return this.lifecycleState === expectedLifecycleState
   }
 
   /** Starts exact recovery duties without acquiring global dispatch ownership. */
@@ -603,7 +613,10 @@ export default class BackgroundJobsMain {
    */
   async _activate() {
     this.logger.info(() => ["Background jobs generation activation starting", {generationId: this.generationId}])
-    await this._startActiveOwnership()
+    const ownershipStarted = await this._startActiveOwnership("candidate")
+    if (!ownershipStarted || this.lifecycleState !== "candidate") {
+      throw new Error("Background jobs generation retirement started before activation acquired ownership")
+    }
     this.lifecycleState = "active"
     this._creditReadyWorkers()
     this.logger.info(() => ["Background jobs generation activation acknowledged", {generationId: this.generationId}])
@@ -619,7 +632,8 @@ export default class BackgroundJobsMain {
   retire() {
     if (!this.generationId) throw new Error("Background jobs generation retirement requires generation mode")
     if (this.lifecycleState === "retiring" || this.lifecycleState === "retired") return Promise.resolve()
-    if (this.lifecycleState !== "active") throw new Error(`Cannot retire background jobs generation from ${this.lifecycleState}`)
+    const activationInProgress = this.lifecycleState === "candidate" && Boolean(this._activationPromise)
+    if (this.lifecycleState !== "active" && !activationInProgress) throw new Error(`Cannot retire background jobs generation from ${this.lifecycleState}`)
 
     this.lifecycleState = "retiring"
     this._activeOwnershipReady = false
@@ -638,7 +652,8 @@ export default class BackgroundJobsMain {
    * @returns {Promise<void>} - Retirement fence completion.
    */
   async _retire() {
-    await this.scheduler?.stop()
+    if (this._activationPromise) await Promise.allSettled([this._activationPromise])
+    if (this.scheduler) await this.scheduler.stop()
     this.scheduler = undefined
     if (this._drainPromise) await this._drainPromise
     if (this._stopped) return

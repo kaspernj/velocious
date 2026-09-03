@@ -284,9 +284,10 @@ export default class BackgroundJobsMain {
     _generationOwnedHandoffSnapshot(): Promise<import("./types.js").BackgroundJobHandoffSnapshot[]>;
     /**
      * Acquires scheduling and dispatch ownership for an active generation.
-     * @returns {Promise<void>} - Resolves after active ownership is established.
+     * @param {"active" | "candidate"} expectedLifecycleState - State that still owns activation.
+     * @returns {Promise<boolean>} - Whether active ownership was established.
      */
-    _startActiveOwnership(): Promise<void>;
+    _startActiveOwnership(expectedLifecycleState: "active" | "candidate"): Promise<boolean>;
     /** Starts exact recovery duties without acquiring global dispatch ownership. */
     _startGenerationRecoveryOwnership(): void;
     /** Starts the generation-fenced orphan sweep. */

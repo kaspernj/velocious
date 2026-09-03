@@ -276,7 +276,6 @@ export default class ChangeTableFakeDriver extends Base {
    * @param {import("../../src/database/drivers/base.js").RemoveIndexSqlArgs} indexData - Index data.
    * @returns {Promise<string[]>} - Resolves with SQL statements.
    */
-  // fallow-ignore-next-line unused-class-member -- consumed through Migration#getDriver's base-typed boundary
   async removeIndexSQLs(indexData) {
     this.removeIndexCalls.push(indexData)
 

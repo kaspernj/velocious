@@ -692,6 +692,14 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
      */
     _ensureJobsTableColumns(db: import("../database/drivers/base.js").default): Promise<void>;
     /**
+     * Repairs secondary indexes that older add-column upgrades declared but did
+     * not create on every SQL driver. The migration ledger keeps routine store
+     * readiness from repeatedly introspecting the full index set.
+     * @param {import("../database/drivers/base.js").default} db - Database connection.
+     * @returns {Promise<void>} - Resolves when all expected indexes exist.
+     */
+    _ensureJobsTableIndexesOnce(db: import("../database/drivers/base.js").default): Promise<void>;
+    /**
      * Idempotently adds the per-job wall-clock timeout to existing job tables.
      * @param {import("../database/drivers/base.js").default} db - Database connection.
      * @returns {Promise<void>} - Resolves when ensured.
@@ -1007,6 +1015,14 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
      * @returns {Promise<void>} - Resolves when reconciled.
      */
     _reconcileConcurrency(db: import("../database/drivers/base.js").default): Promise<void>;
+    /**
+     * Rebuilds one counter after locking it ahead of the job rows, matching the
+     * lock order used by handoff and completion transitions.
+     * @param {import("../database/drivers/base.js").default} db - Database connection.
+     * @param {string} concurrencyKey - Counter key.
+     * @returns {Promise<void>} - Resolves when reconciled.
+     */
+    _reconcileConcurrencyKey(db: import("../database/drivers/base.js").default, concurrencyKey: string): Promise<void>;
     /**
      * Reconciles queue-derived concurrency with the current configuration. Only
      * invoked through {@link reconcileQueueConcurrency} — the explicit lifecycle
