@@ -22,6 +22,26 @@ import BackgroundJobsGenerationHandshakeTimeoutError, { DEFAULT_GENERATION_HANDS
  * @property {ReturnType<typeof setTimeout> | null} timer - The pending timeout timer, cleared on exit.
  * @property {ReturnType<typeof setTimeout> | null} sigkillTimer - The pending SIGKILL grace timer, cleared on exit.
  */
+/**
+ * @typedef {object} PooledJobEntry
+ * @property {import("./types.js").BackgroundJobPayload & {id: string}} payload - Durable job payload.
+ * @property {(value: void) => void} [resolve] - Completion resolver.
+ * @property {Promise<void>} [pooledJob] - Tracked pooled-job promise.
+ * @property {ReturnType<typeof setTimeout> | null} [timeoutTimer] - Per-job timeout timer.
+ */
+/**
+ * @typedef {object} PooledChildState
+ * @property {number} createdAtMs - Child creation timestamp.
+ * @property {number} jobsRun - Acknowledged jobs completed by this child.
+ * @property {Map<string, PooledJobEntry>} inflight - Jobs currently owned by this child.
+ * @property {number} lastDispatchSeq - Round-robin dispatch sequence.
+ * @property {boolean} retiring - Whether this child is draining before retirement.
+ * @property {boolean} [started] - Whether the child completed its startup handshake.
+ * @property {boolean} [settling] - Whether failure handling already owns this child.
+ * @property {ReturnType<typeof setTimeout> | null} [timeoutSigkillTimer] - Pending timeout SIGKILL timer.
+ * @property {import("./types.js").PooledRunnerTerminationReason} [terminationReason] - Expected termination reason.
+ * @property {string} [timeoutJobId] - Job whose timeout initiated termination.
+ */
 /** Grace period after SIGTERM before a lingering process runner is SIGKILLed. */
 const FORKED_CHILD_SIGKILL_GRACE_MS = 5000
 /**
@@ -234,7 +254,7 @@ export default class BackgroundJobsWorker {
     this.pooledJobQueueTrackers = new Map()
     /** @type {Set<import("node:child_process").ChildProcess>} */
     this.pooledChildren = new Set()
-    /** @type {Map<import("node:child_process").ChildProcess, {createdAtMs: number, jobsRun: number, inflight: Map<string, {payload: import("./types.js").BackgroundJobPayload & {id: string}, resolve?: (value: void) => void, pooledJob?: Promise<void>, timeoutTimer?: ReturnType<typeof setTimeout> | null}>, lastDispatchSeq: number, retiring: boolean, started?: boolean, settling?: boolean, timeoutSigkillTimer?: ReturnType<typeof setTimeout> | null}>} */
+    /** @type {Map<import("node:child_process").ChildProcess, PooledChildState>} */
     this.pooledChildStates = new Map()
     /** @type {WeakSet<Promise<void>>} */
     this._pooledStartupFailureJobs = new WeakSet()
@@ -511,6 +531,11 @@ export default class BackgroundJobsWorker {
     if (this.inflightProcessChildren.size === 0) return
 
     for (const child of this.inflightProcessChildren) {
+      const pooledState = this.pooledChildStates.get(child)
+      if (pooledState && pooledState.inflight.size > 0 && !pooledState.terminationReason) {
+        pooledState.terminationReason = "worker-shutdown-timeout"
+      }
+
       try {
         child.kill("SIGTERM")
       } catch {
@@ -1046,7 +1071,7 @@ export default class BackgroundJobsWorker {
     try {
       child.send({type: "job", payload, sharedTransactionBroker: this._pooledJobSharedTransactionBrokerConfig()})
     } catch (error) {
-      void this._handlePooledChildFailure({child, error})
+      void this._handlePooledChildFailure({child, error, origin: "ipc-send"})
     }
 
     return pooledJob
@@ -1133,6 +1158,9 @@ export default class BackgroundJobsWorker {
     // Already settling/gone, or the job finished in the race with this timer.
     if (!state || state.settling || !state.inflight.has(jobId)) return
 
+    state.terminationReason = "job-timeout"
+    state.timeoutJobId = jobId
+
     try {
       child.kill("SIGTERM")
     } catch {
@@ -1163,8 +1191,20 @@ export default class BackgroundJobsWorker {
     this.inflightProcessChildren.add(child)
     this.pooledChildStates.set(child, {createdAtMs: Date.now(), jobsRun: 0, inflight: new Map(), lastDispatchSeq: 0, retiring: false, started: false})
     child.on("message", (message) => this._handlePooledChildMessage({child, message}))
-    child.once("exit", (code, signal) => this._handlePooledChildFailure({child, error: new Error(`Pooled background job runner exited: code=${code} signal=${signal || "none"}`)}))
-    child.once("error", (error) => this._handlePooledChildFailure({child, error}))
+    child.once("exit", (exitCode, signal) => this._handlePooledChildFailure({
+      child,
+      error: new Error(`Pooled background job runner exited: code=${exitCode} signal=${signal || "none"}`),
+      exitCode,
+      origin: "exit",
+      signal
+    }))
+    child.once("error", (error) => this._handlePooledChildFailure({
+      child,
+      error,
+      exitCode: child.exitCode,
+      origin: "process-error",
+      signal: child.signalCode
+    }))
     return child
   }
 
@@ -1271,9 +1311,12 @@ export default class BackgroundJobsWorker {
    * @param {object} args - Failure details.
    * @param {import("node:child_process").ChildProcess} args.child - Pooled child.
    * @param {ReturnType<typeof JSON.parse>} args.error - Failure.
+   * @param {number | null} [args.exitCode] - Child exit code when observed.
+   * @param {import("./types.js").PooledRunnerFailureOrigin} [args.origin] - Worker observation that initiated recovery.
+   * @param {import("node:child_process").ChildProcess["signalCode"]} [args.signal] - Child termination signal when observed.
    * @returns {Promise<void>}
    */
-  async _handlePooledChildFailure({child, error}) {
+  async _handlePooledChildFailure({child, error, exitCode = null, origin = "process-error", signal = null}) {
     const state = this.pooledChildStates.get(child)
     if (state?.settling) return
     if (state) {
@@ -1289,6 +1332,9 @@ export default class BackgroundJobsWorker {
     this.inflightProcessChildren.delete(child)
 
     const entries = state ? [...state.inflight.values()] : []
+    const runnerFailure = state
+      ? this._pooledRunnerFailure({child, exitCode, origin, signal, state})
+      : undefined
     if (state) state.inflight.clear()
     this.pooledChildStates.delete(child)
 
@@ -1299,6 +1345,7 @@ export default class BackgroundJobsWorker {
         error,
         handoffId: entry.payload.handoffId,
         handedOffAtMs: entry.payload.handedOffAtMs,
+        runnerFailure,
         workerId: entry.payload.workerId || this.workerId
       })
       if (entry.resolve) entry.resolve(undefined)
@@ -1324,6 +1371,51 @@ export default class BackgroundJobsWorker {
     }
 
     await Promise.allSettled(failureReports)
+  }
+
+  /**
+   * Captures one stable process snapshot before the failed child's state is removed.
+   * @param {object} args - Failure details.
+   * @param {import("node:child_process").ChildProcess} args.child - Failed pooled child.
+   * @param {number | null} args.exitCode - Child exit code when observed.
+   * @param {import("./types.js").PooledRunnerFailureOrigin} args.origin - Worker observation that initiated recovery.
+   * @param {import("node:child_process").ChildProcess["signalCode"]} args.signal - Child termination signal when observed.
+   * @param {PooledChildState} args.state - Child state immediately before recovery.
+   * @returns {import("./types.js").PooledRunnerFailure} - Shared failure provenance.
+   */
+  _pooledRunnerFailure({child, exitCode, origin, signal, state}) {
+    const terminationReason = state.terminationReason ?? "unexpected"
+    const workerLifecycle = this.shouldStop ? "stopping" : this.isRetiring ? "retiring" : "running"
+    const runnerLifecycle = state.started === false ? "starting" : state.retiring ? "retiring" : "running"
+    const activeJobs = [...state.inflight.values()]
+      .map((entry) => ({
+        handoffId: entry.payload.handoffId ?? null,
+        handedOffAtMs: entry.payload.handedOffAtMs ?? null,
+        jobId: entry.payload.id,
+        jobName: entry.payload.jobName,
+        workerId: entry.payload.workerId ?? this.workerId
+      }))
+      .sort((left, right) => left.jobId.localeCompare(right.jobId))
+
+    return Object.freeze({
+      activeJobs,
+      exitCode,
+      generationId: this.generationId ?? null,
+      oomKilled: signal === "SIGKILL" && terminationReason === "unexpected" ? null : false,
+      origin,
+      runnerAgeMs: Math.max(0, Date.now() - state.createdAtMs),
+      runnerCreatedAtMs: state.createdAtMs,
+      runnerDetached: false,
+      runnerJobsRun: state.jobsRun,
+      runnerLifecycle,
+      runnerPid: child.pid ?? null,
+      signal,
+      terminationReason,
+      timeoutJobId: state.timeoutJobId ?? null,
+      workerId: this.workerId,
+      workerLifecycle,
+      workerPid: process.pid
+    })
   }
 
   /**
@@ -1655,9 +1747,10 @@ export default class BackgroundJobsWorker {
    * @param {string} [args.handoffId] - Handoff lease id.
    * @param {number} [args.handedOffAtMs] - Handed off timestamp.
    * @param {string} [args.workerId] - Worker id.
+   * @param {import("./types.js").PooledRunnerFailure} [args.runnerFailure] - Pooled-child process failure provenance.
    * @returns {Promise<void>} - Resolves when reported.
    */
-  async _reportJobResult({jobId, status, delayMs, error, handoffId, handedOffAtMs, workerId}) {
+  async _reportJobResult({jobId, status, delayMs, error, handoffId, handedOffAtMs, workerId, runnerFailure}) {
     if (!this.statusReporter) return
 
     try {
@@ -1665,7 +1758,7 @@ export default class BackgroundJobsWorker {
       // long-lived and cannot exit to trigger orphan reclaim, so dropping the
       // completion here would strand the job in `handed_off` forever — fatal for a
       // `max_concurrency: 1` job (a stranded row blocks every future run).
-      await this.statusReporter.reportWithRetry({jobId, status, delayMs, error, handoffId, handedOffAtMs, workerId, retryPersistErrors: true})
+      await this.statusReporter.reportWithRetry({jobId, status, delayMs, error, handoffId, handedOffAtMs, workerId, runnerFailure, retryPersistErrors: true})
     } catch (reportError) {
       console.error("Background job status reporting failed:", reportError)
     }
@@ -1683,15 +1776,16 @@ export default class BackgroundJobsWorker {
    * @param {string} [args.handoffId] - Handoff lease id.
    * @param {number} [args.handedOffAtMs] - Handed off timestamp.
    * @param {string} [args.workerId] - Worker id.
+   * @param {import("./types.js").PooledRunnerFailure} [args.runnerFailure] - Pooled-child process failure provenance.
    * @returns {void}
    */
-  _reportJobResultInBackground({jobId, status, delayMs, error, handoffId, handedOffAtMs, workerId}) {
+  _reportJobResultInBackground({jobId, status, delayMs, error, handoffId, handedOffAtMs, workerId, runnerFailure}) {
     /**
      * Defines report.
      * @type {Promise<void>} */
     let report
 
-    report = this._reportJobResult({jobId, status, delayMs, error, handoffId, handedOffAtMs, workerId}).finally(() => {
+    report = this._reportJobResult({jobId, status, delayMs, error, handoffId, handedOffAtMs, workerId, runnerFailure}).finally(() => {
       this.inflightReports.delete(report)
     })
 

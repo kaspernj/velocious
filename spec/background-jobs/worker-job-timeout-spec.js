@@ -147,8 +147,14 @@ describe("Background jobs - worker pooled job timeout", () => {
     worker.pooledChildren.add(/** @type {ReturnType<typeof JSON.parse>} */ (child))
     worker.inflightProcessChildren.add(/** @type {ReturnType<typeof JSON.parse>} */ (child))
     worker.pooledChildStates.set(/** @type {ReturnType<typeof JSON.parse>} */ (child), {createdAtMs: Date.now(), jobsRun: 0, inflight: new Map(), lastDispatchSeq: 0, retiring: false})
-    child.once("exit", (/** @type {ReturnType<typeof JSON.parse>} */ code, /** @type {ReturnType<typeof JSON.parse>} */ signal) => {
-      void worker._handlePooledChildFailure({child: /** @type {ReturnType<typeof JSON.parse>} */ (child), error: new Error(`Pooled background job runner exited: code=${code} signal=${signal || "none"}`)})
+    child.once("exit", (/** @type {number | null} */ exitCode, /** @type {import("node:child_process").ChildProcess["signalCode"]} */ signal) => {
+      void worker._handlePooledChildFailure({
+        child: /** @type {ReturnType<typeof JSON.parse>} */ (child),
+        error: new Error(`Pooled background job runner exited: code=${exitCode} signal=${signal || "none"}`),
+        exitCode,
+        origin: "exit",
+        signal
+      })
     })
   }
 
@@ -169,6 +175,10 @@ describe("Background jobs - worker pooled job timeout", () => {
     expect(reports.length).toEqual(1)
     expect(reports[0].jobId).toEqual("pooled-1")
     expect(reports[0].status).toEqual("failed")
+    expect(reports[0].runnerFailure.oomKilled).toEqual(false)
+    expect(reports[0].runnerFailure.signal).toEqual("SIGKILL")
+    expect(reports[0].runnerFailure.terminationReason).toEqual("job-timeout")
+    expect(reports[0].runnerFailure.timeoutJobId).toEqual("pooled-1")
     expect(worker.pooledChildren.has(/** @type {ReturnType<typeof JSON.parse>} */ (child))).toEqual(false)
   })
 

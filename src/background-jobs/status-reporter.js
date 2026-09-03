@@ -47,9 +47,10 @@ export default class BackgroundJobsStatusReporter {
    * @param {string} [args.handoffId] - Handoff lease id.
    * @param {number} [args.handedOffAtMs] - Handed off timestamp.
    * @param {string} [args.workerId] - Worker id.
+   * @param {import("./types.js").PooledRunnerFailure} [args.runnerFailure] - Pooled-child process failure provenance.
    * @returns {Promise<void>} - Resolves when reported.
    */
-  async report({jobId, status, delayMs, error, handoffId, handedOffAtMs, workerId}) {
+  async report({jobId, status, delayMs, error, handoffId, handedOffAtMs, workerId, runnerFailure}) {
     const config = this.configuration.getBackgroundJobsConfig()
     const host = this.host || config.host
     const port = typeof this.port === "number" ? this.port : config.port
@@ -73,7 +74,8 @@ export default class BackgroundJobsStatusReporter {
             handoffId,
             workerId,
             handedOffAtMs,
-            error: error ? normalizeBackgroundJobError(error) : undefined
+            error: error ? normalizeBackgroundJobError(error) : undefined,
+            runnerFailure
           })
         },
         onMessage: ({message, resolve, reject}) => {
@@ -100,17 +102,18 @@ export default class BackgroundJobsStatusReporter {
    * @param {string} [args.handoffId] - Handoff lease id.
    * @param {number} [args.handedOffAtMs] - Handed off timestamp.
    * @param {string} [args.workerId] - Worker id.
+   * @param {import("./types.js").PooledRunnerFailure} [args.runnerFailure] - Pooled-child process failure provenance.
    * @param {number} [args.maxDurationMs] - Max duration for retries.
    * @param {boolean} [args.retryPersistErrors] - Retry a `BackgroundJobUpdateError` (main's `job-update-error`, i.e. a transient DB failure while persisting the terminal status) instead of throwing immediately. Off by default so short-lived forked/spawned runners keep failing loudly and exit non-zero to be reclaimed; on for the long-lived worker, which cannot exit-to-reclaim and would otherwise strand the job in `handed_off`.
    * @returns {Promise<void>} - Resolves when reported.
    */
-  async reportWithRetry({jobId, status, delayMs, error, handoffId, handedOffAtMs, workerId, maxDurationMs, retryPersistErrors = false}) {
+  async reportWithRetry({jobId, status, delayMs, error, handoffId, handedOffAtMs, workerId, runnerFailure, maxDurationMs, retryPersistErrors = false}) {
     let attempt = 0
     const startTime = Date.now()
 
     while (true) {
       try {
-        await this.report({jobId, status, delayMs, error, handoffId, handedOffAtMs, workerId})
+        await this.report({jobId, status, delayMs, error, handoffId, handedOffAtMs, workerId, runnerFailure})
         return
       } catch (error) {
         // A `BackgroundJobUpdateError` means main answered `job-update-error`, which it

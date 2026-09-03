@@ -1668,6 +1668,7 @@ export default class BackgroundJobsMain {
           handoffId: message.handoffId,
           handedOffAtMs: message.handedOffAtMs,
           job: failedJob,
+          runnerFailure: message.runnerFailure,
           workerId: message.workerId
         })
       }
@@ -1686,10 +1687,10 @@ export default class BackgroundJobsMain {
 
   /**
    * Runs emit background job failed.
-   * @param {{error: ReturnType<typeof JSON.parse>, handoffId?: string, handedOffAtMs?: number, job: import("./types.js").BackgroundJobRow, workerId?: string}} args - Failure event data.
+   * @param {{error: ReturnType<typeof JSON.parse>, handoffId?: string, handedOffAtMs?: number, job: import("./types.js").BackgroundJobRow, runnerFailure?: import("./types.js").PooledRunnerFailure, workerId?: string}} args - Failure event data.
    * @returns {void}
    */
-  _emitBackgroundJobFailed({error, handoffId, handedOffAtMs, job, workerId}) {
+  _emitBackgroundJobFailed({error, handoffId, handedOffAtMs, job, runnerFailure, workerId}) {
     const normalizedError = this._normalizeFailureError(error)
     const payload = {
       context: {
@@ -1700,6 +1701,7 @@ export default class BackgroundJobsMain {
         jobId: job.id,
         jobName: job.jobName,
         maxRetries: job.maxRetries,
+        runnerFailure,
         stage: "background-job-failed",
         status: job.status,
         terminal: job.status === "failed" || job.status === "orphaned",
