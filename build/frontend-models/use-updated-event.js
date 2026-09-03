@@ -5,6 +5,7 @@ import {useEffect, useMemo, useRef} from "react"
 
 import clearPendingDebouncedCallback from "./clear-pending-debounced-callback.js"
 import {modelsDependencyKey, modelsFromInput} from "./event-hook-models.js"
+import {frontendModelRemoteRequestContextKey} from "./remote-request-context.js"
 import useModelClassEvent from "./use-model-class-event.js"
 
 /**
@@ -45,7 +46,7 @@ function assertNoUnknownOptions(restOptions) {
 /**
  * Runs event query dependency payload.
  * @param {import("./query.js").default<FrontendModelClass> | undefined} query - Event query option.
- * @returns {import("./query.js").FrontendModelEventOptionsPayload | null} Stable dependency payload.
+ * @returns {import("./query.js").FrontendModelEventQueryPayload | null} Stable dependency payload.
  */
 function eventQueryDependencyPayload(query) {
   if (!query) return null
@@ -62,12 +63,12 @@ function eventQueryDependencyPayload(query) {
  * @returns {void}
  */
 export default function useUpdatedEvent(modelClassOrModels, callback, options = {}) {
-  const {active = true, abilities, debounce = false, onConnected, preload, query, queryData, select, selectsExtra, withCount, ...restOptions} = options
+  const {active = true, abilities, debounce = false, onConnected, preload, query, queryData, requestContext, select, selectsExtra, withCount, ...restOptions} = options
   assertNoUnknownOptions(restOptions)
 
   const classModel = typeof modelClassOrModels === "function" ? modelClassOrModels : null
   const instanceModels = typeof modelClassOrModels === "function" ? null : modelClassOrModels
-  const projectionOptions = {abilities, preload, query, queryData, select, selectsExtra, withCount}
+  const projectionOptions = {abilities, preload, query, queryData, requestContext, select, selectsExtra, withCount}
 
   useModelClassEvent(classModel, "update", (payload) => {
     callback(/** @type {FrontendModelClassUpdateEventPayload} */ (payload))
@@ -83,12 +84,12 @@ export default function useUpdatedEvent(modelClassOrModels, callback, options = 
  * @returns {void}
  */
 function useInstanceUpdatedEvent(modelOrModels, callback, options) {
-  const {active = true, abilities, debounce = false, onConnected, preload, query, queryData, select, selectsExtra, withCount} = options
-  const projectionKey = JSON.stringify({abilities, preload, query: eventQueryDependencyPayload(query), queryData, select, selectsExtra, withCount})
-  const projectionOptionsRef = useRef({abilities, preload, query, queryData, select, selectsExtra, withCount})
+  const {active = true, abilities, debounce = false, onConnected, preload, query, queryData, requestContext, select, selectsExtra, withCount} = options
+  const projectionKey = JSON.stringify({abilities, preload, query: eventQueryDependencyPayload(query), queryData, requestContext: frontendModelRemoteRequestContextKey(requestContext), select, selectsExtra, withCount})
+  const projectionOptionsRef = useRef({abilities, preload, query, queryData, requestContext, select, selectsExtra, withCount})
   const callbackRef = useRef(callback)
   const activeRef = useRef(active)
-  projectionOptionsRef.current = {abilities, preload, query, queryData, select, selectsExtra, withCount}
+  projectionOptionsRef.current = {abilities, preload, query, queryData, requestContext, select, selectsExtra, withCount}
   callbackRef.current = callback
   activeRef.current = active
 

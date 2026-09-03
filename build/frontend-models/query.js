@@ -40,8 +40,14 @@ import isPlainObject from "../utils/plain-object.js"
  * @property {string | Array<string | Record<string, FrontendModelTransportValue>> | Record<string, FrontendModelTransportValue>} [queryData] - Backend query data names/spec.
  */
 /**
+ * FrontendModelEventRoutingOptions type.
+ * @typedef {object} FrontendModelEventRoutingOptions
+ * @property {FrontendModelQuery<import("./base.js").FrontendModelClass>} [query] - Query whose filters match events and whose projections shape event records.
+ * @property {import("../remote-request-context.js").RemoteRequestContext} [requestContext] - Registration-local remote routing context. Its captured value partitions lifecycle server subscriptions and replaces the transport-wide context for this registration.
+ */
+/**
  * Defines this typedef.
- * @typedef {FrontendModelProjectionOptions & {query?: FrontendModelQuery<import("./base.js").FrontendModelClass>}} FrontendModelEventOptionsObject
+ * @typedef {FrontendModelProjectionOptions & FrontendModelEventRoutingOptions} FrontendModelEventOptionsObject
  */
 /**
  * FrontendModelEventOptions type.
@@ -69,11 +75,15 @@ import isPlainObject from "../utils/plain-object.js"
  * @typedef {FrontendModelEventFilterPayload & {key: string}} FrontendModelEventFilterPayloadEntry
  */
 /**
- * FrontendModelEventOptionsPayload type.
- * @typedef {object} FrontendModelEventOptionsPayload
+ * FrontendModelEventQueryPayload type.
+ * @typedef {object} FrontendModelEventQueryPayload
  * @property {string | null} eventFilterKey - Stable event filter key, or null when no filter is present.
  * @property {FrontendModelEventFilterPayload | null} eventFilterPayload - Normalized event filter payload, or null when unfiltered.
  * @property {FrontendModelProjectionPayload} projectionPayload - Normalized event serialization projection payload.
+ */
+/**
+ * FrontendModelEventOptionsPayload type.
+ * @typedef {FrontendModelEventQueryPayload & {requestContext: import("../remote-request-context.js").RemoteRequestContext | undefined}} FrontendModelEventOptionsPayload
  */
 /**
  * FrontendModelSort type.
@@ -1829,7 +1839,7 @@ export default class FrontendModelQuery {
 
   /**
    * Returns the eventOptionsPayload result.
-   * @returns {FrontendModelEventOptionsPayload} - Combined event filter and projection payload.
+   * @returns {FrontendModelEventQueryPayload} - Combined event filter and projection payload.
    */
   eventOptionsPayload() {
     const eventFilterPayload = this.eventFilterPayload()
@@ -2236,5 +2246,10 @@ function frontendModelEventQuery(modelClass, options = {}) {
  * @returns {FrontendModelEventOptionsPayload} - Normalized event subscription payload.
  */
 export function frontendModelEventOptionsPayload(modelClass, options = {}) {
-  return frontendModelEventQuery(modelClass, options).eventOptionsPayload()
+  const requestContext = options instanceof FrontendModelQuery ? undefined : options.requestContext
+
+  return {
+    ...frontendModelEventQuery(modelClass, options).eventOptionsPayload(),
+    requestContext
+  }
 }

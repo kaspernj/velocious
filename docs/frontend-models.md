@@ -5,7 +5,7 @@ Projects sharing resource policy between backend and local/offline runtimes shou
 ## Core transport
 - Frontend models run over HTTP transport, not local database connections.
 - Transport should be configured once via `FrontendModelBase.configureTransport(...)` (or wrapper APIs built on top of it).
-- Remote tenant-routed applications can configure `requestContext` as a synchronous resolver. Velocious captures an immutable scalar snapshot per CRUD/custom operation and event subscription, retains independent context for entries in one batch, and reuses a subscription's captured context through reconnect. See [remote request context](remote-request-context.md).
+- Remote tenant-routed applications can configure `requestContext` as a synchronous resolver. Velocious captures an immutable scalar snapshot per CRUD/custom operation and event subscription, retains independent context for entries in one batch, and reuses a subscription's captured context through reconnect. A lifecycle method or React event hook can also pass a registration-local `requestContext`; that explicit context replaces the transport-wide resolver for that registration. See [remote request context](remote-request-context.md).
 - SnapReq preserves frontend-model event channels across transport reconnects. A channel that the server permanently closes or rejects is terminal and is not automatically reopened; register a new listener after changing the authorization or request context.
 - Browser transport sends the browser's IANA timezone automatically when it can be resolved. Use `FrontendModelBase.configureTransport({timeZone: "Europe/Berlin"})` or a function returning a timezone when an app needs to override it. Frontend-model datetime strings without an explicit timezone are interpreted in that request timezone before the backend stores or queries the UTC instant.
 - Bound each request with `FrontendModelBase.configureTransport({timeout: 10000})` (milliseconds, or a function resolving one). Built on awaitery's `timeout`, the deadline covers connection, response-header wait, and JSON/error response-body consumption; on expiry the live `fetch` — and any `websocketClient` adapter whose `post` forwards the provided `signal` — is aborted and awaitery's `TimeoutError` is thrown (classify via `error instanceof TimeoutError` from `awaitery/build/timeout.js`), so a stalled request can never hang forever. Pass `signal` (an `AbortSignal` or a function returning one) to compose a caller/session cancellation with the deadline; a caller abort stays distinguishable from a timeout. A `websocketClient` adapter receives the composed signal as `post(path, body, {headers, signal})` and should forward it into its transport so the deadline can abort the live request and its body read.
@@ -157,8 +157,9 @@ throw VelociousError.safe("Task placement was rejected.", {
 - Pass an array of event names to subscribe one callback to several class-level events, for example `useModelClassEvent(Subscription, ["create", "update"], reloadStatus)`.
 - Convenience wrappers are available as `useCreatedEvent(ModelClass, callback)`, `useUpdatedEvent(ModelClassOrModel, callback)`, and `useDestroyedEvent(ModelClassOrModel, callback)`.
 - `useUpdatedEvent` and `useDestroyedEvent` accept a model instance or array of model instances for instance-level subscriptions.
-- Hook options support `{active, debounce, onConnected}` plus event record projection options: `select`, `selectsExtra`, `preload`, `withCount`, `abilities`, and `queryData`. The hooks own subscribe/unsubscribe cleanup, so components do not need lifecycle methods just to remove event listeners.
+- Hook options support `{active, debounce, onConnected}` plus event record projection options: `select`, `selectsExtra`, `preload`, `withCount`, `abilities`, and `queryData`. They also accept a registration-local `requestContext` for tenant/routing isolation. Omitting it inherits the configured transport context; passing `{}` explicitly replaces that context with an unscoped registration. Mounted hooks resubscribe when switching between those states. The hooks own subscribe/unsubscribe cleanup, so components do not need lifecycle methods just to remove event listeners.
 - `onCreate` and `onUpdate` can receive a frontend-model query instead of a plain options object. React hooks can receive the same query through the `query` option. The query's `where`, `joins`, and `search` predicates narrow which create/update events reach that callback. The same query's `select`, `selectsExtra`, `preload`, `withCount`, `abilities`, and `queryData` control the event payload.
+- Lifecycle registrations are multiplexed by model class and the captured value of `requestContext`. Equal contexts share the normal deduplicated subscription; distinct contexts always open distinct server subscriptions, so filters for separate routing identities cannot be coalesced into one request. The context is sent as top-level subscription params for the backend tenant resolver, while the query remains independently responsible for event matching. Context is routing input, not authorization; the backend must still authenticate the caller and authorize the resolved tenant.
 - Event queries intentionally reject list-only options such as `limit`, `offset`, `page`, `perPage`, `sort`, `group`, and `distinct` because lifecycle events match one saved record at a time.
 - Destroy events carry only ids after the row is gone, so query-filtered destroy subscriptions are not supported. Use an unfiltered destroy listener and check local ids when a screen needs deletion cleanup.
 - An unfiltered destroy listener can share the same websocket subscription with query-filtered create/update listeners without widening create/update delivery. This keeps long-lived filtered screens from receiving unrelated update payloads just because they also need id-only destroy cleanup.
@@ -168,12 +169,21 @@ useUpdatedEvent(
   BuildGroup,
   onBuildGroupUpdated,
   {
+    requestContext: {workspaceId},
     query: BuildGroup
-      .where({projectId})
+      .where({workspaceId})
       .select({BuildGroup: ["id", "status", "rebuildableBuildsCount"]})
       .withCount("builds")
   }
 )
+```
+
+The same option is available on direct lifecycle methods, including id-only destroy subscriptions:
+
+```js
+const unsubscribe = await BuildGroup.onDestroy(onBuildGroupDestroyed, {
+  requestContext: {workspaceId}
+})
 ```
 
 ## Attachment support
