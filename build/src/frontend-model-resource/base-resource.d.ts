@@ -530,6 +530,12 @@ export default class FrontendModelBaseResource<TModelClass extends FrontendModel
      */
     static resourceConfig(): import("../configuration-types.js").FrontendModelResourceConfiguration;
     /**
+     * Resolves the client-facing resource primary key from explicit resource config or the backing model.
+     * @param {import("../configuration-types.js").FrontendModelResourceConfiguration | import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration} resourceConfiguration - Resource configuration.
+     * @returns {import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition} - Client-facing primary key.
+     */
+    static resolvedPrimaryKey(resourceConfiguration: import("../configuration-types.js").FrontendModelResourceConfiguration | import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration): import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition;
+    /**
      * Runs controller instance.
      * @returns {import("../controller.js").default} - Controller instance.
      */

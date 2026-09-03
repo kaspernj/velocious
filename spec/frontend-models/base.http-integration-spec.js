@@ -1548,6 +1548,7 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
 
         if (!attachment) throw new Error("Expected alias attachment metadata")
         expect(attachment.filename()).toEqual("description.txt")
+        expect((await VelociousAttachment.find(attachment.id())).filename()).toEqual("description.txt")
       } finally {
         configuredBackendProjects.splice(0, configuredBackendProjects.length, ...originalBackendProjects)
         resetFrontendModelTransport()

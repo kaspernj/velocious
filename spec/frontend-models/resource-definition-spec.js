@@ -1,10 +1,11 @@
 // @ts-check
 
 import {describe, expect, it} from "../../src/testing/test.js"
+import DatabaseRecord from "../../src/database/record/index.js"
 import FrontendModelBaseResource from "../../src/frontend-model-resource/base-resource.js"
-import {frontendModelResourceConfigurationFromDefinition, frontendModelSyncManifestForBackendProjects, resolveFrontendModelResourceClass} from "../../src/frontend-models/resource-definition.js"
+import {frontendModelApiManifest, frontendModelResourceConfigurationFromDefinition, frontendModelSyncManifestForBackendProjects, resolveFrontendModelResourceClass} from "../../src/frontend-models/resource-definition.js"
 
-describe("frontendModelResourceConfigurationFromDefinition abilities normalization", {databaseCleaning: {transaction: true}}, () => {
+describe("Frontend model resource definitions", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("rejects resourceConfig overrides on resource classes", () => {
     class FooResource extends FrontendModelBaseResource {
       /** @returns {import("../../src/configuration-types.js").FrontendModelResourceConfiguration} */
@@ -63,9 +64,6 @@ describe("frontendModelResourceConfigurationFromDefinition abilities normalizati
       update: "update"
     })
   })
-})
-
-describe("frontendModelResourceConfigurationFromDefinition primary key validation", {databaseCleaning: {transaction: true}}, () => {
   it("rejects empty and duplicate composite primary keys", () => {
     class EmptyPrimaryKeyResource extends FrontendModelBaseResource {
       static attributes = ["id"]
@@ -85,9 +83,29 @@ describe("frontendModelResourceConfigurationFromDefinition primary key validatio
       frontendModelResourceConfigurationFromDefinition(DuplicatePrimaryKeyResource)
     }).toThrow("Resource primaryKey arrays must contain unique attributes.")
   })
-})
 
-describe("frontendModelResourceConfigurationFromDefinition sync policy normalization", {databaseCleaning: {transaction: true}}, () => {
+  it("reports implicit composite primary keys with frontend attribute names in the API manifest", () => {
+    class LegacyCompositeRecord extends DatabaseRecord {
+      /** @returns {string[]} - Database-column primary key. */
+      static primaryKey() { return ["tenant_id", "external_id"] }
+
+      /** @param {string} name - Attribute or column name. @returns {string | null} - Frontend attribute name. */
+      static resolveAttributeName(name) {
+        return {external_id: "externalId", tenant_id: "tenantId"}[name] || null
+      }
+    }
+
+    class LegacyCompositeResource extends FrontendModelBaseResource {
+      static ModelClass = LegacyCompositeRecord
+      static attributes = ["tenantId", "externalId"]
+    }
+
+    const manifest = frontendModelApiManifest([{frontendModels: {LegacyComposite: LegacyCompositeResource}, path: "/tmp/backend"}])
+    // Narrows the public manifest resource map for this focused assertion.
+    const resources = /** @type {Record<string, {primaryKey: import("../../src/utils/model-primary-key.js").ModelPrimaryKeyDefinition}>} */ (manifest.resources)
+
+    expect(resources.LegacyComposite.primaryKey).toEqual(["tenantId", "externalId"])
+  })
   it("normalizes safe sync metadata and computes a deterministic policy hash", () => {
     class FooResource extends FrontendModelBaseResource {
       static attributes = ["id", "name"]
@@ -191,9 +209,6 @@ describe("frontendModelResourceConfigurationFromDefinition sync policy normaliza
     })
     expect(manifest.Ticket.policyHash).toMatch(/^sha256-[a-f0-9]{64}$/)
   })
-})
-
-describe("resolveFrontendModelResourceClass", {databaseCleaning: {transaction: true}}, () => {
   class TaskResource extends FrontendModelBaseResource {
     static attributes = ["id"]
   }

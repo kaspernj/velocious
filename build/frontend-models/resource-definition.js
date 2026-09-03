@@ -304,8 +304,9 @@ export function frontendModelApiManifest(backendProjects) {
     for (const configuredModelName of Object.keys(projectResources).sort()) {
       const resourceDefinition = projectResources[configuredModelName]
       const resourceConfiguration = frontendModelResourceConfigurationFromDefinition(resourceDefinition)
+      const resourceClass = frontendModelResourceClassFromDefinition(resourceDefinition)
 
-      if (!resourceConfiguration) continue
+      if (!resourceConfiguration || !resourceClass) continue
 
       const modelName = resourceConfiguration.modelName || configuredModelName
       const resourcePath = `/${inflection.dasherize(inflection.pluralize(inflection.underscore(configuredModelName)))}`
@@ -314,7 +315,7 @@ export function frontendModelApiManifest(backendProjects) {
       const entry = {
         modelName,
         path: resourcePath,
-        primaryKey: resourceConfiguration.primaryKey || "id",
+        primaryKey: resourceClass.resolvedPrimaryKey(resourceConfiguration),
         attributes: manifestAttributes(resourceConfiguration.attributes),
         abilities: resourceConfiguration.abilities,
         builtInCommands: {

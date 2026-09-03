@@ -2,8 +2,12 @@
 
 import FrontendModelBaseResource from "./base-resource.js"
 import VelociousAttachment from "../database/record/attachments/attachment-record.js"
+import {frontendModelResourcesForBackendProject} from "../frontend-models/resource-definition.js"
 import isPlainObject from "../utils/plain-object.js"
 import {modelPrimaryKeyConditions, modelPrimaryKeyValueFromCacheKey} from "../utils/model-primary-key.js"
+
+/** @typedef {{name: string, recordId: string, recordType: string, resourceName: string | null}} AttachmentOwnerScope */
+/** @typedef {{backendProject: import("../configuration-types.js").BackendProjectConfiguration, modelName: string, resourceClass: import("../configuration-types.js").FrontendModelResourceClassType, resourceConfiguration: import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration}} AttachmentOwnerResource */
 
 /**
  * Framework-owned frontend resource exposing safe attachment metadata while
@@ -111,7 +115,7 @@ export default class VelociousAttachmentResource extends FrontendModelBaseResour
 
   /**
    * Returns a validated owner scope from frontend-model where params.
-   * @returns {{name: string, recordId: string, recordType: string, resourceName: string}} - Attachment owner scope.
+   * @returns {AttachmentOwnerScope} - Attachment owner scope.
    */
   requiredOwnerScopeFromParams() {
     const where = this.requiredWhereFromParams()
@@ -157,56 +161,83 @@ export default class VelociousAttachmentResource extends FrontendModelBaseResour
   /**
    * Builds owner scope from a stored attachment row.
    * @param {VelociousAttachment} attachment - Attachment row.
-   * @returns {{name: string, recordId: string, recordType: string, resourceName: string}} - Owner scope.
+   * @returns {AttachmentOwnerScope} - Owner scope.
    */
   ownerScopeFromAttachment(attachment) {
     return {
       name: attachment.name(),
       recordId: attachment.recordId(),
       recordType: attachment.recordType(),
-      resourceName: attachment.recordType()
+      resourceName: null
     }
   }
 
   /**
    * Checks whether the current ability can read the attachment owner.
-   * @param {{name: string, recordId: string, recordType: string, resourceName: string}} ownerScope - Owner scope.
+   * @param {AttachmentOwnerScope} ownerScope - Owner scope.
    * @returns {Promise<boolean>} - Whether owner is readable.
    */
   async attachmentOwnerAuthorized(ownerScope) {
     const controller = /** @type {import("../frontend-model-controller.js").default} */ (this.controllerInstance())
-    const ownerResource = this.attachmentOwnerResource({controller, ownerScope})
+    const ownerResources = this.attachmentOwnerResources({controller, ownerScope})
 
-    if (!ownerResource) {
-      throw new Error(`No frontend model resource configured for attachment owner ${ownerScope.resourceName}`)
+    if (ownerResources.length < 1) {
+      throw new Error(`No frontend model resource configured for attachment owner ${ownerScope.resourceName ?? ownerScope.recordType}`)
     }
 
-    const ownerModelClass = controller.frontendModelResourceModelClass(ownerResource)
+    for (const ownerResource of ownerResources) {
+      const ownerModelClass = controller.frontendModelResourceModelClass(ownerResource)
 
-    if (!ownerModelClass) {
-      throw new Error(`No model class configured for attachment owner ${ownerScope.resourceName}`)
+      await controller.ensureFrontendModelRecordClassInitialized(ownerModelClass)
+
+      const abilityAction = ownerResource.resourceConfiguration.abilities.find || ownerResource.resourceConfiguration.abilities.index || "read"
+      const primaryKey = ownerModelClass.primaryKey()
+      const ownerIdentity = modelPrimaryKeyValueFromCacheKey(primaryKey, ownerScope.recordId)
+      const owner = await ownerModelClass
+        .accessibleFor(abilityAction, this.ability)
+        .findBy(modelPrimaryKeyConditions(primaryKey, ownerIdentity))
+
+      if (owner) return true
     }
 
-    if (ownerModelClass.getModelName() !== ownerScope.recordType) {
-      throw new Error(`Attachment owner resource ${ownerScope.resourceName} does not use backing model ${ownerScope.recordType}`)
+    return false
+  }
+
+  /**
+   * Resolves the explicit owner resource for scoped queries or every matching alias for member lookups.
+   * @param {object} args - Options object.
+   * @param {import("../frontend-model-controller.js").default} args.controller - Frontend-model controller.
+   * @param {AttachmentOwnerScope} args.ownerScope - Owner scope.
+   * @returns {AttachmentOwnerResource[]} - Matching owner resources.
+   */
+  attachmentOwnerResources({controller, ownerScope}) {
+    if (ownerScope.resourceName) {
+      const ownerResource = this.attachmentOwnerResource({
+        controller,
+        ownerScope: {...ownerScope, resourceName: ownerScope.resourceName}
+      })
+
+      return ownerResource ? [ownerResource] : []
     }
 
-    const attachmentDefinitions = ownerResource.resourceConfiguration.attachments || {}
+    const ownerResources = []
 
-    if (!attachmentDefinitions[ownerScope.name]) {
-      throw new Error(`No attachment '${ownerScope.name}' configured for ${ownerScope.resourceName}`)
+    for (const backendProject of controller.getConfiguration().getBackendProjects()) {
+      for (const resourceName of Object.keys(frontendModelResourcesForBackendProject(backendProject))) {
+        const ownerResource = controller.frontendModelResourceConfigurationForBackendProjectModelName({backendProject, modelName: resourceName})
+
+        if (!ownerResource) continue
+
+        const ownerModelClass = controller.frontendModelResourceModelClass(ownerResource)
+
+        if (ownerModelClass.getModelName() !== ownerScope.recordType) continue
+        if (!ownerResource.resourceConfiguration.attachments?.[ownerScope.name]) continue
+
+        ownerResources.push(ownerResource)
+      }
     }
 
-    await controller.ensureFrontendModelRecordClassInitialized(ownerModelClass)
-
-    const abilityAction = ownerResource.resourceConfiguration.abilities.find || ownerResource.resourceConfiguration.abilities.index || "read"
-    const primaryKey = ownerModelClass.primaryKey()
-    const ownerIdentity = modelPrimaryKeyValueFromCacheKey(primaryKey, ownerScope.recordId)
-    const owner = await ownerModelClass
-      .accessibleFor(abilityAction, this.ability)
-      .findBy(modelPrimaryKeyConditions(primaryKey, ownerIdentity))
-
-    return Boolean(owner)
+    return ownerResources
   }
 
   /**
@@ -214,7 +245,7 @@ export default class VelociousAttachmentResource extends FrontendModelBaseResour
    * @param {object} args - Options object.
    * @param {import("../frontend-model-controller.js").default} args.controller - Frontend-model controller.
    * @param {{name: string, recordId: string, recordType: string, resourceName: string}} args.ownerScope - Owner scope.
-   * @returns {{backendProject: import("../configuration-types.js").BackendProjectConfiguration, modelName: string, resourceClass: import("../configuration-types.js").FrontendModelResourceClassType, resourceConfiguration: import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration} | null} - Owner resource configuration.
+   * @returns {AttachmentOwnerResource | null} - Owner resource configuration.
    */
   attachmentOwnerResource({controller, ownerScope}) {
     const backendProjects = controller.getConfiguration().getBackendProjects()

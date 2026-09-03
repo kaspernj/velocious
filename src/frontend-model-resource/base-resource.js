@@ -478,6 +478,22 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   }
 
   /**
+   * Resolves the client-facing resource primary key from explicit resource config or the backing model.
+   * @param {import("../configuration-types.js").FrontendModelResourceConfiguration | import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration} resourceConfiguration - Resource configuration.
+   * @returns {import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition} - Client-facing primary key.
+   */
+  static resolvedPrimaryKey(resourceConfiguration) {
+    if (resourceConfiguration.primaryKey) return resourceConfiguration.primaryKey
+
+    const modelClass = /** @type {typeof import("../database/record/index.js").default} */ (this.modelClass())
+    const modelPrimaryKey = modelClass.primaryKey()
+
+    return Array.isArray(modelPrimaryKey)
+      ? modelPrimaryKey.map((columnName) => modelClass.resolveAttributeName(columnName) || columnName)
+      : modelClass.resolveAttributeName(modelPrimaryKey) || modelPrimaryKey
+  }
+
+  /**
    * Runs controller instance.
    * @returns {import("../controller.js").default} - Controller instance.
    */
@@ -866,16 +882,9 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @returns {import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition} - Primary key.
    */
   primaryKey() {
-    const configuredPrimaryKey = this.resourceConfiguration().primaryKey
+    const ResourceClass = /** @type {typeof FrontendModelBaseResource} */ (this.constructor)
 
-    if (configuredPrimaryKey) return configuredPrimaryKey
-
-    const modelClass = this.databaseModelClass()
-    const modelPrimaryKey = modelClass.primaryKey()
-
-    return Array.isArray(modelPrimaryKey)
-      ? modelPrimaryKey.map((columnName) => modelClass.resolveAttributeName(columnName) || columnName)
-      : modelClass.resolveAttributeName(modelPrimaryKey) || modelPrimaryKey
+    return ResourceClass.resolvedPrimaryKey(this.resourceConfiguration())
   }
 
   /**

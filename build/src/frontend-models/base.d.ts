@@ -1511,6 +1511,14 @@ export declare class VelociousAttachment extends FrontendModelBase {
      */
     static resourceConfig(): FrontendModelResourceConfig;
     /**
+     * Finds attachment metadata by its public id through the member authorization path.
+     * @template {FrontendModelClass} T
+     * @this {T}
+     * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} id - Attachment id.
+     * @returns {Promise<InstanceType<T>>} - Resolved attachment metadata.
+     */
+    static find<T extends FrontendModelClass>(this: T, id: import("../utils/model-primary-key.js").ModelPrimaryKeyValue): Promise<InstanceType<T>>;
+    /**
      * Returns the attachment id.
      * @returns {string} - Attachment id.
      */

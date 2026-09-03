@@ -211,7 +211,7 @@ const unsubscribe = await BuildGroup.onDestroy(onBuildGroupDestroyed, {
   const allFiles = await task.files().toArray()
   ```
 
-  `VelociousAttachment` exposes safe metadata fields: `id`, `recordType`, `recordId`, `name`, `position`, `filename`, `contentType`, `byteSize`, `createdAt`, and `updatedAt`. Storage internals such as `driver`, `storageKey`, and `contentBase64` are not exposed or queryable through frontend models. Attachment metadata reads require owner scope (`recordType`, `recordId`, and `name`) and authorize through the owning record's frontend-model resource. Binary content and storage URLs still use `download()` and `url()`.
+  `VelociousAttachment` exposes safe metadata fields: `id`, `recordType`, `recordId`, `name`, `position`, `filename`, `contentType`, `byteSize`, `createdAt`, and `updatedAt`. Storage internals such as `driver`, `storageKey`, and `contentBase64` are not exposed or queryable through frontend models. Attachment metadata collection reads require owner scope (`resourceName`, `recordType`, `recordId`, and `name`) and authorize through that frontend-model resource. `VelociousAttachment.find(id)` authorizes against every configured resource alias backed by the attachment owner type and declaring the attachment. Binary content and storage URLs still use `download()` and `url()`.
 
   Attachment handles on server-loaded records and lifecycle callback models carry the canonical backing-record owner internally. This keeps `first()` and `toArray()` aligned with attachment storage when a frontend resource uses a different name or primary key from its backing model.
 
