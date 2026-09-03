@@ -1,0 +1,1 @@
+Bound background-job generation activation to queue-derived and active or stale concurrency keys, repair secondary indexes missed by older SQL schema upgrades, and keep recovery retirement authoritative when it races an in-flight candidate activation.

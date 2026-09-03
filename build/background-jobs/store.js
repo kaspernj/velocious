@@ -66,12 +66,24 @@ const EXECUTION_MODE_BACKFILL_MIGRATION_VERSION = "20260607131010"
 // handoff-marker workaround), leaving `execution_mode` as the single source of
 // truth for a job's runtime.
 const DROP_FORKED_COLUMN_MIGRATION_VERSION = "20260719000000"
+const JOBS_INDEX_REPAIR_MIGRATION_VERSION = "20260903120000"
 // Legacy marker prefix used by rows written before this migration: pooled jobs
 // used to persist as `execution_mode = "forked"` plus a `velocious-pooled:*`
 // handoff id. Retained only to detect and convert those rows in the migration.
 const LEGACY_POOLED_HANDOFF_ID_PREFIX = "velocious-pooled:"
 const LEGACY_POOLED_QUEUED_HANDOFF_ID = `${LEGACY_POOLED_HANDOFF_ID_PREFIX}queued`
 const JOBS_TABLE = "background_jobs"
+const JOBS_INDEX_COLUMN_NAMES = [
+  "job_name",
+  "queue",
+  "status",
+  "scheduled_at_ms",
+  "created_at_ms",
+  "schedule_key",
+  "handed_off_at_ms",
+  "orphaned_at_ms",
+  "concurrency_key"
+]
 const IDEMPOTENCY_KEYS_TABLE = "background_job_idempotency_keys"
 const SCHEDULE_KEYS_TABLE = "background_job_schedule_keys"
 const CONCURRENCY_TABLE = "background_job_concurrency"
@@ -1838,6 +1850,50 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
     await this._ensureQueueColumn(db)
     await this._ensureScheduleKeyColumn(db)
     await this._ensureJobTimeoutColumn(db)
+    await this._ensureJobsTableIndexesOnce(db)
+  }
+
+  /**
+   * Repairs secondary indexes that older add-column upgrades declared but did
+   * not create on every SQL driver. The migration ledger keeps routine store
+   * readiness from repeatedly introspecting the full index set.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<void>} - Resolves when all expected indexes exist.
+   */
+  async _ensureJobsTableIndexesOnce(db) {
+    const migrationVersion = JOBS_INDEX_REPAIR_MIGRATION_VERSION
+    const migrationKey = this._migrationKey(migrationVersion)
+
+    if (await this._hasMigration(db, migrationVersion)) return
+
+    const acquired = await db.acquireAdvisoryLock(migrationKey)
+
+    if (!acquired) throw new Error("Failed to acquire background jobs index repair lock")
+
+    try {
+      if (await this._hasMigration(db, migrationVersion)) return
+
+      db.clearSchemaCache()
+      const table = await db.getTableByNameOrFail(JOBS_TABLE)
+      const indexedColumnNames = new Set(
+        (await table.getIndexes())
+          .filter((index) => !index.isPrimaryKey() && index.getColumnNames().length === 1)
+          .map((index) => index.getColumnNames()[0])
+      )
+
+      for (const columnName of JOBS_INDEX_COLUMN_NAMES) {
+        if (indexedColumnNames.has(columnName)) continue
+
+        for (const sql of await db.createIndexSQLs({columns: [columnName], tableName: JOBS_TABLE})) {
+          await db.query(sql)
+        }
+      }
+
+      db.clearSchemaCache()
+      await this._recordMigration(db, migrationVersion)
+    } finally {
+      await db.releaseAdvisoryLock(migrationKey)
+    }
   }
 
   /**
@@ -2711,13 +2767,61 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
    */
   async _reconcileConcurrency(db) {
     if (!(await db.tableExists(CONCURRENCY_TABLE))) return
-    const concurrencyTable = db.quoteTable(CONCURRENCY_TABLE)
-    const jobsTable = db.quoteTable(JOBS_TABLE)
-    await db.query(
-      `UPDATE ${concurrencyTable} SET ${db.quoteColumn("active_count")} = (` +
-      `SELECT COUNT(*) FROM ${jobsTable} WHERE ${jobsTable}.${db.quoteColumn("status")} = ${db.quote("handed_off")} AND ` +
-      `${jobsTable}.${db.quoteColumn("concurrency_key")} = ${concurrencyTable}.${db.quoteColumn("concurrency_key")})`
+    const activeRows = await db
+      .newQuery()
+      .from(JOBS_TABLE)
+      .select("concurrency_key")
+      .where({status: "handed_off"})
+      .where(`${db.quoteColumn("concurrency_key")} IS NOT NULL`)
+      .group("concurrency_key")
+      .results()
+    const staleRows = await db
+      .newQuery()
+      .from(CONCURRENCY_TABLE)
+      .select("concurrency_key")
+      .where(`${db.quoteColumn("active_count")} != 0`)
+      .results()
+    const concurrencyKeys = new Set(
+      [...activeRows, ...staleRows].map((row) =>
+        String(/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (row).concurrency_key)
+      )
     )
+
+    for (const concurrencyKey of [...concurrencyKeys].sort()) {
+      await this._transactionResult(db, async () => {
+        await this._reconcileConcurrencyKey(db, concurrencyKey)
+      })
+    }
+  }
+
+  /**
+   * Rebuilds one counter after locking it ahead of the job rows, matching the
+   * lock order used by handoff and completion transitions.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {string} concurrencyKey - Counter key.
+   * @returns {Promise<void>} - Resolves when reconciled.
+   */
+  async _reconcileConcurrencyKey(db, concurrencyKey) {
+    await this._lockConcurrencyRow(db, concurrencyKey)
+    const rows = await db
+      .newQuery()
+      .from(JOBS_TABLE)
+      .select("COUNT(*) AS active_count")
+      .where({concurrency_key: concurrencyKey, status: "handed_off"})
+      .results()
+    const activeCount = this._normalizeNumber(
+      /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (rows[0] || {}).active_count
+    )
+
+    if (activeCount === null || !Number.isSafeInteger(activeCount) || activeCount < 0) {
+      throw new Error(`Invalid reconciled background job concurrency count for ${concurrencyKey}: ${activeCount}`)
+    }
+
+    await db.update({
+      tableName: CONCURRENCY_TABLE,
+      data: {active_count: activeCount},
+      conditions: {concurrency_key: concurrencyKey}
+    })
   }
 
   /**
@@ -2768,7 +2872,12 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       )
     }
 
-    const concurrencyRows = await db.newQuery().from(CONCURRENCY_TABLE).select("concurrency_key").results()
+    const concurrencyRows = await db
+      .newQuery()
+      .from(CONCURRENCY_TABLE)
+      .select("concurrency_key")
+      .where(`${db.quoteColumn("concurrency_key")} LIKE ${db.quote(`${QUEUE_CONCURRENCY_KEY_PREFIX}%`)}`)
+      .results()
 
     for (const row of concurrencyRows) {
       const concurrencyKey = String(/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (row).concurrency_key)

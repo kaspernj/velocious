@@ -162,6 +162,22 @@ class RejectFirstRecoveryReconciliationStore extends BackgroundJobsStore {
   }
 }
 
+/** A store that records the concurrency keys whose counters are rebuilt. */
+class ObservedConcurrencyReconciliationStore extends BackgroundJobsStore {
+  /** @param {object} args - Options forwarded to the store constructor. */
+  constructor(args) {
+    super(args)
+    /** @type {string[]} */
+    this.reconciledConcurrencyKeys = []
+  }
+
+  /** @param {import("../../src/database/drivers/base.js").default} db - Database connection. @param {string} concurrencyKey - Counter key. @returns {Promise<void>} - Resolves when rebuilt. */
+  async _reconcileConcurrencyKey(db, concurrencyKey) {
+    this.reconciledConcurrencyKeys.push(concurrencyKey)
+    await super._reconcileConcurrencyKey(db, concurrencyKey)
+  }
+}
+
 /** @returns {import("../../src/background-jobs/types.js").BackgroundJobRow} - Active concurrency-limited job. */
 function activeConcurrencyJob() {
   return {
@@ -523,6 +539,41 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     await store.reconcileQueueConcurrency()
 
     expect(await readActiveCount({store, concurrencyKey})).toEqual(23)
+  })
+
+  it("rebuilds only active or stale concurrency counters", async () => {
+    const seedStore = await createClearedStore()
+
+    for (let number = 0; number < 5; number++) {
+      await seedStore.enqueue({
+        jobName: "TestJob",
+        args: [number],
+        options: {concurrencyKey: `inactive-${number}`, maxConcurrency: 1}
+      })
+    }
+
+    const activeJobId = await seedStore.enqueue({
+      jobName: "TestJob",
+      args: [],
+      options: {concurrencyKey: "active", maxConcurrency: 2}
+    })
+    const handoff = await seedStore.markHandedOff({jobId: activeJobId, workerId: "worker-1"})
+
+    if (!handoff) throw new Error("Expected the job to be handed off")
+
+    await seedStore.enqueue({
+      jobName: "TestJob",
+      args: [],
+      options: {concurrencyKey: "stale", maxConcurrency: 1}
+    })
+    await writeActiveCount({store: seedStore, concurrencyKey: "stale", activeCount: 7})
+
+    const store = new ObservedConcurrencyReconciliationStore({configuration: dummyConfiguration})
+    await store.reconcileQueueConcurrency()
+
+    expect(store.reconciledConcurrencyKeys.sort()).toEqual(["active", "stale"])
+    expect(await readActiveCount({store, concurrencyKey: "active"})).toEqual(1)
+    expect(await readActiveCount({store, concurrencyKey: "stale"})).toEqual(0)
   })
 
   it("retries the concurrency-count reset after schema repair fails", async () => {
@@ -1239,6 +1290,48 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
       expect(await jobsTable.getColumnByName("concurrency_key")).not.toBeNull()
       expect(await jobsTable.getColumnByName("max_concurrency")).not.toBeNull()
       expect(await concurrencyTable.getColumnByName("reservation_token")).toEqual(undefined)
+    })
+  })
+
+  it("repairs indexes missing from an already-upgraded background jobs table", async () => {
+    const store = await createClearedStore()
+    const indexColumns = ["queue", "concurrency_key", "schedule_key"]
+    const pool = dummyConfiguration.getDatabasePool(store.getDatabaseIdentifier())
+
+    await pool.withConnection({name: "Background jobs remove upgraded indexes"}, async (db) => {
+      const jobsTable = await db.getTableByNameOrFail("background_jobs")
+
+      for (const columnName of indexColumns) {
+        const index = (await jobsTable.getIndexes()).find((candidate) => {
+          const columnNames = candidate.getColumnNames()
+
+          return !candidate.isPrimaryKey() && columnNames.length === 1 && columnNames[0] === columnName
+        })
+
+        if (!index) throw new Error(`Expected background jobs index for ${columnName}`)
+
+        for (const sql of await db.removeIndexSQLs({name: index.getName(), tableName: "background_jobs"})) {
+          await db.query(sql)
+        }
+      }
+
+      await db.delete({
+        tableName: "velocious_internal_migrations",
+        conditions: {key: "background_jobs:20260903120000"}
+      })
+
+      db.clearSchemaCache()
+    })
+
+    await new BackgroundJobsStore({configuration: dummyConfiguration}).ensureReady()
+
+    await pool.withConnection({name: "Background jobs verify upgraded indexes"}, async (db) => {
+      const jobsTable = await db.getTableByNameOrFail("background_jobs")
+      const indexedColumns = (await jobsTable.getIndexes())
+        .filter((index) => !index.isPrimaryKey() && index.getColumnNames().length === 1)
+        .map((index) => index.getColumnNames()[0])
+
+      for (const columnName of indexColumns) expect(indexedColumns).toContain(columnName)
     })
   })
 
