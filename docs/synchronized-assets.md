@@ -48,8 +48,10 @@ Call `synchronize({scopeKey, descriptors, online})` after applying one complete
 descriptor scope. Descriptors removed from that scope lose the scope reference;
 their bytes are deleted only after no active scope references the digest.
 `synchronize` downloads eligible eager descriptors and returns both attempted
-download failures and required asset ids that remain absent. It does not hide a
-failed authenticated request or corrupt payload.
+download failures and required asset ids in that scope that remain absent. It
+does not hide a failed authenticated request or corrupt payload. Removing the
+last reference while a download is active schedules the completed blob for
+deletion instead of leaving unreferenced bytes behind.
 
 Call `resolve({assetId, online})` when rendering an asset. A cached URI is
 returned immediately. An absent on-demand asset downloads when online; offline

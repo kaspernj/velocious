@@ -1,5 +1,6 @@
 // @ts-check
 
+import {deferred} from "awaitery"
 import {describe, expect, it} from "../../src/testing/test.js"
 import SynchronizedAssetCache from "../../src/sync/assets/cache.js"
 import sha256BytesHex from "../../src/utils/sha256-bytes-hex.js"
@@ -69,6 +70,24 @@ class DelayedSaveAssetCacheAdapter extends MemoryAssetCacheAdapter {
     await Promise.resolve()
     await super.saveState(args)
     this.activeSaveCount -= 1
+  }
+}
+
+/** Adapter that can reject exactly the next metadata write. */
+class FailNextSaveAssetCacheAdapter extends MemoryAssetCacheAdapter {
+  constructor() {
+    super()
+    this.failNextSave = false
+  }
+
+  /** @param {{accountId: string, state: SynchronizedAssetCacheState}} args State write. @returns {Promise<void>} */
+  async saveState(args) {
+    if (this.failNextSave) {
+      this.failNextSave = false
+      throw new Error("planned metadata persistence failure")
+    }
+
+    await super.saveState(args)
   }
 }
 
@@ -279,6 +298,78 @@ describe("SynchronizedAssetCache", {databaseCleaning: {transaction: false, trunc
     ])
     expect(downloadCount).toEqual(1)
     expect(adapter.maximumActiveSaveCount).toEqual(1)
+  })
+
+  it("reports missing required assets only for the synchronized scope", async () => {
+    const firstContent = bytes([31, 32, 33])
+    const secondContent = bytes([34, 35, 36])
+    const requiredAsset = descriptor({bytes: firstContent, id: "required", offlineRequirement: "required"})
+    const optionalAsset = descriptor({bytes: secondContent, id: "optional"})
+    const adapter = new MemoryAssetCacheAdapter()
+    const cache = new SynchronizedAssetCache({
+      accountId: "account-1",
+      adapter,
+      download: async () => secondContent,
+      maxBytes: 1024
+    })
+
+    const firstResult = await cache.synchronize({descriptors: [requiredAsset], online: false, scopeKey: "first-scope"})
+    const secondResult = await cache.synchronize({descriptors: [optionalAsset], online: false, scopeKey: "second-scope"})
+
+    expect(firstResult.missingRequiredAssetIds).toEqual([requiredAsset.id])
+    expect(secondResult.missingRequiredAssetIds).toEqual([])
+  })
+
+  it("continues serializing metadata writes after one persistence failure", async () => {
+    const content = bytes([37, 38, 39])
+    const asset = descriptor({bytes: content, fetch: "on-demand"})
+    const adapter = new FailNextSaveAssetCacheAdapter()
+    const cache = new SynchronizedAssetCache({
+      accountId: "account-1",
+      adapter,
+      download: async () => content,
+      maxBytes: 1024
+    })
+
+    await cache.synchronize({descriptors: [asset], online: true, scopeKey: "users"})
+    adapter.failNextSave = true
+
+    await expect(async () => await cache.resolve({assetId: asset.id, online: true})).toThrowError("planned metadata persistence failure")
+
+    expect(await cache.resolve({assetId: asset.id, online: true})).toEqual(`memory://account-1:${asset.digest}`)
+  })
+
+  it("deletes a completed in-flight download after its final scope reference is removed", async () => {
+    const content = bytes([40, 41, 42])
+    const asset = descriptor({bytes: content, fetch: "on-demand"})
+    const adapter = new MemoryAssetCacheAdapter()
+    const downloadStarted = deferred()
+    const releaseDownload = deferred()
+    const cache = new SynchronizedAssetCache({
+      accountId: "account-1",
+      adapter,
+      download: async () => {
+        downloadStarted.resolve(undefined)
+        await releaseDownload.promise
+        return content
+      },
+      maxBytes: 1024
+    })
+
+    await cache.synchronize({descriptors: [asset], online: true, scopeKey: "users"})
+
+    const resolvePromise = cache.resolve({assetId: asset.id, online: true})
+
+    await downloadStarted.promise
+
+    const removalPromise = cache.synchronize({descriptors: [], online: true, scopeKey: "users"})
+
+    await removalPromise
+    releaseDownload.resolve(undefined)
+    await resolvePromise
+
+    expect(adapter.blobs.size).toEqual(0)
+    expect(adapter.deletedBlobKeys).toEqual([`account-1:${asset.digest}`])
   })
 
   it("evicts least-recently-used optional blobs but retains durable content", async () => {

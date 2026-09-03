@@ -221,8 +221,10 @@ describe("Background jobs - queue", {databaseCleaning: {truncate: true}}, () => 
   it("emits background-job-failed after an accepted job failure report", async () => {
     const {main, worker} = await startBackgroundJobs()
     const failureEvents = []
+    const failureReceived = deferred()
     const onFailure = (payload) => {
       failureEvents.push(payload)
+      failureReceived.resolve(undefined)
     }
 
     dummyConfiguration.getErrorEvents().on("background-job-failed", onFailure)
@@ -233,13 +235,7 @@ describe("Background jobs - queue", {databaseCleaning: {truncate: true}}, () => 
         options: {executionMode: "inline", maxRetries: 0}
       })
 
-      await timeout({timeout: 2000}, async () => {
-        while (true) {
-          if (failureEvents.length >= 1) break
-
-          await wait(0.05)
-        }
-      })
+      await failureReceived.promise
 
       expect(failureEvents.length).toEqual(1)
       expect(failureEvents[0].context.jobId).toEqual(jobId)

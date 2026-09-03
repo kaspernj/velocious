@@ -37,6 +37,8 @@ export default class SynchronizedAssetCache {
     this.retryMaxDelayMs = retryMaxDelayMs
     /** @type {Map<string, Promise<string>>} */
     this.downloadPromises = new Map()
+    /** @type {Set<string>} */
+    this.pendingDeletionDigests = new Set()
     /** @type {import("./types.js").SynchronizedAssetCacheState | null} */
     this.state = null
     /** @type {Promise<import("./types.js").SynchronizedAssetCacheState> | null} */
@@ -117,7 +119,7 @@ export default class SynchronizedAssetCache {
 
     return {
       failures,
-      missingRequiredAssetIds: await this.missingRequiredAssetIds()
+      missingRequiredAssetIds: await this.missingRequiredAssetIds(scopeKey)
     }
   }
 
@@ -281,11 +283,13 @@ export default class SynchronizedAssetCache {
   async saveState() {
     if (!this.state) throw new Error("Cannot save synchronized asset cache before loading state")
 
-    this.saveStatePromise = this.saveStatePromise.then(async () => {
+    const persist = async () => {
       if (!this.state) throw new Error("Cannot save synchronized asset cache before loading state")
 
       await this.adapter.saveState({accountId: this.accountId, state: this.state})
-    })
+    }
+
+    this.saveStatePromise = this.saveStatePromise.then(persist, persist)
 
     await this.saveStatePromise
   }
@@ -343,6 +347,10 @@ export default class SynchronizedAssetCache {
     } finally {
       if (ownsDownloadPromise && this.downloadPromises.get(digest) === downloadPromise) {
         this.downloadPromises.delete(digest)
+
+        if (this.pendingDeletionDigests.delete(digest)) {
+          await this.deleteDigestIfUnreferenced(digest)
+        }
       }
     }
   }
@@ -406,21 +414,39 @@ export default class SynchronizedAssetCache {
 
     for (const digest of removedDigests) {
       if (this.state.assets.some((entry) => entry.descriptor.digest === digest)) continue
+      if (this.downloadPromises.has(digest)) {
+        this.pendingDeletionDigests.add(digest)
+        continue
+      }
 
       await this.adapter.deleteBlob({accountId: this.accountId, digest})
     }
   }
 
   /**
+   * Deletes a digest only when no current descriptor references it.
+   * @param {string} digest Content digest.
+   * @returns {Promise<void>} Resolves after any required deletion.
+   */
+  async deleteDigestIfUnreferenced(digest) {
+    if (!this.state) throw new Error("Cannot delete synchronized asset blobs before loading state")
+    if (this.state.assets.some((entry) => entry.descriptor.digest === digest)) return
+
+    await this.adapter.deleteBlob({accountId: this.accountId, digest})
+  }
+
+  /**
    * Finds required assets without locally cached bytes.
+   * @param {string} scopeKey Synchronized scope to inspect.
    * @returns {Promise<string[]>} Missing required descriptor ids.
    */
-  async missingRequiredAssetIds() {
+  async missingRequiredAssetIds(scopeKey) {
     const state = await this.loadState()
     /** @type {string[]} */
     const missingAssetIds = []
 
     for (const entry of state.assets) {
+      if (!entry.scopeKeys.includes(scopeKey)) continue
       if (entry.descriptor.offlineRequirement !== "required") continue
       if (await this.cachedUri(entry)) continue
 

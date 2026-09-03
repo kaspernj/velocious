@@ -12,6 +12,8 @@ export default class SynchronizedAssetCache {
     retryMaxDelayMs: number;
     /** @type {Map<string, Promise<string>>} */
     downloadPromises: Map<string, Promise<string>>;
+    /** @type {Set<string>} */
+    pendingDeletionDigests: Set<string>;
     /** @type {import("./types.js").SynchronizedAssetCacheState | null} */
     state: import("./types.js").SynchronizedAssetCacheState | null;
     /** @type {Promise<import("./types.js").SynchronizedAssetCacheState> | null} */
@@ -114,10 +116,17 @@ export default class SynchronizedAssetCache {
      */
     deleteUnreferencedDigests(removedDigests: Set<string>): Promise<void>;
     /**
+     * Deletes a digest only when no current descriptor references it.
+     * @param {string} digest Content digest.
+     * @returns {Promise<void>} Resolves after any required deletion.
+     */
+    deleteDigestIfUnreferenced(digest: string): Promise<void>;
+    /**
      * Finds required assets without locally cached bytes.
+     * @param {string} scopeKey Synchronized scope to inspect.
      * @returns {Promise<string[]>} Missing required descriptor ids.
      */
-    missingRequiredAssetIds(): Promise<string[]>;
+    missingRequiredAssetIds(scopeKey: string): Promise<string[]>;
     /**
      * Checks whether a failed or missing entry may be downloaded now.
      * @param {import("./types.js").SynchronizedAssetCacheEntry} entry Descriptor state.
