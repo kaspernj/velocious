@@ -4,7 +4,7 @@ import SystemTest from "system-testing/build/system-test.js"
 
 import {describe, expect, it} from "../../src/testing/test.js"
 
-/** @typedef {"classLifecycle" | "debounceUnmount" | "instanceLifecycle" | "projectionOptions" | "resubscribeInstance"} FrontendModelEventHookScenario */
+/** @typedef {"classLifecycle" | "debounceUnmount" | "instanceLifecycle" | "projectionOptions" | "requestContextPresence" | "resubscribeInstance"} FrontendModelEventHookScenario */
 
 /** @returns {boolean} - Whether the browser test runner is active. */
 function runBrowserHookScenarios() {
@@ -89,5 +89,23 @@ describe("Frontend model event hooks", () => {
     expect(result.secondAfterRerenderUpdateSubscriptions).toEqual(1)
     expect(result.secondAfterRerenderDestroySubscriptions).toEqual(1)
     expect(result.receivedEventsAfterEmit).toEqual(2)
+  })
+
+  it("resubscribes when request context changes between inherited and explicitly empty", async () => {
+    const result = await runFrontendModelEventHookScenario("requestContextPresence")
+    if (!result) return
+
+    expect(result.registrationsAfterInheritedRender).toEqual(3)
+    expect(result.registrationsAfterStableInheritedRender).toEqual(3)
+    expect(result.registrationsAfterExplicitEmptyRender).toEqual(6)
+    expect(result.registrationsAfterStableExplicitEmptyRender).toEqual(6)
+    expect(result.registrationsAfterInheritedAgainRender).toEqual(9)
+    expect(result.classRegistrationsAfterTransitions).toEqual(3)
+    expect(result.instanceUpdateRegistrationsAfterTransitions).toEqual(3)
+    expect(result.instanceDestroyRegistrationsAfterTransitions).toEqual(3)
+    expect(result.explicitEmptyRoutingRegistrations).toEqual(3)
+    expect(result.inheritedRoutingRegistrations).toEqual(6)
+    expect(result.activeSubscriptionsAfterTransitions).toEqual(3)
+    expect(result.activeSubscriptionsAfterUnmount).toEqual(0)
   })
 })

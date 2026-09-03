@@ -45,6 +45,11 @@ declare function instanceLifecycleScenario(): Promise<Record<string, number>>;
  */
 declare function projectionOptionsScenario(): Promise<Record<string, number>>;
 /**
+ * Runs request context presence scenario.
+ * @returns {Promise<Record<string, number>>} - Scenario result.
+ */
+declare function requestContextPresenceScenario(): Promise<Record<string, number>>;
+/**
  * Runs debounce unmount scenario.
  * @returns {Promise<Record<string, number>>} - Scenario result.
  */
@@ -59,6 +64,7 @@ declare const scenarios: {
     debounceUnmount: typeof debounceUnmountScenario;
     instanceLifecycle: typeof instanceLifecycleScenario;
     projectionOptions: typeof projectionOptionsScenario;
+    requestContextPresence: typeof requestContextPresenceScenario;
     resubscribeInstance: typeof resubscribeInstanceScenario;
 };
 /**

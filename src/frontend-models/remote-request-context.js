@@ -23,7 +23,10 @@ export function captureFrontendModelRemoteRequestContext(value) {
  * @returns {string} Stable serialized context key.
  */
 export function frontendModelRemoteRequestContextKey(value) {
-  return remoteRequestContextKey(captureFrontendModelRemoteRequestContext(value))
+  return JSON.stringify({
+    context: remoteRequestContextKey(captureFrontendModelRemoteRequestContext(value)),
+    present: value !== undefined
+  })
 }
 
 /**

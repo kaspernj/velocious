@@ -409,6 +409,86 @@ async function projectionOptionsScenario() {
 }
 
 /**
+ * Runs request context presence scenario.
+ * @returns {Promise<Record<string, number>>} - Scenario result.
+ */
+async function requestContextPresenceScenario() {
+  const {ModelClass, subscriptions: classSubscriptions} = buildFakeModelClass()
+  const instanceSubscriptions = buildFakeSubscriptions()
+  const model = buildFakeModel("task-1", instanceSubscriptions)
+
+  /**
+   * Runs test component.
+   * @param {{explicitEmpty: boolean}} props - Component props.
+   * @returns {React.ReactElement} - Test element.
+   */
+  function TestComponent({explicitEmpty}) {
+    const options = explicitEmpty ? {requestContext: {}} : {}
+
+    useModelClassEvent(ModelClass, "create", () => {}, options)
+    useUpdatedEvent(model, () => {}, options)
+    useDestroyedEvent(model, () => {}, options)
+
+    return React.createElement("div")
+  }
+
+  const registrationCount = () => classSubscriptions.options.create.length + instanceSubscriptions.options.update.length + instanceSubscriptions.options.destroy.length
+  const activeSubscriptionCount = () => classSubscriptions.create.size + instanceSubscriptions.update.size + instanceSubscriptions.destroy.size
+  const controls = await renderElement(React.createElement(TestComponent, {explicitEmpty: false}))
+  await waitFor(() => registrationCount() === 3 && activeSubscriptionCount() === 3)
+
+  const registrationsAfterInheritedRender = registrationCount()
+
+  await controls.rerender(React.createElement(TestComponent, {explicitEmpty: false}))
+  const registrationsAfterStableInheritedRender = registrationCount()
+
+  await controls.rerender(React.createElement(TestComponent, {explicitEmpty: true}))
+  await waitFor(() => registrationCount() === 6 && activeSubscriptionCount() === 3)
+  const registrationsAfterExplicitEmptyRender = registrationCount()
+
+  await controls.rerender(React.createElement(TestComponent, {explicitEmpty: true}))
+  const registrationsAfterStableExplicitEmptyRender = registrationCount()
+
+  await controls.rerender(React.createElement(TestComponent, {explicitEmpty: false}))
+  await waitFor(() => registrationCount() === 9 && activeSubscriptionCount() === 3)
+
+  const routingOptions = [
+    classSubscriptions.options.create,
+    instanceSubscriptions.options.update,
+    instanceSubscriptions.options.destroy
+  ]
+  const explicitEmptyRoutingRegistrations = routingOptions.filter((options) => {
+    const requestContext = options[1]?.requestContext
+
+    return requestContext && Object.keys(requestContext).length === 0
+  }).length
+  const inheritedRoutingRegistrations = routingOptions.reduce((count, options) => (
+    count + [options[0], options[2]].filter((entry) => entry?.requestContext === undefined).length
+  ), 0)
+
+  const result = {
+    activeSubscriptionsAfterTransitions: activeSubscriptionCount(),
+    classRegistrationsAfterTransitions: classSubscriptions.options.create.length,
+    explicitEmptyRoutingRegistrations,
+    inheritedRoutingRegistrations,
+    instanceDestroyRegistrationsAfterTransitions: instanceSubscriptions.options.destroy.length,
+    instanceUpdateRegistrationsAfterTransitions: instanceSubscriptions.options.update.length,
+    registrationsAfterExplicitEmptyRender,
+    registrationsAfterInheritedAgainRender: registrationCount(),
+    registrationsAfterInheritedRender,
+    registrationsAfterStableExplicitEmptyRender,
+    registrationsAfterStableInheritedRender
+  }
+
+  await controls.unmount()
+
+  return {
+    ...result,
+    activeSubscriptionsAfterUnmount: activeSubscriptionCount()
+  }
+}
+
+/**
  * Runs debounce unmount scenario.
  * @returns {Promise<Record<string, number>>} - Scenario result.
  */
@@ -510,6 +590,7 @@ const scenarios = {
   debounceUnmount: debounceUnmountScenario,
   instanceLifecycle: instanceLifecycleScenario,
   projectionOptions: projectionOptionsScenario,
+  requestContextPresence: requestContextPresenceScenario,
   resubscribeInstance: resubscribeInstanceScenario
 }
 
