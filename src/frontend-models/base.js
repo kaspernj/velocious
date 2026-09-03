@@ -3790,7 +3790,7 @@ export default class FrontendModelBase {
    * Runs find.
    * @template {FrontendModelClass} T
    * @this {T}
-   * @param {number | string} id - Record identifier.
+   * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} id - Record identifier.
    * @returns {Promise<InstanceType<T>>} - Resolved model.
    */
   static async find(id) {

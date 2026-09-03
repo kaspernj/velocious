@@ -1043,10 +1043,10 @@ export default class FrontendModelBase<Attributes extends object = any, CreateAt
      * Runs find.
      * @template {FrontendModelClass} T
      * @this {T}
-     * @param {number | string} id - Record identifier.
+     * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} id - Record identifier.
      * @returns {Promise<InstanceType<T>>} - Resolved model.
      */
-    static find<T extends FrontendModelClass>(this: T, id: number | string): Promise<InstanceType<T>>;
+    static find<T extends FrontendModelClass>(this: T, id: import("../utils/model-primary-key.js").ModelPrimaryKeyValue): Promise<InstanceType<T>>;
     /**
      * Runs find by.
      * @template {FrontendModelClass} T

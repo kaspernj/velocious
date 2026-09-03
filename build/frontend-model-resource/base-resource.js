@@ -865,7 +865,18 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * Runs primary key.
    * @returns {import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition} - Primary key.
    */
-  primaryKey() { return this.resourceConfiguration().primaryKey || this.modelClass().primaryKey() }
+  primaryKey() {
+    const configuredPrimaryKey = this.resourceConfiguration().primaryKey
+
+    if (configuredPrimaryKey) return configuredPrimaryKey
+
+    const modelClass = this.databaseModelClass()
+    const modelPrimaryKey = modelClass.primaryKey()
+
+    return Array.isArray(modelPrimaryKey)
+      ? modelPrimaryKey.map((columnName) => modelClass.resolveAttributeName(columnName) || columnName)
+      : modelClass.resolveAttributeName(modelPrimaryKey) || modelPrimaryKey
+  }
 
   /**
    * Runs authorized query.
