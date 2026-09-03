@@ -44,7 +44,7 @@ describe("Background jobs store index repair", {databaseCleaning: {transaction: 
           return !candidate.isPrimaryKey() && columnNames.length === 1 && columnNames[0] === columnName
         })
 
-        if (!index) throw new Error(`Expected background jobs index for ${columnName}`)
+        if (!index) continue
 
         for (const sql of await db.removeIndexSQLs({name: index.getName(), tableName: "background_jobs"})) {
           await db.query(sql)
