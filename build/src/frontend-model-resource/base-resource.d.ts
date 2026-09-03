@@ -390,8 +390,8 @@ export default class FrontendModelBaseResource<TModelClass extends typeof import
     static attributes: Record<string, ReturnType<typeof JSON.parse>> | string[] | undefined;
     /** @type {string[] | undefined} */
     static abilities: string[] | undefined;
-    /** @type {Record<string, ReturnType<typeof JSON.parse>> | undefined} */
-    static attachments: Record<string, ReturnType<typeof JSON.parse>> | undefined;
+    /** @type {Record<string, import("../configuration-types.js").FrontendModelAttachmentConfiguration> | undefined} */
+    static attachments: Record<string, import("../configuration-types.js").FrontendModelAttachmentConfiguration> | undefined;
     /** @type {string[] | undefined} */
     static commands: string[] | undefined;
     /** @type {string[] | undefined} */
@@ -447,6 +447,12 @@ export default class FrontendModelBaseResource<TModelClass extends typeof import
      * @returns {string[] | undefined} - Translated attribute names.
      */
     static translatedAttributesConfig(): string[] | undefined;
+    /**
+     * Resolves frontend-safe attachment declarations from the backing model.
+     * Resource-level declarations remain as a fallback for frontend-only resources.
+     * @returns {Record<string, import("../configuration-types.js").FrontendModelAttachmentConfiguration>} - Client attachment configuration keyed by name.
+     */
+    static attachmentConfigurations(): Record<string, import("../configuration-types.js").FrontendModelAttachmentConfiguration>;
     /**
      * Builds a resource instance for shared-resource fallback calls.
      * @returns {FrontendModelBaseResource | null} - Shared resource instance when configured.

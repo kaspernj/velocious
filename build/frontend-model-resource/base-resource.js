@@ -175,7 +175,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   static attributes = undefined
   /** @type {string[] | undefined} */
   static abilities = undefined
-  /** @type {Record<string, ReturnType<typeof JSON.parse>> | undefined} */
+  /** @type {Record<string, import("../configuration-types.js").FrontendModelAttachmentConfiguration> | undefined} */
   static attachments = undefined
   /** @type {string[] | undefined} */
   static commands = undefined
@@ -267,6 +267,28 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    */
   static translatedAttributesConfig() {
     return /** @type {string[] | undefined} */ (this.sharedResourceStaticValue("translatedAttributes"))
+  }
+
+  /**
+   * Resolves frontend-safe attachment declarations from the backing model.
+   * Resource-level declarations remain as a fallback for frontend-only resources.
+   * @returns {Record<string, import("../configuration-types.js").FrontendModelAttachmentConfiguration>} - Client attachment configuration keyed by name.
+   */
+  static attachmentConfigurations() {
+    const configuredAttachments = /** @type {Record<string, import("../configuration-types.js").FrontendModelAttachmentConfiguration> | undefined} */ (this.sharedResourceStaticValue("attachments"))
+    const attachments = configuredAttachments ? {...configuredAttachments} : {}
+
+    if (!this.ModelClass) return attachments
+
+    for (const [attachmentName, definition] of Object.entries(this.ModelClass.getAttachmentsMap())) {
+      const attachmentConfig = /** @type {import("../configuration-types.js").FrontendModelAttachmentConfiguration} */ ({type: definition.type})
+
+      if (definition.sync) attachmentConfig.sync = {...definition.sync}
+
+      attachments[attachmentName] = attachmentConfig
+    }
+
+    return attachments
   }
 
   /**
@@ -392,7 +414,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   static resourceConfig() {
     const attributes = this.sharedResourceStaticValue("attributes")
     const abilities = this.sharedResourceStaticValue("abilities")
-    const attachments = this.sharedResourceStaticValue("attachments")
+    const attachments = this.attachmentConfigurations()
     const commands = this.sharedResourceStaticValue("commands")
     const builtInCollectionCommands = this.sharedResourceStaticValue("builtInCollectionCommands")
     const builtInMemberCommands = this.sharedResourceStaticValue("builtInMemberCommands")
@@ -409,7 +431,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     }
 
     if (abilities) config.abilities = /** @type {string[]} */ (abilities)
-    if (attachments) config.attachments = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (attachments)
+    if (Object.keys(attachments).length > 0) config.attachments = attachments
     if (commands) config.commands = /** @type {string[]} */ (commands)
     if (builtInCollectionCommands) config.builtInCollectionCommands = /** @type {string[]} */ (builtInCollectionCommands)
     if (builtInMemberCommands) config.builtInMemberCommands = /** @type {string[]} */ (builtInMemberCommands)

@@ -42,6 +42,36 @@ describe("FrontendModelBaseResource", {databaseCleaning: {transaction: true}}, (
     })
   })
 
+  it("derives client-safe attachment config from the model declaration", () => {
+    class User extends DatabaseRecord {}
+    User.hasOneAttachment("profilePicture", {
+      driver: "privateUploads",
+      sync: {
+        fetch: "eager",
+        offlineRequirement: "optional",
+        retention: "evictable"
+      }
+    })
+
+    class UserResource extends FrontendModelBaseResource {
+      static ModelClass = User
+    }
+
+    expect(UserResource.resourceConfig()).toEqual({
+      attachments: {
+        profilePicture: {
+          sync: {
+            fetch: "eager",
+            offlineRequirement: "optional",
+            retention: "evictable"
+          },
+          type: "hasOne"
+        }
+      },
+      attributes: []
+    })
+  })
+
   it("falls back to shared resource translated attributes", () => {
     class SharedProjectResource extends FrontendModelBaseResource {
       static translatedAttributes = ["name", "description"]

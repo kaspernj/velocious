@@ -381,7 +381,18 @@ export default class DbGenerateFrontendModels extends BaseCommand {
           ? "hasMany"
           : "hasOne"
 
-        fileContent += `        ${attachmentName}: {type: ${JSON.stringify(attachmentType)}},\n`
+        if (attachmentConfig.sync) {
+          fileContent += `        ${attachmentName}: {\n`
+          fileContent += "          sync: {\n"
+          fileContent += `            fetch: ${JSON.stringify(attachmentConfig.sync.fetch)},\n`
+          fileContent += `            offlineRequirement: ${JSON.stringify(attachmentConfig.sync.offlineRequirement)},\n`
+          fileContent += `            retention: ${JSON.stringify(attachmentConfig.sync.retention)},\n`
+          fileContent += "          },\n"
+          fileContent += `          type: ${JSON.stringify(attachmentType)}\n`
+          fileContent += "        },\n"
+        } else {
+          fileContent += `        ${attachmentName}: {type: ${JSON.stringify(attachmentType)}},\n`
+        }
       }
       fileContent += "      },\n"
     }

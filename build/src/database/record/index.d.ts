@@ -43,6 +43,8 @@ export type TranslationBase = VelociousDatabaseRecord & {
     locale: () => string;
 };
 export type AttachmentDriverConstructor = import("../../configuration-types.js").AttachmentDriverConstructor;
+export type AttachmentSyncConfiguration = import("../../configuration-types.js").AttachmentSyncConfiguration;
+export type RecordAttachmentConfiguration = import("../../configuration-types.js").RecordAttachmentConfiguration;
 declare class ValidationError extends Error {
     _model: VelociousDatabaseRecord<Record<string, any>> | undefined;
     _validationErrors: Record<string, ValidationErrorObjectType[]> | undefined;
@@ -835,11 +837,8 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
         _lifecycleCallbacks: Record<string, LifecycleCallbackType[]> | undefined;
         /** @type {Record<string, typeof import("./validators/base.js").default> | undefined} */
         _validatorTypes: Record<string, typeof import("./validators/base.js").default> | undefined;
-        /** @type {Record<string, {driver?: string | AttachmentDriverConstructor | Record<string, ReturnType<typeof JSON.parse>>, type: "hasOne" | "hasMany"}> | undefined} */
-        _attachmentsMap: Record<string, {
-            driver?: string | AttachmentDriverConstructor | Record<string, ReturnType<typeof JSON.parse>>;
-            type: "hasOne" | "hasMany";
-        }> | undefined;
+        /** @type {Record<string, RecordAttachmentConfiguration> | undefined} */
+        _attachmentsMap: Record<string, RecordAttachmentConfiguration> | undefined;
         /** @type {Record<string, import("./relationships/base.js").default> | undefined} */
         _relationships: Record<string, import("./relationships/base.js").default> | undefined;
         /** @type {Record<string, import("../query/query-data.js").QueryDataFn> | undefined} */
@@ -954,12 +953,9 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
         getValidatorTypesMap(): Record<string, typeof import("./validators/base.js").default>;
         /**
          * Runs get attachments map.
-         * @returns {Record<string, {driver?: string | AttachmentDriverConstructor | Record<string, ReturnType<typeof JSON.parse>>, type: "hasOne" | "hasMany"}>} - Attachment definitions keyed by name.
+         * @returns {Record<string, RecordAttachmentConfiguration>} - Attachment definitions keyed by name.
          */
-        getAttachmentsMap(): Record<string, {
-            driver?: string | AttachmentDriverConstructor | Record<string, ReturnType<typeof JSON.parse>>;
-            type: "hasOne" | "hasMany";
-        }>;
+        getAttachmentsMap(): Record<string, RecordAttachmentConfiguration>;
         validatorTypes(): Record<string, typeof import("./validators/base.js").default>;
         /**
          * Runs register validator type.
@@ -1214,21 +1210,15 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
         getQueryDataByName(name: string): import("../query/query-data.js").QueryDataFn | null;
         /**
          * Runs get attachments.
-         * @returns {Record<string, {driver?: string | AttachmentDriverConstructor | Record<string, ReturnType<typeof JSON.parse>>, type: "hasOne" | "hasMany"}>} - Attachment definitions.
+         * @returns {Record<string, RecordAttachmentConfiguration>} - Attachment definitions.
          */
-        getAttachments(): Record<string, {
-            driver?: string | AttachmentDriverConstructor | Record<string, ReturnType<typeof JSON.parse>>;
-            type: "hasOne" | "hasMany";
-        }>;
+        getAttachments(): Record<string, RecordAttachmentConfiguration>;
         /**
          * Runs get attachment by name.
          * @param {string} attachmentName - Attachment name.
-         * @returns {{driver?: string | AttachmentDriverConstructor | Record<string, ReturnType<typeof JSON.parse>>, type: "hasOne" | "hasMany"}} - Attachment definition.
+         * @returns {RecordAttachmentConfiguration} - Attachment definition.
          */
-        getAttachmentByName(attachmentName: string): {
-            driver?: string | AttachmentDriverConstructor | Record<string, ReturnType<typeof JSON.parse>>;
-            type: "hasOne" | "hasMany";
-        };
+        getAttachmentByName(attachmentName: string): RecordAttachmentConfiguration;
         /**
          * Adds a belongs-to-relationship to the model.
          * @param {string} relationshipName The name of the relationship.
@@ -1317,30 +1307,34 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
          * @param {string} attachmentName - Attachment name.
          * @param {object} args - Attachment args.
          * @param {string | AttachmentDriverConstructor | Record<string, ReturnType<typeof JSON.parse>>} [args.driver] - Attachment driver name, class, or instance.
+         * @param {AttachmentSyncConfiguration} [args.sync] - Client-safe synchronized asset policy.
          * @param {"hasOne" | "hasMany"} args.type - Attachment type.
          * @returns {void} - No return value.
          */
-        _defineAttachment(attachmentName: string, { driver, type }: {
+        _defineAttachment(attachmentName: string, { driver, sync, type }: {
             driver?: string | AttachmentDriverConstructor | Record<string, ReturnType<typeof JSON.parse>>;
+            sync?: AttachmentSyncConfiguration;
             type: "hasOne" | "hasMany";
         }): void;
         /**
          * Adds a single attachment helper to the model.
          * @param {string} attachmentName - Attachment name.
-         * @param {{driver?: string | AttachmentDriverConstructor | Record<string, ReturnType<typeof JSON.parse>>}} [args] - Attachment options.
+         * @param {{driver?: string | AttachmentDriverConstructor | Record<string, ReturnType<typeof JSON.parse>>, sync?: AttachmentSyncConfiguration}} [args] - Attachment options.
          * @returns {void} - No return value.
          */
         hasOneAttachment(attachmentName: string, args?: {
             driver?: string | AttachmentDriverConstructor | Record<string, ReturnType<typeof JSON.parse>>;
+            sync?: AttachmentSyncConfiguration;
         }): void;
         /**
          * Adds a collection attachment helper to the model.
          * @param {string} attachmentName - Attachment name.
-         * @param {{driver?: string | AttachmentDriverConstructor | Record<string, ReturnType<typeof JSON.parse>>}} [args] - Attachment options.
+         * @param {{driver?: string | AttachmentDriverConstructor | Record<string, ReturnType<typeof JSON.parse>>, sync?: AttachmentSyncConfiguration}} [args] - Attachment options.
          * @returns {void} - No return value.
          */
         hasManyAttachments(attachmentName: string, args?: {
             driver?: string | AttachmentDriverConstructor | Record<string, ReturnType<typeof JSON.parse>>;
+            sync?: AttachmentSyncConfiguration;
         }): void;
         /**
          * Runs human attribute name.
@@ -2052,11 +2046,8 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
     static _lifecycleCallbacks: Record<string, LifecycleCallbackType[]> | undefined;
     /** @type {Record<string, typeof import("./validators/base.js").default> | undefined} */
     static _validatorTypes: Record<string, typeof import("./validators/base.js").default> | undefined;
-    /** @type {Record<string, {driver?: string | AttachmentDriverConstructor | Record<string, ReturnType<typeof JSON.parse>>, type: "hasOne" | "hasMany"}> | undefined} */
-    static _attachmentsMap: Record<string, {
-        driver?: string | AttachmentDriverConstructor | Record<string, ReturnType<typeof JSON.parse>>;
-        type: "hasOne" | "hasMany";
-    }> | undefined;
+    /** @type {Record<string, RecordAttachmentConfiguration> | undefined} */
+    static _attachmentsMap: Record<string, RecordAttachmentConfiguration> | undefined;
     /** @type {Record<string, import("./relationships/base.js").default> | undefined} */
     static _relationships: Record<string, import("./relationships/base.js").default> | undefined;
     /** @type {Record<string, import("../query/query-data.js").QueryDataFn> | undefined} */
@@ -2171,12 +2162,9 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
     static getValidatorTypesMap(): Record<string, typeof import("./validators/base.js").default>;
     /**
      * Runs get attachments map.
-     * @returns {Record<string, {driver?: string | AttachmentDriverConstructor | Record<string, ReturnType<typeof JSON.parse>>, type: "hasOne" | "hasMany"}>} - Attachment definitions keyed by name.
+     * @returns {Record<string, RecordAttachmentConfiguration>} - Attachment definitions keyed by name.
      */
-    static getAttachmentsMap(): Record<string, {
-        driver?: string | AttachmentDriverConstructor | Record<string, ReturnType<typeof JSON.parse>>;
-        type: "hasOne" | "hasMany";
-    }>;
+    static getAttachmentsMap(): Record<string, RecordAttachmentConfiguration>;
     /**
      * Attributes.
      * @type {Record<string, ReturnType<typeof JSON.parse>>} */
@@ -2485,21 +2473,15 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
     static getQueryDataByName(name: string): import("../query/query-data.js").QueryDataFn | null;
     /**
      * Runs get attachments.
-     * @returns {Record<string, {driver?: string | AttachmentDriverConstructor | Record<string, ReturnType<typeof JSON.parse>>, type: "hasOne" | "hasMany"}>} - Attachment definitions.
+     * @returns {Record<string, RecordAttachmentConfiguration>} - Attachment definitions.
      */
-    static getAttachments(): Record<string, {
-        driver?: string | AttachmentDriverConstructor | Record<string, ReturnType<typeof JSON.parse>>;
-        type: "hasOne" | "hasMany";
-    }>;
+    static getAttachments(): Record<string, RecordAttachmentConfiguration>;
     /**
      * Runs get attachment by name.
      * @param {string} attachmentName - Attachment name.
-     * @returns {{driver?: string | AttachmentDriverConstructor | Record<string, ReturnType<typeof JSON.parse>>, type: "hasOne" | "hasMany"}} - Attachment definition.
+     * @returns {RecordAttachmentConfiguration} - Attachment definition.
      */
-    static getAttachmentByName(attachmentName: string): {
-        driver?: string | AttachmentDriverConstructor | Record<string, ReturnType<typeof JSON.parse>>;
-        type: "hasOne" | "hasMany";
-    };
+    static getAttachmentByName(attachmentName: string): RecordAttachmentConfiguration;
     /**
      * Runs get relationship by name.
      * @param {string} relationshipName - Relationship name.
@@ -2639,30 +2621,34 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
      * @param {string} attachmentName - Attachment name.
      * @param {object} args - Attachment args.
      * @param {string | AttachmentDriverConstructor | Record<string, ReturnType<typeof JSON.parse>>} [args.driver] - Attachment driver name, class, or instance.
+     * @param {AttachmentSyncConfiguration} [args.sync] - Client-safe synchronized asset policy.
      * @param {"hasOne" | "hasMany"} args.type - Attachment type.
      * @returns {void} - No return value.
      */
-    static _defineAttachment(attachmentName: string, { driver, type }: {
+    static _defineAttachment(attachmentName: string, { driver, sync, type }: {
         driver?: string | AttachmentDriverConstructor | Record<string, ReturnType<typeof JSON.parse>>;
+        sync?: AttachmentSyncConfiguration;
         type: "hasOne" | "hasMany";
     }): void;
     /**
      * Adds a single attachment helper to the model.
      * @param {string} attachmentName - Attachment name.
-     * @param {{driver?: string | AttachmentDriverConstructor | Record<string, ReturnType<typeof JSON.parse>>}} [args] - Attachment options.
+     * @param {{driver?: string | AttachmentDriverConstructor | Record<string, ReturnType<typeof JSON.parse>>, sync?: AttachmentSyncConfiguration}} [args] - Attachment options.
      * @returns {void} - No return value.
      */
     static hasOneAttachment(attachmentName: string, args?: {
         driver?: string | AttachmentDriverConstructor | Record<string, ReturnType<typeof JSON.parse>>;
+        sync?: AttachmentSyncConfiguration;
     }): void;
     /**
      * Adds a collection attachment helper to the model.
      * @param {string} attachmentName - Attachment name.
-     * @param {{driver?: string | AttachmentDriverConstructor | Record<string, ReturnType<typeof JSON.parse>>}} [args] - Attachment options.
+     * @param {{driver?: string | AttachmentDriverConstructor | Record<string, ReturnType<typeof JSON.parse>>, sync?: AttachmentSyncConfiguration}} [args] - Attachment options.
      * @returns {void} - No return value.
      */
     static hasManyAttachments(attachmentName: string, args?: {
         driver?: string | AttachmentDriverConstructor | Record<string, ReturnType<typeof JSON.parse>>;
+        sync?: AttachmentSyncConfiguration;
     }): void;
     /**
      * Runs human attribute name.

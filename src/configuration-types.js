@@ -376,6 +376,22 @@
  */
 
 /**
+ * Client-safe synchronization policy declared with a model attachment.
+ * @typedef {object} AttachmentSyncConfiguration
+ * @property {"eager" | "on-demand"} fetch - Whether clients prefetch the attachment or wait until it is requested.
+ * @property {"optional" | "required"} offlineRequirement - Whether an offline-ready scope requires the attachment bytes.
+ * @property {"durable" | "evictable"} retention - Whether clients may evict the attachment under storage pressure.
+ */
+
+/**
+ * Model attachment declaration retained by the record class.
+ * @typedef {object} RecordAttachmentConfiguration
+ * @property {string | AttachmentDriverConstructor | Record<string, ReturnType<typeof JSON.parse>>} [driver] - Attachment driver name, class, or instance.
+ * @property {AttachmentSyncConfiguration} [sync] - Client-safe synchronized asset policy.
+ * @property {"hasOne" | "hasMany"} type - Attachment cardinality.
+ */
+
+/**
  * @typedef {object} AttachmentsConfiguration
  * @property {string} [defaultDriver] - Default attachment storage driver name.
  * @property {Record<string, AttachmentDriverConfiguration & Record<string, ReturnType<typeof JSON.parse>>>} [drivers] - Named attachment driver configurations.
@@ -418,6 +434,7 @@
 
 /**
  * @typedef {object} FrontendModelAttachmentConfiguration
+ * @property {AttachmentSyncConfiguration} [sync] - Client-side synchronized asset policy.
  * @property {"hasOne" | "hasMany"} type - Attachment cardinality.
  */
 

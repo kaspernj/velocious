@@ -15,6 +15,41 @@ await task.descriptionFile().attach({
 })
 ```
 
+## Synchronized client policy
+
+Declare per-attachment client policy on the model attachment itself. A resource
+backed by that model automatically exposes the client-safe policy to API
+manifests and generated frontend models, so the resource does not repeat an
+`attachments` block:
+
+```js
+User.hasOneAttachment("profilePicture", {
+  driver: "s3",
+  sync: {
+    fetch: "eager",
+    offlineRequirement: "optional",
+    retention: "evictable"
+  }
+})
+```
+
+- `fetch` is `"eager"` when a client should prefetch bytes or `"on-demand"`
+  when it should wait for access.
+- `retention` is `"evictable"` for replaceable cache data or `"durable"` for
+  bytes that storage-pressure cleanup must retain.
+- `offlineRequirement` is `"optional"` when an offline-ready scope can work
+  without the bytes or `"required"` when it cannot. Required assets must use
+  durable retention; Velocious rejects `required` plus `evictable`.
+
+The generated metadata includes only `type` and `sync`. Storage drivers and
+their credentials remain backend-only. This policy is the contract for client
+asset-cache adapters; binary content still travels through the attachment
+download endpoint rather than normal record sync payloads.
+
+Resource-level `static attachments` remains available as a fallback for a
+frontend-only resource without a backing model. When a backing model declares
+an attachment with the same name, the model declaration is authoritative.
+
 The backend accepts Buffer, string, `Uint8Array`, `ArrayBuffer`, browser-style
 `arrayBuffer()` values, `UploadedFile`, `{content, filename?, contentType?}`,
 `{contentBase64, filename?, contentType?}`, and the Node-only
