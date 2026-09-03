@@ -2,6 +2,7 @@
 
 import {describe, expect, it} from "../../src/testing/test.js"
 import FrontendModelBaseResource from "../../src/frontend-model-resource/base-resource.js"
+import FrontendModelBase from "../../src/frontend-models/base.js"
 import DatabaseRecord from "../../src/database/record/index.js"
 import Project from "../dummy/src/models/project.js"
 import Task from "../dummy/src/models/task.js"
@@ -68,6 +69,36 @@ describe("FrontendModelBaseResource", {databaseCleaning: {transaction: true}}, (
           type: "hasOne"
         }
       },
+      attributes: []
+    })
+  })
+
+  it("derives attachment config from a frontend model class", () => {
+    class LocalUser extends FrontendModelBase {
+      /** @returns {import("../../src/frontend-models/base.js").FrontendModelResourceConfig} - Resource config. */
+      static resourceConfig() {
+        return {
+          attachments: {
+            profilePicture: {
+              sync: {
+                fetch: "eager",
+                offlineRequirement: "optional",
+                retention: "evictable"
+              },
+              type: "hasOne"
+            }
+          },
+          modelName: "User"
+        }
+      }
+    }
+
+    class LocalUserResource extends FrontendModelBaseResource {
+      static ModelClass = /** @type {typeof DatabaseRecord} */ (/** @type {unknown} */ (LocalUser))
+    }
+
+    expect(LocalUserResource.resourceConfig()).toEqual({
+      attachments: LocalUser.resourceConfig().attachments,
       attributes: []
     })
   })

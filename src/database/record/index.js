@@ -1174,6 +1174,15 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * Returns attachment definitions through the model contract shared with
+   * frontend model classes.
+   * @returns {Record<string, RecordAttachmentConfiguration>} - Attachment definitions.
+   */
+  static attachmentDefinitions() {
+    return this.getAttachmentsMap()
+  }
+
+  /**
    * Runs get attachment by name.
    * @param {string} attachmentName - Attachment name.
    * @returns {RecordAttachmentConfiguration} - Attachment definition.

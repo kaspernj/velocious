@@ -280,7 +280,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
     if (!this.ModelClass) return attachments
 
-    for (const [attachmentName, definition] of Object.entries(this.ModelClass.getAttachmentsMap())) {
+    for (const [attachmentName, definition] of Object.entries(this.ModelClass.attachmentDefinitions())) {
       const attachmentConfig = /** @type {import("../configuration-types.js").FrontendModelAttachmentConfiguration} */ ({type: definition.type})
 
       if (definition.sync) attachmentConfig.sync = {...definition.sync}

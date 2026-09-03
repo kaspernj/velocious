@@ -1214,6 +1214,12 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
          */
         getAttachments(): Record<string, RecordAttachmentConfiguration>;
         /**
+         * Returns attachment definitions through the model contract shared with
+         * frontend model classes.
+         * @returns {Record<string, RecordAttachmentConfiguration>} - Attachment definitions.
+         */
+        attachmentDefinitions(): Record<string, RecordAttachmentConfiguration>;
+        /**
          * Runs get attachment by name.
          * @param {string} attachmentName - Attachment name.
          * @returns {RecordAttachmentConfiguration} - Attachment definition.
@@ -2476,6 +2482,12 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
      * @returns {Record<string, RecordAttachmentConfiguration>} - Attachment definitions.
      */
     static getAttachments(): Record<string, RecordAttachmentConfiguration>;
+    /**
+     * Returns attachment definitions through the model contract shared with
+     * frontend model classes.
+     * @returns {Record<string, RecordAttachmentConfiguration>} - Attachment definitions.
+     */
+    static attachmentDefinitions(): Record<string, RecordAttachmentConfiguration>;
     /**
      * Runs get attachment by name.
      * @param {string} attachmentName - Attachment name.

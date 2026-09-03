@@ -46,6 +46,10 @@ their credentials remain backend-only. This policy is the contract for client
 asset-cache adapters; binary content still travels through the attachment
 download endpoint rather than normal record sync payloads.
 
+Backend records and frontend model classes expose this metadata through the
+common static `attachmentDefinitions()` contract. This lets the same resource
+configuration code work in backend and frontend/local shared-resource wrappers.
+
 Resource-level `static attachments` remains available as a fallback for a
 frontend-only resource without a backing model. When a backing model declares
 an attachment with the same name, the model declaration is authoritative.
