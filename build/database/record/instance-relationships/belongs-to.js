@@ -1,6 +1,7 @@
 // @ts-check
 
 import BaseInstanceRelationship from "./base.js"
+import {scalarModelPrimaryKey} from "../../../utils/model-primary-key.js"
 
 /**
  * A generic query over some model type.
@@ -79,7 +80,7 @@ export default class VelociousDatabaseRecordBelongsToInstanceRelationship extend
    * @returns {Promise<InstanceType<TMC> | undefined>} - Loaded foreign model.
    */
   async _loadForeignModel({foreignModelID, TargetModelClass}) {
-    const primaryKey = TargetModelClass.primaryKey()
+    const primaryKey = scalarModelPrimaryKey(TargetModelClass.primaryKey(), `Belongs-to relationship load for ${TargetModelClass.name}`)
     /**
      * Where args.
      * @type {Record<string, string | number | null | undefined>} */

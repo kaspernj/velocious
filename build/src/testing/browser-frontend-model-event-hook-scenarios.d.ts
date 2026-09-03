@@ -1,11 +1,11 @@
 import FrontendModelBase from "../frontend-models/base.js";
 export type FrontendModelResourceConfig = import("../frontend-models/base.js").FrontendModelResourceConfig;
 export type FrontendModelHookTestCreateUpdatePayload = {
-    id: string;
+    id: string | import("../utils/model-primary-key.js").CompositeModelPrimaryKeyValue;
     model: FrontendModelBase;
 };
 export type FrontendModelHookTestDestroyPayload = {
-    id: string;
+    id: string | import("../utils/model-primary-key.js").CompositeModelPrimaryKeyValue;
 };
 export type FakeSubscriptions = {
     /**

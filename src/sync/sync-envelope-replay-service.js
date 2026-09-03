@@ -10,6 +10,7 @@ import sha256Hex from "../utils/sha256-hex.js"
 import {decodeReplayPersistedData, serializeReplayPersistedData} from "./sync-replay-persisted-data.js"
 import {ValidationError} from "../database/record/index.js"
 import VelociousError from "../velocious-error.js"
+import {scalarModelPrimaryKey, scalarModelPrimaryKeyValue} from "../utils/model-primary-key.js"
 
 /**
  * Resolved routed-resource registration for one replay resource type.
@@ -799,7 +800,7 @@ export default class SyncEnvelopeReplayService {
     if (mutation.baseVersion === undefined || mutation.baseVersion === null) return null
 
     const ModelClass = resource.modelClass()
-    const primaryKey = ModelClass.primaryKey()
+    const primaryKey = scalarModelPrimaryKey(ModelClass.primaryKey(), `Offline sync conflict handling for ${ModelClass.name}`)
     const primaryKeyAttribute = ModelClass.resolveAttributeName(primaryKey)
     const versionAttribute = this.conflictStrategy.versionAttribute
     const versionAttributeName = ModelClass.resolveAttributeName(versionAttribute)
@@ -943,7 +944,7 @@ export default class SyncEnvelopeReplayService {
       if (columnName) allowedKeys.add(columnName)
     }
 
-    const primaryKey = ModelClass.primaryKey()
+    const primaryKey = scalarModelPrimaryKey(ModelClass.primaryKey(), `Offline sync attribute filtering for ${ModelClass.name}`)
     const primaryKeyAttribute = ModelClass.getColumnNameToAttributeNameMap()[primaryKey]
 
     /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
@@ -980,7 +981,7 @@ export default class SyncEnvelopeReplayService {
    */
   async createRoutedReplayRecord({attributes, mutation, resource}) {
     const ModelClass = resource.modelClass()
-    const primaryKey = ModelClass.primaryKey()
+    const primaryKey = scalarModelPrimaryKey(ModelClass.primaryKey(), `Offline sync create for ${ModelClass.name}`)
     const conflictingIds = await ModelClass.where({[primaryKey]: mutation.resourceId}).pluck(primaryKey)
 
     if (conflictingIds.length > 0) {
@@ -1006,7 +1007,7 @@ export default class SyncEnvelopeReplayService {
       if (ability) {
         const memberIds = await ModelClass
           .accessibleFor(resource.syncAbilityAction("create"), ability)
-          .where({[primaryKey]: record.id()})
+          .where({[primaryKey]: scalarModelPrimaryKeyValue(record.id(), `Offline sync create authorization for ${ModelClass.name}`)})
           .pluck(primaryKey)
 
         if (memberIds.length === 0) {

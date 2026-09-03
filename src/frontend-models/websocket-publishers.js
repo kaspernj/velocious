@@ -4,6 +4,7 @@ import AuthorizationBaseResource from "../authorization/base-resource.js"
 import {frontendModelResourcesWithBuiltInsForBackendProject} from "./built-in-resources.js"
 import {frontendModelResourceDefinitionIsClass} from "./resource-definition.js"
 import {serializeFrontendModelTransportValue} from "./transport-serialization.js"
+import {readModelPrimaryKeyValue} from "../utils/model-primary-key.js"
 
 const modelClassesWithRegisteredHooks = new WeakSet()
 const channelClassRegisteredConfigurations = new WeakSet()
@@ -121,6 +122,11 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
 
     const modelClass = resourceClass.modelClass()
     const modelName = modelClass.getModelName()
+    const configuredPrimaryKey = resourceClass.resourceConfig().primaryKey
+    const modelPrimaryKey = modelClass.primaryKey()
+    const primaryKey = configuredPrimaryKey || (Array.isArray(modelPrimaryKey)
+      ? modelPrimaryKey.map((columnName) => modelClass.resolveAttributeName(columnName) || columnName)
+      : modelClass.resolveAttributeName(modelPrimaryKey) || modelPrimaryKey)
 
     // Register lifecycle hooks once per model class, not per configuration. A model class belongs to a
     // single backend project/config in production, so per-config registration only differs in tests where
@@ -148,7 +154,7 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
       void model.connection().afterCommit(async () => {
         broadcastFrontendModelEvent(model._getConfiguration(), modelName, {
           action,
-          id: model.id(),
+          id: readModelPrimaryKeyValue(primaryKey, (attributeName) => model.readAttribute(attributeName)),
           record: model.attributes()
         })
       })
@@ -159,7 +165,7 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
       void model.connection().afterCommit(async () => {
         broadcastFrontendModelEvent(model._getConfiguration(), modelName, {
           action: "destroy",
-          id: model.id()
+          id: readModelPrimaryKeyValue(primaryKey, (attributeName) => model.readAttribute(attributeName))
         })
       })
     })

@@ -1,5 +1,7 @@
 // @ts-check
 
+import {modelPrimaryKeyCacheKey, scalarModelPrimaryKey} from "../utils/model-primary-key.js"
+
 /**
  * Preloads relationships onto already-loaded frontend model instances.
  *
@@ -36,7 +38,8 @@ export default class FrontendModelPreloader {
 
     if (modelsToLoad.length === 0) return
 
-    const primaryKey = modelClass.primaryKey()
+    const primaryKeyDefinition = modelClass.primaryKey()
+    const primaryKey = scalarModelPrimaryKey(primaryKeyDefinition, `FrontendModelPreloader.preload() for ${modelClass.name}`)
     const ids = modelsToLoad.map((model) => model.primaryKeyValue())
 
     // Rebuild a fresh query carrying only the projection-relevant state so a
@@ -58,11 +61,11 @@ export default class FrontendModelPreloader {
     const reloadedById = new Map()
 
     for (const reloadedModel of reloaded) {
-      reloadedById.set(String(reloadedModel.primaryKeyValue()), reloadedModel)
+      reloadedById.set(modelPrimaryKeyCacheKey(primaryKeyDefinition, reloadedModel.primaryKeyValue()), reloadedModel)
     }
 
     for (const model of modelsToLoad) {
-      const reloadedModel = reloadedById.get(String(model.primaryKeyValue()))
+      const reloadedModel = reloadedById.get(modelPrimaryKeyCacheKey(primaryKeyDefinition, model.primaryKeyValue()))
 
       // The record may have been deleted/filtered between the original load and
       // this preload — skip it rather than crashing on a missing reload.

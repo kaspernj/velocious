@@ -1,7 +1,7 @@
 import VelociousWebsocketChannel from "../http-server/websocket-channel.js";
 export type FrontendModelLifecycleBroadcastBody = {
     action?: string;
-    id?: string | number;
+    id?: import("../utils/model-primary-key.js").ModelPrimaryKeyValue;
     matchedEventFilterKeys?: string[];
     record?: import("./query.js").FrontendModelTransportValue;
     [key: string]: import("./query.js").FrontendModelTransportValue | string[] | undefined;
@@ -121,10 +121,10 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
     _frontendModelController(FrontendModelController: typeof import("../frontend-model-controller.js").default, params?: Record<string, ReturnType<typeof JSON.parse>>): import("../frontend-model-controller.js").default;
     /**
      * Resolves tenant for event.
-     * @param {string | number} id - Event record id.
+     * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} id - Event record id.
      * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolved tenant.
      */
-    _resolveEventTenant(id: string | number): Promise<ReturnType<typeof JSON.parse>>;
+    _resolveEventTenant(id: import("../utils/model-primary-key.js").ModelPrimaryKeyValue): Promise<ReturnType<typeof JSON.parse>>;
     /**
      * Resolves the subscriber's tenant for the broadcast record and runs `callback` inside that tenant
      * context. Broadcast delivery runs in whatever ambient tenant context the publisher left behind. For
@@ -135,46 +135,46 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
      * the subscriber's own tenant/ability scope. When no tenant resolves (non-multitenant configs), the
      * callback runs directly so the ambient context is preserved.
      * @template T
-     * @param {string | number} id - Event record id.
+     * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} id - Event record id.
      * @param {() => Promise<T>} callback - Authorized-query callback.
      * @returns {Promise<T>} - Callback result.
      */
-    _withEventTenant<T>(id: string | number, callback: () => Promise<T>): Promise<T>;
+    _withEventTenant<T>(id: import("../utils/model-primary-key.js").ModelPrimaryKeyValue, callback: () => Promise<T>): Promise<T>;
     /**
      * Whether the broadcast record is within the subscriber's authenticated ability scope. Used to gate
      * unfiltered/unprojected create/update delivery so a scoped token never receives a record it cannot read.
-     * @param {string | number} id - Event record id.
+     * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} id - Event record id.
      * @param {typeof import("../frontend-model-controller.js").default} FrontendModelController - Server-side frontend-model controller class.
      * @returns {Promise<boolean>} True when the record is readable by this subscription.
      */
-    _eventIsAccessible(id: string | number, FrontendModelController: typeof import("../frontend-model-controller.js").default): Promise<boolean>;
+    _eventIsAccessible(id: import("../utils/model-primary-key.js").ModelPrimaryKeyValue, FrontendModelController: typeof import("../frontend-model-controller.js").default): Promise<boolean>;
     /**
      * Runs matched event filter keys for event id.
-     * @param {string | number} id - Event record id.
+     * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} id - Event record id.
      * @param {typeof import("../frontend-model-controller.js").default} FrontendModelController - Server-side frontend-model controller class.
      * @returns {Promise<string[]>} - Event filter keys matched by the record.
      */
-    _matchedEventFilterKeysForEventId(id: string | number, FrontendModelController: typeof import("../frontend-model-controller.js").default): Promise<string[]>;
+    _matchedEventFilterKeysForEventId(id: import("../utils/model-primary-key.js").ModelPrimaryKeyValue, FrontendModelController: typeof import("../frontend-model-controller.js").default): Promise<string[]>;
     /**
      * Runs event matches filter.
      * @param {object} args - Filter args.
      * @param {typeof import("../frontend-model-controller.js").default} args.FrontendModelController - Server-side frontend-model controller class.
      * @param {import("./query.js").FrontendModelEventFilterPayloadEntry} args.eventFilter - Event filter payload.
-     * @param {string | number} args.id - Event record id.
+     * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} args.id - Event record id.
      * @returns {Promise<boolean>} Whether the record matches the filter.
      */
     _eventMatchesFilter({ FrontendModelController, eventFilter, id }: {
         FrontendModelController: typeof import("../frontend-model-controller.js").default;
         eventFilter: import("./query.js").FrontendModelEventFilterPayloadEntry;
-        id: string | number;
+        id: import("../utils/model-primary-key.js").ModelPrimaryKeyValue;
     }): Promise<boolean>;
     /**
      * Runs projected record for event id.
-     * @param {string | number} id - Event record id.
+     * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} id - Event record id.
      * @param {typeof import("../frontend-model-controller.js").default} FrontendModelController - Server-side frontend-model controller class.
      * @returns {Promise<Record<string, import("./query.js").FrontendModelTransportValue> | null>} - Serialized projected record.
      */
-    _projectedRecordForEventId(id: string | number, FrontendModelController: typeof import("../frontend-model-controller.js").default): Promise<Record<string, import("./query.js").FrontendModelTransportValue> | null>;
+    _projectedRecordForEventId(id: import("../utils/model-primary-key.js").ModelPrimaryKeyValue, FrontendModelController: typeof import("../frontend-model-controller.js").default): Promise<Record<string, import("./query.js").FrontendModelTransportValue> | null>;
     /**
      * Minimal Request-like stub used only for ability resolution. Avoids
      * importing `WebsocketRequest` here because its `node:querystring`

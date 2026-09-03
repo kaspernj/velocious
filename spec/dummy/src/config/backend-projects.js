@@ -91,6 +91,23 @@ class TaskFrontendResource extends FrontendModelBaseResource {
   }
 }
 
+class CompositeTaskFrontendResource extends FrontendModelBaseResource {
+  static ModelClass = Task
+
+  static attributes = ["name", "projectId", "description"]
+
+  static builtInCollectionCommands = ["create", "index"]
+
+  static builtInMemberCommands = ["find", "update", "destroy"]
+
+  static primaryKey = ["name", "projectId"]
+
+  /** @returns {Array<string>} - Permit spec for composite task writes. */
+  permittedParams() {
+    return ["name", "projectId", "description"]
+  }
+}
+
 class ProjectFrontendResource extends FrontendModelBaseResource {
   static ModelClass = Project
   static translatedAttributes = ["name"]
@@ -322,6 +339,7 @@ const backendProjects = [
     path: "/tmp/example-backend",
     frontendModels: {
       Comment: SystemTestCommentFrontendResource,
+      CompositeTask: CompositeTaskFrontendResource,
       Interaction: InteractionFrontendResource,
       Project: ProjectFrontendResource,
       Task: TaskFrontendResource,

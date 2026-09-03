@@ -2,7 +2,7 @@ export type FrontendModelClass = import("./base.js").FrontendModelClass;
 export type FrontendModelInstance = import("./base.js").default;
 export type FrontendModelClassDestroyEventPayload = import("./use-model-class-event.js").FrontendModelDestroyEventPayload;
 export type FrontendModelInstanceDestroyEventPayload = {
-    id: string;
+    id: string | import("../utils/model-primary-key.js").CompositeModelPrimaryKeyValue;
 };
 export type FrontendModelDestroyEventPayload = FrontendModelClassDestroyEventPayload | FrontendModelInstanceDestroyEventPayload;
 export type UseDestroyedEventOptions = import("./use-model-class-event.js").UseModelClassEventOptions;

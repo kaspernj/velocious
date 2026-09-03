@@ -52,6 +52,7 @@ import singularizeModelName from "../../utils/singularize-model-name.js"
 import {defineModelScope} from "../../utils/model-scope.js"
 import { normalizeDateStringForWrite, normalizeDateValueForRead, normalizeDateValueForWrite } from "../datetime-storage.js"
 import {formatValue} from "../../utils/format-value.js"
+import {modelPrimaryKeyConditions, readModelPrimaryKeyValue, scalarModelPrimaryKey, scalarModelPrimaryKeyValue} from "../../utils/model-primary-key.js"
 import {captureCreateAuditChanges, captureUpdateAuditChanges, createAudit, createCreateAudit, createDestroyAudit, createUpdateAudit, initializeAuditing, registerAuditCallback, registerAuditing, withoutAudit} from "./auditing.js"
 import {registerMagnitudeCounterCache} from "./counter-cache-magnitude.js"
 import {stateMachine} from "./state-machine.js"
@@ -2520,6 +2521,9 @@ class VelociousDatabaseRecord {
     const primaryKey = this.primaryKey()
     const tableName = this.tableName()
     const connection = this.connection()
+
+    if (Array.isArray(primaryKey)) throw new Error(`${this.name}.nextPrimaryKey() does not support composite primary keys.`)
+
     const newestRecord = await this.order(`${connection.quoteTable(tableName)}.${connection.quoteColumn(primaryKey)}`).last()
 
     if (newestRecord) {
@@ -2537,7 +2541,7 @@ class VelociousDatabaseRecord {
 
   /**
    * Runs set primary key.
-   * @param {string} primaryKey - Primary key.
+   * @param {string | string[]} primaryKey - Primary key.
    * @returns {void} - No return value.
    */
   static setPrimaryKey(primaryKey) {
@@ -2585,7 +2589,7 @@ class VelociousDatabaseRecord {
 
   /**
    * Runs primary key.
-   * @returns {string} - The primary key.
+   * @returns {string | string[]} - The primary key.
    */
   static primaryKey() {
     if (this._primaryKey) return this._primaryKey
@@ -2743,7 +2747,7 @@ class VelociousDatabaseRecord {
           this.bindRelatedRecord(model)
           const foreignKey = model._relationshipForeignKeyAttribute(instanceRelationship)
 
-          model.setAttribute(foreignKey, this.id())
+          model.setAttribute(foreignKey, scalarModelPrimaryKeyValue(this.id(), `Has-many autosave for ${this.getModelClass().name}`))
 
           if (model.isChanged()) {
             useRelationship = true
@@ -2797,7 +2801,7 @@ class VelociousDatabaseRecord {
         this.bindRelatedRecord(model)
         const foreignKey = model._relationshipForeignKeyAttribute(instanceRelationship)
 
-        model.setAttribute(foreignKey, this.id())
+        model.setAttribute(foreignKey, scalarModelPrimaryKeyValue(this.id(), `Has-many autosave for ${this.getModelClass().name}`))
 
         if (model.isChanged()) {
           await model.save()
@@ -2996,7 +3000,7 @@ class VelociousDatabaseRecord {
     const targetTableSql = driver.quoteTable(query.getTableReferenceForJoin())
     const scopeTableSql = driver.quoteTable(scopeTableReference)
     const scopeTableFromSql = `${driver.quoteTable(tableName)} AS ${scopeTableSql}`
-    const primaryKeyColumn = translationClass.primaryKey()
+    const primaryKeyColumn = scalarModelPrimaryKey(translationClass.primaryKey(), `Current translation scope for ${translationClass.name}`)
     const foreignKeyColumn = relationship.getForeignKey()
     const targetPrimaryKeySql = `${targetTableSql}.${driver.quoteColumn(primaryKeyColumn)}`
     const targetForeignKeySql = `${targetTableSql}.${driver.quoteColumn(foreignKeyColumn)}`
@@ -3253,7 +3257,11 @@ class VelociousDatabaseRecord {
   static orderableColumn() {
     // FIXME: Allow to change to 'created_at' if using UUID?
 
-    return this.primaryKey()
+    const primaryKey = this.primaryKey()
+
+    if (Array.isArray(primaryKey)) return primaryKey[0]
+
+    return primaryKey
   }
 
   /**
@@ -3359,7 +3367,7 @@ class VelociousDatabaseRecord {
    * Runs find.
    * @template {typeof VelociousDatabaseRecord} MC
    * @this {MC}
-   * @param {number|string} recordId - Record id.
+   * @param {import("../../utils/model-primary-key.js").ModelPrimaryKeyValue} recordId - Record id.
    * @returns {Promise<InstanceType<MC>>} - Resolves with the find.
    */
   static async find(recordId) {
@@ -4022,7 +4030,7 @@ class VelociousDatabaseRecord {
      * @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const conditions = {}
 
-    conditions[this.getModelClass().primaryKey()] = this.id()
+    Object.assign(conditions, modelPrimaryKeyConditions(this.getModelClass().primaryKey(), this._persistedPrimaryKeyValue()))
 
     const sql = this._connection().deleteSql({
       conditions,
@@ -4520,7 +4528,7 @@ class VelociousDatabaseRecord {
 
     const data = Object.assign({}, this._belongsToChanges(), this.rawAttributes())
     const primaryKey = this.getModelClass().primaryKey()
-    const primaryKeyColumn = this.getModelClass().getColumns().find((column) => column.getName() == primaryKey)
+    const primaryKeyColumn = Array.isArray(primaryKey) ? undefined : this.getModelClass().getColumns().find((column) => column.getName() == primaryKey)
     const primaryKeyType = primaryKeyColumn?.getType()?.toLowerCase()
     const driverSupportsDefaultUUID = typeof connection.supportsDefaultPrimaryKeyUUID == "function" && connection.supportsDefaultPrimaryKeyUUID()
     const isUUIDPrimaryKey = primaryKeyType?.includes("uuid")
@@ -4528,9 +4536,13 @@ class VelociousDatabaseRecord {
     this._setDefaultTimestampValues(data)
 
     const columnNames = this.getModelClass().getColumnNames()
-    const hasUserProvidedPrimaryKey = data[primaryKey] !== undefined && data[primaryKey] !== null && data[primaryKey] !== ""
+    const hasUserProvidedPrimaryKey = Array.isArray(primaryKey)
+      ? primaryKey.every((columnName) => data[columnName] !== undefined && data[columnName] !== null && data[columnName] !== "")
+      : data[primaryKey] !== undefined && data[primaryKey] !== null && data[primaryKey] !== ""
 
     if (shouldAssignUUIDPrimaryKey && !hasUserProvidedPrimaryKey) {
+      if (Array.isArray(primaryKey)) throw new Error("Composite UUID primary keys must be provided explicitly.")
+
       data[primaryKey] = new UUID(4).format()
     }
 
@@ -4575,10 +4587,15 @@ class VelociousDatabaseRecord {
 
   /**
    * Applies the database insert response to this record.
-   * @param {{connection: import("../drivers/base.js").default, data: Record<string, string | number | boolean | Date | null | undefined>, insertResult: Array<Record<string, string | number | boolean | Date | null | undefined>> | null | undefined, primaryKey: string}} options - Pinned insert connection, inserted data, connection result, and primary key column name.
+   * @param {{connection: import("../drivers/base.js").default, data: Record<string, string | number | boolean | Date | null | undefined>, insertResult: Array<Record<string, string | number | boolean | Date | null | undefined>> | null | undefined, primaryKey: string | string[]}} options - Pinned insert connection, inserted data, connection result, and primary key column name.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async _applyInsertResult({connection, data, insertResult, primaryKey}) {
+    if (Array.isArray(primaryKey)) {
+      await this._reloadWithId(readModelPrimaryKeyValue(primaryKey, (columnName) => data[columnName]))
+      return
+    }
+
     if (Array.isArray(insertResult) && insertResult[0] && insertResult[0][primaryKey]) {
       this._attributes = insertResult[0]
       this._changes = {}
@@ -4645,7 +4662,7 @@ class VelociousDatabaseRecord {
      * @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const conditions = {}
 
-    conditions[this.getModelClass().primaryKey()] = this.id()
+    Object.assign(conditions, modelPrimaryKeyConditions(this.getModelClass().primaryKey(), this._persistedPrimaryKeyValue()))
 
     const changes = Object.assign({}, this._belongsToChanges(), this._changes)
     const updatedAtColumn = this.getModelClass().getColumns().find((column) => column.getName() == "updated_at")
@@ -4669,7 +4686,7 @@ class VelociousDatabaseRecord {
 
   /**
    * Runs id.
-   * @returns {number|string} - The id.
+   * @returns {import("../../utils/model-primary-key.js").ModelPrimaryKeyValue} - The id.
    */
   id() {
     if (!this.getModelClass()._columnNameToAttributeName) {
@@ -4677,6 +4694,11 @@ class VelociousDatabaseRecord {
     }
 
     const primaryKey = this.getModelClass().primaryKey()
+
+    if (Array.isArray(primaryKey)) {
+      return readModelPrimaryKeyValue(primaryKey, (columnName) => this.readColumn(columnName))
+    }
+
     const attributeName = this.getModelClass().getColumnNameToAttributeNameMap()[primaryKey]
 
     if (attributeName === undefined) {
@@ -4684,6 +4706,16 @@ class VelociousDatabaseRecord {
     }
 
     return /** @type {number | string} */ (this.readAttribute(attributeName))
+  }
+
+  /**
+   * Returns the identity represented by the last persisted database attributes.
+   * @returns {import("../../utils/model-primary-key.js").ModelPrimaryKeyValue} - Persisted identity.
+   */
+  _persistedPrimaryKeyValue() {
+    const primaryKey = this.getModelClass().primaryKey()
+
+    return readModelPrimaryKeyValue(primaryKey, (columnName) => this._attributes[columnName])
   }
 
   /**
@@ -4710,7 +4742,7 @@ class VelociousDatabaseRecord {
   /**
    * Runs reload with id.
    * @template {typeof VelociousDatabaseRecord} MC
-   * @param {string | number} id - Record identifier.
+   * @param {import("../../utils/model-primary-key.js").ModelPrimaryKeyValue} id - Record identifier.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async _reloadWithId(id) {
@@ -4721,7 +4753,7 @@ class VelociousDatabaseRecord {
      * @type {Record<string, ReturnType<typeof JSON.parse>>} */
     const whereObject = {}
 
-    whereObject[primaryKey] = id
+    Object.assign(whereObject, modelPrimaryKeyConditions(primaryKey, id))
 
     const query = /** @type {import("../query/model-class-query.js").default<MC>} */ (
       this
@@ -4742,7 +4774,7 @@ class VelociousDatabaseRecord {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async reload() {
-    const recordId = /** @type {string | number} */ (this.readAttribute("id"))
+    const recordId = this._persistedPrimaryKeyValue()
     await this._reloadWithId(recordId)
   }
 

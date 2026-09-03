@@ -433,7 +433,7 @@
  * @property {string[]} [builtInMemberCommands] - Built-in member command names (`find`, `update`, `destroy`, `attach`, `download`, `url`).
  * @property {string} [modelName] - Frontend model name override.
  * @property {string[]} [relationships] - Relationship names to expose in frontend models. Type and target model are inferred from the backend model's registered relationships.
- * @property {string} [primaryKey] - Primary key attribute name.
+ * @property {string | string[]} [primaryKey] - Primary key attribute name or ordered composite primary-key attribute names.
  * @property {FrontendModelResourceServerConfiguration} [server] - Optional legacy backend behavior overrides for built-in frontend actions.
  * @property {FrontendModelResourceSyncConfiguration | boolean} [sync] - Optional safe local/offline sync policy metadata. `policy` participates in the hash but is not exposed to generated frontend config/manifest.
  */

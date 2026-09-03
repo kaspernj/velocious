@@ -19,7 +19,7 @@ import useModelClassEvent from "./use-model-class-event.js"
  * @typedef {import("./use-model-class-event.js").FrontendModelCreateUpdateEventPayload} FrontendModelClassUpdateEventPayload */
 /**
  * Defines this typedef.
- * @typedef {{id: string, model: FrontendModelInstance}} FrontendModelInstanceUpdateEventPayload */
+ * @typedef {{id: string | import("../utils/model-primary-key.js").CompositeModelPrimaryKeyValue, model: FrontendModelInstance}} FrontendModelInstanceUpdateEventPayload */
 /**
  * FrontendModelUpdateEventPayload type.
  * @typedef {FrontendModelClassUpdateEventPayload | FrontendModelInstanceUpdateEventPayload} FrontendModelUpdateEventPayload */

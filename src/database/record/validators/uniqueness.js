@@ -2,6 +2,7 @@
 
 import Base from "./base.js"
 import * as inflection from "inflection"
+import {modelPrimaryKeyConditions, scalarModelPrimaryKeyValue} from "../../../utils/model-primary-key.js"
 import validationMessage from "../validation-messages.js"
 
 export default class VelociousDatabaseRecordValidatorsUniqueness extends Base {
@@ -15,8 +16,6 @@ export default class VelociousDatabaseRecordValidatorsUniqueness extends Base {
   async validate({model, attributeName}) {
     const modelClass = /** @type {typeof import("../index.js").default} */ (model.constructor)
 
-    const connection = model.connection()
-    const tableName = modelClass._getTable().getName()
     const attributeValue = /** @type {string | number} */ (model.readAttribute(attributeName))
     const attributeNameUnderscore = inflection.underscore(attributeName)
 
@@ -55,7 +54,7 @@ export default class VelociousDatabaseRecordValidatorsUniqueness extends Base {
       .where(whereArgs)
 
     if (model.isPersisted()) {
-      existingRecordQuery.where(`${connection.quoteTable(tableName)}.${connection.quoteColumn(modelClass.primaryKey())} != ${connection.quote(model.id())}`)
+      existingRecordQuery.whereNot(modelPrimaryKeyConditions(modelClass.primaryKey(), model.id()))
     }
 
     const existingRecord = await existingRecordQuery.first()
@@ -96,7 +95,7 @@ export default class VelociousDatabaseRecordValidatorsUniqueness extends Base {
       const loaded = instanceRelationship.loaded()
 
       if (loaded && !Array.isArray(loaded) && typeof loaded.id === "function") {
-        return loaded.id()
+        return scalarModelPrimaryKeyValue(loaded.id(), `Uniqueness scope relationship for ${modelClass.name}`)
       }
     }
 

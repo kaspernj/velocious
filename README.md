@@ -3,7 +3,7 @@
 * Concurrent multi threadded web server
 * Database framework with familiar MVC concepts
 * Database models with migrations and validations
-* Database models that work almost the same in frontend and backend
+* Database models that work almost the same in frontend and backend, including online CRUD for [composite primary keys](docs/composite-primary-keys.md)
 * Connection-scoped advisory locks with automatic cleanup before pooled connections are reused or closed (see [docs/advisory-locks.md](docs/advisory-locks.md))
 * Built-in record auditing for model lifecycle changes (see [docs/auditing.md](docs/auditing.md))
 * Declarative state machines for models, with typed event methods generated into the base model (see [docs/state-machine.md](docs/state-machine.md))

@@ -241,10 +241,10 @@ export default class VelociousDatabaseQueryModelClassQuery<MC extends typeof imp
     updateAll(data: Record<string, ReturnType<typeof JSON.parse>>): Promise<void>;
     /**
      * Runs find.
-     * @param {number|string} recordId - Record id.
+     * @param {import("../../utils/model-primary-key.js").ModelPrimaryKeyValue} recordId - Record id.
      * @returns {Promise<InstanceType<MC>>} - Resolves with the find.
      */
-    find(recordId: number | string): Promise<InstanceType<MC>>;
+    find(recordId: import("../../utils/model-primary-key.js").ModelPrimaryKeyValue): Promise<InstanceType<MC>>;
     /**
      * Runs find by.
      * @param {{[key: string]: string | number}} conditions - Conditions hash keyed by attribute name.

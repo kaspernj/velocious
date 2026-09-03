@@ -1,1 +1,1 @@
-Note that composite primary-key CRUD support remains under development and is not available yet.
+Add composite primary-key CRUD for backend records and generated frontend models, including key-changing updates, resource authorization, attachments, and lifecycle event routing. Composite identities use an exact object whose fields match the configured primary-key array; unsupported scalar-only features now fail with an explicit error.

@@ -79,6 +79,7 @@ throw VelociousError.safe("Task placement was rejected.", {
 - `findOrInitializeBy(conditions)` returns existing model or a new unsaved model.
 - `findOrCreateBy(conditions, callback)` returns existing model or creates a new model.
 - Date condition values are normalized through JSON serialization to align request and local matching semantics.
+- Resources may declare `primaryKey: ["tenantId", "externalId"]`; their generated frontend models use exact identity objects for `find`, online `save`/`update`, `destroy`, attachments, and lifecycle events. See [composite primary keys](composite-primary-keys.md) for the identity contract and scalar-only boundaries.
 
 ## Association counts
 - `query.withCount("tasks")` attaches a per-row has-many count to each loaded record, read via `record.readCount("tasksCount")`. Accepts a relationship name, an array of names, or an object form with custom attribute names and per-association `where` filters. Polymorphic has-many is supported. See [with-count.md](with-count.md) for full usage and semantics.

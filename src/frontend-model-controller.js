@@ -21,6 +21,7 @@ import { normalizeDateStringForWrite } from "./database/datetime-storage.js"
 import VelociousError from "./velocious-error.js"
 import isDate from "./utils/is-date.js"
 import isPlainObject from "./utils/plain-object.js"
+import {compositeModelPrimaryKeyCohortSql, modelPrimaryKeyCacheKey, modelPrimaryKeyConditions, modelPrimaryKeyValueFromCacheKey, readModelPrimaryKeyValue, scalarModelPrimaryKey} from "./utils/model-primary-key.js"
 import {RansackQueryError, normalizeRansackGroup, parseRansackSort} from "./utils/ransack.js"
 
 /**
@@ -821,6 +822,10 @@ export default class FrontendModelController extends Controller {
 
     if (!frontendModelResource) return null
 
+    if (this.frontendModelResourceModelClass(frontendModelResource) === modelClass) {
+      return frontendModelResource
+    }
+
     return this.frontendModelResourceConfigurationForBackendProjectModelName({
       backendProject: frontendModelResource.backendProject,
       modelName: modelClass.getModelName()
@@ -1045,10 +1050,10 @@ export default class FrontendModelController extends Controller {
 
   /**
    * Runs frontend model primary key.
-   * @returns {string} - Frontend model primary key.
+   * @returns {import("./utils/model-primary-key.js").ModelPrimaryKeyDefinition} - Frontend model primary key.
    */
   frontendModelPrimaryKey() {
-    return this.frontendModelClass().primaryKey()
+    return this.frontendModelResourceInstance().primaryKey()
   }
 
   /**
@@ -1110,15 +1115,52 @@ export default class FrontendModelController extends Controller {
   /**
    * Runs frontend model primary key value.
    * @param {import("./database/record/index.js").default} model - Model instance.
-   * @returns {string} - Primary key value as string.
+   * @returns {import("./utils/model-primary-key.js").ModelPrimaryKeyValue} - Primary key value.
    */
   frontendModelPrimaryKeyValue(model) {
-    const columnName = this.frontendModelPrimaryKey()
-    const attributeNameMap = model.getModelClass().getColumnNameToAttributeNameMap()
-    const attributeName = attributeNameMap[columnName] || columnName
-    const value = model.readAttribute(attributeName)
+    const primaryKey = this.frontendModelPrimaryKey()
 
-    return String(value)
+    return readModelPrimaryKeyValue(primaryKey, (attributeName) => model.readAttribute(attributeName))
+  }
+
+  /**
+   * Returns the authorized identities from a candidate cohort without per-record queries.
+   * @param {object} args - Arguments.
+   * @param {import("./utils/model-primary-key.js").ModelPrimaryKeyValue[]} args.identities - Candidate identities.
+   * @param {typeof import("./database/record/index.js").default} args.modelClass - Model class owning the identity attributes.
+   * @param {import("./utils/model-primary-key.js").ModelPrimaryKeyDefinition} args.primaryKey - Identity definition.
+   * @param {import("./database/query/model-class-query.js").default<typeof import("./database/record/index.js").default>} args.query - Authorized query.
+   * @returns {Promise<Set<string>>} - Canonical authorized identity keys.
+   */
+  async frontendModelAuthorizedIdentitySet({identities, modelClass, primaryKey, query}) {
+    if (!Array.isArray(primaryKey)) {
+      const authorizedIds = await query
+        .where({[primaryKey]: identities})
+        .pluck(primaryKey)
+
+      return new Set(authorizedIds.map((value) => modelPrimaryKeyCacheKey(primaryKey, value)))
+    }
+
+    const cohorts = query.driver.chunkValues(identities, (cohort) => query
+      .clone()
+      .where(compositeModelPrimaryKeyCohortSql({modelClass, primaryKey, query, values: cohort}))
+      .toSql())
+    const authorizedIdentityKeys = new Set()
+
+    for (const cohort of cohorts) {
+      const authorizedModels = await query
+        .clone()
+        .where(compositeModelPrimaryKeyCohortSql({modelClass, primaryKey, query, values: cohort}))
+        .toArray()
+
+      for (const model of authorizedModels) {
+        const identity = readModelPrimaryKeyValue(primaryKey, (attributeName) => model.readAttribute(attributeName))
+
+        authorizedIdentityKeys.add(modelPrimaryKeyCacheKey(primaryKey, identity))
+      }
+    }
+
+    return authorizedIdentityKeys
   }
 
   /**
@@ -1132,14 +1174,16 @@ export default class FrontendModelController extends Controller {
     if (models.length === 0) return models
 
     const primaryKey = this.frontendModelPrimaryKey()
-    const ids = models.map((model) => this.frontendModelPrimaryKeyValue(model))
-    const authorizedQuery = this.frontendModelAuthorizedQuery(action).where({[primaryKey]: ids})
 
-    const authorizedIdsRaw = await authorizedQuery.pluck(primaryKey)
+    const identities = models.map((model) => this.frontendModelPrimaryKeyValue(model))
+    const authorizedIds = await this.frontendModelAuthorizedIdentitySet({
+      identities,
+      modelClass: this.frontendModelClass(),
+      primaryKey,
+      query: this.frontendModelAuthorizedQuery(action)
+    })
 
-    const authorizedIds = new Set(authorizedIdsRaw.map((id) => String(id)))
-
-    return models.filter((model) => authorizedIds.has(this.frontendModelPrimaryKeyValue(model)))
+    return models.filter((model) => authorizedIds.has(modelPrimaryKeyCacheKey(primaryKey, this.frontendModelPrimaryKeyValue(model))))
   }
 
   /**
@@ -1156,7 +1200,7 @@ export default class FrontendModelController extends Controller {
   /**
    * Runs frontend model find record.
    * @param {"find" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url"} action - Frontend action.
-   * @param {string | number} id - Record id.
+   * @param {import("./utils/model-primary-key.js").ModelPrimaryKeyValue} id - Record id.
    * @returns {Promise<import("./database/record/index.js").default | null>} - Located model record.
    */
   async frontendModelFindRecord(action, id) {
@@ -1469,17 +1513,21 @@ export default class FrontendModelController extends Controller {
       if (candidates.length === 0) continue
 
       const primaryKey = modelClass.primaryKey()
-      const ids = candidates
-        .map((record) => record.readAttribute(primaryKey))
-        .filter((value) => value !== null && value !== undefined)
-      if (ids.length === 0) continue
 
       for (const action of entry.actions) {
+        /** @type {Set<string>} */
         let allowedIds
         try {
-          const authorizedQuery = modelClass.accessibleFor(action, ability).where({[primaryKey]: ids})
-          const plucked = await authorizedQuery.pluck(primaryKey)
-          allowedIds = new Set(plucked.map((value) => String(value)))
+          const authorizedQuery = modelClass.accessibleFor(action, ability)
+
+          const identities = candidates.map((record) => record.id())
+
+          allowedIds = await this.frontendModelAuthorizedIdentitySet({
+            identities,
+            modelClass,
+            primaryKey,
+            query: authorizedQuery
+          })
         } catch (error) {
           // An ability with no allow rules for the action throws via
           // `accessibleFor`; treat as a universal deny so the frontend
@@ -1490,8 +1538,8 @@ export default class FrontendModelController extends Controller {
         }
 
         for (const record of candidates) {
-          const idValue = record.readAttribute(primaryKey)
-          const allowed = idValue !== null && idValue !== undefined && allowedIds.has(String(idValue))
+          const idValue = record.id()
+          const allowed = allowedIds.has(modelPrimaryKeyCacheKey(primaryKey, idValue))
           record._setComputedAbility(action, allowed)
         }
       }
@@ -1657,7 +1705,7 @@ export default class FrontendModelController extends Controller {
    */
   frontendModelMssqlDistinctByPrimaryKeyQuery({query}) {
     const modelClass = this.frontendModelClass()
-    const primaryKey = modelClass.primaryKey()
+    const primaryKey = scalarModelPrimaryKey(modelClass.primaryKey(), "MSSQL distinct frontend-model queries")
     const rootTableSql = query.driver.quoteTable(modelClass.tableName())
     const primaryKeySql = `${rootTableSql}.${query.driver.quoteColumn(primaryKey)}`
     const distinctIdsQuery = query.clone()
@@ -2968,7 +3016,7 @@ export default class FrontendModelController extends Controller {
     const authorizedIdsByClass = new Map()
     /**
      * Primary keys by class.
-     * @type {Map<typeof import("./database/record/index.js").default, string>} */
+     * @type {Map<typeof import("./database/record/index.js").default, import("./utils/model-primary-key.js").ModelPrimaryKeyDefinition>} */
     const primaryKeysByClass = new Map()
 
     for (const [relatedModelClass, relatedModels] of modelsByClass.entries()) {
@@ -2989,22 +3037,16 @@ export default class FrontendModelController extends Controller {
       }
 
       const primaryKey = relatedModelClass.primaryKey()
-      const ids = relatedModels
-        .map((model) => model.attributes()[primaryKey])
-        .filter((id) => id !== undefined && id !== null)
-
-      if (ids.length < 1) {
-        authorizedIdsByClass.set(relatedModelClass, new Set())
-        continue
-      }
-
-      const authorizedIdsRaw = await relatedModelClass
-        .accessibleFor(abilityAction)
-        .where({[primaryKey]: ids})
-        .pluck(primaryKey)
+      const identities = relatedModels.map((model) => model.id())
+      const authorizedIds = await this.frontendModelAuthorizedIdentitySet({
+        identities,
+        modelClass: relatedModelClass,
+        primaryKey,
+        query: relatedModelClass.accessibleFor(abilityAction)
+      })
 
       primaryKeysByClass.set(relatedModelClass, primaryKey)
-      authorizedIdsByClass.set(relatedModelClass, new Set(authorizedIdsRaw.map((id) => String(id))))
+      authorizedIdsByClass.set(relatedModelClass, authorizedIds)
     }
 
     return models.filter((model) => {
@@ -3014,11 +3056,7 @@ export default class FrontendModelController extends Controller {
 
       if (!authorizedIds || !primaryKey) return false
 
-      const primaryKeyValue = model.attributes()[primaryKey]
-
-      if (primaryKeyValue === undefined || primaryKeyValue === null) return false
-
-      return authorizedIds.has(String(primaryKeyValue))
+      return authorizedIds.has(modelPrimaryKeyCacheKey(primaryKey, model.id()))
     })
   }
 
@@ -3461,7 +3499,8 @@ export default class FrontendModelController extends Controller {
 
     const params = this.frontendModelParams()
     const modelClass = this.frontendModelClass()
-    const id = params.id
+    const primaryKey = this.frontendModelPrimaryKey()
+    let id = params.id
 
     if (action === "create") {
       const mutationAttributes = frontendModelMutationAttributes(params)
@@ -3482,8 +3521,20 @@ export default class FrontendModelController extends Controller {
       return frontendModelSerializedModelSuccess(serializedModel)
     }
 
-    if ((typeof id !== "string" && typeof id !== "number") || `${id}`.length < 1) {
+    if (!Array.isArray(primaryKey) && ((typeof id !== "string" && typeof id !== "number") || `${id}`.length < 1)) {
       return this.frontendModelErrorPayload("Expected model id.", {errorType: "validation_error"})
+    }
+
+    try {
+      if (Array.isArray(primaryKey) && typeof id === "string") {
+        id = modelPrimaryKeyValueFromCacheKey(primaryKey, id)
+      }
+
+      modelPrimaryKeyConditions(primaryKey, id)
+    } catch (error) {
+      if (!(error instanceof TypeError)) throw error
+
+      return this.frontendModelErrorPayload(error.message, {errorType: "validation_error"})
     }
 
     if (action === "attach") {

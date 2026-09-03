@@ -1165,10 +1165,12 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
     const primaryKey = modelClass.primaryKey()
 
-    if (typeof primaryKey != "string" || primaryKey.length < 1) return false
-    if (attributeName === primaryKey) return true
+    for (const columnName of Array.isArray(primaryKey) ? primaryKey : [primaryKey]) {
+      if (attributeName === columnName) return true
+      if (modelClass.resolveAttributeName(columnName) === attributeName) return true
+    }
 
-    return modelClass.resolveAttributeName(primaryKey) === attributeName
+    return false
   }
 
   /**
@@ -1188,13 +1190,27 @@ export default class DbGenerateFrontendModels extends BaseCommand {
 
   /**
    * Validates an explicitly configured frontend-model primary key.
-   * @param {{attributeNames: Array<string>, primaryKey: string}} args - Configured primary key args.
-   * @returns {string} - Configured primary key.
+   * @param {{attributeNames: Array<string>, primaryKey: string | string[]}} args - Configured primary key args.
+   * @returns {string | string[]} - Configured primary key.
    */
   validatedConfiguredPrimaryKey({attributeNames, primaryKey}) {
-    if (attributeNames.includes(primaryKey)) return primaryKey
+    const primaryKeyAttributes = Array.isArray(primaryKey) ? primaryKey : [primaryKey]
 
-    throw new Error(`Configured frontend model primary key "${primaryKey}" is not a generated frontend model attribute.`)
+    if (primaryKeyAttributes.length < 1) {
+      throw new Error("Configured frontend model composite primary key must contain at least one attribute.")
+    }
+
+    if (new Set(primaryKeyAttributes).size !== primaryKeyAttributes.length) {
+      throw new Error("Configured frontend model composite primary key attributes must be unique.")
+    }
+
+    for (const attributeName of primaryKeyAttributes) {
+      if (!attributeNames.includes(attributeName)) {
+        throw new Error(`Configured frontend model primary key "${attributeName}" is not a generated frontend model attribute.`)
+      }
+    }
+
+    return primaryKey
   }
 
   /**

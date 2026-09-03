@@ -276,9 +276,9 @@ export default class FrontendModelController extends Controller {
     frontendModelResourceInstance(): import("./frontend-model-resource/base-resource.js").default;
     /**
      * Runs frontend model primary key.
-     * @returns {string} - Frontend model primary key.
+     * @returns {import("./utils/model-primary-key.js").ModelPrimaryKeyDefinition} - Frontend model primary key.
      */
-    frontendModelPrimaryKey(): string;
+    frontendModelPrimaryKey(): import("./utils/model-primary-key.js").ModelPrimaryKeyDefinition;
     /**
      * Runs frontend model ability action.
      * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url"} action - Frontend action.
@@ -300,9 +300,24 @@ export default class FrontendModelController extends Controller {
     /**
      * Runs frontend model primary key value.
      * @param {import("./database/record/index.js").default} model - Model instance.
-     * @returns {string} - Primary key value as string.
+     * @returns {import("./utils/model-primary-key.js").ModelPrimaryKeyValue} - Primary key value.
      */
-    frontendModelPrimaryKeyValue(model: import("./database/record/index.js").default): string;
+    frontendModelPrimaryKeyValue(model: import("./database/record/index.js").default): import("./utils/model-primary-key.js").ModelPrimaryKeyValue;
+    /**
+     * Returns the authorized identities from a candidate cohort without per-record queries.
+     * @param {object} args - Arguments.
+     * @param {import("./utils/model-primary-key.js").ModelPrimaryKeyValue[]} args.identities - Candidate identities.
+     * @param {typeof import("./database/record/index.js").default} args.modelClass - Model class owning the identity attributes.
+     * @param {import("./utils/model-primary-key.js").ModelPrimaryKeyDefinition} args.primaryKey - Identity definition.
+     * @param {import("./database/query/model-class-query.js").default<typeof import("./database/record/index.js").default>} args.query - Authorized query.
+     * @returns {Promise<Set<string>>} - Canonical authorized identity keys.
+     */
+    frontendModelAuthorizedIdentitySet({ identities, modelClass, primaryKey, query }: {
+        identities: import("./utils/model-primary-key.js").ModelPrimaryKeyValue[];
+        modelClass: typeof import("./database/record/index.js").default;
+        primaryKey: import("./utils/model-primary-key.js").ModelPrimaryKeyDefinition;
+        query: import("./database/query/model-class-query.js").default<typeof import("./database/record/index.js").default>;
+    }): Promise<Set<string>>;
     /**
      * Runs frontend model filter authorized models.
      * @param {object} args - Arguments.
@@ -323,10 +338,10 @@ export default class FrontendModelController extends Controller {
     /**
      * Runs frontend model find record.
      * @param {"find" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url"} action - Frontend action.
-     * @param {string | number} id - Record id.
+     * @param {import("./utils/model-primary-key.js").ModelPrimaryKeyValue} id - Record id.
      * @returns {Promise<import("./database/record/index.js").default | null>} - Located model record.
      */
-    frontendModelFindRecord(action: "find" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url", id: string | number): Promise<import("./database/record/index.js").default | null>;
+    frontendModelFindRecord(action: "find" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url", id: import("./utils/model-primary-key.js").ModelPrimaryKeyValue): Promise<import("./database/record/index.js").default | null>;
     /**
      * Runs frontend model create record.
      * @param {Record<string, ReturnType<typeof JSON.parse>>} attributes - Create attributes.

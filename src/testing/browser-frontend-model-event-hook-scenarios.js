@@ -15,10 +15,10 @@ import wait from "awaitery/build/wait.js"
  * @typedef {import("../frontend-models/base.js").FrontendModelResourceConfig} FrontendModelResourceConfig */
 /**
  * Defines this typedef.
- * @typedef {{id: string, model: FrontendModelBase}} FrontendModelHookTestCreateUpdatePayload */
+ * @typedef {{id: string | import("../utils/model-primary-key.js").CompositeModelPrimaryKeyValue, model: FrontendModelBase}} FrontendModelHookTestCreateUpdatePayload */
 /**
  * Defines this typedef.
- * @typedef {{id: string}} FrontendModelHookTestDestroyPayload */
+ * @typedef {{id: string | import("../utils/model-primary-key.js").CompositeModelPrimaryKeyValue}} FrontendModelHookTestDestroyPayload */
 /**
  * FakeSubscriptions type.
  * @typedef {object} FakeSubscriptions

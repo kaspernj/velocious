@@ -2,6 +2,7 @@
 
 import UUID from "pure-uuid"
 import HasManyRelationship from "./relationships/has-many.js"
+import {scalarModelPrimaryKey, scalarModelPrimaryKeyValue} from "../../utils/model-primary-key.js"
 
 /**
  * Global audit event bus matching ActiveRecordAuditable::Events.
@@ -648,6 +649,7 @@ async function createAuditWithCurrentConnection(record, args, modelClass) {
   const auditedChanges = args.auditedChanges === undefined ? null : args.auditedChanges
   const params = args.params === undefined ? null : args.params
   const currentDate = new Date()
+  const recordId = scalarModelPrimaryKeyValue(record.id(), `Auditing for ${modelClass.name}`)
 
   const auditActionId = await findOrCreateLookupId({
     columnName: "action",
@@ -667,7 +669,7 @@ async function createAuditWithCurrentConnection(record, args, modelClass) {
       tableName: tableData.tableName,
       data: {
         id: auditId,
-        [`${modelKey}_id`]: record.id(),
+        [`${modelKey}_id`]: recordId,
         audit_action_id: auditActionId,
         audited_changes: auditedChanges,
         params,
@@ -691,7 +693,7 @@ async function createAuditWithCurrentConnection(record, args, modelClass) {
         id: auditId,
         audit_action_id: auditActionId,
         audit_auditable_type_id: auditAuditableTypeId,
-        auditable_id: record.id(),
+        auditable_id: recordId,
         auditable_type: modelClass.getModelName(),
         audited_changes: auditedChanges,
         params,
@@ -836,7 +838,8 @@ function withoutAudit(modelClass, action) {
   const tableData = auditTableDataByModel.get(modelClass)?.get(databaseIdentity)
   const modelTableSql = db.quoteTable(modelClass.tableName())
   const auditActionsTableSql = db.quoteTable("audit_actions")
-  const modelPrimaryKeySql = `${modelTableSql}.${db.quoteColumn(modelClass.primaryKey())}`
+  const primaryKey = scalarModelPrimaryKey(modelClass.primaryKey(), `withoutAudit for ${modelClass.name}`)
+  const modelPrimaryKeySql = `${modelTableSql}.${db.quoteColumn(primaryKey)}`
   const auditActionsIdSql = `${auditActionsTableSql}.${db.quoteColumn("id")}`
   const auditActionsActionSql = `${auditActionsTableSql}.${db.quoteColumn("action")}`
 

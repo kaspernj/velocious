@@ -227,7 +227,7 @@ export type FrontendModelResourceSaveOptions = {
     nestedAttributes?: FrontendModelResourceAttributePayload | null;
 };
 export type FrontendModelResourceNestedEntry = FrontendModelResourceAttributePayload & {
-    id?: string | number;
+    id?: import("../utils/model-primary-key.js").ModelPrimaryKeyValue;
     _destroy?: boolean;
     attributes?: FrontendModelResourceAttributePayload;
     attachments?: FrontendModelResourceAttributePayload;
@@ -369,7 +369,7 @@ export type FrontendModelResourceNestedEntry = FrontendModelResourceAttributePay
  */
 /**
  * Normalized nested attributes entry.
- * @typedef {FrontendModelResourceAttributePayload & {id?: string | number, _destroy?: boolean, attributes?: FrontendModelResourceAttributePayload, attachments?: FrontendModelResourceAttributePayload, nestedAttributes?: FrontendModelResourceAttributePayload}} FrontendModelResourceNestedEntry
+ * @typedef {FrontendModelResourceAttributePayload & {id?: import("../utils/model-primary-key.js").ModelPrimaryKeyValue, _destroy?: boolean, attributes?: FrontendModelResourceAttributePayload, attachments?: FrontendModelResourceAttributePayload, nestedAttributes?: FrontendModelResourceAttributePayload}} FrontendModelResourceNestedEntry
  */
 /**
  * Base class for backend frontend-model resources.
@@ -406,8 +406,8 @@ export default class FrontendModelBaseResource<TModelClass extends typeof import
     static relationships: string[] | undefined;
     /** @type {string | undefined} */
     static modelName: string | undefined;
-    /** @type {string | undefined} */
-    static primaryKey: string | undefined;
+    /** @type {string | string[] | undefined} */
+    static primaryKey: string | string[] | undefined;
     /** @type {import("../configuration-types.js").FrontendModelResourceServerConfiguration | undefined} */
     static server: import("../configuration-types.js").FrontendModelResourceServerConfiguration | undefined;
     /** @type {import("../configuration-types.js").FrontendModelResourceSyncConfiguration | boolean | undefined} */
@@ -751,9 +751,9 @@ export default class FrontendModelBaseResource<TModelClass extends typeof import
     }): Promise<Result>;
     /**
      * Runs primary key.
-     * @returns {string} - Primary key.
+     * @returns {import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition} - Primary key.
      */
-    primaryKey(): string;
+    primaryKey(): import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition;
     /**
      * Runs authorized query.
      * @param {FrontendModelResourceAction} action - Ability action.
@@ -841,10 +841,10 @@ export default class FrontendModelBaseResource<TModelClass extends typeof import
     /**
      * Runs find.
      * @param {"find" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url"} action - Action.
-     * @param {string | number} id - Record id.
+     * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} id - Record id.
      * @returns {Promise<import("../database/record/index.js").default | null>} - Located model.
      */
-    find(action: "find" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url", id: string | number): Promise<import("../database/record/index.js").default | null>;
+    find(action: "find" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url", id: import("../utils/model-primary-key.js").ModelPrimaryKeyValue): Promise<import("../database/record/index.js").default | null>;
     /**
      * Runs create.
      * @param {FrontendModelResourceAttributePayload} attributes - Create attributes.
@@ -975,16 +975,18 @@ export default class FrontendModelBaseResource<TModelClass extends typeof import
      * fields (`{name, file, commentsAttributes}`).
      * @param {object} args - Normalization inputs.
      * @param {{attributes: string[], nested: Record<string, ReturnType<typeof JSON.parse>>}} args.childPermit - Parsed child permit spec.
+     * @param {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration} args.childResourceConfiguration - Child resource configuration.
      * @param {FrontendModelResourceNestedEntry} args.entry - Raw nested entry.
      * @param {string} args.relationshipName - Relationship name for error messages.
      * @param {typeof import("../database/record/index.js").default} args.targetModelClass - Child model class.
      * @returns {FrontendModelResourceNestedEntry} Normalized nested entry.
      */
-    _normalizeNestedRelationshipEntry({ childPermit, entry, relationshipName, targetModelClass }: {
+    _normalizeNestedRelationshipEntry({ childPermit, childResourceConfiguration, entry, relationshipName, targetModelClass }: {
         childPermit: {
             attributes: string[];
             nested: Record<string, ReturnType<typeof JSON.parse>>;
         };
+        childResourceConfiguration: import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration;
         entry: FrontendModelResourceNestedEntry;
         relationshipName: string;
         targetModelClass: typeof import("../database/record/index.js").default;
@@ -1069,7 +1071,7 @@ export default class FrontendModelBaseResource<TModelClass extends typeof import
      * @param {import("../authorization/ability.js").default | undefined} args.ability - Current ability.
      * @param {"update" | "destroy"} args.action - Frontend action.
      * @param {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration} args.childResourceConfiguration - Child resource configuration.
-     * @param {string | number} args.id - Child id from the payload.
+     * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} args.id - Child id from the payload.
      * @param {string} args.relationshipName - Parent's relationship name for error messages.
      * @param {typeof import("../database/record/index.js").default} args.targetModelClass - Child model class.
      * @returns {Promise<import("../database/record/index.js").default>} Authorized child model.
@@ -1078,7 +1080,7 @@ export default class FrontendModelBaseResource<TModelClass extends typeof import
         ability: import("../authorization/ability.js").default | undefined;
         action: "update" | "destroy";
         childResourceConfiguration: import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration;
-        id: string | number;
+        id: import("../utils/model-primary-key.js").ModelPrimaryKeyValue;
         relationshipName: string;
         targetModelClass: typeof import("../database/record/index.js").default;
     }): Promise<import("../database/record/index.js").default>;
@@ -1102,7 +1104,7 @@ export default class FrontendModelBaseResource<TModelClass extends typeof import
      * @param {import("../authorization/ability.js").default | undefined} args.ability - Current ability.
      * @param {"update" | "destroy"} args.action - Frontend action.
      * @param {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration} args.childResourceConfiguration - Child resource configuration.
-     * @param {string | number} args.id - Child id from the payload.
+     * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} args.id - Child id from the payload.
      * @param {import("../database/record/index.js").default} args.parent - Parent model instance.
      * @param {Record<string, string | number>} args.parentLinkAttributes - Attributes that scope the child to the parent.
      * @param {string} args.relationshipName - Parent's relationship name (for error messages).
@@ -1113,7 +1115,7 @@ export default class FrontendModelBaseResource<TModelClass extends typeof import
         ability: import("../authorization/ability.js").default | undefined;
         action: "update" | "destroy";
         childResourceConfiguration: import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration;
-        id: string | number;
+        id: import("../utils/model-primary-key.js").ModelPrimaryKeyValue;
         parent: import("../database/record/index.js").default;
         parentLinkAttributes: Record<string, string | number>;
         relationshipName: string;

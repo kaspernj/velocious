@@ -1,5 +1,7 @@
 // @ts-check
 
+import {scalarModelPrimaryKey} from "../utils/model-primary-key.js"
+
 /**
  * Defines this typedef.
  * @template {typeof import("../database/record/index.js").default} [MC=typeof import("../database/record/index.js").default]
@@ -244,7 +246,7 @@ export default class VelociousAuthorizationAbility {
    * @returns {string[]} - SQL condition parts.
    */
   conditionSqlParts({action, modelClass, query, rules}) {
-    const pk = modelClass.primaryKey()
+    const pk = scalarModelPrimaryKey(modelClass.primaryKey(), `Conditional authorization for ${modelClass.name}`)
     const quotedBaseTable = query.driver.quoteTable(modelClass.tableName())
     const quotedPk = query.driver.quoteColumn(pk)
     const sqlParts = []

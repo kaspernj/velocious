@@ -2,6 +2,7 @@
 
 import UUID from "pure-uuid"
 import TableData from "../../table-data/index.js"
+import {modelPrimaryKeyCacheKey} from "../../../utils/model-primary-key.js"
 import normalizeRecordAttachmentInput from "./normalize-input.js"
 
 /**
@@ -20,6 +21,15 @@ const storesByConfiguration = new WeakMap()
  */
 function generateUUID() {
   return new UUID(4).format()
+}
+
+/**
+ * Returns the canonical stored owner identity for a model attachment.
+ * @param {import("../index.js").default} model - Attachment owner.
+ * @returns {string} - Canonical owner identity.
+ */
+function attachmentRecordId(model) {
+  return modelPrimaryKeyCacheKey(model.getModelClass().primaryKey(), model.id())
 }
 
 /**
@@ -198,7 +208,7 @@ export default class RecordAttachmentsStore {
         if (persistenceFailed) {
           throw new AggregateError(
             [persistenceError, closeError],
-            `Attachment persistence and path-source close both failed for ${model.getModelClass().getModelName()}#${String(model.id())} (${name})`,
+            `Attachment persistence and path-source close both failed for ${model.getModelClass().getModelName()}#${attachmentRecordId(model)} (${name})`,
             {cause: closeError}
           )
         }
@@ -242,7 +252,7 @@ export default class RecordAttachmentsStore {
     const attachmentDriverName = this._attachmentDriverNameFor({model, name})
     const now = Date.now()
     const recordType = model.getModelClass().getModelName()
-    const recordId = String(model.id())
+    const recordId = attachmentRecordId(model)
     const attachmentId = generateUUID()
     /**
      * Written storage key.
@@ -453,7 +463,7 @@ export default class RecordAttachmentsStore {
 
     return await this._withDb(async (db) => {
       const recordType = model.getModelClass().getModelName()
-      const recordId = String(model.id())
+      const recordId = attachmentRecordId(model)
       let query = db
         .newQuery()
         .from(ATTACHMENTS_TABLE)
@@ -484,7 +494,7 @@ export default class RecordAttachmentsStore {
 
     return await this._withDb(async (db) => {
       const recordType = model.getModelClass().getModelName()
-      const recordId = String(model.id())
+      const recordId = attachmentRecordId(model)
       const query = db
         .newQuery()
         .from(ATTACHMENTS_TABLE)
@@ -535,7 +545,7 @@ export default class RecordAttachmentsStore {
 
     return await this._withDb(async (db) => {
       const recordType = model.getModelClass().getModelName()
-      const recordId = String(model.id())
+      const recordId = attachmentRecordId(model)
       /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */
       const rows = await db
         .newQuery()

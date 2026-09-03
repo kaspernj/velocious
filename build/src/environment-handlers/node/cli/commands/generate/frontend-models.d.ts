@@ -426,13 +426,13 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     }): string | Array<string>;
     /**
      * Validates an explicitly configured frontend-model primary key.
-     * @param {{attributeNames: Array<string>, primaryKey: string}} args - Configured primary key args.
-     * @returns {string} - Configured primary key.
+     * @param {{attributeNames: Array<string>, primaryKey: string | string[]}} args - Configured primary key args.
+     * @returns {string | string[]} - Configured primary key.
      */
     validatedConfiguredPrimaryKey({ attributeNames, primaryKey }: {
         attributeNames: Array<string>;
-        primaryKey: string;
-    }): string;
+        primaryKey: string | string[];
+    }): string | string[];
     /**
      * Resolves the backend primary key to generated frontend-model attribute names.
      * @param {{attributeNames: Array<string>, modelClass: typeof import("../../../../../database/record/index.js").default}} args - Primary key resolution args.

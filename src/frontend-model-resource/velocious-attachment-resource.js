@@ -3,6 +3,7 @@
 import FrontendModelBaseResource from "./base-resource.js"
 import VelociousAttachment from "../database/record/attachments/attachment-record.js"
 import isPlainObject from "../utils/plain-object.js"
+import {modelPrimaryKeyConditions, modelPrimaryKeyValueFromCacheKey} from "../utils/model-primary-key.js"
 
 /**
  * Framework-owned frontend resource exposing safe attachment metadata while
@@ -168,9 +169,11 @@ export default class VelociousAttachmentResource extends FrontendModelBaseResour
     await controller.ensureFrontendModelRecordClassInitialized(ownerModelClass)
 
     const abilityAction = ownerResource.resourceConfiguration.abilities.find || ownerResource.resourceConfiguration.abilities.index || "read"
+    const primaryKey = ownerModelClass.primaryKey()
+    const ownerIdentity = modelPrimaryKeyValueFromCacheKey(primaryKey, ownerScope.recordId)
     const owner = await ownerModelClass
       .accessibleFor(abilityAction, this.ability)
-      .findBy({[ownerModelClass.primaryKey()]: ownerScope.recordId})
+      .findBy(modelPrimaryKeyConditions(primaryKey, ownerIdentity))
 
     return Boolean(owner)
   }

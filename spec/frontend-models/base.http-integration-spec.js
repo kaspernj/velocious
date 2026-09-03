@@ -12,6 +12,40 @@ import runWithProcessTimezone from "../helpers/process-timezone.js"
 import TaskRecord from "../dummy/src/models/task.js"
 import UserRecord from "../dummy/src/models/user.js"
 
+/** Frontend model with a composite resource identity backed by dummy tasks. */
+class CompositeTask extends FrontendModelBase {
+  /** @returns {import("../../src/frontend-models/base.js").FrontendModelResourceConfig} - Resource config. */
+  static resourceConfig() {
+    return {
+      attributes: ["name", "projectId", "description"],
+      builtInCollectionCommands: ["create", "index"],
+      builtInMemberCommands: ["find", "update", "destroy"],
+      modelName: "CompositeTask",
+      primaryKey: ["name", "projectId"]
+    }
+  }
+
+  /** @returns {string} - Task name. */
+  name() { return this.readAttribute("name") }
+
+  /** @param {string} value - Task name. @returns {void} */
+  setName(value) { this.setAttribute("name", value) }
+
+  /** @returns {number} - Project id. */
+  projectId() { return this.readAttribute("projectId") }
+
+  /** @param {number} value - Project id. @returns {void} */
+  setProjectId(value) { this.setAttribute("projectId", value) }
+
+  /** @returns {string | null} - Task description. */
+  description() { return this.readAttribute("description") }
+
+  /** @param {string} value - Task description. @returns {void} */
+  setDescription(value) { this.setAttribute("description", value) }
+}
+
+FrontendModelBase.registerModel(CompositeTask)
+
 /** Frontend model used for Node HTTP integration tests against dummy backend routes. */
 class User extends FrontendModelBase {
   /**
@@ -381,6 +415,75 @@ async function seedHttpAttachmentModels() {
 }
 
 describe("Frontend models - base http integration", {databaseCleaning: {transaction: false, truncate: true}}, () => {
+  it("creates, finds, updates, rekeys, and destroys a composite-identity model", async () => {
+    await Dummy.run(async () => {
+      const originalProject = await ProjectRecord.create({name: "Composite frontend original project"})
+      const replacementProject = await ProjectRecord.create({name: "Composite frontend replacement project"})
+
+      configureNodeTransport()
+
+      try {
+        const task = await CompositeTask.create({
+          description: "Before",
+          name: "Composite frontend task",
+          projectId: originalProject.id()
+        })
+        await CompositeTask.create({
+          description: "Second",
+          name: "Composite frontend task two",
+          projectId: originalProject.id()
+        })
+
+        expect(task.primaryKeyValue()).toEqual({name: "Composite frontend task", projectId: originalProject.id()})
+
+        const listedTasks = await CompositeTask
+          .where({projectId: originalProject.id()})
+          .sort(["name"])
+          .toArray()
+
+        expect(listedTasks.map((listedTask) => listedTask.name())).toEqual([
+          "Composite frontend task",
+          "Composite frontend task two"
+        ])
+
+        const foundTask = await CompositeTask.find(task.primaryKeyValue())
+
+        expect(foundTask.description()).toEqual("Before")
+        foundTask.setDescription("After")
+        await foundTask.save()
+        expect(foundTask.description()).toEqual("After")
+
+        foundTask.setName("Composite frontend renamed")
+        foundTask.setProjectId(replacementProject.id())
+        await foundTask.save()
+
+        expect(foundTask.primaryKeyValue()).toEqual({name: "Composite frontend renamed", projectId: replacementProject.id()})
+        expect((await CompositeTask.find(foundTask.primaryKeyValue())).description()).toEqual("After")
+
+        await foundTask.destroy()
+        await expect(async () => await CompositeTask.find(foundTask.primaryKeyValue())).toThrow(/not found/u)
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
+  it("rejects malformed composite frontend identities before transport", async () => {
+    const invalidIdentities = [
+      "Composite frontend task",
+      ["Composite frontend task", 1],
+      null,
+      {name: "Composite frontend task"},
+      {name: "Composite frontend task", projectId: 1, extra: true},
+      {name: null, projectId: 1},
+      {name: "Composite frontend task", projectId: undefined}
+    ]
+
+    for (const identity of invalidIdentities) {
+      await expect(async () => await CompositeTask.find(identity)).toThrow(/composite primary key identity/u)
+    }
+  })
+
   it("loads frontend models through real websocket batch requests", async () => {
     await Dummy.run(async () => {
       const websocketClient = new WebsocketClient()

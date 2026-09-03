@@ -163,6 +163,21 @@ class ConfiguredPrimaryKeyUserFrontendResource extends FrontendModelBaseResource
   static primaryKey = "legacyID"
 }
 
+class CompositePrimaryKeyUser extends DatabaseRecord {}
+CompositePrimaryKeyUser.setPrimaryKey(["LegacyID", "TenantID"])
+
+class CompositePrimaryKeyUserFrontendResource extends FrontendModelBaseResource {
+  static ModelClass = CompositePrimaryKeyUser
+
+  static attributes = [
+    {name: "legacyID", type: "integer"},
+    {name: "tenantID", type: "integer"},
+    {name: "email", type: "varchar"}
+  ]
+
+  static primaryKey = ["legacyID", "tenantID"]
+}
+
 /** @returns {void} */
 function configureCallColumns() {
   Call._initialized = true
@@ -230,6 +245,24 @@ function configureLegacyPrimaryKeyUserColumns() {
   delete LegacyPrimaryKeyUser._columnsAsHash
   delete LegacyPrimaryKeyUser._columnTypeByName
   delete LegacyPrimaryKeyUser._columnNameToAttributeName
+}
+
+/** @returns {void} */
+function configureCompositePrimaryKeyUserColumns() {
+  CompositePrimaryKeyUser._initialized = true
+  CompositePrimaryKeyUser._columns = [
+    new TableColumn("LegacyID", {null: false, type: "integer"}),
+    new TableColumn("TenantID", {null: false, type: "integer"}),
+    new TableColumn("email", {null: true, type: "varchar"})
+  ]
+  CompositePrimaryKeyUser._attributeNameToColumnName = {
+    email: "email",
+    legacyID: "LegacyID",
+    tenantID: "TenantID"
+  }
+  delete CompositePrimaryKeyUser._columnsAsHash
+  delete CompositePrimaryKeyUser._columnTypeByName
+  delete CompositePrimaryKeyUser._columnNameToAttributeName
 }
 
 /**
@@ -902,6 +935,37 @@ export default class ReportResource extends FrontendModelBaseResource {
     expect(userContents).toContain("@property {number} legacyID - Attribute value.")
     expect(userContents).toContain("primaryKey: \"legacyID\"")
     expect(userContents).not.toContain("primaryKey: \"LegacyID\"")
+  })
+
+  it("generates configured composite frontend-model primary key attribute names", async () => {
+    await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
+    configureCompositePrimaryKeyUserColumns()
+
+    const cli = new Cli({
+      configuration: buildConfiguration({
+        backendProjectsList: [{
+          path: "/tmp/backend",
+          frontendModels: {
+            CompositePrimaryKeyUser: CompositePrimaryKeyUserFrontendResource
+          }
+        }],
+        initializeModels: async ({configuration}) => {
+          configuration.registerModelClass(CompositePrimaryKeyUser)
+        }
+      }),
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:frontend-models"],
+      testing: true
+    })
+
+    await cli.execute()
+
+    const userContents = await fs.readFile(`${dummyDirectory()}/src/frontend-models/composite-primary-key-user.js`, "utf8")
+
+    expect(userContents).toContain("@property {number} legacyID - Attribute value.")
+    expect(userContents).toContain("@property {number} tenantID - Attribute value.")
+    expect(userContents).toContain('primaryKey: ["legacyID","tenantID"]')
   })
 
   it("emits nestedAttributes relationship names extracted from permittedParams into the generated frontend-model resourceConfig", async () => {

@@ -1,5 +1,7 @@
 // @ts-check
 
+import {scalarModelPrimaryKey} from "../../../utils/model-primary-key.js"
+
 import ensureModelClassInitialized from "./ensure-model-class-initialized.js"
 import PreloaderSelection from "./selection.js"
 import preloadQueryForModel, { bindPreloadModelClass } from "./query-for-model.js"
@@ -185,7 +187,8 @@ export default class VelociousDatabaseQueryPreloaderHasMany {
 
       for (const throughModel of throughModels) {
         const parentId = /** @type {string | number} */ (throughModel.readColumn(throughForeignKey))
-        const throughId = /** @type {string | number} */ (throughModel.readColumn(throughModelClass.primaryKey()))
+        const throughPrimaryKey = scalarModelPrimaryKey(throughModelClass.primaryKey(), `Has-many-through preload for ${throughModelClass.name}`)
+        const throughId = /** @type {string | number} */ (throughModel.readColumn(throughPrimaryKey))
 
         if (!(parentId in parentToTargetIds)) parentToTargetIds[parentId] = []
 

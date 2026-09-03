@@ -3,10 +3,11 @@
 import VelociousWebsocketChannel from "../http-server/websocket-channel.js"
 import Response from "../http-server/client/response.js"
 import {serializeFrontendModelTransportValue} from "./transport-serialization.js"
+import {modelPrimaryKeyConditions} from "../utils/model-primary-key.js"
 
 /**
  * Defines this typedef.
- * @typedef {{action?: string, id?: string | number, matchedEventFilterKeys?: string[], record?: import("./query.js").FrontendModelTransportValue, [key: string]: import("./query.js").FrontendModelTransportValue | string[] | undefined}} FrontendModelLifecycleBroadcastBody
+ * @typedef {{action?: string, id?: import("../utils/model-primary-key.js").ModelPrimaryKeyValue, matchedEventFilterKeys?: string[], record?: import("./query.js").FrontendModelTransportValue, [key: string]: import("./query.js").FrontendModelTransportValue | string[] | undefined}} FrontendModelLifecycleBroadcastBody
  */
 /**
  * Defines this typedef.
@@ -359,7 +360,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
 
   /**
    * Resolves tenant for event.
-   * @param {string | number} id - Event record id.
+   * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} id - Event record id.
    * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolved tenant.
    */
   async _resolveEventTenant(id) {
@@ -390,7 +391,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
    * the subscriber's own tenant/ability scope. When no tenant resolves (non-multitenant configs), the
    * callback runs directly so the ambient context is preserved.
    * @template T
-   * @param {string | number} id - Event record id.
+   * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} id - Event record id.
    * @param {() => Promise<T>} callback - Authorized-query callback.
    * @returns {Promise<T>} - Callback result.
    */
@@ -415,7 +416,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
   /**
    * Whether the broadcast record is within the subscriber's authenticated ability scope. Used to gate
    * unfiltered/unprojected create/update delivery so a scoped token never receives a record it cannot read.
-   * @param {string | number} id - Event record id.
+   * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} id - Event record id.
    * @param {typeof import("../frontend-model-controller.js").default} FrontendModelController - Server-side frontend-model controller class.
    * @returns {Promise<boolean>} True when the record is readable by this subscription.
    */
@@ -426,8 +427,8 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
       await controller.ensureFrontendModelClassInitialized()
 
       const ModelClass = controller.frontendModelClass()
-      const primaryKey = ModelClass.primaryKey()
-      const query = controller.frontendModelAuthorizedQuery("find").where({[ModelClass.tableName()]: {[primaryKey]: id}})
+      const primaryKey = controller.frontendModelPrimaryKey()
+      const query = controller.frontendModelAuthorizedQuery("find").where({[ModelClass.tableName()]: modelPrimaryKeyConditions(primaryKey, id)})
 
       return Boolean(await query.first())
     })
@@ -435,7 +436,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
 
   /**
    * Runs matched event filter keys for event id.
-   * @param {string | number} id - Event record id.
+   * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} id - Event record id.
    * @param {typeof import("../frontend-model-controller.js").default} FrontendModelController - Server-side frontend-model controller class.
    * @returns {Promise<string[]>} - Event filter keys matched by the record.
    */
@@ -463,7 +464,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
    * @param {object} args - Filter args.
    * @param {typeof import("../frontend-model-controller.js").default} args.FrontendModelController - Server-side frontend-model controller class.
    * @param {import("./query.js").FrontendModelEventFilterPayloadEntry} args.eventFilter - Event filter payload.
-   * @param {string | number} args.id - Event record id.
+   * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} args.id - Event record id.
    * @returns {Promise<boolean>} Whether the record matches the filter.
    */
   async _eventMatchesFilter({FrontendModelController, eventFilter, id}) {
@@ -477,12 +478,12 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
       await controller.ensureFrontendModelClassInitialized()
 
       const ModelClass = controller.frontendModelClass()
-      const primaryKey = ModelClass.primaryKey()
+      const primaryKey = controller.frontendModelPrimaryKey()
       const where = controller.frontendModelWhere()
       const joins = controller.frontendModelJoins()
       // Start from the subscriber's authorized scope so a filter can only ever match records the
       // subscription's ability permits to read.
-      let query = controller.frontendModelAuthorizedQuery("find").where({[ModelClass.tableName()]: {[primaryKey]: id}})
+      let query = controller.frontendModelAuthorizedQuery("find").where({[ModelClass.tableName()]: modelPrimaryKeyConditions(primaryKey, id)})
 
       if (where) controller.applyFrontendModelWhere({query, where})
       if (joins) controller.applyFrontendModelJoins({joins, query})
@@ -497,7 +498,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
 
   /**
    * Runs projected record for event id.
-   * @param {string | number} id - Event record id.
+   * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} id - Event record id.
    * @param {typeof import("../frontend-model-controller.js").default} FrontendModelController - Server-side frontend-model controller class.
    * @returns {Promise<Record<string, import("./query.js").FrontendModelTransportValue> | null>} - Serialized projected record.
    */
@@ -508,10 +509,10 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
       await controller.ensureFrontendModelClassInitialized()
 
       const ModelClass = controller.frontendModelClass()
-      const primaryKey = ModelClass.primaryKey()
+      const primaryKey = controller.frontendModelPrimaryKey()
       // Reload through the subscriber's authorized scope so projected records are only ever sent for
       // rows the subscription's ability permits to read.
-      let query = controller.frontendModelAuthorizedQuery("find").where({[ModelClass.tableName()]: {[primaryKey]: id}})
+      let query = controller.frontendModelAuthorizedQuery("find").where({[ModelClass.tableName()]: modelPrimaryKeyConditions(primaryKey, id)})
       const preload = controller.frontendModelPreload()
 
       if (preload) query = query.preload(preload)

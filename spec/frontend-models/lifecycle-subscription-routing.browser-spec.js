@@ -91,7 +91,56 @@ function buildRoutedTaskClass() {
   }
 }
 
+/**
+ * Builds an isolated composite-identity frontend model class.
+ * @returns {typeof FrontendModelBase} - Frontend model class.
+ */
+function buildCompositeRoutedTaskClass() {
+  return class CompositeRoutedTask extends FrontendModelBase {
+    /** @returns {import("../../src/frontend-models/base.js").FrontendModelResourceConfig} - Resource configuration. */
+    static resourceConfig() {
+      return {
+        attributes: ["name", "workspaceId", "state"],
+        primaryKey: ["name", "workspaceId"]
+      }
+    }
+
+    /** @returns {string} - Task state. */
+    state() { return this.readAttribute("state") }
+  }
+}
+
 describe("Frontend model lifecycle subscription routing", () => {
+  it("routes composite identities to the matching instance listener", async () => {
+    const CompositeRoutedTask = buildCompositeRoutedTaskClass()
+    const websocketClient = buildWebsocketClient()
+    const task = new CompositeRoutedTask({name: "Composite task", state: "open", workspaceId: "alpha"})
+    /** @type {Array<string | import("../../src/utils/model-primary-key.js").CompositeModelPrimaryKeyValue>} */
+    const eventIds = []
+
+    FrontendModelBase.configureTransport({websocketClient})
+
+    try {
+      const unsubscribe = await task.onUpdate(({id}) => eventIds.push(id))
+      const subscription = websocketClient.subscriptions[0]
+
+      if (!subscription) throw new Error("Expected composite model subscription")
+
+      subscription.options.onMessage({
+        action: "update",
+        id: {name: "Composite task", workspaceId: "alpha"},
+        record: {name: "Composite task", state: "closed", workspaceId: "alpha"}
+      })
+
+      expect(eventIds).toEqual([{name: "Composite task", workspaceId: "alpha"}])
+      expect(task.state()).toEqual("closed")
+
+      unsubscribe()
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
   it("isolates distinct request contexts and delivers only matching events", async () => {
     const RoutedTask = buildRoutedTaskClass()
     const websocketClient = buildWebsocketClient()
