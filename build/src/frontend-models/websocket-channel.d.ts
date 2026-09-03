@@ -49,6 +49,12 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
      */
     canSubscribe(): Promise<boolean>;
     /**
+     * Resolves a subscription name through frontend resources before falling back to a backing model name.
+     * @param {string} modelName - Frontend resource name.
+     * @returns {typeof import("../database/record/index.js").default | undefined} - Backing model class.
+     */
+    _modelClass(modelName: string): typeof import("../database/record/index.js").default | undefined;
+    /**
      * Runs deliver broadcast.
      * @param {FrontendModelLifecycleBroadcastBody} body - Broadcast body.
      * @param {{eventId?: string}} [meta] - Optional event metadata.

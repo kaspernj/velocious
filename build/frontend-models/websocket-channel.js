@@ -2,6 +2,8 @@
 
 import VelociousWebsocketChannel from "../http-server/websocket-channel.js"
 import Response from "../http-server/client/response.js"
+import {frontendModelResourcesWithBuiltInsForBackendProject} from "./built-in-resources.js"
+import {frontendModelResourceClassFromDefinition} from "./resource-definition.js"
 import {serializeFrontendModelTransportValue} from "./transport-serialization.js"
 import {modelPrimaryKeyConditions} from "../utils/model-primary-key.js"
 
@@ -22,6 +24,25 @@ const EVENT_FILTER_KEYS = new Set(["joins", "key", "searches", "where"])
 // Mirrors FRONTEND_MODELS_CHANNEL_NAME in ./websocket-publishers.js, duplicated here
 // to avoid the configuration → logger → websocket-publishers import cycle.
 const FRONTEND_MODELS_CHANNEL_NAME = "frontend-models"
+
+/**
+ * Resolves frontend resource identity attributes to backing database columns.
+ * @param {typeof import("../database/record/index.js").default} ModelClass - Backing model class.
+ * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition} primaryKey - Frontend resource identity definition.
+ * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} id - Frontend resource identity.
+ * @returns {Record<string, import("../utils/model-primary-key.js").ModelPrimaryKeyScalar>} - Backing column conditions.
+ */
+function frontendModelPrimaryKeyDatabaseConditions(ModelClass, primaryKey, id) {
+  const resourceConditions = modelPrimaryKeyConditions(primaryKey, id)
+  /** @type {Record<string, import("../utils/model-primary-key.js").ModelPrimaryKeyScalar>} */
+  const databaseConditions = {}
+
+  for (const [attributeName, value] of Object.entries(resourceConditions)) {
+    databaseConditions[ModelClass.getColumnNameForAttributeName(attributeName)] = value
+  }
+
+  return databaseConditions
+}
 
 /**
  * Runs transport serialization options for a configuration.
@@ -70,8 +91,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
     this._eventFilters()
 
     const configuration = this.session.configuration
-    const modelClasses = configuration.getModelClasses()
-    const ModelClass = modelClasses[modelName]
+    const ModelClass = this._modelClass(modelName)
 
     if (!ModelClass) return false
 
@@ -97,6 +117,24 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
     const readRules = ability.rulesFor({action: "read", modelClass: ModelClass})
 
     return readRules.some((/** @type {{effect: string}} */ rule) => rule.effect === "allow")
+  }
+
+  /**
+   * Resolves a subscription name through frontend resources before falling back to a backing model name.
+   * @param {string} modelName - Frontend resource name.
+   * @returns {typeof import("../database/record/index.js").default | undefined} - Backing model class.
+   */
+  _modelClass(modelName) {
+    const configuration = this.session.configuration
+
+    for (const backendProject of configuration.getBackendProjects()) {
+      const resourceDefinition = frontendModelResourcesWithBuiltInsForBackendProject(backendProject)[modelName]
+      const resourceClass = resourceDefinition ? frontendModelResourceClassFromDefinition(resourceDefinition) : null
+
+      if (resourceClass?.ModelClass) return resourceClass.modelClass()
+    }
+
+    return configuration.getModelClasses()[modelName]
   }
 
   /**
@@ -428,7 +466,9 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
 
       const ModelClass = controller.frontendModelClass()
       const primaryKey = controller.frontendModelPrimaryKey()
-      const query = controller.frontendModelAuthorizedQuery("find").where({[ModelClass.tableName()]: modelPrimaryKeyConditions(primaryKey, id)})
+      const query = controller.frontendModelAuthorizedQuery("find").where({
+        [ModelClass.tableName()]: frontendModelPrimaryKeyDatabaseConditions(ModelClass, primaryKey, id)
+      })
 
       return Boolean(await query.first())
     })
@@ -483,7 +523,9 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
       const joins = controller.frontendModelJoins()
       // Start from the subscriber's authorized scope so a filter can only ever match records the
       // subscription's ability permits to read.
-      let query = controller.frontendModelAuthorizedQuery("find").where({[ModelClass.tableName()]: modelPrimaryKeyConditions(primaryKey, id)})
+      let query = controller.frontendModelAuthorizedQuery("find").where({
+        [ModelClass.tableName()]: frontendModelPrimaryKeyDatabaseConditions(ModelClass, primaryKey, id)
+      })
 
       if (where) controller.applyFrontendModelWhere({query, where})
       if (joins) controller.applyFrontendModelJoins({joins, query})
@@ -512,7 +554,9 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
       const primaryKey = controller.frontendModelPrimaryKey()
       // Reload through the subscriber's authorized scope so projected records are only ever sent for
       // rows the subscription's ability permits to read.
-      let query = controller.frontendModelAuthorizedQuery("find").where({[ModelClass.tableName()]: modelPrimaryKeyConditions(primaryKey, id)})
+      let query = controller.frontendModelAuthorizedQuery("find").where({
+        [ModelClass.tableName()]: frontendModelPrimaryKeyDatabaseConditions(ModelClass, primaryKey, id)
+      })
       const preload = controller.frontendModelPreload()
 
       if (preload) query = query.preload(preload)

@@ -81,6 +81,8 @@ import {RansackQueryError, normalizeRansackGroup, parseRansackSort} from "./util
  * @returns {void}
  */
 
+const ATTACHMENT_OWNER_KEY = "__attachmentOwner"
+
 /**
  * Runs normalize frontend model preload.
  * @param {import("./database/query/index.js").NestedPreloadRecord | string | string[] | boolean | undefined | null} preload - Preload shorthand.
@@ -3175,8 +3177,10 @@ export default class FrontendModelController extends Controller {
       const hasQueryData = Object.keys(queryDataValues).length > 0
       const hasAbilities = Object.keys(computedAbilities).length > 0
       const hasPreloaded = Object.keys(preloadedRelationships).length > 0
+      const resource = this._serializationResourceInstanceForModel(model)
+      const hasAttachmentOwner = Object.keys(resource?.resourceConfiguration().attachments || {}).length > 0
 
-      if (!hasPreloaded && !hasCounts && !hasQueryData && !hasAbilities) {
+      if (!hasPreloaded && !hasCounts && !hasQueryData && !hasAbilities && !hasAttachmentOwner) {
         serializedModels.push(serializedAttributes)
         continue
       }
@@ -3190,6 +3194,14 @@ export default class FrontendModelController extends Controller {
       if (hasCounts) serialized.__associationCounts = associationCounts
       if (hasQueryData) serialized.__queryData = queryDataValues
       if (hasAbilities) serialized.__abilities = computedAbilities
+      if (hasAttachmentOwner) {
+        const modelClass = model.getModelClass()
+
+        serialized[ATTACHMENT_OWNER_KEY] = {
+          recordId: modelPrimaryKeyCacheKey(modelClass.primaryKey(), model.id()),
+          recordType: modelClass.getModelName()
+        }
+      }
 
       serializedModels.push(serialized)
     }

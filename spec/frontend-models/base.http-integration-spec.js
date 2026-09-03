@@ -18,6 +18,7 @@ class CompositeTask extends FrontendModelBase {
   static resourceConfig() {
     return {
       attributes: ["name", "projectId", "description"],
+      attachments: {descriptionFile: {type: "hasOne"}},
       builtInCollectionCommands: ["create", "index"],
       builtInMemberCommands: ["find", "update", "destroy"],
       modelName: "CompositeTask",
@@ -484,6 +485,32 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
     }
   })
 
+  it("loads composite-resource attachment metadata through the backing record identity", async () => {
+    await Dummy.run(async () => {
+      const project = await ProjectRecord.create({name: "Composite attachment project"})
+      const task = await TaskRecord.create({name: "Composite attachment task", project})
+
+      await task.getAttachmentByName("descriptionFile").attach({
+        contentBase64: Buffer.from("composite attachment").toString("base64"),
+        contentType: "text/plain",
+        filename: "composite.txt"
+      })
+      configureNodeTransport()
+
+      try {
+        const loadedTask = await CompositeTask.find({name: task.name(), projectId: project.id()})
+        const attachment = await loadedTask.getAttachmentByName("descriptionFile").first()
+
+        if (!attachment) throw new Error("Expected composite attachment metadata")
+        expect(attachment.filename()).toEqual("composite.txt")
+        expect(attachment.recordType()).toEqual("Task")
+        expect(attachment.recordId()).toEqual(String(task.id()))
+      } finally {
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
   it("loads frontend models through real websocket batch requests", async () => {
     await Dummy.run(async () => {
       const websocketClient = new WebsocketClient()
@@ -721,6 +748,40 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
         offCreate()
         offUpdate()
         offDestroy()
+        resetFrontendModelTransport()
+        await websocketClient.close()
+      }
+    })
+  })
+
+  it("publishes lifecycle events for every frontend resource backed by the same model", async () => {
+    await Dummy.run(async () => {
+      const websocketClient = new WebsocketClient()
+      const project = await ProjectRecord.create({name: "Shared lifecycle project"})
+
+      configureWebsocketSharedTransport(websocketClient)
+
+      /** @type {Array<string | import("../../src/utils/model-primary-key.js").CompositeModelPrimaryKeyValue>} */
+      const taskIds = []
+      /** @type {Array<string | import("../../src/utils/model-primary-key.js").CompositeModelPrimaryKeyValue>} */
+      const compositeTaskIds = []
+      const offTaskCreate = await Task.onCreate((event) => { taskIds.push(event.id) })
+      const offCompositeTaskCreate = await CompositeTask.onCreate((event) => { compositeTaskIds.push(event.id) })
+
+      try {
+        const task = await TaskRecord.create({name: "Shared lifecycle task", project})
+
+        await waitFor(() => {
+          if (taskIds.length < 1 || compositeTaskIds.length < 1) {
+            throw new Error(`Expected both resource events but got Task=${taskIds.length}, CompositeTask=${compositeTaskIds.length}`)
+          }
+        })
+
+        expect(taskIds).toEqual([String(task.id())])
+        expect(compositeTaskIds).toEqual([{name: task.name(), projectId: project.id()}])
+      } finally {
+        offTaskCreate()
+        offCompositeTaskCreate()
         resetFrontendModelTransport()
         await websocketClient.close()
       }

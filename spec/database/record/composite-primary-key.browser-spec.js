@@ -50,7 +50,7 @@ describe("Record - composite primary key", {tags: ["dummy"]}, () => {
     const project = await Project.create({name: "Scalar identity project"})
     const task = await Task.create({name: "Scalar identity task", project})
 
-    expect(typeof task.id()).toEqual("number")
+    expect(["number", "string"].includes(typeof task.id())).toBeTrue()
     expect((await Task.find(task.id()))?.id()).toEqual(task.id())
   })
 

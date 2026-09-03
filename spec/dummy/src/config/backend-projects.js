@@ -96,6 +96,10 @@ class CompositeTaskFrontendResource extends FrontendModelBaseResource {
 
   static attributes = ["name", "projectId", "description"]
 
+  static attachments = {
+    descriptionFile: {type: "hasOne"}
+  }
+
   static builtInCollectionCommands = ["create", "index"]
 
   static builtInMemberCommands = ["find", "update", "destroy"]
@@ -104,7 +108,7 @@ class CompositeTaskFrontendResource extends FrontendModelBaseResource {
 
   /** @returns {Array<string>} - Permit spec for composite task writes. */
   permittedParams() {
-    return ["name", "projectId", "description"]
+    return ["name", "projectId", "description", "descriptionFile"]
   }
 }
 

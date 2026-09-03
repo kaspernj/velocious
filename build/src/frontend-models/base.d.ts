@@ -523,6 +523,14 @@ export default class FrontendModelBase<Attributes extends object = any, CreateAt
      */
     _loadCohort: Array<FrontendModelBase> | undefined;
     /**
+     * Canonical backing-record attachment owner returned by the server.
+     * @type {{recordId: string, recordType: string} | null}
+     */
+    _attachmentOwner: {
+        recordId: string;
+        recordType: string;
+    } | null;
+    /**
      * Runs constructor.
      * @param {Attributes | CreateAttributes} [attributes] - Initial attributes.
      */
@@ -732,6 +740,12 @@ export default class FrontendModelBase<Attributes extends object = any, CreateAt
      * @returns {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} - Primary key value.
      */
     primaryKeyValue(): import("../utils/model-primary-key.js").ModelPrimaryKeyValue;
+    /**
+     * Returns the scalar identity required by scalar-only frontend features.
+     * @param {string} operation - Operation requiring a scalar identity.
+     * @returns {import("../utils/model-primary-key.js").ModelPrimaryKeyScalar} - Scalar primary-key value.
+     */
+    scalarPrimaryKeyValue(operation: string): import("../utils/model-primary-key.js").ModelPrimaryKeyScalar;
     /**
      * Returns the identity represented by the last persisted frontend attributes.
      * @returns {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} - Persisted primary-key value.
@@ -984,10 +998,14 @@ export default class FrontendModelBase<Attributes extends object = any, CreateAt
      * Runs model data from response.
      * @this {FrontendModelClass}
      * @param {object} response - Response payload.
-     * @returns {{abilities: Record<string, boolean>, attributes: Record<string, FrontendModelAttributeValue>, associationCounts: Record<string, number>, queryData: Record<string, FrontendModelAttributeValue>, preloadedRelationships: Record<string, FrontendModelAttributeValue>, selectedAttributes: Set<string>}} - Attributes, preloaded relationships, association counts, queryData, abilities, and the selected-attributes set.
+     * @returns {{abilities: Record<string, boolean>, attachmentOwner: {recordId: string, recordType: string} | null, attributes: Record<string, FrontendModelAttributeValue>, associationCounts: Record<string, number>, queryData: Record<string, FrontendModelAttributeValue>, preloadedRelationships: Record<string, FrontendModelAttributeValue>, selectedAttributes: Set<string>}} - Attributes, attachment owner, preloaded relationships, association counts, queryData, abilities, and selected attributes.
      */
     static modelDataFromResponse(this: FrontendModelClass, response: object): {
         abilities: Record<string, boolean>;
+        attachmentOwner: {
+            recordId: string;
+            recordType: string;
+        } | null;
         attributes: Record<string, FrontendModelAttributeValue>;
         associationCounts: Record<string, number>;
         queryData: Record<string, FrontendModelAttributeValue>;

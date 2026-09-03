@@ -17,7 +17,8 @@ import {captureFrontendModelRemoteRequestContext, mergeFrontendModelRemoteReques
 import {bufferOutgoingEvent, clearBufferedOutgoingEvents, drainBufferedOutgoingEvents} from "./outgoing-event-buffer.js"
 import {defineModelScope} from "../utils/model-scope.js"
 import isPlainObject from "../utils/plain-object.js"
-import {modelPrimaryKeyCacheKey, modelPrimaryKeyConditions, readModelPrimaryKeyValue, scalarModelPrimaryKey} from "../utils/model-primary-key.js"
+import {forcedNonBlankString} from "typanic"
+import {modelPrimaryKeyCacheKey, modelPrimaryKeyConditions, readModelPrimaryKeyValue, scalarModelPrimaryKey, scalarModelPrimaryKeyValue} from "../utils/model-primary-key.js"
 import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQueryData, setPayloadAssociationCount, setPayloadComputedAbility, setPayloadQueryData} from "../record-payload-values.js"
 
 /**
@@ -159,6 +160,7 @@ const SELECTED_ATTRIBUTES_KEY = "__selectedAttributes"
 const ASSOCIATION_COUNTS_KEY = "__associationCounts"
 const QUERY_DATA_KEY = "__queryData"
 const ABILITIES_KEY = "__abilities"
+const ATTACHMENT_OWNER_KEY = "__attachmentOwner"
 /**
  * Pending shared frontend model requests.
  * @type {Array<{commandName?: string, commandType: FrontendModelRequestCommandType, customPath?: string, modelClass: FrontendModelClass, payload: Record<string, ReturnType<typeof JSON.parse>>, requestContext: import("../remote-request-context.js").RemoteRequestContext, requestId: string, resolve: (response: Record<string, ReturnType<typeof JSON.parse>>) => void, reject: (error: ReturnType<typeof JSON.parse>) => void, resourcePath?: string | null}>} */
@@ -776,6 +778,19 @@ function frontendModelAttachmentCommandPayload(attachment, attachmentId) {
 }
 
 /**
+ * Returns the canonical backing owner used by attachment metadata storage.
+ * @param {FrontendModelBase} model - Frontend attachment owner.
+ * @returns {{recordId: string, recordType: string}} - Canonical attachment owner.
+ */
+function frontendModelAttachmentOwner(model) {
+  if (!model._attachmentOwner) {
+    throw new Error(`Missing attachment owner metadata on ${frontendModelClassFor(model).name}`)
+  }
+
+  return model._attachmentOwner
+}
+
+/**
  * Runs frontend attachment value is bytes.
  * @param {ReturnType<typeof JSON.parse>} value - Candidate value.
  * @returns {boolean} - Whether value looks like byte data.
@@ -1180,13 +1195,13 @@ export class FrontendModelAttachmentHandle {
    * @returns {import("./query.js").default<typeof VelociousAttachment>} - Attachment metadata query.
    */
   query() {
-    const ModelClass = frontendModelClassFor(this.model)
+    const attachmentOwner = frontendModelAttachmentOwner(this.model)
 
     return VelociousAttachment
       .where({
         name: this.attachmentName,
-        recordId: modelPrimaryKeyCacheKey(ModelClass.primaryKey(), this.model.primaryKeyValue()),
-        recordType: ModelClass.getModelName()
+        recordId: attachmentOwner.recordId,
+        recordType: attachmentOwner.recordType
       })
       .order([["position", "asc"]])
   }
@@ -2425,6 +2440,11 @@ export default class FrontendModelBase {
    * @type {Array<FrontendModelBase> | undefined} - Shared reference to sibling records loaded in the same batch. Used by auto-batch-preload.
    */
   _loadCohort
+  /**
+   * Canonical backing-record attachment owner returned by the server.
+   * @type {{recordId: string, recordType: string} | null}
+   */
+  _attachmentOwner
 
   /**
    * Runs constructor.
@@ -2442,6 +2462,7 @@ export default class FrontendModelBase {
     this._isNewRecord = true
     this._markedForDestruction = false
     this._persistedAttributes = {}
+    this._attachmentOwner = null
     if (attributes) this.assignAttributes(attributes)
   }
 
@@ -2927,6 +2948,15 @@ export default class FrontendModelBase {
 
       return value
     })
+  }
+
+  /**
+   * Returns the scalar identity required by scalar-only frontend features.
+   * @param {string} operation - Operation requiring a scalar identity.
+   * @returns {import("../utils/model-primary-key.js").ModelPrimaryKeyScalar} - Scalar primary-key value.
+   */
+  scalarPrimaryKeyValue(operation) {
+    return scalarModelPrimaryKeyValue(this.primaryKeyValue(), operation)
   }
 
   /**
@@ -3553,7 +3583,7 @@ export default class FrontendModelBase {
    * Runs model data from response.
    * @this {FrontendModelClass}
    * @param {object} response - Response payload.
-   * @returns {{abilities: Record<string, boolean>, attributes: Record<string, FrontendModelAttributeValue>, associationCounts: Record<string, number>, queryData: Record<string, FrontendModelAttributeValue>, preloadedRelationships: Record<string, FrontendModelAttributeValue>, selectedAttributes: Set<string>}} - Attributes, preloaded relationships, association counts, queryData, abilities, and the selected-attributes set.
+   * @returns {{abilities: Record<string, boolean>, attachmentOwner: {recordId: string, recordType: string} | null, attributes: Record<string, FrontendModelAttributeValue>, associationCounts: Record<string, number>, queryData: Record<string, FrontendModelAttributeValue>, preloadedRelationships: Record<string, FrontendModelAttributeValue>, selectedAttributes: Set<string>}} - Attributes, attachment owner, preloaded relationships, association counts, queryData, abilities, and selected attributes.
    */
   static modelDataFromResponse(response) {
     if (!response || typeof response !== "object") {
@@ -3594,7 +3624,23 @@ export default class FrontendModelBase {
     const selectedAttributesFromPayload = Array.isArray(attributes[SELECTED_ATTRIBUTES_KEY])
       ? new Set(/** @type {string[]} */ (attributes[SELECTED_ATTRIBUTES_KEY]).filter((attributeName) => typeof attributeName === "string"))
       : null
+    const attachmentOwnerPayload = attributes[ATTACHMENT_OWNER_KEY]
+    let attachmentOwner = null
 
+    if (attachmentOwnerPayload !== undefined) {
+      if (!isPlainObject(attachmentOwnerPayload)) {
+        throw new TypeError(`Expected ${ATTACHMENT_OWNER_KEY} to be an object`)
+      }
+
+      const attachmentOwnerObject = /** @type {{recordId?: unknown, recordType?: unknown}} */ (attachmentOwnerPayload)
+
+      attachmentOwner = {
+        recordId: forcedNonBlankString(attachmentOwnerObject.recordId, `${ATTACHMENT_OWNER_KEY}.recordId`),
+        recordType: forcedNonBlankString(attachmentOwnerObject.recordType, `${ATTACHMENT_OWNER_KEY}.recordType`)
+      }
+    }
+
+    delete attributes[ATTACHMENT_OWNER_KEY]
     delete attributes[PRELOADED_RELATIONSHIPS_KEY]
     delete attributes[SELECTED_ATTRIBUTES_KEY]
     delete attributes[ASSOCIATION_COUNTS_KEY]
@@ -3603,7 +3649,7 @@ export default class FrontendModelBase {
 
     const selectedAttributes = selectedAttributesFromPayload || new Set(Object.keys(attributes))
 
-    return {abilities, attributes, associationCounts, queryData, preloadedRelationships, selectedAttributes}
+    return {abilities, attachmentOwner, attributes, associationCounts, queryData, preloadedRelationships, selectedAttributes}
   }
 
   /**
@@ -3696,10 +3742,12 @@ export default class FrontendModelBase {
     const associationCounts = modelData.associationCounts
     const queryData = modelData.queryData
     const abilities = modelData.abilities
+    const attachmentOwner = modelData.attachmentOwner
     const selectedAttributes = modelData.selectedAttributes
     const receiver = /** @type {unknown} */ (this)
     const ModelClass = /** @type {new (attributes?: Record<string, FrontendModelAttributeValue>) => InstanceType<T>} */ (receiver)
     const model = new ModelClass(attributes)
+    model._attachmentOwner = attachmentOwner
     model._selectedAttributes = selectedAttributes ? new Set(selectedAttributes) : null
 
     this.applyPreloadedRelationships(model, preloadedRelationships)
@@ -4450,7 +4498,10 @@ export default class FrontendModelBase {
 
     removeTemporaryListenerAliases()
 
-    this.assignAttributes(ModelClass.attributesFromResponse(response))
+    const modelData = ModelClass.modelDataFromResponse(response)
+
+    this.assignAttributes(modelData.attributes)
+    this._attachmentOwner = modelData.attachmentOwner
     this.setIsNewRecord(false)
 
     if (previousIdentity !== null) {
@@ -4505,7 +4556,7 @@ export default class FrontendModelBase {
    */
   async destroy() {
     const ModelClass = frontendModelClassFor(this)
-    const id = this.persistedPrimaryKeyValue()
+    const id = this.isNewRecord() ? this.primaryKeyValue() : this.persistedPrimaryKeyValue()
 
     if (shouldQueueFrontendModelOperationOffline(ModelClass, "destroy")) {
       const primaryKey = scalarModelPrimaryKey(ModelClass.primaryKey(), `Offline destroy for ${ModelClass.name}`)

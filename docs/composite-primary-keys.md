@@ -35,7 +35,7 @@ Online `create`, `find`, `save`/`update`, and `destroy` use every identity compo
 
 Frontend-model resources must expose every configured composite-key attribute. The generator rejects missing, duplicate, or empty composite-key definitions and emits the ordered array in `resourceConfig()`.
 
-Authorization and per-record ability checks match complete identity tuples and batch candidate records within driver query limits. Attachments and WebSocket lifecycle listeners use an unambiguous ordered encoding internally while public lifecycle callbacks receive the identity object.
+Authorization and per-record ability checks match complete identity tuples and batch candidate records within driver query limits. Attachment handles use canonical backing-record ownership returned by the server, so resource aliases can expose a composite identity even when attachment storage uses a different backing key. WebSocket lifecycle publishers fan out through every resource backed by a record class; each resource receives its own configured identity while public lifecycle callbacks receive that identity object.
 
 ## Scalar-only boundaries
 

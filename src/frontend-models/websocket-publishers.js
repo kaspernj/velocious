@@ -8,6 +8,8 @@ import {readModelPrimaryKeyValue} from "../utils/model-primary-key.js"
 
 const modelClassesWithRegisteredHooks = new WeakSet()
 const channelClassRegisteredConfigurations = new WeakSet()
+/** @type {WeakMap<import("../configuration.js").default, WeakMap<typeof import("../database/record/index.js").default, Map<string, import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition>>>} */
+const publisherResourcesByConfiguration = new WeakMap()
 
 /** Shared channel name for all frontend-model lifecycle subscriptions. */
 export const FRONTEND_MODELS_CHANNEL_NAME = "frontend-models"
@@ -61,7 +63,7 @@ function frontendModelResourcesFromAbilityResourcesList(abilityResources) {
       // throw `requires a static ModelClass` during ability-resource discovery.
       if (!resourceClass.ModelClass) continue
 
-      const modelName = resourceClass.modelClass().getModelName()
+      const modelName = resourceClass.resourceConfig().modelName || resourceClass.modelClass().getModelName()
 
       resources[modelName] = resourceClass
     } else if (resourceClass.prototype instanceof AuthorizationBaseResource) {
@@ -114,19 +116,33 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
     configuration.registerWebsocketChannel(FRONTEND_MODELS_CHANNEL_NAME, FrontendModelWebsocketChannel)
   }
 
-  for (const resourceClass of Object.values(allFrontendModels)) {
+  for (const [modelName, resourceClass] of Object.entries(allFrontendModels)) {
     // An abstract base resource (no static ModelClass — e.g. an app's shared
     // `BaseResource` that other resources extend) backs no model, so there is
     // nothing to publish realtime events for. Skip it instead of throwing.
     if (!resourceClass.ModelClass) continue
 
     const modelClass = resourceClass.modelClass()
-    const modelName = modelClass.getModelName()
     const configuredPrimaryKey = resourceClass.resourceConfig().primaryKey
     const modelPrimaryKey = modelClass.primaryKey()
     const primaryKey = configuredPrimaryKey || (Array.isArray(modelPrimaryKey)
       ? modelPrimaryKey.map((columnName) => modelClass.resolveAttributeName(columnName) || columnName)
       : modelClass.resolveAttributeName(modelPrimaryKey) || modelPrimaryKey)
+    let publisherResourcesByModelClass = publisherResourcesByConfiguration.get(configuration)
+
+    if (!publisherResourcesByModelClass) {
+      publisherResourcesByModelClass = new WeakMap()
+      publisherResourcesByConfiguration.set(configuration, publisherResourcesByModelClass)
+    }
+
+    let publisherResources = publisherResourcesByModelClass.get(modelClass)
+
+    if (!publisherResources) {
+      publisherResources = new Map()
+      publisherResourcesByModelClass.set(modelClass, publisherResources)
+    }
+
+    publisherResources.set(modelName, primaryKey)
 
     // Register lifecycle hooks once per model class, not per configuration. A model class belongs to a
     // single backend project/config in production, so per-config registration only differs in tests where
@@ -152,22 +168,37 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
       if (action !== "create" && action !== "update") return
 
       void model.connection().afterCommit(async () => {
-        broadcastFrontendModelEvent(model._getConfiguration(), modelName, {
-          action,
-          id: readModelPrimaryKeyValue(primaryKey, (attributeName) => model.readAttribute(attributeName)),
-          record: model.attributes()
-        })
+        broadcastFrontendModelEvents(model, action, model.attributes())
       })
       delete modelWithWebsocketAction.__frontendModelWebsocketAction
     })
 
     modelClass.afterDestroy((model) => {
       void model.connection().afterCommit(async () => {
-        broadcastFrontendModelEvent(model._getConfiguration(), modelName, {
-          action: "destroy",
-          id: readModelPrimaryKeyValue(primaryKey, (attributeName) => model.readAttribute(attributeName))
-        })
+        broadcastFrontendModelEvents(model, "destroy")
       })
+    })
+  }
+}
+
+/**
+ * Fans one backing-record lifecycle event out through every configured frontend-resource identity.
+ * @param {import("../database/record/index.js").default} model - Backing model instance.
+ * @param {"create" | "update" | "destroy"} action - Lifecycle action.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} [record] - Backing record attributes.
+ * @returns {void}
+ */
+function broadcastFrontendModelEvents(model, action, record) {
+  const configuration = model._getConfiguration()
+  const publisherResources = publisherResourcesByConfiguration.get(configuration)?.get(model.getModelClass())
+
+  if (!publisherResources) return
+
+  for (const [modelName, primaryKey] of publisherResources) {
+    broadcastFrontendModelEvent(configuration, modelName, {
+      action,
+      id: readModelPrimaryKeyValue(primaryKey, (attributeName) => model.readAttribute(attributeName)),
+      ...(record ? {record} : {})
     })
   }
 }

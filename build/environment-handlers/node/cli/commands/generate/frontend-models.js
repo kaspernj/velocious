@@ -531,7 +531,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       fileContent += `    return /** @type {${signature.returnType}} */ (await ${className}.executeCustomCommand({\n`
       fileContent += `      commandName: ${JSON.stringify(memberCommands[methodName])},\n`
       fileContent += `      commandType: ${JSON.stringify(memberCommands[methodName])},\n`
-      fileContent += "      memberId: this.primaryKeyValue(),\n"
+      fileContent += `      memberId: this.scalarPrimaryKeyValue(${JSON.stringify(`Custom member command ${className}#${methodName}`)}),\n`
       fileContent += `      payload: ${className}.normalizeCustomCommandPayloadArguments(${signature.payloadArguments}),\n`
       fileContent += `      resourcePath: ${className}.resourcePath()\n`
       fileContent += "    }))\n"
