@@ -29,6 +29,7 @@ This folder contains implementation learnings and practical guidance discovered 
 - `docs/sync-envelope-replay-service.md`: Server-side sync envelope replay hook contract for app-owned sync receivers.
 - `docs/schema-metadata-cache.md`: Driver schema metadata caching, invalidation, and disabling.
 - `docs/sqlite-web-persistence.md`: SQLite web persistence backend auto-selection: OPFS, IndexedDB, and legacy-byte migration.
+- `docs/synchronized-assets.md`: Platform-neutral synchronized attachment descriptor cache, integrity checks, retry state, content deduplication, account isolation, and eviction policy.
 - `docs/tenant-databases.md`: Tenant-only database identifiers and tenant lifecycle commands.
 - `docs/tenant-selected-database-generation.md`: Explicit, immutable tenant database selection for base-model and structure generation.
 - `docs/test-profiling.md`: Opt-in test profiling, rich JSON/privacy guarantees, custom activity spans, timing-manifest generation, and strict shard aggregation.

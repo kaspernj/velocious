@@ -713,6 +713,9 @@ User.hasOneAttachment("profilePicture", {
 `db:migrate` provisions the framework-owned attachment table before runtime
 attachment work begins. See [Backend record attachments](docs/attachments.md)
 for the complete input, storage-driver, lifecycle, and path-security contracts.
+Offline-capable clients can apply synchronized attachment descriptors through
+the platform-neutral [Synchronized asset cache](docs/synchronized-assets.md),
+while Expo and web packages own their respective byte-storage adapters.
 
 You can also pass a driver class or instance directly on the attachment:
 
