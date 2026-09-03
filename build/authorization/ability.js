@@ -1,7 +1,5 @@
 // @ts-check
 
-import {scalarModelPrimaryKey} from "../utils/model-primary-key.js"
-
 /**
  * Defines this typedef.
  * @template {typeof import("../database/record/index.js").default} [MC=typeof import("../database/record/index.js").default]
@@ -246,9 +244,9 @@ export default class VelociousAuthorizationAbility {
    * @returns {string[]} - SQL condition parts.
    */
   conditionSqlParts({action, modelClass, query, rules}) {
-    const pk = scalarModelPrimaryKey(modelClass.primaryKey(), `Conditional authorization for ${modelClass.name}`)
-    const quotedBaseTable = query.driver.quoteTable(modelClass.tableName())
-    const quotedPk = query.driver.quoteColumn(pk)
+    const primaryKey = modelClass.primaryKey()
+    const primaryKeyAttributes = Array.isArray(primaryKey) ? primaryKey : [primaryKey]
+    const quotedBaseTable = query.driver.quoteTable(query.getTableReferenceForJoin())
     const sqlParts = []
 
     for (const rule of rules) {
@@ -262,7 +260,9 @@ export default class VelociousAuthorizationAbility {
         query: scopedQuery
       })
       const finalQuery = resultQuery || scopedQuery
-      const selectedPkSql = `${quotedBaseTable}.${quotedPk}`
+      const quotedScopedTable = query.driver.quoteTable(finalQuery.getTableReferenceForJoin())
+      const primaryKeyColumns = primaryKeyAttributes.map((attributeName) => modelClass.getColumnNameForAttributeName(attributeName))
+      const selectedPkSql = primaryKeyColumns.map((columnName) => `${quotedScopedTable}.${query.driver.quoteColumn(columnName)}`)
 
       if (finalQuery._distinct) {
         query.distinct(true)
@@ -270,7 +270,18 @@ export default class VelociousAuthorizationAbility {
 
       finalQuery.select(selectedPkSql)
 
-      sqlParts.push(`${quotedBaseTable}.${quotedPk} IN (${finalQuery.toSql()})`)
+      if (Array.isArray(primaryKey)) {
+        const authorizedRowsAlias = query.driver.quoteTable("velocious_authorized_rows")
+        const identitySql = primaryKeyColumns.map((columnName) => {
+          const quotedColumn = query.driver.quoteColumn(columnName)
+
+          return `${authorizedRowsAlias}.${quotedColumn} = ${quotedBaseTable}.${quotedColumn}`
+        }).join(" AND ")
+
+        sqlParts.push(`EXISTS (SELECT 1 FROM (${finalQuery.toSql()}) AS ${authorizedRowsAlias} WHERE ${identitySql})`)
+      } else {
+        sqlParts.push(`${quotedBaseTable}.${query.driver.quoteColumn(primaryKeyColumns[0])} IN (${finalQuery.toSql()})`)
+      }
     }
 
     return sqlParts

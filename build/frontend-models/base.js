@@ -1659,7 +1659,7 @@ class FrontendModelEventSubscription {
         for (const entry of listener.destroyCallbacks) {
           try { entry.callback({id: identity}) } catch (error) { console.error(error) }
         }
-        this.instanceListeners.delete(id)
+        deleteFrontendModelInstanceListener(this, listener)
       }
       for (const entry of this.classDestroyCallbacks) {
         try { entry.callback({id: identity}) } catch (error) { console.error(error) }
@@ -1816,22 +1816,73 @@ function ensureFrontendModelInstanceListener(sub, id, instance) {
 }
 
 /**
+ * Removes every identity key pointing at an instance listener.
+ * @param {FrontendModelEventSubscription} sub - Event subscription bucket.
+ * @param {ReturnType<typeof ensureFrontendModelInstanceListener>} listener - Instance listener bucket.
+ * @returns {void}
+ */
+function deleteFrontendModelInstanceListener(sub, listener) {
+  for (const [id, current] of sub.instanceListeners) {
+    if (current === listener) sub.instanceListeners.delete(id)
+  }
+}
+
+/**
  * Removes one instance callback entry and tears down an empty listener/subscription bucket.
  * @param {FrontendModelEventSubscription} sub - Event subscription bucket.
  * @param {(listener: ReturnType<typeof ensureFrontendModelInstanceListener>) => boolean} removeEntry - Callback entry removal.
  * @returns {void}
  */
 function removeFrontendModelInstanceListenerEntry(sub, removeEntry) {
-  for (const [id, current] of sub.instanceListeners) {
+  for (const current of sub.instanceListeners.values()) {
     if (!removeEntry(current)) continue
 
     if (current.updateCallbacks.size === 0 && current.destroyCallbacks.size === 0) {
-      sub.instanceListeners.delete(id)
+      deleteFrontendModelInstanceListener(sub, current)
     }
     break
   }
 
   sub.maybeTeardown()
+}
+
+/**
+ * Temporarily registers an instance listener under its pending identity while retaining its persisted identity.
+ * @param {FrontendModelClass} ModelClass - Frontend model class.
+ * @param {FrontendModelBase} instance - Instance being re-keyed.
+ * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} previousIdentity - Persisted identity.
+ * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} nextIdentity - Pending identity sent to the server.
+ * @returns {() => void} - Callback that removes the temporary aliases.
+ */
+function aliasFrontendModelInstanceListeners(ModelClass, instance, previousIdentity, nextIdentity) {
+  const primaryKey = ModelClass.primaryKey()
+  const previousId = modelPrimaryKeyCacheKey(primaryKey, previousIdentity)
+  const nextId = modelPrimaryKeyCacheKey(primaryKey, nextIdentity)
+  /** @type {Array<{listener: ReturnType<typeof ensureFrontendModelInstanceListener>, sub: FrontendModelEventSubscription}>} */
+  const aliases = []
+
+  if (previousId === nextId) return () => {}
+
+  const subscriptions = frontendModelEventSubscriptions.get(ModelClass)
+
+  if (!subscriptions) return () => {}
+
+  for (const sub of subscriptions.values()) {
+    const listener = sub.instanceListeners.get(previousId)
+
+    if (!listener || listener.instance !== instance || sub.instanceListeners.has(nextId)) continue
+
+    sub.instanceListeners.set(nextId, listener)
+    aliases.push({listener, sub})
+  }
+
+  return () => {
+    for (const {listener, sub} of aliases) {
+      if (sub.instanceListeners.get(previousId) === listener && sub.instanceListeners.get(nextId) === listener) {
+        sub.instanceListeners.delete(nextId)
+      }
+    }
+  }
 }
 
 /**
@@ -4385,7 +4436,19 @@ export default class FrontendModelBase {
       return this
     }
 
-    const response = await ModelClass.executeCommand(commandType, payload)
+    const removeTemporaryListenerAliases = previousIdentity === null
+      ? () => {}
+      : aliasFrontendModelInstanceListeners(ModelClass, this, previousIdentity, this.primaryKeyValue())
+    let response
+
+    try {
+      response = await ModelClass.executeCommand(commandType, payload)
+    } catch (error) {
+      removeTemporaryListenerAliases()
+      throw error
+    }
+
+    removeTemporaryListenerAliases()
 
     this.assignAttributes(ModelClass.attributesFromResponse(response))
     this.setIsNewRecord(false)

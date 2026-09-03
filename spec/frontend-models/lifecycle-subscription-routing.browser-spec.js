@@ -93,9 +93,10 @@ function buildRoutedTaskClass() {
 
 /**
  * Builds an isolated composite-identity frontend model class.
+ * @param {{beforeUpdateResponse?: (record: Record<string, ReturnType<typeof JSON.parse>>) => void | Promise<void>}} [args] - Optional update-response hook.
  * @returns {typeof FrontendModelBase} - Frontend model class.
  */
-function buildCompositeRoutedTaskClass() {
+function buildCompositeRoutedTaskClass({beforeUpdateResponse} = {}) {
   return class CompositeRoutedTask extends FrontendModelBase {
     /** @returns {import("../../src/frontend-models/base.js").FrontendModelResourceConfig} - Resource configuration. */
     static resourceConfig() {
@@ -115,13 +116,15 @@ function buildCompositeRoutedTaskClass() {
     static async executeCommand(commandType, payload) {
       if (commandType !== "update") throw new Error(`Unexpected command: ${commandType}`)
 
-      return {
-        model: {
-          name: payload.attributes.name,
-          state: "saved",
-          workspaceId: payload.id.workspaceId
-        }
+      const model = {
+        name: payload.attributes.name,
+        state: "saved",
+        workspaceId: payload.id.workspaceId
       }
+
+      if (beforeUpdateResponse) await beforeUpdateResponse(model)
+
+      return {model}
     }
 
     /** @returns {string} - Task state. */
@@ -200,6 +203,42 @@ describe("Frontend model lifecycle subscription routing", () => {
 
       unsubscribeUpdate()
       unsubscribeDestroy()
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
+  it("routes a re-key update broadcast before the save response arrives", async () => {
+    const websocketClient = buildWebsocketClient()
+    const rekeyedIdentity = {name: "Composite renamed", workspaceId: "alpha"}
+    const CompositeRoutedTask = buildCompositeRoutedTaskClass({
+      beforeUpdateResponse: (record) => {
+        const subscription = websocketClient.subscriptions[0]
+
+        if (!subscription) throw new Error("Expected composite model subscription")
+
+        subscription.options.onMessage({
+          action: "update",
+          id: rekeyedIdentity,
+          record: {...record, state: "broadcast"}
+        })
+      }
+    })
+    const task = CompositeRoutedTask.instantiateFromResponse({name: "Composite task", state: "open", workspaceId: "alpha"})
+    /** @type {Array<string | import("../../src/utils/model-primary-key.js").CompositeModelPrimaryKeyValue>} */
+    const updateIds = []
+
+    FrontendModelBase.configureTransport({websocketClient})
+
+    try {
+      const unsubscribe = await task.onUpdate(({id}) => updateIds.push(id))
+
+      task.setAttribute("name", rekeyedIdentity.name)
+      await task.save()
+
+      expect(updateIds).toEqual([rekeyedIdentity])
+
+      unsubscribe()
     } finally {
       resetFrontendModelTransport()
     }
