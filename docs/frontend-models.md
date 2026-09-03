@@ -212,7 +212,7 @@ const unsubscribe = await BuildGroup.onDestroy(onBuildGroupDestroyed, {
 
   `VelociousAttachment` exposes safe metadata fields: `id`, `recordType`, `recordId`, `name`, `position`, `filename`, `contentType`, `byteSize`, `createdAt`, and `updatedAt`. Storage internals such as `driver`, `storageKey`, and `contentBase64` are not exposed or queryable through frontend models. Attachment metadata reads require owner scope (`recordType`, `recordId`, and `name`) and authorize through the owning record's frontend-model resource. Binary content and storage URLs still use `download()` and `url()`.
 
-  Attachment handles on server-loaded records carry the canonical backing-record owner internally. This keeps `first()` and `toArray()` aligned with attachment storage when a frontend resource uses a different name or primary key from its backing model.
+  Attachment handles on server-loaded records and lifecycle callback models carry the canonical backing-record owner internally. This keeps `first()` and `toArray()` aligned with attachment storage when a frontend resource uses a different name or primary key from its backing model.
 
 ## Condition validation rules
 - Reject `undefined` condition values.

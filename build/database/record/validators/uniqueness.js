@@ -94,8 +94,12 @@ export default class VelociousDatabaseRecordValidatorsUniqueness extends Base {
       const instanceRelationship = model.getRelationshipByName(relationshipName)
       const loaded = instanceRelationship.loaded()
 
-      if (loaded && !Array.isArray(loaded) && typeof loaded.id === "function") {
-        return scalarModelPrimaryKeyValue(loaded.id(), `Uniqueness scope relationship for ${modelClass.name}`)
+      if (loaded && !Array.isArray(loaded)) {
+        const loadedId = loaded.id()
+
+        if (loadedId == null) return null
+
+        return scalarModelPrimaryKeyValue(loadedId, `Uniqueness scope relationship for ${modelClass.name}`)
       }
     }
 

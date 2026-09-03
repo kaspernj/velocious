@@ -4,12 +4,16 @@ import AuthorizationBaseResource from "../authorization/base-resource.js"
 import {frontendModelResourcesWithBuiltInsForBackendProject} from "./built-in-resources.js"
 import {frontendModelResourceDefinitionIsClass} from "./resource-definition.js"
 import {serializeFrontendModelTransportValue} from "./transport-serialization.js"
-import {readModelPrimaryKeyValue} from "../utils/model-primary-key.js"
+import {modelPrimaryKeyCacheKey, readModelPrimaryKeyValue} from "../utils/model-primary-key.js"
+
+/** @typedef {{hasAttachments: boolean, primaryKey: import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition}} FrontendModelPublisherResource */
+/** @typedef {import("../database/record/index.js").default & {__frontendModelWebsocketAction?: "create" | "update", __frontendModelWebsocketPreviousIds?: Map<string, import("../utils/model-primary-key.js").ModelPrimaryKeyValue>}} FrontendModelWebsocketRecord */
 
 const modelClassesWithRegisteredHooks = new WeakSet()
 const channelClassRegisteredConfigurations = new WeakSet()
-/** @type {WeakMap<import("../configuration.js").default, WeakMap<typeof import("../database/record/index.js").default, Map<string, import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition>>>} */
+/** @type {WeakMap<import("../configuration.js").default, WeakMap<typeof import("../database/record/index.js").default, Map<string, FrontendModelPublisherResource>>>} */
 const publisherResourcesByConfiguration = new WeakMap()
+const ATTACHMENT_OWNER_KEY = "__attachmentOwner"
 
 /** Shared channel name for all frontend-model lifecycle subscriptions. */
 export const FRONTEND_MODELS_CHANNEL_NAME = "frontend-models"
@@ -123,7 +127,8 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
     if (!resourceClass.ModelClass) continue
 
     const modelClass = resourceClass.modelClass()
-    const configuredPrimaryKey = resourceClass.resourceConfig().primaryKey
+    const resourceConfiguration = resourceClass.resourceConfig()
+    const configuredPrimaryKey = resourceConfiguration.primaryKey
     const modelPrimaryKey = modelClass.primaryKey()
     const primaryKey = configuredPrimaryKey || (Array.isArray(modelPrimaryKey)
       ? modelPrimaryKey.map((columnName) => modelClass.resolveAttributeName(columnName) || columnName)
@@ -142,7 +147,10 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
       publisherResourcesByModelClass.set(modelClass, publisherResources)
     }
 
-    publisherResources.set(modelName, primaryKey)
+    publisherResources.set(modelName, {
+      hasAttachments: Object.keys(resourceConfiguration.attachments || {}).length > 0,
+      primaryKey
+    })
 
     // Register lifecycle hooks once per model class, not per configuration. A model class belongs to a
     // single backend project/config in production, so per-config registration only differs in tests where
@@ -154,23 +162,28 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
     modelClassesWithRegisteredHooks.add(modelClass)
 
     modelClass.beforeCreate((model) => {
-      /** @type {import("../database/record/index.js").default & {__frontendModelWebsocketAction?: "create" | "update"}} */ (model).__frontendModelWebsocketAction = "create"
+      /** @type {FrontendModelWebsocketRecord} */ (model).__frontendModelWebsocketAction = "create"
     })
 
     modelClass.beforeUpdate((model) => {
-      /** @type {import("../database/record/index.js").default & {__frontendModelWebsocketAction?: "create" | "update"}} */ (model).__frontendModelWebsocketAction = "update"
+      const websocketModel = /** @type {FrontendModelWebsocketRecord} */ (model)
+
+      websocketModel.__frontendModelWebsocketAction = "update"
+      websocketModel.__frontendModelWebsocketPreviousIds = frontendModelPreviousResourceIdentities(model)
     })
 
     modelClass.afterSave((model) => {
-      const modelWithWebsocketAction = /** @type {import("../database/record/index.js").default & {__frontendModelWebsocketAction?: "create" | "update"}} */ (model)
+      const modelWithWebsocketAction = /** @type {FrontendModelWebsocketRecord} */ (model)
       const action = modelWithWebsocketAction.__frontendModelWebsocketAction
 
       if (action !== "create" && action !== "update") return
+      const previousIds = modelWithWebsocketAction.__frontendModelWebsocketPreviousIds
 
       void model.connection().afterCommit(async () => {
-        broadcastFrontendModelEvents(model, action, model.attributes())
+        broadcastFrontendModelEvents(model, action, model.attributes(), previousIds)
       })
       delete modelWithWebsocketAction.__frontendModelWebsocketAction
+      delete modelWithWebsocketAction.__frontendModelWebsocketPreviousIds
     })
 
     modelClass.afterDestroy((model) => {
@@ -182,23 +195,66 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
 }
 
 /**
+ * Returns every resource identity represented by the record before its pending update.
+ * @param {import("../database/record/index.js").default} model - Backing model before update.
+ * @returns {Map<string, import("../utils/model-primary-key.js").ModelPrimaryKeyValue>} - Previous identities by resource name.
+ */
+function frontendModelPreviousResourceIdentities(model) {
+  const publisherResources = publisherResourcesByConfiguration.get(model._getConfiguration())?.get(model.getModelClass())
+  /** @type {Map<string, import("../utils/model-primary-key.js").ModelPrimaryKeyValue>} */
+  const previousIds = new Map()
+
+  if (!publisherResources) return previousIds
+
+  const changes = model.changes()
+
+  for (const [modelName, {primaryKey}] of publisherResources) {
+    previousIds.set(modelName, readModelPrimaryKeyValue(primaryKey, (attributeName) => {
+      const columnName = model.getModelClass().getColumnNameForAttributeName(attributeName)
+
+      if (Object.hasOwn(changes, columnName)) return changes[columnName][0]
+
+      return model.readAttribute(attributeName)
+    }))
+  }
+
+  return previousIds
+}
+
+/**
  * Fans one backing-record lifecycle event out through every configured frontend-resource identity.
  * @param {import("../database/record/index.js").default} model - Backing model instance.
  * @param {"create" | "update" | "destroy"} action - Lifecycle action.
  * @param {Record<string, ReturnType<typeof JSON.parse>>} [record] - Backing record attributes.
+ * @param {Map<string, import("../utils/model-primary-key.js").ModelPrimaryKeyValue>} [previousIds] - Previous update identities by resource name.
  * @returns {void}
  */
-function broadcastFrontendModelEvents(model, action, record) {
+function broadcastFrontendModelEvents(model, action, record, previousIds) {
   const configuration = model._getConfiguration()
   const publisherResources = publisherResourcesByConfiguration.get(configuration)?.get(model.getModelClass())
 
   if (!publisherResources) return
 
-  for (const [modelName, primaryKey] of publisherResources) {
+  for (const [modelName, {hasAttachments, primaryKey}] of publisherResources) {
+    const id = readModelPrimaryKeyValue(primaryKey, (attributeName) => model.readAttribute(attributeName))
+    const previousId = previousIds?.get(modelName)
+    const identityChanged = previousId !== undefined
+      && modelPrimaryKeyCacheKey(primaryKey, previousId) !== modelPrimaryKeyCacheKey(primaryKey, id)
+    const lifecycleRecord = record && hasAttachments
+      ? {
+          ...record,
+          [ATTACHMENT_OWNER_KEY]: {
+            recordId: modelPrimaryKeyCacheKey(model.getModelClass().primaryKey(), model.id()),
+            recordType: model.getModelClass().getModelName()
+          }
+        }
+      : record
+
     broadcastFrontendModelEvent(configuration, modelName, {
       action,
-      id: readModelPrimaryKeyValue(primaryKey, (attributeName) => model.readAttribute(attributeName)),
-      ...(record ? {record} : {})
+      id,
+      ...(identityChanged ? {previousId} : {}),
+      ...(lifecycleRecord ? {record: lifecycleRecord} : {})
     })
   }
 }
@@ -209,7 +265,7 @@ function broadcastFrontendModelEvents(model, action, record) {
  * transport serializer so Date/undefined/etc. survive the JSON hop.
  * @param {import("../configuration.js").default} configuration - Configuration instance.
  * @param {string} modelName - Model class name.
- * @param {{action: "create" | "update" | "destroy", id: ReturnType<typeof JSON.parse>, record?: Record<string, ReturnType<typeof JSON.parse>>}} event - Lifecycle event.
+ * @param {{action: "create" | "update" | "destroy", id: ReturnType<typeof JSON.parse>, previousId?: ReturnType<typeof JSON.parse>, record?: Record<string, ReturnType<typeof JSON.parse>>}} event - Lifecycle event.
  * @returns {void}
  */
 function broadcastFrontendModelEvent(configuration, modelName, event) {
@@ -217,6 +273,7 @@ function broadcastFrontendModelEvent(configuration, modelName, event) {
     action: event.action,
     id: event.id,
     model: modelName,
+    ...(event.previousId !== undefined ? {previousId: event.previousId} : {}),
     ...(event.record ? {record: serializeFrontendModelTransportValue(event.record, transportSerializationOptionsForConfiguration(configuration))} : {})
   }
 

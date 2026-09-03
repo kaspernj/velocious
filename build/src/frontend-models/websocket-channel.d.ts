@@ -3,6 +3,7 @@ export type FrontendModelLifecycleBroadcastBody = {
     action?: string;
     id?: import("../utils/model-primary-key.js").ModelPrimaryKeyValue;
     matchedEventFilterKeys?: string[];
+    previousId?: import("../utils/model-primary-key.js").ModelPrimaryKeyValue;
     record?: import("./query.js").FrontendModelTransportValue;
     [key: string]: import("./query.js").FrontendModelTransportValue | string[] | undefined;
 };

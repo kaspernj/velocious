@@ -58,6 +58,15 @@ describe("Record - validations", {tags: ["dummy"]}, () => {
     }
   })
 
+  it("allows scoped uniqueness to wait for an unsaved belongs-to relationship", async () => {
+    const task = await Task.create({
+      name: "Unsaved relationship scope",
+      project: new Project({name: "Unsaved relationship project"})
+    })
+
+    expect(task.projectId()).toBeDefined()
+  })
+
   it("rejects a malformed email with a format validation", async () => {
     const user = new User({email: "not-an-email", encryptedPassword: "test"})
 

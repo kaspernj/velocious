@@ -1,3 +1,11 @@
+export type FrontendModelPublisherResource = {
+    hasAttachments: boolean;
+    primaryKey: import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition;
+};
+export type FrontendModelWebsocketRecord = import("../database/record/index.js").default & {
+    __frontendModelWebsocketAction?: "create" | "update";
+    __frontendModelWebsocketPreviousIds?: Map<string, import("../utils/model-primary-key.js").ModelPrimaryKeyValue>;
+};
 /** Shared channel name for all frontend-model lifecycle subscriptions. */
 export declare const FRONTEND_MODELS_CHANNEL_NAME = "frontend-models";
 /**

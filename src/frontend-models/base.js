@@ -1665,6 +1665,15 @@ class FrontendModelEventSubscription {
       ? modelPrimaryKeyConditions(primaryKey, rawId)
       : String(rawId)
     const id = modelPrimaryKeyCacheKey(primaryKey, identity)
+    const rawPreviousId = body.previousId
+    const previousIdentity = rawPreviousId === undefined || rawPreviousId === null
+      ? null
+      : Array.isArray(primaryKey)
+        ? modelPrimaryKeyConditions(primaryKey, rawPreviousId)
+        : String(rawPreviousId)
+    const previousId = previousIdentity === null
+      ? null
+      : modelPrimaryKeyCacheKey(primaryKey, previousIdentity)
     const matchedEventFilterKeys = frontendModelMatchedEventFilterKeys(body)
 
     if (action === "destroy") {
@@ -1686,12 +1695,16 @@ class FrontendModelEventSubscription {
 
     const deserializedRecord = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (deserializeFrontendModelTransportValue(body.record))
     const freshModel = /** @type {ReturnType<typeof JSON.parse>} */ (this.ModelClass).instantiateFromResponse(deserializedRecord)
-    const listener = this.instanceListeners.get(id)
+    const listener = this.instanceListeners.get(id) || (previousId === null ? undefined : this.instanceListeners.get(previousId))
 
     if (action === "update" && listener) {
       const matchingUpdateCallbacks = Array.from(listener.updateCallbacks).filter((entry) =>
         frontendModelEventEntryMatches(entry, matchedEventFilterKeys)
       )
+
+      if (previousIdentity !== null) {
+        rekeyFrontendModelInstanceListeners(this.ModelClass, listener.instance, previousIdentity, identity)
+      }
 
       if (matchingUpdateCallbacks.length > 0) {
         // Auto-merge into the registered instance so callers reading
@@ -1699,6 +1712,7 @@ class FrontendModelEventSubscription {
         const instanceAny = /** @type {ReturnType<typeof JSON.parse>} */ (listener.instance)
 
         instanceAny.assignAttributes(freshModel.attributes())
+        instanceAny._attachmentOwner = freshModel._attachmentOwner
         instanceAny._persistedAttributes = cloneFrontendModelAttributes(listener.instance.attributes())
 
         for (const entry of matchingUpdateCallbacks) {

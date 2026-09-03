@@ -239,6 +239,7 @@ describe("FrontendModelWebsocketChannel", {databaseCleaning: {transaction: true}
       rulesFor: () => [{effect: "allow"}]
     }
     const configuration = {
+      getBackendProjects: () => [],
       getModelClasses: () => ({Task: class Task {}}),
       resolveAbility: async (/** @type {{params: Record<string, unknown>}} */ {params}) => {
         resolveAbilityParams.push(params)

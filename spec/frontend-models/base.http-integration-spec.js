@@ -5,6 +5,7 @@ import {describe, expect, it} from "../../src/testing/test.js"
 import FrontendModelBase, {AttributeNotSelectedError, VelociousAttachment} from "../../src/frontend-models/base.js"
 import FrontendModelPreloader from "../../src/frontend-models/preloader.js"
 import WebsocketClient from "../../src/http-client/websocket-client.js"
+import {modelPrimaryKeyCacheKey} from "../../src/utils/model-primary-key.js"
 import Dummy from "../dummy/index.js"
 import CommentRecord from "../dummy/src/models/comment.js"
 import ProjectRecord from "../dummy/src/models/project.js"
@@ -504,7 +505,7 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
         if (!attachment) throw new Error("Expected composite attachment metadata")
         expect(attachment.filename()).toEqual("composite.txt")
         expect(attachment.recordType()).toEqual("Task")
-        expect(attachment.recordId()).toEqual(String(task.id()))
+        expect(attachment.recordId()).toEqual(modelPrimaryKeyCacheKey(TaskRecord.primaryKey(), task.id()))
       } finally {
         resetFrontendModelTransport()
       }
@@ -782,6 +783,90 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       } finally {
         offTaskCreate()
         offCompositeTaskCreate()
+        resetFrontendModelTransport()
+        await websocketClient.close()
+      }
+    })
+  })
+
+  it("keeps canonical attachment ownership on unprojected lifecycle records", async () => {
+    await Dummy.run(async () => {
+      const websocketClient = new WebsocketClient()
+      const project = await ProjectRecord.create({name: "Lifecycle attachment project"})
+      const task = await TaskRecord.create({name: "Lifecycle attachment task", project})
+
+      await task.getAttachmentByName("descriptionFile").attach({
+        contentBase64: Buffer.from("lifecycle attachment").toString("base64"),
+        contentType: "text/plain",
+        filename: "lifecycle.txt"
+      })
+      configureWebsocketSharedTransport(websocketClient)
+
+      /** @type {CompositeTask | undefined} */
+      let lifecycleTask
+      const offUpdate = await CompositeTask.onUpdate((event) => {
+        lifecycleTask = /** @type {CompositeTask} */ (event.model)
+      })
+
+      try {
+        task.setDescription("Lifecycle attachment updated")
+        await task.save()
+
+        await waitFor(() => {
+          if (!lifecycleTask) throw new Error("Expected composite lifecycle update")
+        })
+        if (!lifecycleTask) throw new Error("Expected composite lifecycle task")
+
+        const attachment = await lifecycleTask.getAttachmentByName("descriptionFile").first()
+
+        if (!attachment) throw new Error("Expected lifecycle attachment metadata")
+        expect(attachment.filename()).toEqual("lifecycle.txt")
+        expect(attachment.recordType()).toEqual("Task")
+        expect(attachment.recordId()).toEqual(modelPrimaryKeyCacheKey(TaskRecord.primaryKey(), task.id()))
+      } finally {
+        offUpdate()
+        resetFrontendModelTransport()
+        await websocketClient.close()
+      }
+    })
+  })
+
+  it("routes remote composite rekeys through the previous instance identity", async () => {
+    await Dummy.run(async () => {
+      const websocketClient = new WebsocketClient()
+      const project = await ProjectRecord.create({name: "Remote rekey project"})
+      const task = await TaskRecord.create({name: "Remote rekey task", project})
+
+      configureNodeTransport()
+      const loadedTask = await CompositeTask.find({name: task.name(), projectId: project.id()})
+      configureWebsocketSharedTransport(websocketClient)
+
+      /** @type {Array<import("../../src/utils/model-primary-key.js").CompositeModelPrimaryKeyValue>} */
+      const updateIds = []
+      const offUpdate = await loadedTask.onUpdate((event) => {
+        updateIds.push(/** @type {import("../../src/utils/model-primary-key.js").CompositeModelPrimaryKeyValue} */ (event.id))
+      })
+
+      try {
+        task.setName("Remote rekey renamed")
+        await task.save()
+
+        await waitFor(() => {
+          if (updateIds.length < 1) throw new Error("Expected remote rekey update")
+        })
+        expect(updateIds[0]).toEqual({name: "Remote rekey renamed", projectId: project.id()})
+        expect(loadedTask.name()).toEqual("Remote rekey renamed")
+
+        task.setDescription("Remote rekey follow-up")
+        await task.save()
+
+        await waitFor(() => {
+          if (updateIds.length < 2) throw new Error("Expected update after remote rekey")
+        })
+        expect(updateIds[1]).toEqual({name: "Remote rekey renamed", projectId: project.id()})
+        expect(loadedTask.description()).toEqual("Remote rekey follow-up")
+      } finally {
+        offUpdate()
         resetFrontendModelTransport()
         await websocketClient.close()
       }
