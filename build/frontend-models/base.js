@@ -66,7 +66,7 @@ import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQuer
  */
 /**
  * Defines this typedef.
- * @typedef {{type: "hasOne" | "hasMany"}} FrontendModelAttachmentDefinition
+ * @typedef {{sync?: import("../configuration-types.js").AttachmentSyncConfiguration, type: "hasOne" | "hasMany"}} FrontendModelAttachmentDefinition
  */
 /**
  * Defines frontend-model attribute metadata.

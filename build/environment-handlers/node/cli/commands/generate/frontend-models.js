@@ -5,6 +5,7 @@ import path from "node:path"
 import * as inflection from "inflection"
 import {frontendModelResourceIsBuiltIn, frontendModelResourcesWithBuiltInsForBackendProject} from "../../../../../frontend-models/built-in-resources.js"
 import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition} from "../../../../../frontend-models/resource-definition.js"
+import {frontendModelResourceInternalConstructor} from "../../../../../frontend-model-resource/base-resource.js"
 
 /**
  * Attribute metadata used for generated frontend-model JSDoc.
@@ -381,7 +382,18 @@ export default class DbGenerateFrontendModels extends BaseCommand {
           ? "hasMany"
           : "hasOne"
 
-        fileContent += `        ${attachmentName}: {type: ${JSON.stringify(attachmentType)}},\n`
+        if (attachmentConfig.sync) {
+          fileContent += `        ${attachmentName}: {\n`
+          fileContent += "          sync: {\n"
+          fileContent += `            fetch: ${JSON.stringify(attachmentConfig.sync.fetch)},\n`
+          fileContent += `            offlineRequirement: ${JSON.stringify(attachmentConfig.sync.offlineRequirement)},\n`
+          fileContent += `            retention: ${JSON.stringify(attachmentConfig.sync.retention)},\n`
+          fileContent += "          },\n"
+          fileContent += `          type: ${JSON.stringify(attachmentType)}\n`
+          fileContent += "        },\n"
+        } else {
+          fileContent += `        ${attachmentName}: {type: ${JSON.stringify(attachmentType)}},\n`
+        }
       }
       fileContent += "      },\n"
     }
@@ -857,7 +869,8 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     try {
       const modelClass = resourceClass.modelClass()
 
-      const instance = new resourceClass({
+      const ResourceClass = frontendModelResourceInternalConstructor(resourceClass)
+      const instance = new ResourceClass({
         ability: undefined,
         context: {},
         locals: {},
@@ -894,7 +907,8 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     try {
       const modelClass = resourceClass.modelClass()
 
-      const instance = new resourceClass({
+      const ResourceClass = frontendModelResourceInternalConstructor(resourceClass)
+      const instance = new ResourceClass({
         ability: undefined,
         context: {},
         locals: {},

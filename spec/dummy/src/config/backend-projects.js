@@ -19,11 +19,6 @@ class TaskFrontendResource extends FrontendModelBaseResource {
 
   static sync = {operations: ["index", "find", "create", "update"]}
 
-  static attachments = {
-        descriptionFile: {type: "hasOne"},
-        files: {type: "hasMany"}
-      }
-
   static builtInCollectionCommands = ["index"]
 
   static builtInMemberCommands = ["find", "update", "destroy"]

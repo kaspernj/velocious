@@ -47,7 +47,7 @@
 * AbortSignal-driven MySQL/MariaDB query cancellation for raw, model, and cross-tenant aggregate queries (see [docs/database-query-cancellation.md](docs/database-query-cancellation.md))
 * Optional built-in debug endpoint for inspecting server and database connection state (see [docs/debug-endpoint.md](docs/debug-endpoint.md))
 * Optional built-in API manifest endpoint describing every registered frontend-model resource as human- and machine-readable JSON (see [docs/api-manifest-endpoint.md](docs/api-manifest-endpoint.md))
-* Backend record attachments with filesystem, S3, native callback, and bounded Node path-input persistence (see [docs/attachments.md](docs/attachments.md))
+* Backend record attachments with filesystem, S3, native callback, bounded Node path-input persistence, and model-declared client sync policy (see [docs/attachments.md](docs/attachments.md))
 
 # Setup
 
@@ -701,6 +701,13 @@ For backend models, you can declare attachment helpers directly:
 Task.hasManyAttachments("files")
 Task.hasOneAttachment("descriptionFile")
 Task.hasOneAttachment("archivedPdf", {driver: "s3"})
+User.hasOneAttachment("profilePicture", {
+  sync: {
+    fetch: "eager",
+    offlineRequirement: "optional",
+    retention: "evictable"
+  }
+})
 ```
 
 `db:migrate` provisions the framework-owned attachment table before runtime
@@ -815,7 +822,9 @@ behavior. See
 [docs/attachments.md](docs/attachments.md#normalized-storage-driver-input) for
 the normalized input passed to custom drivers.
 
-For frontend models, configure `resourceConfig().attachments` and use:
+For a resource with a backing model, the model attachment declaration
+automatically generates `resourceConfig().attachments`; do not repeat it on the
+resource. Use the generated attachment handles normally:
 
 ```js
 await frontendTask.update({descriptionFile: file})
@@ -828,6 +837,11 @@ await frontendTask.attach(file)
 
 Frontend model attachment input does not support `{path: ...}`.
 Use `File`/`Blob`/bytes/`contentBase64` payloads instead.
+The optional model-level `sync` block is client-safe policy metadata for asset
+cache adapters. It distinguishes eager/on-demand fetching,
+durable/evictable retention, and optional/required offline availability.
+Required offline assets must be durable. Backend driver configuration never
+appears in generated frontend models or API manifests.
 Attachment metadata is exposed through the built-in `VelociousAttachment` frontend model with safe fields only: `id`, `recordType`, `recordId`, `name`, `position`, `filename`, `contentType`, `byteSize`, `createdAt`, and `updatedAt`. Storage internals such as `driver`, `storageKey`, and `contentBase64` remain hidden and non-queryable. Direct metadata queries require owner filters: `recordType`, `recordId`, and `name`.
 
 When your frontend app calls a backend on another host/port (or under a path prefix), configure transport once:

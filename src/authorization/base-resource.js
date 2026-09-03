@@ -1,10 +1,15 @@
 // @ts-check
 
+/**
+ * Model class supported by authorization and shared frontend-model resources.
+ * @typedef {{new (): import("../database/record/index.js").default | import("../frontend-models/base.js").default, getModelName: () => string}} AuthorizationResourceModelClass
+ */
+
 /** Base class for authorization resources defining abilities for a model. */
 export default class AuthorizationBaseResource {
   /**
    * Model class.
-   * @type {typeof import("../database/record/index.js").default | undefined} */
+   * @type {AuthorizationResourceModelClass | undefined} */
   static ModelClass = undefined
 
   /**
@@ -22,7 +27,9 @@ export default class AuthorizationBaseResource {
 
   /**
    * Runs model class.
-   * @returns {typeof import("../database/record/index.js").default} - Model class handled by this resource.
+   * @template {AuthorizationResourceModelClass} TModelClass
+   * @this {{ModelClass: TModelClass | undefined, name: string}}
+   * @returns {TModelClass} - Model class handled by this resource.
    */
   static modelClass() {
     if (!this.ModelClass) {
@@ -41,7 +48,10 @@ export default class AuthorizationBaseResource {
    */
   can(actions, conditions) {
     this.assertResourceConditionsSignature({conditions, methodName: "can"})
-    this.requiredAbility().can(actions, this.requiredModelClass(), /** @type {import("./ability.js").AbilityConditionsType<typeof import("../database/record/index.js").default> | undefined} */ (conditions))
+    // Authorization query rules are backend-only even when a shared resource is bound to a frontend model.
+    const modelClass = /** @type {typeof import("../database/record/index.js").default} */ (this.requiredModelClass())
+
+    this.requiredAbility().can(actions, modelClass, /** @type {import("./ability.js").AbilityConditionsType<typeof import("../database/record/index.js").default> | undefined} */ (conditions))
   }
 
   /**
@@ -53,7 +63,10 @@ export default class AuthorizationBaseResource {
    */
   cannot(actions, conditions) {
     this.assertResourceConditionsSignature({conditions, methodName: "cannot"})
-    this.requiredAbility().cannot(actions, this.requiredModelClass(), /** @type {import("./ability.js").AbilityConditionsType<typeof import("../database/record/index.js").default> | undefined} */ (conditions))
+    // Authorization query rules are backend-only even when a shared resource is bound to a frontend model.
+    const modelClass = /** @type {typeof import("../database/record/index.js").default} */ (this.requiredModelClass())
+
+    this.requiredAbility().cannot(actions, modelClass, /** @type {import("./ability.js").AbilityConditionsType<typeof import("../database/record/index.js").default> | undefined} */ (conditions))
   }
 
   /**
@@ -70,7 +83,7 @@ export default class AuthorizationBaseResource {
 
   /**
    * Runs required model class.
-   * @returns {typeof import("../database/record/index.js").default} - Model class handled by this resource.
+   * @returns {AuthorizationResourceModelClass} - Model class handled by this resource.
    */
   requiredModelClass() {
     const ResourceClass = /** @type {typeof AuthorizationBaseResource} */ (this.constructor)

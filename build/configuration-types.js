@@ -376,6 +376,22 @@
  */
 
 /**
+ * Client-safe synchronization policy declared with a model attachment.
+ * @typedef {object} AttachmentSyncConfiguration
+ * @property {"eager" | "on-demand"} fetch - Whether clients prefetch the attachment or wait until it is requested.
+ * @property {"optional" | "required"} offlineRequirement - Whether an offline-ready scope requires the attachment bytes.
+ * @property {"durable" | "evictable"} retention - Whether clients may evict the attachment under storage pressure.
+ */
+
+/**
+ * Model attachment declaration retained by the record class.
+ * @typedef {object} RecordAttachmentConfiguration
+ * @property {string | AttachmentDriverConstructor | Record<string, ReturnType<typeof JSON.parse>>} [driver] - Attachment driver name, class, or instance.
+ * @property {AttachmentSyncConfiguration} [sync] - Client-safe synchronized asset policy.
+ * @property {"hasOne" | "hasMany"} type - Attachment cardinality.
+ */
+
+/**
  * @typedef {object} AttachmentsConfiguration
  * @property {string} [defaultDriver] - Default attachment storage driver name.
  * @property {Record<string, AttachmentDriverConfiguration & Record<string, ReturnType<typeof JSON.parse>>>} [drivers] - Named attachment driver configurations.
@@ -418,6 +434,7 @@
 
 /**
  * @typedef {object} FrontendModelAttachmentConfiguration
+ * @property {AttachmentSyncConfiguration} [sync] - Client-side synchronized asset policy.
  * @property {"hasOne" | "hasMany"} type - Attachment cardinality.
  */
 
@@ -574,11 +591,26 @@
  */
 
 /**
- * @typedef {Omit<typeof import("./frontend-model-resource/base-resource.js").default, never> & {new (args: import("./frontend-model-resource/base-resource.js").FrontendModelResourceAbilityArgs | import("./frontend-model-resource/base-resource.js").FrontendModelResourceControllerArgs): import("./frontend-model-resource/base-resource.js").default<typeof import("./database/record/index.js").default>}} FrontendModelResourceClassType
+ * Unbound resource class used by model-agnostic registries.
+ * @typedef {Omit<typeof import("./frontend-model-resource/base-resource.js").default, "modelClass"> & {modelClass: () => typeof import("./database/record/index.js").default, new (args: never): import("./frontend-model-resource/base-resource.js").default<typeof import("./database/record/index.js").default>}} UnboundFrontendModelResourceClassType
  */
 
 /**
- * @typedef {FrontendModelResourceClassType} FrontendModelResourceDefinition
+ * Resource class bound to a specific model class.
+ * @template {import("./frontend-model-resource/base-resource.js").FrontendModelResourceModelClass} TModelClass
+ * @template {typeof import("./database/record/index.js").default} TDatabaseModelClass
+ * @typedef {Omit<typeof import("./frontend-model-resource/base-resource.js").default, "ModelClass" | "modelClass"> & {ModelClass: TModelClass | undefined, modelClass: () => TModelClass, new (args: import("./frontend-model-resource/base-resource.js").FrontendModelResourceAbilityArgs<TModelClass> | import("./frontend-model-resource/base-resource.js").FrontendModelResourceControllerArgs<TDatabaseModelClass>): import("./frontend-model-resource/base-resource.js").default<TModelClass, TDatabaseModelClass>}} BoundFrontendModelResourceClassType
+ */
+
+/**
+ * @template {import("./frontend-model-resource/base-resource.js").FrontendModelResourceModelClass} [TModelClass=never]
+ * @template {typeof import("./database/record/index.js").default} [TDatabaseModelClass=Extract<TModelClass, typeof import("./database/record/index.js").default>]
+ * @typedef {[TModelClass] extends [never] ? UnboundFrontendModelResourceClassType : BoundFrontendModelResourceClassType<TModelClass, TDatabaseModelClass>} FrontendModelResourceClassType
+ */
+
+/**
+ * @template {import("./frontend-model-resource/base-resource.js").FrontendModelResourceModelClass} [TModelClass=never]
+ * @typedef {FrontendModelResourceClassType<TModelClass>} FrontendModelResourceDefinition
  */
 
 /**

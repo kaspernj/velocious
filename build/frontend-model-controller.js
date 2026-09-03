@@ -3,7 +3,7 @@
 import {randomUUID} from "node:crypto"
 import * as inflection from "inflection"
 import Controller from "./controller.js"
-import FrontendModelBaseResource from "./frontend-model-resource/base-resource.js"
+import FrontendModelBaseResource, {frontendModelResourceInternalConstructor} from "./frontend-model-resource/base-resource.js"
 import Response from "./http-server/client/response.js"
 import {frontendModelResourcesWithBuiltInsForBackendProject} from "./frontend-models/built-in-resources.js"
 import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigurationFromDefinition, frontendModelResourcePath, frontendModelResourcesForBackendProject, frontendModelSyncManifestForBackendProjects} from "./frontend-models/resource-definition.js"
@@ -70,7 +70,7 @@ import {RansackQueryError, normalizeRansackGroup, parseRansackSort} from "./util
  * @typedef {object} FrontendModelIndexQueryOptions
  * @property {boolean} [includePagination] - Whether frontend-model pagination params should be applied.
  * @property {boolean} [includeSort] - Whether frontend-model sort params should be applied.
- * @property {import("./frontend-model-resource/base-resource.js").default} [resource] - Resource providing query hooks.
+ * @property {Pick<import("./frontend-model-resource/base-resource.js").default<import("./frontend-model-resource/base-resource.js").FrontendModelResourceModelClass>, "applyFrontendModelIndexPagination" | "applyFrontendModelIndexSearch" | "applyFrontendModelIndexSort">} [resource] - Resource providing query hooks.
  */
 /** @typedef {import("./database/query/model-class-query.js").default & Record<symbol, Set<string> | undefined>} FrontendModelQueryMetadata */
 /**
@@ -1040,7 +1040,9 @@ export default class FrontendModelController extends Controller {
       resourceConfiguration: frontendModelResource.resourceConfiguration
     }
 
-    return new frontendModelResource.resourceClass(resourceArgs)
+    const ResourceClass = frontendModelResourceInternalConstructor(frontendModelResource.resourceClass)
+
+    return new ResourceClass(resourceArgs)
   }
 
   /**
@@ -2908,7 +2910,9 @@ export default class FrontendModelController extends Controller {
         const resourceClass = resourceDefinition ? frontendModelResourceClassFromDefinition(resourceDefinition) : null
 
         if (resourceClass) {
-          resource = new resourceClass({
+          const ResourceClass = frontendModelResourceInternalConstructor(resourceClass)
+
+          resource = new ResourceClass({
             ability: this.currentAbility(),
             // Propagate the controller so a related/preloaded model's serialization
             // resource can use request context (e.g. `requestBaseUrl()` for signed
@@ -3985,7 +3989,8 @@ export default class FrontendModelController extends Controller {
 
     if (!frontendModelResource) throw frontendSyncReplaySafeError(`Sync replay model is not enabled: ${mutation.model}`)
 
-    const resource = new frontendModelResource.resourceClass({
+    const ResourceClass = frontendModelResourceInternalConstructor(frontendModelResource.resourceClass)
+    const resource = new ResourceClass({
       ability: this.currentAbility(),
       controller: this,
       context: {
