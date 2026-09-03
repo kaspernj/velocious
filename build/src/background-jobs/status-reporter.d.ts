@@ -43,9 +43,10 @@ export default class BackgroundJobsStatusReporter {
      * @param {string} [args.handoffId] - Handoff lease id.
      * @param {number} [args.handedOffAtMs] - Handed off timestamp.
      * @param {string} [args.workerId] - Worker id.
+     * @param {import("./types.js").PooledRunnerFailure} [args.runnerFailure] - Pooled-child process failure provenance.
      * @returns {Promise<void>} - Resolves when reported.
      */
-    report({ jobId, status, delayMs, error, handoffId, handedOffAtMs, workerId }: {
+    report({ jobId, status, delayMs, error, handoffId, handedOffAtMs, workerId, runnerFailure }: {
         jobId: string;
         status: "completed" | "failed" | "rescheduled";
         delayMs?: number;
@@ -53,6 +54,7 @@ export default class BackgroundJobsStatusReporter {
         handoffId?: string;
         handedOffAtMs?: number;
         workerId?: string;
+        runnerFailure?: import("./types.js").PooledRunnerFailure;
     }): Promise<void>;
     /**
      * Runs report with retry.
@@ -64,11 +66,12 @@ export default class BackgroundJobsStatusReporter {
      * @param {string} [args.handoffId] - Handoff lease id.
      * @param {number} [args.handedOffAtMs] - Handed off timestamp.
      * @param {string} [args.workerId] - Worker id.
+     * @param {import("./types.js").PooledRunnerFailure} [args.runnerFailure] - Pooled-child process failure provenance.
      * @param {number} [args.maxDurationMs] - Max duration for retries.
      * @param {boolean} [args.retryPersistErrors] - Retry a `BackgroundJobUpdateError` (main's `job-update-error`, i.e. a transient DB failure while persisting the terminal status) instead of throwing immediately. Off by default so short-lived forked/spawned runners keep failing loudly and exit non-zero to be reclaimed; on for the long-lived worker, which cannot exit-to-reclaim and would otherwise strand the job in `handed_off`.
      * @returns {Promise<void>} - Resolves when reported.
      */
-    reportWithRetry({ jobId, status, delayMs, error, handoffId, handedOffAtMs, workerId, maxDurationMs, retryPersistErrors }: {
+    reportWithRetry({ jobId, status, delayMs, error, handoffId, handedOffAtMs, workerId, runnerFailure, maxDurationMs, retryPersistErrors }: {
         jobId: string;
         status: "completed" | "failed" | "rescheduled";
         delayMs?: number;
@@ -76,6 +79,7 @@ export default class BackgroundJobsStatusReporter {
         handoffId?: string;
         handedOffAtMs?: number;
         workerId?: string;
+        runnerFailure?: import("./types.js").PooledRunnerFailure;
         maxDurationMs?: number;
         retryPersistErrors?: boolean;
     }): Promise<void>;

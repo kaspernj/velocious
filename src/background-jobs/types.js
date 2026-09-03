@@ -6,6 +6,39 @@
 /** @typedef {"candidate" | "active" | "retired"} BackgroundJobsGenerationInitialState */
 /** @typedef {"starting" | "candidate" | "active" | "retiring" | "retired" | "stopped"} BackgroundJobsGenerationLifecycleState */
 /** @typedef {"missing-generation" | "unexpected-generation" | "malformed-generation" | "generation-mismatch" | "worker-admission-retired" | "worker-has-no-recoverable-handoffs"} BackgroundJobsGenerationRejectionReason */
+/** @typedef {"exit" | "process-error" | "ipc-send"} PooledRunnerFailureOrigin */
+/** @typedef {"starting" | "running" | "retiring"} PooledRunnerLifecycleState */
+/** @typedef {"unexpected" | "job-timeout" | "worker-shutdown-timeout"} PooledRunnerTerminationReason */
+/** @typedef {"running" | "retiring" | "stopping"} BackgroundJobsWorkerLifecycleState */
+/**
+ * @typedef {object} PooledRunnerActiveJob
+ * @property {string | null} handoffId - Durable handoff lease id.
+ * @property {number | null} handedOffAtMs - Durable handoff timestamp.
+ * @property {string} jobId - Durable background job id.
+ * @property {string} jobName - Registered job class name.
+ * @property {string} workerId - Worker identity persisted with the handoff.
+ */
+/**
+ * One process-failure snapshot shared by every job lost with a pooled child.
+ * @typedef {object} PooledRunnerFailure
+ * @property {PooledRunnerActiveJob[]} activeJobs - Jobs that were in flight when the child failed, ordered by job id.
+ * @property {number | null} exitCode - Child exit code, or null for signal/process errors.
+ * @property {string | null} generationId - Release generation identity, or null in legacy mode.
+ * @property {boolean | null} oomKilled - False when the observed exit rules OOM out; null when an unexpected SIGKILL cannot be distinguished from an OOM kill without supervisor/kernel evidence.
+ * @property {PooledRunnerFailureOrigin} origin - Worker observation that initiated failure handling.
+ * @property {number} runnerAgeMs - Child age when failure handling started.
+ * @property {number} runnerCreatedAtMs - Child creation timestamp.
+ * @property {boolean} runnerDetached - Whether the runner owned a detached process group.
+ * @property {number} runnerJobsRun - Previously acknowledged jobs handled by the child.
+ * @property {PooledRunnerLifecycleState} runnerLifecycle - Child lifecycle immediately before recovery.
+ * @property {number | null} runnerPid - Child process id when available.
+ * @property {import("node:child_process").ChildProcess["signalCode"]} signal - Child termination signal when available.
+ * @property {PooledRunnerTerminationReason} terminationReason - Why the worker expected or did not expect termination.
+ * @property {string | null} timeoutJobId - Job whose timeout initiated child termination, or null.
+ * @property {string} workerId - Stable generation-qualified worker id.
+ * @property {BackgroundJobsWorkerLifecycleState} workerLifecycle - Parent worker lifecycle immediately before recovery.
+ * @property {number} workerPid - Parent worker process id.
+ */
 /**
  * @typedef {object} LocalBackgroundJobsClock
  * @property {() => number} now - Current epoch milliseconds.
@@ -140,6 +173,7 @@
  * @property {string | undefined} handoffId - Handoff lease id from the worker report.
  * @property {number | undefined} handedOffAtMs - Handoff timestamp from the worker report.
  * @property {string | undefined} workerId - Worker id from the worker report.
+ * @property {PooledRunnerFailure | undefined} runnerFailure - Shared pooled-child process failure provenance.
  */
 /**
  * @typedef {"worker" | "client" | "reporter"} BackgroundJobSocketRole
@@ -162,7 +196,7 @@
  * @typedef {{type: "cancel-scheduled-error", error?: string}} BackgroundJobCancelScheduledErrorMessage
  * @typedef {{type: "job", payload: BackgroundJobPayload}} BackgroundJobJobMessage
  * @typedef {{type: "job-complete", jobId: string, handoffId?: string, workerId?: string, handedOffAtMs?: number}} BackgroundJobCompleteMessage
- * @typedef {{type: "job-failed", jobId: string, error?: ReturnType<typeof JSON.parse>, handoffId?: string, workerId?: string, handedOffAtMs?: number}} BackgroundJobFailedMessage
+ * @typedef {{type: "job-failed", jobId: string, error?: ReturnType<typeof JSON.parse>, handoffId?: string, workerId?: string, handedOffAtMs?: number, runnerFailure?: PooledRunnerFailure}} BackgroundJobFailedMessage
  * @typedef {{type: "job-reschedule", jobId: string, delayMs: number, handoffId?: string, workerId?: string, handedOffAtMs?: number}} BackgroundJobRescheduleMessage
  * @typedef {{type: "job-updated", jobId: string}} BackgroundJobUpdatedMessage
  * @typedef {{type: "job-update-error", jobId: string, error?: string}} BackgroundJobUpdateErrorMessage

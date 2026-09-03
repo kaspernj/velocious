@@ -7,12 +7,13 @@ import {afterAll, beforeAll, describe, expect, it} from "../../src/testing/test.
 import createBackgroundJobsSocketBarrier from "../helpers/background-jobs-socket-barrier.js"
 import SocketBarrierTestJob from "../dummy/src/jobs/socket-barrier-test-job.js"
 import SlowTestJob from "../dummy/src/jobs/slow-test-job.js"
+import dummyConfiguration from "../dummy/src/config/configuration.js"
 import {outputPathFor, startBackgroundJobs, waitForOutputJson} from "../helpers/background-jobs-helper.js"
 
 /** @type {Awaited<ReturnType<typeof startBackgroundJobs>> | undefined} */
 let backgroundJobs
 
-describe("Background jobs - pooled ready dispatch", {tags: ["dummy"], databaseCleaning: {truncate: true}}, () => {
+describe("Background jobs - pooled ready dispatch", {tags: ["dummy"], databaseCleaning: {transaction: true}}, () => {
   beforeAll(async () => {
     backgroundJobs = await startBackgroundJobs({workerOptions: {pooledRunnerConcurrency: 5, pooledRunnerCount: 1}})
   })
@@ -113,6 +114,77 @@ describe("Background jobs - pooled ready dispatch", {tags: ["dummy"], databaseCl
     } finally {
       releaseFailureReport.resolve(undefined)
       backgroundJobs.worker.statusReporter = originalReporter
+    }
+  })
+
+  it("emits one shared runner-exit provenance snapshot for every job lost with a pooled child", async () => {
+    if (!backgroundJobs) throw new Error("Expected background jobs to be started")
+    const barrier = await createBackgroundJobsSocketBarrier(2)
+    const failureEvents = []
+    const failuresReceived = deferred()
+    const jobIds = []
+    const onFailure = (payload) => {
+      if (!jobIds.includes(payload.context.jobId)) return
+
+      failureEvents.push(payload)
+      if (failureEvents.length === 2) failuresReceived.resolve(undefined)
+    }
+
+    dummyConfiguration.getErrorEvents().on("background-job-failed", onFailure)
+
+    try {
+      for (let index = 0; index < 2; index += 1) {
+        jobIds.push(await SocketBarrierTestJob.performLaterWithOptions({
+          args: [barrier.port],
+          options: {executionMode: "pooled", maxRetries: 0}
+        }))
+      }
+
+      await barrier.waiting
+
+      const childEntry = [...backgroundJobs.worker.pooledChildStates]
+        .find(([, state]) => jobIds.every((jobId) => state.inflight.has(jobId)))
+      if (!childEntry) throw new Error("Expected both jobs to share one pooled child")
+      const [child] = childEntry
+      const runnerPid = child.pid
+      if (!runnerPid) throw new Error("Expected pooled child pid")
+
+      child.kill("SIGKILL")
+      await timeout({errorMessage: "Killed pooled jobs did not report both failures", timeout: 2000}, async () => {
+        await failuresReceived.promise
+      })
+
+      const failedJobs = await Promise.all(jobIds.map(async (jobId) => await backgroundJobs.store.getJob(jobId)))
+      const runnerFailures = failureEvents.map((event) => event.context.runnerFailure)
+
+      expect(failedJobs.map((job) => job?.status)).toEqual(["failed", "failed"])
+      expect(runnerFailures[0]).toEqual(runnerFailures[1])
+      expect(runnerFailures.map((failure) => failure.activeJobs.map((job) => job.jobId))).toEqual([
+        [...jobIds].sort(),
+        [...jobIds].sort()
+      ])
+
+      for (const failure of runnerFailures) {
+        expect(failure.exitCode).toEqual(null)
+        expect(failure.generationId).toEqual(null)
+        expect(failure.oomKilled).toEqual(null)
+        expect(failure.origin).toEqual("exit")
+        expect(failure.runnerDetached).toEqual(false)
+        expect(failure.runnerLifecycle).toEqual("running")
+        expect(failure.runnerPid).toEqual(runnerPid)
+        expect(failure.signal).toEqual("SIGKILL")
+        expect(failure.terminationReason).toEqual("unexpected")
+        expect(failure.workerId).toEqual(backgroundJobs.worker.workerId)
+        expect(failure.workerLifecycle).toEqual("running")
+        expect(failure.workerPid).toEqual(process.pid)
+        expect(failure.activeJobs.every((job) => typeof job.handoffId === "string")).toEqual(true)
+        expect(failure.activeJobs.every((job) => typeof job.handedOffAtMs === "number")).toEqual(true)
+        expect(failure.activeJobs.every((job) => job.workerId === backgroundJobs.worker.workerId)).toEqual(true)
+      }
+    } finally {
+      dummyConfiguration.getErrorEvents().off("background-job-failed", onFailure)
+      barrier.release()
+      await barrier.close()
     }
   })
 })
