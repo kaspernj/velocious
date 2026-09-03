@@ -436,6 +436,21 @@ The `background-job-failed` payload has:
 - `context.terminal`: whether this failure ended the job.
 - `context.willRetry`: whether this failure returned the job to the queue.
 - `context.workerId`: the worker id included in the accepted report.
+- `context.runnerFailure`: present when a pooled runner process failure affected
+  this job. Every job lost with the same child receives the same snapshot. It
+  contains `activeJobs` (job, handoff, timestamp, and worker identities), the
+  runner and worker PIDs, release generation, runner/worker lifecycle states,
+  runner age and completed-job count, process-group ownership through
+  `runnerDetached`, failure `origin`, expected `terminationReason`, timeout job
+  id, exit code, signal, and `oomKilled`.
+
+`oomKilled` is `false` when Velocious initiated or observed a termination that
+rules OOM out. It is `null` for an unexplained `SIGKILL`, because Node cannot
+distinguish an operator/supervisor kill from the kernel OOM killer; correlate the
+snapshot with supervisor and kernel logs before classifying it. Pooled runners
+are attached children (`runnerDetached: false`) and therefore remain in the
+worker-owned process group rather than creating an independently supervised
+group.
 
 The mirrored `all-error` payload includes the same `error` and `context` plus `errorType: "background-job-failed"`.
 
