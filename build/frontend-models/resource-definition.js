@@ -176,6 +176,7 @@ function normalizeFrontendModelResourceConfiguration(resourceConfiguration) {
   }
 
   restArgsError(restArgs)
+  validateFrontendModelResourcePrimaryKey(resourceConfiguration.primaryKey)
 
   const normalizedCommands = normalizeFrontendModelResourceCommands(resourceConfiguration)
   const sync = normalizeFrontendModelResourceSync(resourceConfiguration)
@@ -192,6 +193,23 @@ function normalizeFrontendModelResourceConfiguration(resourceConfiguration) {
     commandMetadata: normalizedCommands.commandMetadata,
     memberCommands: normalizedCommands.memberCommands,
     sync
+  }
+}
+
+/**
+ * Validates a resource primary-key definition before it can be used to build CRUD conditions.
+ * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition | undefined} primaryKey - Resource primary key.
+ * @returns {void}
+ */
+function validateFrontendModelResourcePrimaryKey(primaryKey) {
+  if (!Array.isArray(primaryKey)) return
+
+  if (primaryKey.length === 0) {
+    throw new Error("Resource primaryKey arrays must contain at least one attribute.")
+  }
+
+  if (new Set(primaryKey).size !== primaryKey.length) {
+    throw new Error("Resource primaryKey arrays must contain unique attributes.")
   }
 }
 

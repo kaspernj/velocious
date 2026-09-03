@@ -24,15 +24,11 @@ export type FrontendModelWebsocketSyntheticRequest = {
  * Per-session channel subscription for frontend-model lifecycle events.
  * Replaces the legacy `FrontendModelWebsocketChannel` (Phase 3).
  *
- * Auth model: subscribe-time only. `canSubscribe` resolves the caller's
- * ability once, checks that at least one `allow` rule exists for
- * `read` on the requested model class, and then delivers future
- * lifecycle broadcasts for that model without re-authorizing per event.
- * This matches the explicit design decision in Phase 3 to trade
- * per-record visibility guarantees for massively cheaper broadcast fan-out.
- * Subscriber-provided event filters can still narrow which create/update
- * events are delivered, but they are matching predicates rather than
- * per-record authorization checks.
+ * `canSubscribe` resolves the caller's ability once and requires a read rule
+ * for the requested model class. Create/update delivery then reloads each
+ * record through that ability and serializes it through the subscribed
+ * frontend resource. Subscriber-provided event filters can further narrow
+ * those authorized events.
  *
  * Wire: subscribe with `subscribeChannel("frontend-models", {params: {model: ModelName}})`.
  * Backend publishes `{action, id, record}` via
@@ -90,11 +86,6 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
      */
     _modelName(): string | null;
     /**
-     * Runs has projection params.
-     * @returns {boolean} - Whether this subscription requested per-event record projection.
-     */
-    _hasProjectionParams(): boolean;
-    /**
      * Runs has event filter params.
      * @returns {boolean} - Whether this subscription requested event query filters.
      */
@@ -147,14 +138,6 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
      * @returns {Promise<T>} - Callback result.
      */
     _withEventTenant<T>(id: import("../utils/model-primary-key.js").ModelPrimaryKeyValue, callback: () => Promise<T>): Promise<T>;
-    /**
-     * Whether the broadcast record is within the subscriber's authenticated ability scope. Used to gate
-     * unfiltered/unprojected create/update delivery so a scoped token never receives a record it cannot read.
-     * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} id - Event record id.
-     * @param {typeof import("../frontend-model-controller.js").default} FrontendModelController - Server-side frontend-model controller class.
-     * @returns {Promise<boolean>} True when the record is readable by this subscription.
-     */
-    _eventIsAccessible(id: import("../utils/model-primary-key.js").ModelPrimaryKeyValue, FrontendModelController: typeof import("../frontend-model-controller.js").default): Promise<boolean>;
     /**
      * Runs matched event filter keys for event id.
      * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} id - Event record id.

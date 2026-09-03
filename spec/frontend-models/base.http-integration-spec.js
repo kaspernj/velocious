@@ -2,11 +2,13 @@
 
 import {wait, waitFor} from "awaitery"
 import {describe, expect, it} from "../../src/testing/test.js"
+import Configuration from "../../src/configuration.js"
 import FrontendModelBase, {AttributeNotSelectedError, VelociousAttachment} from "../../src/frontend-models/base.js"
 import FrontendModelPreloader from "../../src/frontend-models/preloader.js"
 import WebsocketClient from "../../src/http-client/websocket-client.js"
 import {modelPrimaryKeyCacheKey} from "../../src/utils/model-primary-key.js"
 import Dummy from "../dummy/index.js"
+import backendProjects from "../dummy/src/config/backend-projects.js"
 import CommentRecord from "../dummy/src/models/comment.js"
 import ProjectRecord from "../dummy/src/models/project.js"
 import runWithProcessTimezone from "../helpers/process-timezone.js"
@@ -789,6 +791,38 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
     })
   })
 
+  it("serializes unprojected lifecycle records through the subscribed resource", async () => {
+    await Dummy.run(async () => {
+      const websocketClient = new WebsocketClient()
+      const project = await ProjectRecord.create({name: "Serialized lifecycle project"})
+      const task = await TaskRecord.create({name: "Serialized lifecycle task", project})
+
+      configureWebsocketSharedTransport(websocketClient)
+
+      /** @type {CompositeTask | undefined} */
+      let lifecycleTask
+      const offUpdate = await CompositeTask.onUpdate((event) => {
+        lifecycleTask = /** @type {CompositeTask} */ (event.model)
+      })
+
+      try {
+        task.setDescription("Serialized lifecycle description")
+        await task.save()
+
+        await waitFor(() => {
+          if (!lifecycleTask) throw new Error("Expected serialized composite lifecycle update")
+        })
+        if (!lifecycleTask) throw new Error("Expected serialized composite lifecycle task")
+
+        expect(Object.keys(lifecycleTask.attributes()).sort()).toEqual(["description", "name", "projectId"])
+      } finally {
+        offUpdate()
+        resetFrontendModelTransport()
+        await websocketClient.close()
+      }
+    })
+  })
+
   it("keeps canonical attachment ownership on unprojected lifecycle records", async () => {
     await Dummy.run(async () => {
       const websocketClient = new WebsocketClient()
@@ -1458,10 +1492,10 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       try {
         const {task} = await seedHttpAttachmentModels()
         const descriptionAttachments = await VelociousAttachment
-          .where({recordType: "Task", recordId: String(task.id()), name: "descriptionFile"})
+          .where({recordType: "Task", recordId: String(task.id()), resourceName: "Task", name: "descriptionFile"})
           .toArray()
         const fileAttachments = await VelociousAttachment
-          .where({recordType: "Task", recordId: String(task.id()), name: "files"})
+          .where({recordType: "Task", recordId: String(task.id()), resourceName: "Task", name: "files"})
           .order([["position", "asc"]])
           .toArray()
         const loadedTask = await Task.find(task.id())
@@ -1494,13 +1528,40 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
     })
   })
 
+  it("authorizes attachment metadata through an alias-only frontend resource", async () => {
+    await Dummy.run(async () => {
+      const configuration = Configuration.current()
+      const configuredBackendProjects = configuration.getBackendProjects()
+      const originalBackendProjects = configuredBackendProjects.slice()
+      const {project, task} = await seedHttpAttachmentModels()
+      const compositeTaskResource = backendProjects[0].frontendModels.CompositeTask
+
+      configuredBackendProjects.splice(0, configuredBackendProjects.length, {
+        frontendModels: {CompositeTask: compositeTaskResource},
+        path: backendProjects[0].path
+      })
+      configureNodeTransport()
+
+      try {
+        const loadedTask = await CompositeTask.find({name: task.name(), projectId: project.id()})
+        const attachment = await loadedTask.getAttachmentByName("descriptionFile").first()
+
+        if (!attachment) throw new Error("Expected alias attachment metadata")
+        expect(attachment.filename()).toEqual("description.txt")
+      } finally {
+        configuredBackendProjects.splice(0, configuredBackendProjects.length, ...originalBackendProjects)
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
   it("rejects hidden attachment storage fields in frontend-model queries over real Node HTTP requests", async () => {
     await Dummy.run(async () => {
       configureNodeTransport()
 
       try {
         const {task} = await seedHttpAttachmentModels()
-        const ownerWhere = {recordType: "Task", recordId: String(task.id()), name: "descriptionFile"}
+        const ownerWhere = {recordType: "Task", recordId: String(task.id()), resourceName: "Task", name: "descriptionFile"}
 
         await expect(async () => {
           await VelociousAttachment

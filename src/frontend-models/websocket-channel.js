@@ -59,15 +59,11 @@ function transportSerializationOptionsForConfiguration(configuration) {
  * Per-session channel subscription for frontend-model lifecycle events.
  * Replaces the legacy `FrontendModelWebsocketChannel` (Phase 3).
  *
- * Auth model: subscribe-time only. `canSubscribe` resolves the caller's
- * ability once, checks that at least one `allow` rule exists for
- * `read` on the requested model class, and then delivers future
- * lifecycle broadcasts for that model without re-authorizing per event.
- * This matches the explicit design decision in Phase 3 to trade
- * per-record visibility guarantees for massively cheaper broadcast fan-out.
- * Subscriber-provided event filters can still narrow which create/update
- * events are delivered, but they are matching predicates rather than
- * per-record authorization checks.
+ * `canSubscribe` resolves the caller's ability once and requires a read rule
+ * for the requested model class. Create/update delivery then reloads each
+ * record through that ability and serializes it through the subscribed
+ * frontend resource. Subscriber-provided event filters can further narrow
+ * those authorized events.
  *
  * Wire: subscribe with `subscribeChannel("frontend-models", {params: {model: ModelName}})`.
  * Backend publishes `{action, id, record}` via
@@ -156,20 +152,6 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
   async _deliverBroadcast(body, meta) {
     const hasEventFilters = this._hasEventFilterParams()
 
-    if (!this._hasProjectionParams() && !hasEventFilters) {
-      // Even unfiltered subscriptions must respect the subscriber's ability. A create/update carries
-      // the record, so only deliver it when the record is within the authenticated ability's scope.
-      // Destroys (and bodies without a usable id) carry no record, so pass them through unchanged.
-      if (body && typeof body === "object" && (body.action === "create" || body.action === "update") && body.id !== undefined && body.id !== null) {
-        const FrontendModelController = await this._frontendModelControllerClass()
-
-        if (!await this._eventIsAccessible(body.id, FrontendModelController)) return
-      }
-
-      this.sendMessage(body, meta)
-      return
-    }
-
     if (!body || typeof body !== "object") {
       if (!hasEventFilters || this._hasUnfilteredEventDelivery()) this.sendMessage(body, meta)
       return
@@ -186,34 +168,32 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
     }
 
     const FrontendModelController = await this._frontendModelControllerClass()
-    const matchedEventFilterKeys = await this._matchedEventFilterKeysForEventId(body.id, FrontendModelController)
+    const matchedEventFilterKeys = hasEventFilters
+      ? await this._matchedEventFilterKeysForEventId(body.id, FrontendModelController)
+      : []
 
     if (hasEventFilters && matchedEventFilterKeys.length === 0 && !this._hasUnfilteredEventDelivery()) {
       return
     }
 
+    const projectedRecord = await this._projectedRecordForEventId(body.id, FrontendModelController)
+
+    if (!projectedRecord) {
+      return
+    }
+
+    const configuration = this.session.configuration
+
+    if (!configuration) {
+      throw new Error("Frontend model websocket channel has no configuration for transport serialization")
+    }
+
     /**
      * Deliver body.
      * @type {FrontendModelLifecycleBroadcastBody} */
-    let deliverBody = body
-
-    if (this._hasProjectionParams()) {
-      const projectedRecord = await this._projectedRecordForEventId(body.id, FrontendModelController)
-
-      if (!projectedRecord) {
-        return
-      }
-
-      const configuration = this.session.configuration
-
-      if (!configuration) {
-        throw new Error("Frontend model websocket channel has no configuration for transport serialization")
-      }
-
-      deliverBody = {
-        ...deliverBody,
-        record: /** @type {import("./query.js").FrontendModelTransportValue} */ (serializeFrontendModelTransportValue(projectedRecord, transportSerializationOptionsForConfiguration(configuration)))
-      }
+    let deliverBody = {
+      ...body,
+      record: /** @type {import("./query.js").FrontendModelTransportValue} */ (serializeFrontendModelTransportValue(projectedRecord, transportSerializationOptionsForConfiguration(configuration)))
     }
 
     if (hasEventFilters) {
@@ -264,19 +244,6 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
     return typeof this.params?.model === "string" && this.params.model.length > 0
       ? this.params.model
       : null
-  }
-
-  /**
-   * Runs has projection params.
-   * @returns {boolean} - Whether this subscription requested per-event record projection.
-   */
-  _hasProjectionParams() {
-    return this.params.select !== undefined
-      || this.params.selectsExtra !== undefined
-      || this.params.preload !== undefined
-      || this.params.withCount !== undefined
-      || this.params.abilities !== undefined
-      || this.params.queryData !== undefined
   }
 
   /**
@@ -448,29 +415,6 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
     // could leak it to a subscriber whose own resolver could not resolve it.
     return await configuration.runWithTenant(tenant, async () => {
       return await configuration.ensureConnections({name: "Frontend model websocket event tenant"}, callback)
-    })
-  }
-
-  /**
-   * Whether the broadcast record is within the subscriber's authenticated ability scope. Used to gate
-   * unfiltered/unprojected create/update delivery so a scoped token never receives a record it cannot read.
-   * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} id - Event record id.
-   * @param {typeof import("../frontend-model-controller.js").default} FrontendModelController - Server-side frontend-model controller class.
-   * @returns {Promise<boolean>} True when the record is readable by this subscription.
-   */
-  async _eventIsAccessible(id, FrontendModelController) {
-    return await this._withEventTenant(id, async () => {
-      const controller = this._frontendModelController(FrontendModelController)
-
-      await controller.ensureFrontendModelClassInitialized()
-
-      const ModelClass = controller.frontendModelClass()
-      const primaryKey = controller.frontendModelPrimaryKey()
-      const query = controller.frontendModelAuthorizedQuery("find").where({
-        [ModelClass.tableName()]: frontendModelPrimaryKeyDatabaseConditions(ModelClass, primaryKey, id)
-      })
-
-      return Boolean(await query.first())
     })
   }
 

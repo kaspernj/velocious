@@ -524,11 +524,12 @@ export default class FrontendModelBase<Attributes extends object = any, CreateAt
     _loadCohort: Array<FrontendModelBase> | undefined;
     /**
      * Canonical backing-record attachment owner returned by the server.
-     * @type {{recordId: string, recordType: string} | null}
+     * @type {{recordId: string, recordType: string, resourceName: string} | null}
      */
     _attachmentOwner: {
         recordId: string;
         recordType: string;
+        resourceName: string;
     } | null;
     /**
      * Runs constructor.
@@ -998,13 +999,14 @@ export default class FrontendModelBase<Attributes extends object = any, CreateAt
      * Runs model data from response.
      * @this {FrontendModelClass}
      * @param {object} response - Response payload.
-     * @returns {{abilities: Record<string, boolean>, attachmentOwner: {recordId: string, recordType: string} | null, attributes: Record<string, FrontendModelAttributeValue>, associationCounts: Record<string, number>, queryData: Record<string, FrontendModelAttributeValue>, preloadedRelationships: Record<string, FrontendModelAttributeValue>, selectedAttributes: Set<string>}} - Attributes, attachment owner, preloaded relationships, association counts, queryData, abilities, and selected attributes.
+     * @returns {{abilities: Record<string, boolean>, attachmentOwner: {recordId: string, recordType: string, resourceName: string} | null, attributes: Record<string, FrontendModelAttributeValue>, associationCounts: Record<string, number>, queryData: Record<string, FrontendModelAttributeValue>, preloadedRelationships: Record<string, FrontendModelAttributeValue>, selectedAttributes: Set<string>}} - Attributes, attachment owner, preloaded relationships, association counts, queryData, abilities, and selected attributes.
      */
     static modelDataFromResponse(this: FrontendModelClass, response: object): {
         abilities: Record<string, boolean>;
         attachmentOwner: {
             recordId: string;
             recordType: string;
+            resourceName: string;
         } | null;
         attributes: Record<string, FrontendModelAttributeValue>;
         associationCounts: Record<string, number>;

@@ -1736,7 +1736,7 @@ describe("Controller frontend model actions", () => {
             commandType: "index",
             model: "VelociousAttachment",
             payload: {
-              where: {recordType: "Task", recordId: String(task.id()), name: "descriptionFile"}
+              where: {recordType: "Task", recordId: String(task.id()), resourceName: "Task", name: "descriptionFile"}
             },
             requestId: "request-1"
           }]

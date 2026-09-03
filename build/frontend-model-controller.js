@@ -3195,11 +3195,14 @@ export default class FrontendModelController extends Controller {
       if (hasQueryData) serialized.__queryData = queryDataValues
       if (hasAbilities) serialized.__abilities = computedAbilities
       if (hasAttachmentOwner) {
+        if (!resource) throw new Error(`Missing frontend model resource for attachment owner ${model.getModelClass().getModelName()}`)
+
         const modelClass = model.getModelClass()
 
         serialized[ATTACHMENT_OWNER_KEY] = {
           recordId: modelPrimaryKeyCacheKey(modelClass.primaryKey(), model.id()),
-          recordType: modelClass.getModelName()
+          recordType: modelClass.getModelName(),
+          resourceName: resource.modelName()
         }
       }
 

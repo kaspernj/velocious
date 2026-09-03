@@ -780,7 +780,7 @@ function frontendModelAttachmentCommandPayload(attachment, attachmentId) {
 /**
  * Returns the canonical backing owner used by attachment metadata storage.
  * @param {FrontendModelBase} model - Frontend attachment owner.
- * @returns {{recordId: string, recordType: string}} - Canonical attachment owner.
+ * @returns {{recordId: string, recordType: string, resourceName: string}} - Canonical attachment owner and originating resource.
  */
 function frontendModelAttachmentOwner(model) {
   if (!model._attachmentOwner) {
@@ -1201,7 +1201,8 @@ export class FrontendModelAttachmentHandle {
       .where({
         name: this.attachmentName,
         recordId: attachmentOwner.recordId,
-        recordType: attachmentOwner.recordType
+        recordType: attachmentOwner.recordType,
+        resourceName: attachmentOwner.resourceName
       })
       .order([["position", "asc"]])
   }
@@ -2456,7 +2457,7 @@ export default class FrontendModelBase {
   _loadCohort
   /**
    * Canonical backing-record attachment owner returned by the server.
-   * @type {{recordId: string, recordType: string} | null}
+   * @type {{recordId: string, recordType: string, resourceName: string} | null}
    */
   _attachmentOwner
 
@@ -3597,7 +3598,7 @@ export default class FrontendModelBase {
    * Runs model data from response.
    * @this {FrontendModelClass}
    * @param {object} response - Response payload.
-   * @returns {{abilities: Record<string, boolean>, attachmentOwner: {recordId: string, recordType: string} | null, attributes: Record<string, FrontendModelAttributeValue>, associationCounts: Record<string, number>, queryData: Record<string, FrontendModelAttributeValue>, preloadedRelationships: Record<string, FrontendModelAttributeValue>, selectedAttributes: Set<string>}} - Attributes, attachment owner, preloaded relationships, association counts, queryData, abilities, and selected attributes.
+   * @returns {{abilities: Record<string, boolean>, attachmentOwner: {recordId: string, recordType: string, resourceName: string} | null, attributes: Record<string, FrontendModelAttributeValue>, associationCounts: Record<string, number>, queryData: Record<string, FrontendModelAttributeValue>, preloadedRelationships: Record<string, FrontendModelAttributeValue>, selectedAttributes: Set<string>}} - Attributes, attachment owner, preloaded relationships, association counts, queryData, abilities, and selected attributes.
    */
   static modelDataFromResponse(response) {
     if (!response || typeof response !== "object") {
@@ -3646,11 +3647,12 @@ export default class FrontendModelBase {
         throw new TypeError(`Expected ${ATTACHMENT_OWNER_KEY} to be an object`)
       }
 
-      const attachmentOwnerObject = /** @type {{recordId?: unknown, recordType?: unknown}} */ (attachmentOwnerPayload)
+      const attachmentOwnerObject = /** @type {{recordId?: unknown, recordType?: unknown, resourceName?: unknown}} */ (attachmentOwnerPayload)
 
       attachmentOwner = {
         recordId: forcedNonBlankString(attachmentOwnerObject.recordId, `${ATTACHMENT_OWNER_KEY}.recordId`),
-        recordType: forcedNonBlankString(attachmentOwnerObject.recordType, `${ATTACHMENT_OWNER_KEY}.recordType`)
+        recordType: forcedNonBlankString(attachmentOwnerObject.recordType, `${ATTACHMENT_OWNER_KEY}.recordType`),
+        resourceName: forcedNonBlankString(attachmentOwnerObject.resourceName, `${ATTACHMENT_OWNER_KEY}.resourceName`)
       }
     }
 

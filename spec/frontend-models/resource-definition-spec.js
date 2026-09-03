@@ -65,6 +65,28 @@ describe("frontendModelResourceConfigurationFromDefinition abilities normalizati
   })
 })
 
+describe("frontendModelResourceConfigurationFromDefinition primary key validation", {databaseCleaning: {transaction: true}}, () => {
+  it("rejects empty and duplicate composite primary keys", () => {
+    class EmptyPrimaryKeyResource extends FrontendModelBaseResource {
+      static attributes = ["id"]
+      static primaryKey = []
+    }
+
+    class DuplicatePrimaryKeyResource extends FrontendModelBaseResource {
+      static attributes = ["projectId"]
+      static primaryKey = ["projectId", "projectId"]
+    }
+
+    expect(() => {
+      frontendModelResourceConfigurationFromDefinition(EmptyPrimaryKeyResource)
+    }).toThrow("Resource primaryKey arrays must contain at least one attribute.")
+
+    expect(() => {
+      frontendModelResourceConfigurationFromDefinition(DuplicatePrimaryKeyResource)
+    }).toThrow("Resource primaryKey arrays must contain unique attributes.")
+  })
+})
+
 describe("frontendModelResourceConfigurationFromDefinition sync policy normalization", {databaseCleaning: {transaction: true}}, () => {
   it("normalizes safe sync metadata and computes a deterministic policy hash", () => {
     class FooResource extends FrontendModelBaseResource {

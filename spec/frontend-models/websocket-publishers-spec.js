@@ -9,6 +9,74 @@ import Task from "../dummy/src/models/task.js"
 import User from "../dummy/src/models/user.js"
 
 describe("Frontend models - websocket publishers", {databaseCleaning: {transaction: true}}, () => {
+  it("does not require unloaded alias identity attributes during partial updates", async () => {
+    /** @type {((model: any) => void) | undefined} */
+    let beforeUpdateCallback
+
+    class PartialRecord {
+      /** @param {(model: any) => void} callback - Lifecycle callback. @returns {void} */
+      static beforeUpdate(callback) { beforeUpdateCallback = callback }
+      /** @param {(model: any) => void} _callback - Lifecycle callback. @returns {void} */
+      static beforeCreate(_callback) {}
+      /** @param {(model: any) => void} _callback - Lifecycle callback. @returns {void} */
+      static afterSave(_callback) {}
+      /** @param {(model: any) => void} _callback - Lifecycle callback. @returns {void} */
+      static afterDestroy(_callback) {}
+      /** @returns {string} - Model name. */
+      static getModelName() { return "PartialRecord" }
+      /** @returns {string} - Backing primary key. */
+      static primaryKey() { return "id" }
+      /** @param {string} attributeName - Attribute name. @returns {string} - Resolved attribute name. */
+      static resolveAttributeName(attributeName) { return attributeName }
+      /** @param {string} attributeName - Attribute name. @returns {string} - Resolved column name. */
+      static getColumnNameForAttributeName(attributeName) { return attributeName }
+    }
+
+    class PartialRecordResource extends FrontendModelBaseResource {
+      static ModelClass = /** @type {any} */ (PartialRecord)
+      static attributes = ["id", "name"]
+    }
+
+    class PartialRecordAliasResource extends FrontendModelBaseResource {
+      static ModelClass = /** @type {any} */ (PartialRecord)
+      static attributes = ["aliasOne", "aliasTwo"]
+      static primaryKey = ["aliasOne", "aliasTwo"]
+    }
+
+    const mockConfiguration = {
+      getAbilityResources: () => [],
+      getBackendProjects: () => [{
+        frontendModels: {
+          PartialRecord: PartialRecordResource,
+          PartialRecordAlias: PartialRecordAliasResource
+        },
+        path: "/tmp/test-project"
+      }],
+      registerWebsocketChannel: () => {}
+    }
+
+    await ensureFrontendModelWebsocketPublishersRegistered(/** @type {any} */ (mockConfiguration))
+
+    const attributes = {id: "record-1", name: "Updated name"}
+    const model = {
+      __frontendModelWebsocketAction: undefined,
+      __frontendModelWebsocketPreviousIds: undefined,
+      _getConfiguration: () => mockConfiguration,
+      attributes: () => attributes,
+      changes: () => ({name: ["Previous name", "Updated name"]}),
+      getModelClass: () => PartialRecord,
+      readAttribute: (/** @type {string} */ attributeName) => {
+        if (!Object.hasOwn(attributes, attributeName)) throw new Error(`Unloaded ${attributeName}`)
+
+        return attributes[/** @type {"id" | "name"} */ (attributeName)]
+      }
+    }
+
+    if (!beforeUpdateCallback) throw new Error("Expected beforeUpdate lifecycle callback registration")
+
+    expect(() => beforeUpdateCallback(model)).not.toThrow()
+  })
+
   it("auto-discovers frontend model resources from explicit ability resources when no frontend model config exists", async () => {
     class TestTaskResource extends FrontendModelBaseResource {
       static ModelClass = Task

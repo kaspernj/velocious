@@ -180,6 +180,7 @@ describe("FrontendModelWebsocketChannel", {databaseCleaning: {transaction: true}
           activeCheckoutName = null
         }
       },
+      getEnvironmentHandler: () => ({getTimeZone: () => "UTC"}),
       resolveTenant: async () => {
         if (!activeCheckoutName) {
           throw new Error("Tenant resolution did not run inside a checkout")
@@ -205,8 +206,8 @@ describe("FrontendModelWebsocketChannel", {databaseCleaning: {transaction: true}
     })
 
     channel._frontendModelControllerClass = async () => /** @type {typeof import("../../src/frontend-model-controller.js").default} */ (class FrontendModelController {})
-    channel._eventIsAccessible = async (id) => {
-      return await channel._withEventTenant(id, async () => true)
+    channel._projectedRecordForEventId = async (id) => {
+      return await channel._withEventTenant(id, async () => ({id: "task-1", name: "Task 1"}))
     }
 
     await channel.deliverBroadcast({

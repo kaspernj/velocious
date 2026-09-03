@@ -27,6 +27,11 @@ export default class VelociousAttachmentResource extends FrontendModelBaseResour
      */
     beforeAction(action: "index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"): Promise<void>;
     /**
+     * Loads attachment metadata after removing the authorization-only resource name from database filters.
+     * @returns {Promise<VelociousAttachment[]>} - Attachment metadata rows.
+     */
+    records(): Promise<VelociousAttachment[]>;
+    /**
      * Runs find.
      * @param {"find" | "update" | "destroy" | "attach" | "download" | "url"} action - Action.
      * @param {string | number} id - Attachment id.
@@ -47,13 +52,19 @@ export default class VelociousAttachmentResource extends FrontendModelBaseResour
     updatedAtAttribute(model: VelociousAttachment): Date;
     /**
      * Returns a validated owner scope from frontend-model where params.
-     * @returns {{name: string, recordId: string, recordType: string}} - Attachment owner scope.
+     * @returns {{name: string, recordId: string, recordType: string, resourceName: string}} - Attachment owner scope.
      */
     requiredOwnerScopeFromParams(): {
         name: string;
         recordId: string;
         recordType: string;
+        resourceName: string;
     };
+    /**
+     * Returns the required attachment metadata where object.
+     * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Attachment where filters.
+     */
+    requiredWhereFromParams(): Record<string, ReturnType<typeof JSON.parse>>;
     /**
      * Reads one required string-like where value.
      * @param {object} args - Args.
@@ -68,28 +79,30 @@ export default class VelociousAttachmentResource extends FrontendModelBaseResour
     /**
      * Builds owner scope from a stored attachment row.
      * @param {VelociousAttachment} attachment - Attachment row.
-     * @returns {{name: string, recordId: string, recordType: string}} - Owner scope.
+     * @returns {{name: string, recordId: string, recordType: string, resourceName: string}} - Owner scope.
      */
     ownerScopeFromAttachment(attachment: VelociousAttachment): {
         name: string;
         recordId: string;
         recordType: string;
+        resourceName: string;
     };
     /**
      * Checks whether the current ability can read the attachment owner.
-     * @param {{name: string, recordId: string, recordType: string}} ownerScope - Owner scope.
+     * @param {{name: string, recordId: string, recordType: string, resourceName: string}} ownerScope - Owner scope.
      * @returns {Promise<boolean>} - Whether owner is readable.
      */
     attachmentOwnerAuthorized(ownerScope: {
         name: string;
         recordId: string;
         recordType: string;
+        resourceName: string;
     }): Promise<boolean>;
     /**
      * Finds the frontend-model resource that owns an attachment scope.
      * @param {object} args - Options object.
      * @param {import("../frontend-model-controller.js").default} args.controller - Frontend-model controller.
-     * @param {{name: string, recordId: string, recordType: string}} args.ownerScope - Owner scope.
+     * @param {{name: string, recordId: string, recordType: string, resourceName: string}} args.ownerScope - Owner scope.
      * @returns {{backendProject: import("../configuration-types.js").BackendProjectConfiguration, modelName: string, resourceClass: import("../configuration-types.js").FrontendModelResourceClassType, resourceConfiguration: import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration} | null} - Owner resource configuration.
      */
     attachmentOwnerResource({ controller, ownerScope }: {
@@ -98,6 +111,7 @@ export default class VelociousAttachmentResource extends FrontendModelBaseResour
             name: string;
             recordId: string;
             recordType: string;
+            resourceName: string;
         };
     }): {
         backendProject: import("../configuration-types.js").BackendProjectConfiguration;

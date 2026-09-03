@@ -1,5 +1,4 @@
 export type FrontendModelPublisherResource = {
-    hasAttachments: boolean;
     primaryKey: import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition;
 };
 export type FrontendModelWebsocketRecord = import("../database/record/index.js").default & {
