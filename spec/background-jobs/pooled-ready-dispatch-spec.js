@@ -13,7 +13,7 @@ import {outputPathFor, startBackgroundJobs, waitForOutputJson} from "../helpers/
 /** @type {Awaited<ReturnType<typeof startBackgroundJobs>> | undefined} */
 let backgroundJobs
 
-describe("Background jobs - pooled ready dispatch", {tags: ["dummy"], databaseCleaning: {truncate: true}}, () => {
+describe("Background jobs - pooled ready dispatch", {tags: ["dummy"], databaseCleaning: {transaction: true}}, () => {
   beforeAll(async () => {
     backgroundJobs = await startBackgroundJobs({workerOptions: {pooledRunnerConcurrency: 5, pooledRunnerCount: 1}})
   })
