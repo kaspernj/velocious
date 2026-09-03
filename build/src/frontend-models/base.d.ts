@@ -24,6 +24,7 @@ export type FrontendModelTransportObject = Record<string, unknown>;
 export type FrontendModelTransportValue = FrontendModelTransportScalarValue | FrontendModelTransportObject | Array<unknown>;
 export type FrontendModelAttributeValue = FrontendModelTransportValue;
 export type FrontendModelAttachmentDefinition = {
+    sync?: import("../configuration-types.js").AttachmentSyncConfiguration;
     type: "hasOne" | "hasMany";
 };
 export type FrontendModelAttributeDefinition = {

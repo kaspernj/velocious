@@ -1,6 +1,7 @@
 // @ts-check
 
 import {deliverDeclaredBroadcasts, upsertSyncRow} from "./sync-change-fanout.js"
+import {frontendModelResourceInternalConstructor} from "../frontend-model-resource/base-resource.js"
 import {markServerApply} from "./sync-publish-suppression.js"
 import {resolveFrontendModelResourceClass} from "../frontend-models/resource-definition.js"
 import {resolveSyncConflict} from "./conflict-strategy.js"
@@ -568,7 +569,7 @@ export default class SyncEnvelopeReplayService {
    * @returns {Promise<import("../frontend-model-resource/base-resource.js").default>} Routed resource instance.
    */
   async buildReplayResource({actor, context, mutation, registration}) {
-    const ResourceClass = registration.resourceClass
+    const ResourceClass = frontendModelResourceInternalConstructor(registration.resourceClass)
     const {ability, abilityContext} = await this.replayAbilityFor({actor, context})
 
     return new ResourceClass({

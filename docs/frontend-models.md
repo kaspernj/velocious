@@ -188,10 +188,11 @@ const unsubscribe = await BuildGroup.onDestroy(onBuildGroupDestroyed, {
 ```
 
 ## Attachment support
-- Frontend models can define `resourceConfig().attachments` and use generated attachment handles:
+- Backend models declare attachment helpers once with `hasOneAttachment` / `hasManyAttachments`; generated frontend models receive the corresponding `resourceConfig().attachments` metadata and can use:
   - `await model.attachmentName().attach(fileLikeOrBase64Payload)`
   - `const attachment = await model.attachmentName().download()`
   - `const attachmentUrl = await model.attachmentName().url()`
+- A model attachment's optional `sync` policy is available in the generated resource config. It declares eager versus on-demand fetch, durable versus evictable retention, and optional versus required offline availability without exposing the backend storage driver.
 - Backend attachment command mapping supports `attach`, `download`, and `url` command names in resource `commands`.
 - Frontend attachment input supports `File`/`Blob` (`arrayBuffer()`), bytes, and `{contentBase64, filename?, contentType?}` payloads.
 - Frontend attachment input does not support `{path: ...}`.

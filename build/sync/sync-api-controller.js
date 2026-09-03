@@ -1,7 +1,7 @@
 // @ts-check
 
 import Controller from "../controller.js"
-import FrontendModelBaseResource from "../frontend-model-resource/base-resource.js"
+import FrontendModelBaseResource, {frontendModelResourceInternalConstructor} from "../frontend-model-resource/base-resource.js"
 
 /** Configurations whose sync.api routes have already been mounted. */
 const mountedConfigurations = new WeakSet()
@@ -41,9 +41,10 @@ export default class SyncApiController extends Controller {
    */
   syncResource(params) {
     const ResourceClass = this.syncResourceClass()
+    const ResourceConstructor = frontendModelResourceInternalConstructor(ResourceClass)
     const ability = this.currentAbility()
 
-    return new ResourceClass({
+    return new ResourceConstructor({
       ability,
       controller: /** @type {import("../frontend-model-resource/base-resource.js").FrontendModelResourceController} */ (/** @type {unknown} */ (this)),
       context: {
@@ -137,7 +138,7 @@ export default class SyncApiController extends Controller {
    * @returns {import("../configuration-types.js").FrontendModelResourceClassType} Sync resource class.
    */
   missingSyncResourceClass() {
-    return /** @type {typeof FrontendModelBaseResource} */ (/** @type {unknown} */ (this.raiseMissingSyncResourceClass()))
+    return /** @type {import("../configuration-types.js").FrontendModelResourceClassType} */ (/** @type {unknown} */ (this.raiseMissingSyncResourceClass()))
   }
 
   /** Raises a configuration error for subclasses that do not provide a resource. */
@@ -155,7 +156,7 @@ export default class SyncApiController extends Controller {
 
     if (!modelClass) throw new Error("Sync resource class must define static ModelClass")
 
-    return modelClass
+    return /** @type {typeof import("../database/record/index.js").default} */ (/** @type {unknown} */ (modelClass))
   }
 
   /**
@@ -178,4 +179,3 @@ export default class SyncApiController extends Controller {
     })
   }
 }
-

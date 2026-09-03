@@ -29,7 +29,13 @@ Task.hasMany("interactions", {className: "Interaction", foreignKey: "subject_id"
 Task.hasOne("primaryInteraction", {className: "Interaction", foreignKey: "subject_id", polymorphic: true})
 Task.hasMany("comments")
 Task.hasManyAttachments("files")
-Task.hasOneAttachment("descriptionFile")
+Task.hasOneAttachment("descriptionFile", {
+  sync: {
+    fetch: "on-demand",
+    offlineRequirement: "optional",
+    retention: "evictable"
+  }
+})
 Task.acceptsNestedAttributesFor("comments", {allowDestroy: true})
 Task.acceptsNestedAttributesFor("project")
 Task.validates("name", {presence: true, uniqueness: {scope: "projectId"}})

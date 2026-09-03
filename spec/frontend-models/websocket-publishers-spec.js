@@ -14,6 +14,8 @@ describe("Frontend models - websocket publishers", {databaseCleaning: {transacti
     let beforeUpdateCallback
 
     class PartialRecord {
+      /** @returns {Record<string, never>} - Attachment definitions. */
+      static attachmentDefinitions() { return {} }
       /** @param {(model: any) => void} callback - Lifecycle callback. @returns {void} */
       static beforeUpdate(callback) { beforeUpdateCallback = callback }
       /** @param {(model: any) => void} _callback - Lifecycle callback. @returns {void} */

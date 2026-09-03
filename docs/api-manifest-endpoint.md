@@ -97,7 +97,7 @@ backend project paths, and secrets are never included.
   - `primaryKey` — primary key attribute name (defaults to `"id"`)
   - `attributes` — sorted list of exposed attribute names
   - `relationships` — declared relationship names (when any)
-  - `attachments` — attachment definitions with cardinality (when any)
+  - `attachments` — model-derived attachment definitions with cardinality and optional client-safe sync policy (when any); backend storage drivers are excluded
   - `abilities` — per-resource ability map including default CRUD actions
   - `builtInCommands` — collection and member built-in command slugs
   - `commands` — custom collection and member command entries (method name, scope, path, typed args, return type)

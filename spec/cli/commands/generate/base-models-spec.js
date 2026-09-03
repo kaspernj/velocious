@@ -201,7 +201,7 @@ describe("Cli - generate - base-models", () => {
     })
   })
 
-  it("accepts concrete frontend-model resources in typed registries", async () => {
+  it("accepts concrete frontend-model resources in typed registries", {databaseCleaning: {transaction: false, truncate: false}}, async () => {
     const projectRoot = path.resolve(import.meta.dirname, "../../../..")
     const sourceText = `
       // @ts-check

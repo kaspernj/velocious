@@ -7,7 +7,7 @@ A backend project should declare resources with static resource properties:
 - `static attributes`
 - optional `abilities` for additional per-record `record.can(action)` checks
 - optional `commands`
-- optional `attachments`
+- optional `attachments` only for a frontend-only resource without a backing model
 - optional server behavior (`records`, `serialize`, `beforeAction`)
 
 Backend resource classes must not override `static resourceConfig()`; Velocious throws during resource normalization. Use declarative static fields instead so resource config stays easy to scan and shared-resource fallback has one config path.
@@ -18,7 +18,9 @@ Without a resource definition, frontend models should not silently work.
 
 ## Attachment command mapping
 - Resource `commands` can map `attach`, `download`, and `url` in addition to CRUD/index commands.
-- Resource `attachments` defines attachment helpers generated on frontend models.
+- A backing model's `hasOneAttachment` / `hasManyAttachments` declarations define attachment helpers generated on frontend models. Their optional client-safe `sync` policy is copied into resource config and API manifests; backend storage drivers are not.
+- Resource `static attachments` is the fallback for frontend-only resources. A backing model declaration with the same attachment name is authoritative.
+- See [Backend record attachments](attachments.md#synchronized-client-policy) for the fetch, retention, and offline-requirement policy.
 
 ## Shared resource fallback
 - See the [shared-resource sync developer guide](shared-resource-sync-guide.md) for a complete shared recipe, backend/local wrappers, security boundaries, and migration gates.
