@@ -9,7 +9,7 @@ import dummyConfiguration from "../dummy/src/config/configuration.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 import {waitForJobCompleted} from "../helpers/background-jobs-helper.js"
 
-describe("Background jobs release generation pooled drain", {tags: ["dummy"], databaseCleaning: {truncate: true}}, () => {
+describe("Background jobs release generation pooled drain", {tags: ["dummy"], databaseCleaning: {transaction: true}}, () => {
   it("keeps a retiring pooled child alive until all concurrent jobs report durably", async () => {
     const barrier = await createBackgroundJobsSocketBarrier(2)
     const retireMessage = promiseBarrier()

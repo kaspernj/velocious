@@ -182,6 +182,27 @@ describe("Background jobs - worker pooled job timeout", () => {
     expect(worker.pooledChildren.has(/** @type {ReturnType<typeof JSON.parse>} */ (child))).toEqual(false)
   })
 
+  it("preserves the first timeout that starts pooled child termination", async () => {
+    const worker = new BackgroundJobsWorker({jobTimeoutMs: 60_000, forkedChildSigkillGraceMs: 30, pooledRunnerConcurrency: 2})
+    /** @type {Array<{jobId: string, runnerFailure: import("../../src/background-jobs/types.js").PooledRunnerFailure}>} */
+    const reports = []
+    worker.statusReporter = /** @type {ReturnType<typeof JSON.parse>} */ ({reportWithRetry: async (/** @type {{jobId: string, runnerFailure: import("../../src/background-jobs/types.js").PooledRunnerFailure}} */ args) => { reports.push(args) }})
+
+    const child = new FakeHungChild()
+    registerPooledChild(worker, child)
+
+    const firstJob = worker._runPooledJob(/** @type {ReturnType<typeof JSON.parse>} */ ({id: "pooled-first-timeout", jobName: "FirstHangingJob", options: {timeoutMs: 10}}))
+    const secondJob = worker._runPooledJob(/** @type {ReturnType<typeof JSON.parse>} */ ({id: "pooled-second-timeout", jobName: "SecondHangingJob", options: {timeoutMs: 20}}))
+
+    await Promise.all([firstJob, secondJob])
+
+    expect(child.killSignals).toEqual(["SIGTERM", "SIGKILL"])
+    expect(reports.map((report) => report.runnerFailure.timeoutJobId)).toEqual([
+      "pooled-first-timeout",
+      "pooled-first-timeout"
+    ])
+  })
+
   it("does not terminate a pooled job that reports its outcome before the timeout", async () => {
     const worker = new BackgroundJobsWorker({jobTimeoutMs: 15, forkedChildSigkillGraceMs: 5})
     /** @type {Array<ReturnType<typeof JSON.parse>>} */

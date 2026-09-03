@@ -1156,7 +1156,7 @@ export default class BackgroundJobsWorker {
     const state = this.pooledChildStates.get(child)
 
     // Already settling/gone, or the job finished in the race with this timer.
-    if (!state || state.settling || !state.inflight.has(jobId)) return
+    if (!state || state.settling || state.terminationReason || !state.inflight.has(jobId)) return
 
     state.terminationReason = "job-timeout"
     state.timeoutJobId = jobId
