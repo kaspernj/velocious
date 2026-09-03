@@ -1884,7 +1884,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       for (const columnName of JOBS_INDEX_COLUMN_NAMES) {
         if (indexedColumnNames.has(columnName)) continue
 
-        for (const sql of await db.createIndexSQLs({columns: [columnName], tableName: JOBS_TABLE})) {
+        for (const sql of await db.createIndexSQLs({columns: [columnName], ifNotExists: db.getType() === "sqlite", tableName: JOBS_TABLE})) {
           await db.query(sql)
         }
       }

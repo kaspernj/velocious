@@ -614,7 +614,9 @@ export default class BackgroundJobsMain {
   async _activate() {
     this.logger.info(() => ["Background jobs generation activation starting", {generationId: this.generationId}])
     const ownershipStarted = await this._startActiveOwnership("candidate")
-    if (!ownershipStarted || this.lifecycleState !== "candidate") return
+    if (!ownershipStarted || this.lifecycleState !== "candidate") {
+      throw new Error("Background jobs generation retirement started before activation acquired ownership")
+    }
     this.lifecycleState = "active"
     this._creditReadyWorkers()
     this.logger.info(() => ["Background jobs generation activation acknowledged", {generationId: this.generationId}])

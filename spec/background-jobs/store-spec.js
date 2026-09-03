@@ -1,6 +1,7 @@
 // @ts-check
 
 import BackgroundJobsStore from "../../src/background-jobs/store.js"
+import ChangeTableFakeDriver from "../helpers/change-table-fake-driver.js"
 import TableData from "../../src/database/table-data/index.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 
@@ -176,6 +177,29 @@ class ObservedConcurrencyReconciliationStore extends BackgroundJobsStore {
     this.reconciledConcurrencyKeys.push(concurrencyKey)
     await super._reconcileConcurrencyKey(db, concurrencyKey)
   }
+}
+
+/** Store harness that isolates index repair from the migration ledger. */
+class IndexRepairStore extends BackgroundJobsStore {
+  /** @returns {Promise<boolean>} - The repair has not been recorded. */
+  async _hasMigration() { return false }
+
+  /** @returns {Promise<void>} - Resolves without recording the harness migration. */
+  async _recordMigration() {}
+}
+
+/** SQLite harness whose advisory lock is intentionally process-local. */
+class ProcessLocalIndexRepairDriver extends ChangeTableFakeDriver {
+  constructor() {
+    super({type: "sqlite"})
+    this.setTable("background_jobs")
+  }
+
+  /** @returns {Promise<boolean>} - Acquires this harness's independent lock. */
+  async _acquireAdvisoryLock() { return true }
+
+  /** @returns {Promise<boolean>} - Releases this harness's independent lock. */
+  async _releaseAdvisoryLock() { return true }
 }
 
 /** @returns {import("../../src/background-jobs/types.js").BackgroundJobRow} - Active concurrency-limited job. */
@@ -1333,6 +1357,16 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
 
       for (const columnName of indexColumns) expect(indexedColumns).toContain(columnName)
     })
+  })
+
+  it("uses conflict-safe index creation for SQLite repair processes", async () => {
+    const store = new IndexRepairStore({configuration: dummyConfiguration})
+    const db = new ProcessLocalIndexRepairDriver()
+
+    await store._ensureJobsTableIndexesOnce(db)
+
+    expect(db.indexCalls.length).toBeGreaterThan(0)
+    for (const indexCall of db.indexCalls) expect(indexCall.ifNotExists).toEqual(true)
   })
 
   it("serializes and rechecks concurrent legacy concurrency-column migrations", async () => {

@@ -562,14 +562,15 @@ testing; each connection sends exactly one hello.
 reconciliation, dispatch, reclaim, or orphan sweep. Activation transitions it
 to `active`. If an operational recovery retires the candidate while activation
 is still reconciling durable queue state, that retirement fence wins and the
-in-flight activation cannot restore active ownership. Retirement installs its
-admission fence synchronously, stops new schedules/dispatch/admission/handoffs,
-then transitions through `retiring` to `retired` while preserving accepted
-workers, reports, acknowledgements, timeouts, child reaping, and durable
-transitions. A restarted `retired` main recovers only exact durable handoffs for
-its own generation and never dispatches global queue work. It reaches `stopped`
-only after its exact workers, handoffs, reports, worker connections, and
-lifecycle acknowledgements drain.
+in-flight activation cannot restore active ownership or return a successful
+lifecycle acknowledgement. Retirement installs its admission fence
+synchronously, stops new schedules/dispatch/admission/handoffs, then transitions
+through `retiring` to `retired` while preserving accepted workers, reports,
+acknowledgements, timeouts, child reaping, and durable transitions. A restarted
+`retired` main recovers only exact durable handoffs for its own generation and
+never dispatches global queue work. It reaches `stopped` only after its exact
+workers, handoffs, reports, worker connections, and lifecycle acknowledgements
+drain.
 
 Worker ownership is stored as `<generationId>:<workerUuid>` (maximum 165
 characters). The built-in SQL schema already gives `worker_id` 255 characters
@@ -584,7 +585,9 @@ queue-derived concurrency keys plus counters that are active or stale. It does
 not execute a job-table count query for every historical concurrency key. Its
 internal schema migration also repairs missing single-column job indexes from
 older `queue`, `schedule_key`, and `concurrency_key` add-column upgrades before
-activation uses them.
+activation uses them. SQLite emits conflict-safe index creation for that repair,
+so independent generation processes remain safe even if both observed a missing
+index before database serialization.
 
 ### Lifecycle control socket
 

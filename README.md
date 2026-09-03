@@ -2397,9 +2397,10 @@ Candidate activation performs bounded durable concurrency reconciliation: it
 examines queue-derived keys and counters that are active or stale instead of
 running a job-table count query for every historical key. If recovery retires a
 candidate while that work is still in flight, the retirement fence wins and
-activation cannot later restore ownership. The SQL store also repairs secondary
-indexes missed by older background-job add-column upgrades through a one-time
-internal migration.
+activation cannot later restore ownership or acknowledge success. The SQL store
+also repairs secondary indexes missed by older background-job add-column
+upgrades through a one-time internal migration, with conflict-safe SQLite index
+creation across generation processes.
 
 Jobs can opt into cross-worker durable concurrency limits by pairing a non-empty `concurrencyKey` with a positive-integer `maxConcurrency` in their background-job options, or by deriving the key in a hydrated job instance's non-static `concurrencyKey()` method. Explicit enqueue options win. The first cap registered for a key is stable; conflicting caps are rejected. See [durable concurrency limits](docs/background-jobs.md#durable-concurrency-limits).
 

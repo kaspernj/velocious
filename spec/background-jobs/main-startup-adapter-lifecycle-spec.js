@@ -106,7 +106,7 @@ describe("Background jobs - main startup adapter lifecycle", () => {
       expect(main._activeOwnershipReady).toEqual(false)
 
       reconciliation.release()
-      await activation
+      await expect(async () => await activation).toThrow("Background jobs generation retirement started before activation acquired ownership")
       await main._retirementPromise
 
       expect(main.getLifecycleState()).toEqual("retired")
