@@ -200,6 +200,10 @@ describe("Record - composite primary key", {tags: ["dummy"]}, () => {
       await task.update({name: "Composite rollback renamed"})
     }).toThrow("Composite update rejected after persistence")
 
+    expect(task.id()).toEqual(originalIdentity)
+    await task.reload()
+    expect(task.id()).toEqual(originalIdentity)
+
     const originalTask = await FailingAfterUpdateCompositePrimaryKeyTask.find(originalIdentity)
 
     if (!originalTask) throw new Error("Expected the original composite record after rollback")

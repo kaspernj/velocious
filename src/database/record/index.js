@@ -2667,32 +2667,48 @@ class VelociousDatabaseRecord {
       await this._runValidations()
 
       const saveInTransaction = async () => {
-        await this._runLifecycleCallbacks("beforeSave")
+        /** @type {Record<string, ReturnType<typeof JSON.parse>> | undefined} */
+        let persistedAttributesBeforeUpdate
+        let updateReloaded = false
 
-        // If any belongs-to-relationships was saved, then updated-at should still be set on this record.
-        const {savedCount} = await this._autoSaveBelongsToRelationships()
+        try {
+          await this._runLifecycleCallbacks("beforeSave")
 
-        if (this.isPersisted()) {
-          await this._runLifecycleCallbacks("beforeUpdate")
+          // If any belongs-to-relationships was saved, then updated-at should still be set on this record.
+          const {savedCount} = await this._autoSaveBelongsToRelationships()
 
-          // If any has-many-relationships will be saved, then updated-at should still be set on this record.
-          const autoSaveHasManyrelationships = this._autoSaveHasManyAndHasOneRelationshipsToSave()
+          if (this.isPersisted()) {
+            persistedAttributesBeforeUpdate = {...this._attributes}
+            await this._runLifecycleCallbacks("beforeUpdate")
 
-          if (this._hasChanges() || savedCount > 0 || autoSaveHasManyrelationships.length > 0) {
-            result = await this._updateRecordWithChanges()
+            // If any has-many-relationships will be saved, then updated-at should still be set on this record.
+            const autoSaveHasManyrelationships = this._autoSaveHasManyAndHasOneRelationshipsToSave()
+
+            if (this._hasChanges() || savedCount > 0 || autoSaveHasManyrelationships.length > 0) {
+              result = await this._updateRecordWithChanges()
+              updateReloaded = true
+            }
+
+            await this._runLifecycleCallbacks("afterUpdate")
+          } else {
+            await this._runLifecycleCallbacks("beforeCreate")
+            result = await this._createNewRecord()
+            await this._runLifecycleCallbacks("afterCreate")
           }
 
-          await this._runLifecycleCallbacks("afterUpdate")
-        } else {
-          await this._runLifecycleCallbacks("beforeCreate")
-          result = await this._createNewRecord()
-          await this._runLifecycleCallbacks("afterCreate")
-        }
+          await this._autoSaveHasManyAndHasOneRelationships({isNewRecord})
+          await this._autoSaveAttachments()
+          await this._runLifecycleCallbacks("afterSave")
+          await this._emitRecordChangeAfterCommit(isNewRecord ? "create" : "update")
+        } catch (error) {
+          if (updateReloaded && persistedAttributesBeforeUpdate) {
+            this._attributes = persistedAttributesBeforeUpdate
+            this._changes = {}
+            this._assignedAttributeNames = undefined
+          }
 
-        await this._autoSaveHasManyAndHasOneRelationships({isNewRecord})
-        await this._autoSaveAttachments()
-        await this._runLifecycleCallbacks("afterSave")
-        await this._emitRecordChangeAfterCommit(isNewRecord ? "create" : "update")
+          throw error
+        }
       }
 
       if (this._databaseOperation) {
