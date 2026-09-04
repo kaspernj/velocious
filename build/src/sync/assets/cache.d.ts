@@ -91,6 +91,44 @@ export default class SynchronizedAssetCache {
      */
     saveState(): Promise<void>;
     /**
+     * Persists a detached reconciliation before exposing it through shared state.
+     * @param {object} args Reconciliation inputs.
+     * @param {import("./types.js").SynchronizedAssetCacheDescriptor[]} args.descriptors Current descriptors in the scope.
+     * @param {string} args.scopeKey Stable synchronized scope key.
+     * @returns {Promise<Map<string, import("./types.js").SynchronizedAssetCacheEntry>>} Reconciled live entries by id.
+     */
+    reconcileDescriptors({ descriptors, scopeKey }: {
+        descriptors: import("./types.js").SynchronizedAssetCacheDescriptor[];
+        scopeKey: string;
+    }): Promise<Map<string, import("./types.js").SynchronizedAssetCacheEntry>>;
+    /**
+     * Applies one scope's descriptor set to cache state.
+     * @param {object} args Reconciliation inputs.
+     * @param {import("./types.js").SynchronizedAssetCacheDescriptor[]} args.descriptors Current descriptors in the scope.
+     * @param {number} args.newEntryLastAccessedAt Initial LRU timestamp for new entries.
+     * @param {string} args.scopeKey Stable synchronized scope key.
+     * @param {import("./types.js").SynchronizedAssetCacheState} args.state State to reconcile.
+     * @returns {Map<string, import("./types.js").SynchronizedAssetCacheEntry>} Live entries by id.
+     */
+    applyDescriptorReconciliation({ descriptors, newEntryLastAccessedAt, scopeKey, state }: {
+        descriptors: import("./types.js").SynchronizedAssetCacheDescriptor[];
+        newEntryLastAccessedAt: number;
+        scopeKey: string;
+        state: import("./types.js").SynchronizedAssetCacheState;
+    }): Map<string, import("./types.js").SynchronizedAssetCacheEntry>;
+    /**
+     * Copies metadata into a detached persistence candidate.
+     * @param {import("./types.js").SynchronizedAssetCacheState} state State to copy.
+     * @returns {import("./types.js").SynchronizedAssetCacheState} Detached state.
+     */
+    copyState(state: import("./types.js").SynchronizedAssetCacheState): import("./types.js").SynchronizedAssetCacheState;
+    /**
+     * Serializes one metadata persistence operation after prior failures or successes.
+     * @param {() => Promise<void>} persist Persistence operation.
+     * @returns {Promise<void>} Resolves after persistence.
+     */
+    serializeStatePersistence(persist: () => Promise<void>): Promise<void>;
+    /**
      * Ensures one descriptor has verified local bytes.
      * @param {import("./types.js").SynchronizedAssetCacheEntry} entry Descriptor state.
      * @returns {Promise<{error: Error | null, uri: string | null}>} Cache result.

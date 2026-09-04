@@ -13,7 +13,8 @@
   before eviction, and count shared download failures once per network attempt.
 - Retain digest protection through eager synchronization and release every
   incoming digest when one pending-deletion finalizer fails.
-- Preserve deletion markers added concurrently while another marker's
-  persistence rollback is pending.
+- Persist descriptor reconciliation before exposing it through shared cache
+  state, retaining the last committed descriptors after a rejected write while
+  preserving queued deletion work across an earlier persistence rollback.
 - Return `null` instead of a deleted local URI when concurrent synchronization
   removes the requested descriptor's final scope reference during resolution.

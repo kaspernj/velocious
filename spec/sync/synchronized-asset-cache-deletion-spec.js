@@ -135,7 +135,7 @@ describe("SynchronizedAssetCache deletion", {databaseCleaning: {transaction: fal
     expect(adapter.blobs.size).toEqual(0)
   })
 
-  it("preserves deletion markers added while another marker rollback is pending", async () => {
+  it("isolates queued reconciliation while preserving its deletion work after an earlier rollback", async () => {
     const firstContent = bytes([82, 83, 84])
     const secondContent = bytes([85, 86, 87])
     const firstAsset = descriptor({bytes: firstContent, fetch: "on-demand", id: "first"})
@@ -175,12 +175,18 @@ describe("SynchronizedAssetCache deletion", {databaseCleaning: {transaction: fal
     const removalSynchronization = cache.synchronize({descriptors: [], online: false, scopeKey: "users"})
     const liveState = await cache.loadState()
 
-    expect(liveState.pendingDeletionDigests).toEqual([firstAsset.digest, secondAsset.digest])
+    expect(liveState.pendingDeletionDigests).toEqual([])
     adapter.releaseFailingSave.resolve(undefined)
 
     await failingSynchronization
     await removalSynchronization
 
+    const persistedState = await adapter.loadState({accountId: "account-1"})
+
+    if (!persistedState) throw new Error("Expected persisted asset cache state")
+
+    expect(persistedState.assets).toEqual([])
+    expect(persistedState.pendingDeletionDigests).toEqual([])
     expect(adapter.blobs.size).toEqual(0)
   })
 

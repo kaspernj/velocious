@@ -47,8 +47,10 @@ Each descriptor identifies one immutable attachment row and contains:
 Call `synchronize({scopeKey, descriptors, online})` after applying one complete
 descriptor scope. Descriptors removed from that scope lose the scope reference;
 their bytes are deleted only after no active scope references the digest.
-The complete incoming descriptor set is validated before cache state changes,
-so an immutable-digest conflict rejects without partially reconciling the scope.
+The complete incoming descriptor set is validated and atomically persisted
+before cache state changes become visible. An immutable-digest conflict or
+metadata persistence failure therefore leaves the last committed scope active
+without exposing a partially reconciled descriptor set.
 `synchronize` downloads eligible eager descriptors and returns both attempted
 download failures and required asset ids in that scope that remain absent. It
 does not hide a failed authenticated request or corrupt payload. Incoming
@@ -103,8 +105,9 @@ serialized per digest with new lookup and descriptor-reconciliation work, so a
 caller cannot receive a URI or offline-ready result for bytes being removed.
 If finalizing one incoming digest cannot persist its pending-deletion update,
 the cache releases the other incoming digests before propagating the failure.
-Rollback restores only that digest's marker, preserving deletion work added by
-concurrent synchronizations.
+Rollback restores only that digest's marker. Descriptor reconciliations queued
+behind that write continue from the last committed state and preserve their
+deletion work.
 
 Every operation includes `accountId`. Adapters must use it as a physical
 namespace rather than trusting a digest to isolate users. Signing out or

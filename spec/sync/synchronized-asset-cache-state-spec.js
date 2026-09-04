@@ -60,6 +60,40 @@ describe("SynchronizedAssetCache state", {databaseCleaning: {transaction: false,
     expect(await cache.resolve({assetId: asset.id, online: true})).toEqual(`memory://account-1:${asset.digest}`)
   })
 
+  it("keeps the last committed descriptors when reconciliation persistence fails", async () => {
+    const removedContent = bytes([64, 65, 66])
+    const addedContent = bytes([67, 68, 69])
+    const removedAsset = descriptor({bytes: removedContent, fetch: "on-demand", id: "removed"})
+    const addedAsset = descriptor({bytes: addedContent, fetch: "on-demand", id: "added"})
+    const contents = new Map([
+      [removedAsset.id, removedContent],
+      [addedAsset.id, addedContent]
+    ])
+    const adapter = new FailNextSaveAssetCacheAdapter()
+    const cache = new SynchronizedAssetCache({
+      accountId: "account-1",
+      adapter,
+      download: async (asset) => /** @type {Uint8Array} */ (contents.get(asset.id)),
+      maxBytes: 1024
+    })
+
+    await cache.synchronize({descriptors: [removedAsset], online: false, scopeKey: "users"})
+    adapter.failNextSave = true
+
+    await expect(async () => {
+      await cache.synchronize({descriptors: [addedAsset], online: false, scopeKey: "users"})
+    }).toThrowError("planned metadata persistence failure")
+
+    expect(await cache.resolve({assetId: addedAsset.id, online: true})).toEqual(null)
+    expect(await cache.resolve({assetId: removedAsset.id, online: true})).toEqual(`memory://account-1:${removedAsset.digest}`)
+
+    const persistedState = await adapter.loadState({accountId: "account-1"})
+
+    if (!persistedState) throw new Error("Expected persisted asset cache state")
+
+    expect(persistedState.assets.map((entry) => entry.descriptor.id)).toEqual([removedAsset.id])
+  })
+
   it("keeps state and bytes isolated by account namespace", async () => {
     const content = bytes([25, 26, 27])
     const asset = descriptor({bytes: content})

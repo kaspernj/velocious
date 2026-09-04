@@ -59,7 +59,7 @@ export default class SynchronizedAssetCache {
    * @returns {Promise<import("./types.js").SynchronizedAssetCacheSynchronizationResult>} Synchronization result.
    */
   async synchronize({descriptors, online, scopeKey}) {
-    const state = await this.loadState()
+    await this.loadState()
     const incomingDigests = [...new Set(descriptors.map((asset) => asset.digest))]
     /** @type {import("./types.js").SynchronizedAssetCacheFailure[]} */
     const failures = []
@@ -70,57 +70,7 @@ export default class SynchronizedAssetCache {
     let entriesById
 
     try {
-      const incomingIds = new Set(descriptors.map((asset) => asset.id))
-      entriesById = new Map(state.assets.map((entry) => [entry.descriptor.id, entry]))
-      const digestsById = new Map(state.assets.map((entry) => [entry.descriptor.id, entry.descriptor.digest]))
-      const removedDigests = new Set()
-
-      for (const asset of descriptors) {
-        const knownDigest = digestsById.get(asset.id)
-
-        if (knownDigest !== undefined && knownDigest !== asset.digest) {
-          throw new Error(`Synchronized asset descriptor ${asset.id} changed its immutable digest`)
-        }
-
-        digestsById.set(asset.id, asset.digest)
-      }
-
-      for (const entry of state.assets) {
-        if (!entry.scopeKeys.includes(scopeKey) || incomingIds.has(entry.descriptor.id)) continue
-
-        entry.scopeKeys = entry.scopeKeys.filter((candidate) => candidate !== scopeKey)
-        if (entry.scopeKeys.length === 0) removedDigests.add(entry.descriptor.digest)
-      }
-
-      state.assets = state.assets.filter((entry) => entry.scopeKeys.length > 0)
-
-      for (const asset of descriptors) {
-        const existing = entriesById.get(asset.id)
-
-        if (existing && state.assets.includes(existing)) {
-          existing.descriptor = asset
-          if (!existing.scopeKeys.includes(scopeKey)) existing.scopeKeys.push(scopeKey)
-        } else {
-          const newEntry = {
-            attempts: 0,
-            descriptor: asset,
-            lastAccessedAt: this.nowMilliseconds(),
-            nextRetryAt: null,
-            scopeKeys: [scopeKey],
-            status: /** @type {const} */ ("missing")
-          }
-
-          state.assets.push(newEntry)
-          entriesById.set(asset.id, newEntry)
-        }
-      }
-
-      for (const digest of removedDigests) {
-        if (state.assets.some((entry) => entry.descriptor.digest === digest)) continue
-        if (!state.pendingDeletionDigests.includes(digest)) state.pendingDeletionDigests.push(digest)
-      }
-
-      await this.saveState()
+      entriesById = await this.reconcileDescriptors({descriptors, scopeKey})
       await this.deleteUnreferencedDigests()
 
       if (online) {
@@ -349,6 +299,124 @@ export default class SynchronizedAssetCache {
       await this.adapter.saveState({accountId: this.accountId, state: this.state})
     }
 
+    await this.serializeStatePersistence(persist)
+  }
+
+  /**
+   * Persists a detached reconciliation before exposing it through shared state.
+   * @param {object} args Reconciliation inputs.
+   * @param {import("./types.js").SynchronizedAssetCacheDescriptor[]} args.descriptors Current descriptors in the scope.
+   * @param {string} args.scopeKey Stable synchronized scope key.
+   * @returns {Promise<Map<string, import("./types.js").SynchronizedAssetCacheEntry>>} Reconciled live entries by id.
+   */
+  async reconcileDescriptors({descriptors, scopeKey}) {
+    /** @type {Map<string, import("./types.js").SynchronizedAssetCacheEntry> | null} */
+    let entriesById = null
+
+    const persist = async () => {
+      if (!this.state) throw new Error("Cannot reconcile synchronized asset cache before loading state")
+
+      const candidateState = this.copyState(this.state)
+      const newEntryLastAccessedAt = this.nowMilliseconds()
+
+      this.applyDescriptorReconciliation({descriptors, newEntryLastAccessedAt, scopeKey, state: candidateState})
+      await this.adapter.saveState({accountId: this.accountId, state: candidateState})
+      entriesById = this.applyDescriptorReconciliation({descriptors, newEntryLastAccessedAt, scopeKey, state: this.state})
+    }
+
+    await this.serializeStatePersistence(persist)
+
+    if (!entriesById) throw new Error("Synchronized asset descriptor reconciliation completed without live entries")
+
+    return entriesById
+  }
+
+  /**
+   * Applies one scope's descriptor set to cache state.
+   * @param {object} args Reconciliation inputs.
+   * @param {import("./types.js").SynchronizedAssetCacheDescriptor[]} args.descriptors Current descriptors in the scope.
+   * @param {number} args.newEntryLastAccessedAt Initial LRU timestamp for new entries.
+   * @param {string} args.scopeKey Stable synchronized scope key.
+   * @param {import("./types.js").SynchronizedAssetCacheState} args.state State to reconcile.
+   * @returns {Map<string, import("./types.js").SynchronizedAssetCacheEntry>} Live entries by id.
+   */
+  applyDescriptorReconciliation({descriptors, newEntryLastAccessedAt, scopeKey, state}) {
+    const incomingIds = new Set(descriptors.map((asset) => asset.id))
+    const entriesById = new Map(state.assets.map((entry) => [entry.descriptor.id, entry]))
+    const digestsById = new Map(state.assets.map((entry) => [entry.descriptor.id, entry.descriptor.digest]))
+    const removedDigests = new Set()
+
+    for (const asset of descriptors) {
+      const knownDigest = digestsById.get(asset.id)
+
+      if (knownDigest !== undefined && knownDigest !== asset.digest) {
+        throw new Error(`Synchronized asset descriptor ${asset.id} changed its immutable digest`)
+      }
+
+      digestsById.set(asset.id, asset.digest)
+    }
+
+    for (const entry of state.assets) {
+      if (!entry.scopeKeys.includes(scopeKey) || incomingIds.has(entry.descriptor.id)) continue
+
+      entry.scopeKeys = entry.scopeKeys.filter((candidate) => candidate !== scopeKey)
+      if (entry.scopeKeys.length === 0) removedDigests.add(entry.descriptor.digest)
+    }
+
+    state.assets = state.assets.filter((entry) => entry.scopeKeys.length > 0)
+
+    for (const asset of descriptors) {
+      const existing = entriesById.get(asset.id)
+
+      if (existing && state.assets.includes(existing)) {
+        existing.descriptor = asset
+        if (!existing.scopeKeys.includes(scopeKey)) existing.scopeKeys.push(scopeKey)
+      } else {
+        const newEntry = {
+          attempts: 0,
+          descriptor: asset,
+          lastAccessedAt: newEntryLastAccessedAt,
+          nextRetryAt: null,
+          scopeKeys: [scopeKey],
+          status: /** @type {const} */ ("missing")
+        }
+
+        state.assets.push(newEntry)
+        entriesById.set(asset.id, newEntry)
+      }
+    }
+
+    for (const digest of removedDigests) {
+      if (state.assets.some((entry) => entry.descriptor.digest === digest)) continue
+      if (!state.pendingDeletionDigests.includes(digest)) state.pendingDeletionDigests.push(digest)
+    }
+
+    return entriesById
+  }
+
+  /**
+   * Copies metadata into a detached persistence candidate.
+   * @param {import("./types.js").SynchronizedAssetCacheState} state State to copy.
+   * @returns {import("./types.js").SynchronizedAssetCacheState} Detached state.
+   */
+  copyState(state) {
+    return {
+      assets: state.assets.map((entry) => ({
+        ...entry,
+        descriptor: {...entry.descriptor},
+        scopeKeys: [...entry.scopeKeys]
+      })),
+      pendingDeletionDigests: [...state.pendingDeletionDigests],
+      version: state.version
+    }
+  }
+
+  /**
+   * Serializes one metadata persistence operation after prior failures or successes.
+   * @param {() => Promise<void>} persist Persistence operation.
+   * @returns {Promise<void>} Resolves after persistence.
+   */
+  async serializeStatePersistence(persist) {
     this.saveStatePromise = this.saveStatePromise.then(persist, persist)
 
     await this.saveStatePromise
