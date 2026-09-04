@@ -254,7 +254,7 @@ describe("TestRunner transactional tenant connections", {databaseCleaning: {tran
           await dbs.projectTenant.query("CREATE TABLE attempt_rows(value varchar(255) NOT NULL)")
         })
       })
-      configureTests({defaultTimeoutSeconds: 1})
+      configureTests({defaultTimeoutSeconds: 5})
 
       const runner = new TestRunner({configuration, testFiles: []})
       const tests = {
@@ -266,7 +266,9 @@ describe("TestRunner transactional tenant connections", {databaseCleaning: {tran
         subs: {},
         tests: {
           "times out while holding an uncommitted tenant row": {
-            args: {databaseCleaning: {transaction: true}, timeoutSeconds: 0.01},
+            // Registration performs real tenant I/O; the timeout must begin after enough budget for that setup
+            // so the deliberately unresolved signal, rather than registration latency, is what times out.
+            args: {databaseCleaning: {transaction: true}, timeoutSeconds: 1},
             function: async (testArgs) => {
               await testArgs.registerTransactionalTenant({databaseIdentifier: "projectTenant", tenant: {slug: "alpha"}})
               await configuration.runWithTenant({slug: "alpha"}, async () => {
