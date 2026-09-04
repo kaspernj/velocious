@@ -145,12 +145,14 @@ describe("SynchronizedAssetCache eviction", {databaseCleaning: {transaction: fal
 
     await adapter.blobWritesCommitted.promise
     adapter.releaseBlobWrites.resolve(undefined)
-    await resolutions
+    const resolvedUris = await resolutions
 
     const storedBytes = [...adapter.blobs.values()].reduce((total, blob) => total + blob.byteLength, 0)
+    const retainedUris = [...adapter.blobs.keys()].map((key) => `memory://${key}`)
 
     expect(adapter.blobs.size).toEqual(1)
     expect(storedBytes).toEqual(3)
+    expect(resolvedUris.filter((uri) => uri !== null)).toEqual(retainedUris)
   })
 
   it("waits for an in-flight eviction before resolving the same digest", async () => {

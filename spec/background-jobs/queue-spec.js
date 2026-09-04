@@ -235,7 +235,7 @@ describe("Background jobs - queue", {databaseCleaning: {truncate: true}}, () => 
         options: {executionMode: "inline", maxRetries: 0}
       })
 
-      await failureReceived.promise
+      await timeout({timeout: 2000}, async () => await failureReceived.promise)
 
       expect(failureEvents.length).toEqual(1)
       expect(failureEvents[0].context.jobId).toEqual(jobId)

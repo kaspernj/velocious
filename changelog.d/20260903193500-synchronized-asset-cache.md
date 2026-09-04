@@ -24,4 +24,5 @@
   every grouped descriptor, and reject conflicting byte sizes for shared
   digests before committing descriptor state.
 - Re-enforce the cache byte budget after concurrent on-demand downloads release
-  their digest guards, and reject conflicting content types for shared digests.
+  their digest guards, revalidate selected blobs before returning resolved
+  URIs, and reject conflicting content types for shared digests.

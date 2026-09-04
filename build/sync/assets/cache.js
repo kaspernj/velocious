@@ -176,9 +176,11 @@ export default class SynchronizedAssetCache {
 
     if (shouldCleanup) await this.cleanupAfterResolve(new Set([digest]))
     if (!resolvedUri) return null
-    if (!state.assets.some((candidate) => candidate.descriptor.id === assetId && candidate.descriptor.digest === digest)) return null
+    const resolvedEntry = state.assets.find((candidate) => candidate.descriptor.id === assetId && candidate.descriptor.digest === digest)
 
-    return resolvedUri
+    if (!resolvedEntry) return null
+
+    return await this.cachedUri(resolvedEntry)
   }
 
   /**

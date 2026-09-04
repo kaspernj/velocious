@@ -847,7 +847,9 @@ Required offline assets must be durable. Backend driver configuration never
 appears in generated frontend models or API manifests. A descriptor ID keeps
 its digest, byte size, and content type immutably. Cache descriptors that share
 a digest must agree on byte size and content type, and eager synchronization
-attempts each shared digest only once per reconciliation.
+attempts each shared digest only once per reconciliation. On-demand resolution
+rechecks the backing blob after cleanup and returns `null` instead of a stale
+local URI when concurrent eviction removed it.
 Attachment metadata is exposed through the built-in `VelociousAttachment` frontend model with safe fields only: `id`, `recordType`, `recordId`, `name`, `position`, `filename`, `contentType`, `byteSize`, `createdAt`, and `updatedAt`. Storage internals such as `driver`, `storageKey`, and `contentBase64` remain hidden and non-queryable. Direct metadata queries require owner filters: `recordType`, `recordId`, and `name`.
 
 When your frontend app calls a backend on another host/port (or under a path prefix), configure transport once:
