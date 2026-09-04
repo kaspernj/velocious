@@ -14,6 +14,7 @@ const ATTACHMENTS_TABLE = "velocious_attachments"
 const ATTACHMENT_OWNER_INDEX_NAME = "index_velocious_attachments_on_record_type_and_record_id_digest"
 const ATTACHMENT_RECORD_ID_DIGEST_LENGTH = 64
 const ATTACHMENT_RECORD_ID_DIGEST_MIGRATION_BATCH_SIZE = 100
+const ATTACHMENT_SCHEMA_LOCK_NAME = "velocious-attachments-schema"
 
 /**
  * Stores by configuration.
@@ -123,6 +124,7 @@ export default class RecordAttachmentsStore {
     this.configuration = configuration
     this.databaseIdentifier = databaseIdentifier
     this._readyPromise = null
+    this._schemaUpgradePromise = null
     this._driverColumnsAvailable = false
     this._contentBase64Nullable = true
     /**
@@ -402,6 +404,36 @@ export default class RecordAttachmentsStore {
    * @returns {Promise<void>} - Resolves when schema columns are ensured.
    */
   async ensureAttachmentStoreSchema({db}) {
+    if (this._schemaUpgradePromise) return await this._schemaUpgradePromise
+
+    this._schemaUpgradePromise = (async () => {
+      const acquired = await db.acquireAdvisoryLock(ATTACHMENT_SCHEMA_LOCK_NAME)
+
+      if (!acquired) throw new Error(`Failed to acquire attachment schema lock ${ATTACHMENT_SCHEMA_LOCK_NAME}`)
+
+      try {
+        if (!await db.tableExists(ATTACHMENTS_TABLE)) return
+
+        await this._ensureAttachmentStoreSchema({db})
+      } finally {
+        await db.releaseAdvisoryLock(ATTACHMENT_SCHEMA_LOCK_NAME)
+      }
+    })()
+
+    try {
+      await this._schemaUpgradePromise
+    } finally {
+      this._schemaUpgradePromise = null
+    }
+  }
+
+  /**
+   * Ensures attachment columns and indexes after schema-upgrade serialization is acquired.
+   * @param {object} args - Options.
+   * @param {import("../../../database/drivers/base.js").default} args.db - DB connection.
+   * @returns {Promise<void>} - Resolves when schema columns are ensured.
+   */
+  async _ensureAttachmentStoreSchema({db}) {
     const table = await db.getTableByNameOrFail(ATTACHMENTS_TABLE)
     const columns = await table.getColumns()
     const hasDriverColumn = columns.some((column) => column.getName() === "driver")
@@ -680,8 +712,6 @@ export default class RecordAttachmentsStore {
    * @returns {Promise<void>} - Resolves when existing attachment schema is current.
    */
   async prepareRecordIdentityMigration({connection}) {
-    if (!await connection.tableExists(ATTACHMENTS_TABLE)) return
-
     await this.ensureAttachmentStoreSchema({db: connection})
   }
 

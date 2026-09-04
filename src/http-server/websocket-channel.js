@@ -95,6 +95,15 @@ export default class VelociousWebsocketChannel {
   matches(..._broadcastArgs) { return true }
 
   /**
+   * Whether replaying a persisted broadcast would require a client resync.
+   * Subclasses override this when replay storage deliberately omits metadata
+   * required to deliver an event safely.
+   * @param {WebsocketJsonValue} _body - Persisted broadcast payload.
+   * @returns {boolean | Promise<boolean>} - Whether the session must report a replay gap.
+   */
+  _requiresReplayGap(_body) { return false }
+
+  /**
    * Returns sanitized diagnostics for debug snapshots.
    * Subclasses can override to expose non-sensitive routing details.
    * @returns {Record<string, ReturnType<typeof JSON.parse>>} Debug-safe subscription details.

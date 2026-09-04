@@ -284,6 +284,20 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
   }
 
   /**
+   * Requires a resync for relevant destroy events because their authorization
+   * snapshots are intentionally excluded from the persisted replay payload.
+   * @param {import("../http-server/websocket-channel.js").WebsocketJsonValue} body - Persisted broadcast payload.
+   * @returns {boolean} - Whether replay cannot safely authorize this event.
+   */
+  _requiresReplayGap(body) {
+    if (!body || typeof body !== "object" || Array.isArray(body)) return false
+    if (!("action" in body) || body.action !== "destroy") return false
+    if (!("id" in body) || body.id === undefined || body.id === null) return false
+
+    return !("model" in body) || typeof body.model !== "string" || body.model === this._modelName()
+  }
+
+  /**
    * Checks a destroy against the subscriber's ordinary authorized query by
    * replacing the deleted backing table with the captured pre-delete row. Values
    * are quoted on this trusted database connection; no broadcast-provided SQL is run.

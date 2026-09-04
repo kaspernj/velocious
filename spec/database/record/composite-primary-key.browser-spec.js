@@ -67,14 +67,18 @@ class SchemaPreparingAttachmentStore extends RecordAttachmentsStore {
   /** @type {Array<import("../../../src/database/drivers/base.js").default>} */
   schemaConnections = []
 
+  /** @type {boolean[]} */
+  schemaLocksHeld = []
+
   /**
    * Records the connection used to ensure the attachment schema.
    * @param {object} args - Options.
    * @param {import("../../../src/database/drivers/base.js").default} args.db - Database connection.
    * @returns {Promise<void>} - Resolves after recording the connection.
    */
-  async ensureAttachmentStoreSchema({db}) {
+  async _ensureAttachmentStoreSchema({db}) {
     this.schemaConnections.push(db)
+    this.schemaLocksHeld.push(await db.isAdvisoryLockHeld("velocious-attachments-schema"))
   }
 
   /**
@@ -245,7 +249,7 @@ describe("Record - composite primary key", {tags: ["dummy"]}, () => {
     expect(await task.getAttachmentByName("descriptionFile").download()).not.toBeNull()
   })
 
-  it("prepares attachment schema before the record transaction and keeps identity migration DML-only", async () => {
+  it("prepares attachment schema under an advisory lock before the record transaction and keeps identity migration DML-only", async () => {
     const project = await Project.create({name: "Composite migration connection project"})
     const task = await CompositePrimaryKeyTask.create({
       name: "Composite migration connection task",
@@ -261,8 +265,10 @@ describe("Record - composite primary key", {tags: ["dummy"]}, () => {
     await store.prepareRecordIdentityMigration({connection})
 
     expect(store.schemaConnections).toEqual([connection])
+    expect(store.schemaLocksHeld).toEqual([true])
 
     store.schemaConnections = []
+    store.schemaLocksHeld = []
 
     await connection.transaction(async () => {
       await store.migrateRecordIdentity({
@@ -274,6 +280,7 @@ describe("Record - composite primary key", {tags: ["dummy"]}, () => {
     })
 
     expect(store.schemaConnections).toEqual([])
+    expect(store.schemaLocksHeld).toEqual([])
   })
 
   it("stores canonical composite attachment identities without a length limit", async () => {

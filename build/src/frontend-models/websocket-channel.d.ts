@@ -67,6 +67,13 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
      */
     _deliverBroadcast(body: FrontendModelLifecycleBroadcastBody, meta?: import("../http-server/websocket-channel.js").WebsocketBroadcastMetadata): Promise<void>;
     /**
+     * Requires a resync for relevant destroy events because their authorization
+     * snapshots are intentionally excluded from the persisted replay payload.
+     * @param {import("../http-server/websocket-channel.js").WebsocketJsonValue} body - Persisted broadcast payload.
+     * @returns {boolean} - Whether replay cannot safely authorize this event.
+     */
+    _requiresReplayGap(body: import("../http-server/websocket-channel.js").WebsocketJsonValue): boolean;
+    /**
      * Checks a destroy against the subscriber's ordinary authorized query by
      * replacing the deleted backing table with the captured pre-delete row. Values
      * are quoted on this trusted database connection; no broadcast-provided SQL is run.
