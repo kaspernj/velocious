@@ -713,6 +713,9 @@ User.hasOneAttachment("profilePicture", {
 `db:migrate` provisions the framework-owned attachment table before runtime
 attachment work begins. See [Backend record attachments](docs/attachments.md)
 for the complete input, storage-driver, lifecycle, and path-security contracts.
+Offline-capable clients can apply synchronized attachment descriptors through
+the platform-neutral [Synchronized asset cache](docs/synchronized-assets.md),
+while Expo and web packages own their respective byte-storage adapters.
 
 You can also pass a driver class or instance directly on the attachment:
 
@@ -841,7 +844,13 @@ The optional model-level `sync` block is client-safe policy metadata for asset
 cache adapters. It distinguishes eager/on-demand fetching,
 durable/evictable retention, and optional/required offline availability.
 Required offline assets must be durable. Backend driver configuration never
-appears in generated frontend models or API manifests.
+appears in generated frontend models or API manifests. A descriptor ID keeps
+its digest, byte size, and content type immutably. Cache descriptors that share
+a digest must agree on byte size and content type, and eager synchronization
+attempts each shared digest only once per reconciliation. On-demand resolution
+rechecks the backing blob after cleanup and returns `null` instead of a stale
+local URI when concurrent eviction removed it. Cleanup deferred by an active
+cached resolution runs again after that digest's final guard releases.
 Attachment metadata is exposed through the built-in `VelociousAttachment` frontend model with safe fields only: `id`, `recordType`, `recordId`, `name`, `position`, `filename`, `contentType`, `byteSize`, `createdAt`, and `updatedAt`. Storage internals such as `driver`, `storageKey`, and `contentBase64` remain hidden and non-queryable. Metadata collection queries require owner filters: `resourceName`, `recordType`, `recordId`, and `name`. Composite `recordId` values retain the complete canonical tuple without a 255-character limit, and key-changing saves rekey attachment ownership in the record transaction. `VelociousAttachment.find(id)` uses the member endpoint and authorizes against configured resource aliases backed by the attachment owner type.
 
 When your frontend app calls a backend on another host/port (or under a path prefix), configure transport once:
