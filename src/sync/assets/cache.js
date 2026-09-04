@@ -718,12 +718,18 @@ export default class SynchronizedAssetCache {
   async cachedUri(entry) {
     const digest = entry.descriptor.digest
 
-    await this.beginActiveDigest(digest)
+    while (true) {
+      await this.beginActiveDigest(digest)
+      let deferredCleanupRan
+      let uri
 
-    try {
-      return await this.cachedUriWhileActive(entry)
-    } finally {
-      await this.finishActiveDigest(digest, new Set([digest]))
+      try {
+        uri = await this.cachedUriWhileActive(entry)
+      } finally {
+        deferredCleanupRan = await this.finishActiveDigest(digest)
+      }
+
+      if (!deferredCleanupRan) return uri
     }
   }
 
@@ -765,7 +771,7 @@ export default class SynchronizedAssetCache {
    * Releases one cache operation and processes deferred deletion after the last.
    * @param {string} digest Content digest.
    * @param {Set<string>} [protectedCleanupDigests] Digests needed by the resolving caller.
-   * @returns {Promise<void>} Resolves after any pending deletion.
+   * @returns {Promise<boolean>} Whether deferred cleanup ran after the final release.
    */
   async finishActiveDigest(digest, protectedCleanupDigests = new Set()) {
     const activeCount = this.activeDigestCounts.get(digest)
@@ -776,15 +782,16 @@ export default class SynchronizedAssetCache {
 
     if (activeCount > 1) {
       this.activeDigestCounts.set(digest, activeCount - 1)
-      return
+      return false
     }
 
     this.activeDigestCounts.delete(digest)
     await this.deletePendingDigestIfUnreferenced(digest)
+    const deferredCleanupRequired = this.cleanupRequiredAfterReleaseDigests.delete(digest)
 
-    if (this.cleanupRequiredAfterReleaseDigests.delete(digest)) {
-      await this.cleanup(protectedCleanupDigests)
-    }
+    if (deferredCleanupRequired) await this.cleanup(protectedCleanupDigests)
+
+    return deferredCleanupRequired
   }
 
   /**

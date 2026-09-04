@@ -229,9 +229,9 @@ export default class SynchronizedAssetCache {
      * Releases one cache operation and processes deferred deletion after the last.
      * @param {string} digest Content digest.
      * @param {Set<string>} [protectedCleanupDigests] Digests needed by the resolving caller.
-     * @returns {Promise<void>} Resolves after any pending deletion.
+     * @returns {Promise<boolean>} Whether deferred cleanup ran after the final release.
      */
-    finishActiveDigest(digest: string, protectedCleanupDigests?: Set<string>): Promise<void>;
+    finishActiveDigest(digest: string, protectedCleanupDigests?: Set<string>): Promise<boolean>;
     /**
      * Releases every acquired digest before propagating finalization failures.
      * @param {string[]} digests Content digests.

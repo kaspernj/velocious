@@ -185,7 +185,7 @@ describe("SynchronizedAssetCache eviction", {databaseCleaning: {transaction: fal
     expect(adapter.blobs.has(`account-1:${durableAsset.digest}`)).toEqual(true)
   })
 
-  it("keeps a resolved URI cached through deferred cleanup during its final lookup", async () => {
+  it("rechecks a resolved URI after deferred cleanup during its final lookup", async () => {
     class PausedFinalBlobLookupAssetCacheAdapter extends MemoryAssetCacheAdapter {
       constructor() {
         super()
@@ -231,8 +231,9 @@ describe("SynchronizedAssetCache eviction", {databaseCleaning: {transaction: fal
     await cache.synchronize({descriptors: [durableAsset], online: true, scopeKey: "durable-scope"})
     adapter.releaseFinalBlobLookup.resolve(undefined)
 
-    expect(await resolvePromise).toEqual(`memory://account-1:${cachedAsset.digest}`)
-    expect(adapter.blobs.has(`account-1:${cachedAsset.digest}`)).toEqual(true)
+    expect(await resolvePromise).toEqual(null)
+    expect(adapter.blobs.has(`account-1:${cachedAsset.digest}`)).toEqual(false)
+    expect(adapter.blobs.has(`account-1:${durableAsset.digest}`)).toEqual(true)
   })
 
   it("serializes overlapping cleanup passes before selecting another victim", async () => {
