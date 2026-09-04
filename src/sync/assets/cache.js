@@ -61,6 +61,8 @@ export default class SynchronizedAssetCache {
   async synchronize({descriptors, online, scopeKey}) {
     const state = await this.loadState()
     const incomingDigests = [...new Set(descriptors.map((asset) => asset.digest))]
+    /** @type {import("./types.js").SynchronizedAssetCacheFailure[]} */
+    const failures = []
 
     for (const digest of incomingDigests) await this.beginActiveDigest(digest)
 
@@ -119,27 +121,23 @@ export default class SynchronizedAssetCache {
       }
 
       await this.saveState()
-    } finally {
-      for (const digest of incomingDigests) await this.finishActiveDigest(digest)
-    }
+      await this.deleteUnreferencedDigests()
 
-    await this.deleteUnreferencedDigests()
+      if (online) {
+        for (const asset of descriptors) {
+          if (asset.fetch !== "eager") continue
 
-    /** @type {import("./types.js").SynchronizedAssetCacheFailure[]} */
-    const failures = []
+          const entry = entriesById.get(asset.id)
 
-    if (online) {
-      for (const asset of descriptors) {
-        if (asset.fetch !== "eager") continue
+          if (!entry || !this.retryEligible(entry)) continue
 
-        const entry = entriesById.get(asset.id)
+          const cacheResult = await this.ensureCachedWhileActive(entry)
 
-        if (!entry || !this.retryEligible(entry)) continue
-
-        const cacheResult = await this.ensureCached(entry)
-
-        if (cacheResult.error) failures.push({assetId: asset.id, error: cacheResult.error})
+          if (cacheResult.error) failures.push({assetId: asset.id, error: cacheResult.error})
+        }
       }
+    } finally {
+      await this.finishActiveDigests(incomingDigests)
     }
 
     await this.cleanup()
@@ -561,6 +559,29 @@ export default class SynchronizedAssetCache {
 
     this.activeDigestCounts.delete(digest)
     await this.deletePendingDigestIfUnreferenced(digest)
+  }
+
+  /**
+   * Releases every acquired digest before propagating finalization failures.
+   * @param {string[]} digests Content digests.
+   * @returns {Promise<void>} Resolves after every digest is released.
+   */
+  async finishActiveDigests(digests) {
+    /** @type {Error[]} */
+    const failures = []
+
+    for (const digest of digests) {
+      try {
+        await this.finishActiveDigest(digest)
+      } catch (error) {
+        failures.push(error instanceof Error ? error : new Error(String(error)))
+      }
+    }
+
+    if (failures.length === 1) throw failures[0]
+    if (failures.length > 1) {
+      throw new AggregateError(failures, "Multiple synchronized asset digest finalizers failed", {cause: failures[0]})
+    }
   }
 
   /**

@@ -91,6 +91,45 @@ class FailNextSaveAssetCacheAdapter extends MemoryAssetCacheAdapter {
   }
 }
 
+/** Adapter that rejects one selected metadata write. */
+class FailSelectedSaveAssetCacheAdapter extends MemoryAssetCacheAdapter {
+  constructor() {
+    super()
+    this.failOnSaveCount = null
+    this.saveCount = 0
+  }
+
+  /** @param {{accountId: string, state: SynchronizedAssetCacheState}} args State write. @returns {Promise<void>} */
+  async saveState(args) {
+    this.saveCount += 1
+
+    if (this.saveCount === this.failOnSaveCount) throw new Error("planned selected metadata persistence failure")
+
+    await super.saveState(args)
+  }
+}
+
+/** Adapter that pauses the next metadata write after committing it. */
+class PausedSaveAssetCacheAdapter extends MemoryAssetCacheAdapter {
+  constructor() {
+    super()
+    this.pauseNextSave = false
+    this.releaseSave = deferred()
+    this.saveCommitted = deferred()
+  }
+
+  /** @param {{accountId: string, state: SynchronizedAssetCacheState}} args State write. @returns {Promise<void>} */
+  async saveState(args) {
+    await super.saveState(args)
+
+    if (!this.pauseNextSave) return
+
+    this.pauseNextSave = false
+    this.saveCommitted.resolve(undefined)
+    await this.releaseSave.promise
+  }
+}
+
 /** Adapter that can reject exactly the next blob deletion. */
 class FailNextDeleteAssetCacheAdapter extends MemoryAssetCacheAdapter {
   constructor() {
@@ -551,6 +590,75 @@ describe("SynchronizedAssetCache", {databaseCleaning: {transaction: false, trunc
 
     expect(adapter.blobs.size).toEqual(0)
     expect(adapter.deletedBlobKeys).toEqual([`account-1:${asset.digest}`])
+  })
+
+  it("deletes an eager download whose scope is removed during descriptor persistence", async () => {
+    const content = bytes([73, 74, 75])
+    const asset = descriptor({bytes: content})
+    const adapter = new PausedSaveAssetCacheAdapter()
+    const cache = new SynchronizedAssetCache({
+      accountId: "account-1",
+      adapter,
+      download: async () => content,
+      maxBytes: 1024
+    })
+
+    adapter.pauseNextSave = true
+
+    const eagerSynchronization = cache.synchronize({descriptors: [asset], online: true, scopeKey: "users"})
+
+    await adapter.saveCommitted.promise
+
+    const removalSynchronization = cache.synchronize({descriptors: [], online: true, scopeKey: "users"})
+
+    adapter.releaseSave.resolve(undefined)
+
+    await eagerSynchronization
+    await removalSynchronization
+
+    expect(adapter.blobs.size).toEqual(0)
+  })
+
+  it("releases every incoming digest after one finalizer fails", async () => {
+    const firstContent = bytes([76, 77, 78])
+    const secondContent = bytes([79, 80, 81])
+    const firstAsset = descriptor({bytes: firstContent, fetch: "on-demand", id: "first"})
+    const secondAsset = descriptor({bytes: secondContent, fetch: "on-demand", id: "second"})
+    const adapter = new FailSelectedSaveAssetCacheAdapter()
+
+    adapter.blobs.set(`account-1:${firstAsset.digest}`, firstContent)
+    adapter.blobs.set(`account-1:${secondAsset.digest}`, secondContent)
+    adapter.states.set("account-1", {
+      assets: [firstAsset, secondAsset].map((asset) => ({
+        attempts: 0,
+        descriptor: asset,
+        lastAccessedAt: 1000,
+        nextRetryAt: null,
+        scopeKeys: ["users"],
+        status: /** @type {const} */ ("cached")
+      })),
+      pendingDeletionDigests: [firstAsset.digest, secondAsset.digest],
+      version: 1
+    })
+
+    const cache = new SynchronizedAssetCache({
+      accountId: "account-1",
+      adapter,
+      download: async () => firstContent,
+      maxBytes: 1024
+    })
+
+    adapter.failOnSaveCount = 2
+
+    await expect(async () => {
+      await cache.synchronize({descriptors: [firstAsset, secondAsset], online: false, scopeKey: "users"})
+    }).toThrowError("planned selected metadata persistence failure")
+
+    adapter.failOnSaveCount = null
+
+    await cache.synchronize({descriptors: [], online: false, scopeKey: "users"})
+
+    expect(adapter.blobs.size).toEqual(0)
   })
 
   it("waits for an in-flight eviction before resolving the same digest", async () => {

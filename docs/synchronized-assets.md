@@ -51,9 +51,10 @@ The complete incoming descriptor set is validated before cache state changes,
 so an immutable-digest conflict rejects without partially reconciling the scope.
 `synchronize` downloads eligible eager descriptors and returns both attempted
 download failures and required asset ids in that scope that remain absent. It
-does not hide a failed authenticated request or corrupt payload. Removing the
-last reference while a cache lookup or download is active schedules any
-completed blob for deletion instead of leaving unreferenced bytes behind.
+does not hide a failed authenticated request or corrupt payload. Incoming
+digests stay protected through eager processing. Removing the last reference
+while descriptor persistence, a cache lookup, or a download is active schedules
+any completed blob for deletion instead of leaving unreferenced bytes behind.
 
 Call `resolve({assetId, online})` when rendering an asset. A cached URI is
 returned immediately. An absent on-demand asset downloads when online; offline
@@ -98,6 +99,8 @@ failure therefore rejects the current synchronization and is retried by the
 next synchronization, including after a process restart. Blob deletion is
 serialized per digest with new lookup and descriptor-reconciliation work, so a
 caller cannot receive a URI or offline-ready result for bytes being removed.
+If finalizing one incoming digest cannot persist its pending-deletion update,
+the cache releases the other incoming digests before propagating the failure.
 
 Every operation includes `accountId`. Adapters must use it as a physical
 namespace rather than trusting a digest to isolate users. Signing out or

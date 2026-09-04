@@ -151,6 +151,12 @@ export default class SynchronizedAssetCache {
      */
     finishActiveDigest(digest: string): Promise<void>;
     /**
+     * Releases every acquired digest before propagating finalization failures.
+     * @param {string[]} digests Content digests.
+     * @returns {Promise<void>} Resolves after every digest is released.
+     */
+    finishActiveDigests(digests: string[]): Promise<void>;
+    /**
      * Deletes blobs that lost their final descriptor reference.
      * @returns {Promise<void>} Resolves after deletion.
      */
