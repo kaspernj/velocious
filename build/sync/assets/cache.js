@@ -404,17 +404,23 @@ export default class SynchronizedAssetCache {
   applyDescriptorReconciliation({descriptors, newEntryLastAccessedAt, scopeKey, state}) {
     const incomingIds = new Set(descriptors.map((asset) => asset.id))
     const entriesById = new Map(state.assets.map((entry) => [entry.descriptor.id, entry]))
-    const digestsById = new Map(state.assets.map((entry) => [entry.descriptor.id, entry.descriptor.digest]))
+    const descriptorsById = new Map(state.assets.map((entry) => [entry.descriptor.id, entry.descriptor]))
     const removedDigests = new Set()
 
     for (const asset of descriptors) {
-      const knownDigest = digestsById.get(asset.id)
+      const knownDescriptor = descriptorsById.get(asset.id)
 
-      if (knownDigest !== undefined && knownDigest !== asset.digest) {
+      if (knownDescriptor && knownDescriptor.digest !== asset.digest) {
         throw new Error(`Synchronized asset descriptor ${asset.id} changed its immutable digest`)
       }
+      if (knownDescriptor && knownDescriptor.byteSize !== asset.byteSize) {
+        throw new Error(`Synchronized asset descriptor ${asset.id} changed its immutable byte size`)
+      }
+      if (knownDescriptor && knownDescriptor.contentType !== asset.contentType) {
+        throw new Error(`Synchronized asset descriptor ${asset.id} changed its immutable content type`)
+      }
 
-      digestsById.set(asset.id, asset.digest)
+      descriptorsById.set(asset.id, asset)
     }
 
     for (const entry of state.assets) {

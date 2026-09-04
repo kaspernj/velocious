@@ -61,6 +61,42 @@ describe("SynchronizedAssetCache state", {databaseCleaning: {transaction: false,
     expect(await adapter.loadState({accountId: "account-1"})).toEqual(null)
   })
 
+  it("rejects changed blob metadata before replacing an existing descriptor", async () => {
+    const content = bytes([118, 119, 120])
+    const asset = descriptor({bytes: content, fetch: "on-demand"})
+    const adapter = new MemoryAssetCacheAdapter()
+    const cache = new SynchronizedAssetCache({
+      accountId: "account-1",
+      adapter,
+      download: async () => content,
+      maxBytes: 1024
+    })
+
+    await cache.synchronize({descriptors: [asset], online: false, scopeKey: "users"})
+
+    await expect(async () => {
+      await cache.synchronize({
+        descriptors: [{...asset, byteSize: asset.byteSize + 1}],
+        online: false,
+        scopeKey: "users"
+      })
+    }).toThrowError(`Synchronized asset descriptor ${asset.id} changed its immutable byte size`)
+
+    await expect(async () => {
+      await cache.synchronize({
+        descriptors: [{...asset, contentType: "image/jpeg"}],
+        online: false,
+        scopeKey: "users"
+      })
+    }).toThrowError(`Synchronized asset descriptor ${asset.id} changed its immutable content type`)
+
+    const persistedState = await adapter.loadState({accountId: "account-1"})
+
+    if (!persistedState) throw new Error("Expected persisted asset cache state")
+
+    expect(persistedState.assets.map((entry) => entry.descriptor)).toEqual([asset])
+  })
+
   it("does not mutate cache state when immutable descriptor validation fails", async () => {
     const retainedContent = bytes([46, 47, 48])
     const removedContent = bytes([49, 50, 51])

@@ -48,10 +48,10 @@ Call `synchronize({scopeKey, descriptors, online})` after applying one complete
 descriptor scope. Descriptors removed from that scope lose the scope reference;
 their bytes are deleted only after no active scope references the digest.
 The complete incoming descriptor set is validated and atomically persisted
-before cache state changes become visible. An immutable-digest conflict or
-conflicting byte size for one shared digest, or a metadata persistence failure,
-therefore leaves the last committed scope active without exposing a partially
-reconciled descriptor set.
+before cache state changes become visible. A digest, byte-size, or content-type
+change for an existing descriptor, conflicting metadata for one shared digest,
+or a metadata persistence failure therefore leaves the last committed scope
+active without exposing a partially reconciled descriptor set.
 `synchronize` downloads eligible eager descriptors and returns both attempted
 download failures and required asset ids in that scope that remain absent. It
 does not hide a failed authenticated request or corrupt payload. Incoming

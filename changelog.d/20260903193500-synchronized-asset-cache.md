@@ -6,9 +6,9 @@
   unreferenced blobs after concurrent downloads finish.
 - Hash attachment bytes in fixed-size blocks and persist unconfirmed blob
   deletions so transient adapter failures are retried.
-- Reject immutable descriptor conflicts before mutating cache state and protect
-  blobs from deletion or eviction throughout active cache lookup and download
-  operations.
+- Reject immutable descriptor digest, byte-size, and content-type conflicts
+  before mutating cache state and protect blobs from deletion or eviction
+  throughout active cache lookup and download operations.
 - Serialize per-digest deletion with new cache activity, recheck live retention
   and LRU metadata before eviction, and keep late callers on the same failed
   download while persisting retry metadata for every participating descriptor.
