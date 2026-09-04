@@ -253,7 +253,7 @@ describe("SynchronizedAssetCache eviction", {databaseCleaning: {transaction: fal
     expect(await resolvePromise).toEqual(null)
   })
 
-  it("does not evict a blob while its download is still completing", async () => {
+  it("evicts an oversized on-demand blob after its download guard releases", async () => {
     const content = bytes([58, 59, 60])
     const asset = descriptor({bytes: content, fetch: "on-demand"})
     const adapter = new PausedWriteAssetCacheAdapter()
@@ -275,7 +275,28 @@ describe("SynchronizedAssetCache eviction", {databaseCleaning: {transaction: fal
 
     adapter.releaseBlobWrite.resolve(undefined)
 
-    expect(await resolvePromise).toEqual(`memory://account-1:${asset.digest}`)
+    expect(await resolvePromise).toEqual(null)
+    expect(adapter.blobs.size).toEqual(0)
+  })
+
+  it("evicts an oversized cached blob instead of resolving it", async () => {
+    const content = bytes([61, 62, 63])
+    const asset = descriptor({bytes: content, fetch: "on-demand"})
+    const adapter = new MemoryAssetCacheAdapter()
+    const cache = new SynchronizedAssetCache({
+      accountId: "account-1",
+      adapter,
+      download: async () => content,
+      maxBytes: content.byteLength
+    })
+
+    await cache.synchronize({descriptors: [asset], online: true, scopeKey: "users"})
+    expect(await cache.resolve({assetId: asset.id, online: true})).toEqual(`memory://account-1:${asset.digest}`)
+
+    cache.maxBytes = 0
+
+    expect(await cache.resolve({assetId: asset.id, online: false})).toEqual(null)
+    expect(adapter.blobs.size).toEqual(0)
   })
 
   it("evicts least-recently-used optional blobs but retains durable content", async () => {
@@ -363,6 +384,7 @@ describe("SynchronizedAssetCache eviction", {databaseCleaning: {transaction: fal
 
     expect(await cleanupPromise).toEqual(0)
     expect(adapter.blobs.size).toEqual(1)
+    expect(await cache.resolve({assetId: evictableAsset.id, online: false})).toEqual(`memory://account-1:${evictableAsset.digest}`)
     expect(await cache.resolve({assetId: durableAsset.id, online: false})).toEqual(`memory://account-1:${durableAsset.digest}`)
   })
 })
