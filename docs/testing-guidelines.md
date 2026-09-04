@@ -25,6 +25,48 @@ real browser, add `tags: ["browser-only"]` to its metadata. The Node runner stil
 discovers the definition but filters its tests before lifecycle hooks or callbacks
 run; the browser runner executes them normally.
 
+## Package-runner migration parity
+
+The package-runner migration is guarded by a reusable characterization harness in
+`spec/testing/testing-package-runner-parity-spec.js` and
+`spec/testing/testing-package-integration-spec.js`. The harness currently runs the
+authoritative Velocious runner and records the compatibility behavior that a later
+`@velocious/testing` runner adapter must preserve:
+
+- include tags match any requested tag; focus bypasses inclusion tags but never
+  exclusion tags;
+- focused tests and the tests inherited from a focused suite exclude ordinary
+  tests;
+- a line filter selecting a suite includes its descendants, while a test line
+  selects only that test;
+- retries repeat `beforeEach`, the callback, and `afterEach`, while `beforeAll`
+  and `afterAll` run once;
+- suite hooks receive `{configuration}`; per-test hooks receive
+  `{configuration, testArgs, testData}`; and the callback receives the same
+  `testArgs` object across retries;
+- a failed `beforeAll` prevents descendant callbacks and still runs `afterAll`;
+  after-all failures reject the run and same-scope cleanup continues in reverse
+  order;
+- legacy attempt/retry/final-failure event listeners are awaited in order; and
+- cleanup aggregation retains falsy values thrown or rejected by the test body.
+
+The identity fixtures additionally prove both facade/package import orders,
+shared default-context identity across compatible physical package copies, and
+deterministic schema incompatibility in both orders. The current facade and direct
+package declarations are still separate registries joined by the existing
+conversion adapter; this characterization does not claim that the package runner
+has been adopted.
+
+Several adoption assertions intentionally remain RED because making them pass
+requires the later runner switch rather than a test-only change. The current
+conversion drops package declaration `state` and `rowArguments`, so skip/todo
+state and table callback rows cannot yet reach the legacy runner. A standalone
+falsy throw or rejection is not counted unless another cleanup failure makes the
+lifecycle error truthy, and a `beforeAll` failure rejects the scope without
+creating one failed result for every selected descendant. The package-backed
+adapter must close these gaps, add Velocious `testArgs` after table row arguments,
+and make facade and direct-package declarations share the one package registry.
+
 ## Truncation cleanup
 
 When test isolation uses truncation, `truncateAllTables()` discovers the live table
