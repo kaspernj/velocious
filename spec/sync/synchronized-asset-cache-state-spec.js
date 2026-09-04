@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from "../../src/testing/test.js"
 import SynchronizedAssetCache from "../../src/sync/assets/cache.js"
-import { bytes, descriptor, FailNextSaveAssetCacheAdapter, MemoryAssetCacheAdapter } from "../helpers/synchronized-asset-cache.js"
+import { bytes, descriptor, FailNextSaveAssetCacheAdapter, MemoryAssetCacheAdapter, PausedDeleteAssetCacheAdapter } from "../helpers/synchronized-asset-cache.js"
 
 describe("SynchronizedAssetCache state", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("rejects inconsistent byte sizes before reconciling a shared digest", async () => {
@@ -184,6 +184,37 @@ describe("SynchronizedAssetCache state", {databaseCleaning: {transaction: false,
     if (!persistedState) throw new Error("Expected persisted asset cache state")
 
     expect(persistedState.assets.map((entry) => entry.descriptor.id)).toEqual([removedAsset.id])
+  })
+
+  it("reconciles overlapping calls for one scope in invocation order", async () => {
+    const content = bytes([121, 122, 123])
+    const asset = descriptor({bytes: content})
+    const adapter = new PausedDeleteAssetCacheAdapter()
+    const cache = new SynchronizedAssetCache({
+      accountId: "account-1",
+      adapter,
+      download: async () => content,
+      maxBytes: 1024
+    })
+
+    await cache.synchronize({descriptors: [asset], online: true, scopeKey: "users"})
+    cache.maxBytes = 0
+
+    const cleanupPromise = cache.cleanup()
+
+    await adapter.blobDeletionStarted.promise
+
+    const retainPromise = cache.synchronize({descriptors: [asset], online: false, scopeKey: "users"})
+    const removePromise = cache.synchronize({descriptors: [], online: false, scopeKey: "users"})
+
+    adapter.releaseBlobDeletion.resolve(undefined)
+    await Promise.all([cleanupPromise, retainPromise, removePromise])
+
+    const persistedState = await adapter.loadState({accountId: "account-1"})
+
+    if (!persistedState) throw new Error("Expected persisted asset cache state")
+
+    expect(persistedState.assets).toEqual([])
   })
 
   it("keeps state and bytes isolated by account namespace", async () => {

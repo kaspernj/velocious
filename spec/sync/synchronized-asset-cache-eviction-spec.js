@@ -185,6 +185,48 @@ describe("SynchronizedAssetCache eviction", {databaseCleaning: {transaction: fal
     expect(adapter.blobs.has(`account-1:${durableAsset.digest}`)).toEqual(true)
   })
 
+  it("serializes overlapping cleanup passes before selecting another victim", async () => {
+    class DelayedBlobLookupAssetCacheAdapter extends MemoryAssetCacheAdapter {
+      /** @param {{accountId: string, digest: string}} args Blob identity. @returns {Promise<string | null>} Resolvable URI. */
+      async blobUri(args) {
+        const uri = await super.blobUri(args)
+
+        await Promise.resolve()
+
+        return uri
+      }
+    }
+
+    const firstContent = bytes([124, 125, 126])
+    const secondContent = bytes([127, 128, 129])
+    const firstAsset = descriptor({bytes: firstContent, id: "first"})
+    const secondAsset = descriptor({bytes: secondContent, id: "second"})
+    const contents = new Map([[firstAsset.id, firstContent], [secondAsset.id, secondContent]])
+    const adapter = new DelayedBlobLookupAssetCacheAdapter()
+    let currentTime = 1000
+    const cache = new SynchronizedAssetCache({
+      accountId: "account-1",
+      adapter,
+      download: async (asset) => /** @type {Uint8Array} */ (contents.get(asset.id)),
+      maxBytes: 1024,
+      now: () => new Date(currentTime)
+    })
+
+    await cache.synchronize({descriptors: [firstAsset], online: true, scopeKey: "first-scope"})
+    currentTime += 1
+    await cache.synchronize({descriptors: [secondAsset], online: true, scopeKey: "second-scope"})
+    cache.maxBytes = firstContent.byteLength
+
+    const removedBytes = await Promise.all([
+      cache.cleanup(new Set([firstAsset.digest])),
+      cache.cleanup()
+    ])
+
+    expect(removedBytes).toEqual([secondContent.byteLength, 0])
+    expect(adapter.deletedBlobKeys).toEqual([`account-1:${secondAsset.digest}`])
+    expect(adapter.blobs.has(`account-1:${firstAsset.digest}`)).toEqual(true)
+  })
+
   it("waits for an in-flight eviction before resolving the same digest", async () => {
     const content = bytes([67, 68, 69])
     const asset = descriptor({bytes: content})
@@ -274,6 +316,24 @@ describe("SynchronizedAssetCache eviction", {databaseCleaning: {transaction: fal
   })
 
   it("rechecks live durable references before evicting a digest", async () => {
+    class DurableReferenceObservedAssetCache extends SynchronizedAssetCache {
+      durableDescriptorReconciled = deferred()
+
+      /**
+       * @param {{descriptors: import("../../src/sync/assets/types.js").SynchronizedAssetCacheDescriptor[], scopeKey: string}} args Reconciliation inputs.
+       * @returns {Promise<Map<string, import("../../src/sync/assets/types.js").SynchronizedAssetCacheEntry>>} Reconciled entries.
+       */
+      async reconcileDescriptors(args) {
+        const entries = await super.reconcileDescriptors(args)
+
+        if (args.descriptors.some((descriptor) => descriptor.retention === "durable")) {
+          this.durableDescriptorReconciled.resolve(undefined)
+        }
+
+        return entries
+      }
+    }
+
     const content = bytes([70, 71, 72])
     const evictableAsset = descriptor({bytes: content, id: "evictable"})
     const durableAsset = {
@@ -281,7 +341,7 @@ describe("SynchronizedAssetCache eviction", {databaseCleaning: {transaction: fal
       recordId: "user-2"
     }
     const adapter = new PausedBlobLookupAssetCacheAdapter()
-    const cache = new SynchronizedAssetCache({
+    const cache = new DurableReferenceObservedAssetCache({
       accountId: "account-1",
       adapter,
       download: async () => content,
@@ -295,8 +355,11 @@ describe("SynchronizedAssetCache eviction", {databaseCleaning: {transaction: fal
     const cleanupPromise = cache.cleanup()
 
     await adapter.blobLookupStarted.promise
-    await cache.synchronize({descriptors: [durableAsset], online: false, scopeKey: "second-scope"})
+    const synchronizationPromise = cache.synchronize({descriptors: [durableAsset], online: false, scopeKey: "second-scope"})
+
+    await cache.durableDescriptorReconciled.promise
     adapter.releaseBlobLookup.resolve(undefined)
+    await synchronizationPromise
 
     expect(await cleanupPromise).toEqual(0)
     expect(adapter.blobs.size).toEqual(1)

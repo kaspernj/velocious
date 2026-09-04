@@ -16,8 +16,8 @@ export default class SynchronizedAssetCache {
     deletionPromises: Map<string, Promise<void>>;
     /** @type {Set<string>} */
     cleanupRequiredAfterReleaseDigests: Set<string>;
-    /** @type {Promise<void>} */
-    resolveCleanupPromise: Promise<void>;
+    /** @type {Promise<number>} */
+    cleanupPromise: Promise<number>;
     /** @type {Map<string, Promise<{error: Error, uri: null} | {error: null, uri: string}>>} */
     downloadPromises: Map<string, Promise<{
         error: Error;
@@ -32,6 +32,8 @@ export default class SynchronizedAssetCache {
     statePromise: Promise<import("./types.js").SynchronizedAssetCacheState> | null;
     /** @type {Promise<void>} */
     saveStatePromise: Promise<void>;
+    /** @type {Map<string, Promise<import("./types.js").SynchronizedAssetCacheSynchronizationResult>>} */
+    synchronizePromises: Map<string, Promise<import("./types.js").SynchronizedAssetCacheSynchronizationResult>>;
     /**
      * Creates a synchronized asset cache.
      * @param {object} args Options.
@@ -67,6 +69,19 @@ export default class SynchronizedAssetCache {
         scopeKey: string;
     }): Promise<import("./types.js").SynchronizedAssetCacheSynchronizationResult>;
     /**
+     * Runs one scope synchronization after prior calls for that scope finish.
+     * @param {object} args Reconciliation inputs.
+     * @param {import("./types.js").SynchronizedAssetCacheDescriptor[]} args.descriptors Current descriptors in the scope.
+     * @param {boolean} args.online Whether authenticated downloads are available.
+     * @param {string} args.scopeKey Stable synchronized scope key.
+     * @returns {Promise<import("./types.js").SynchronizedAssetCacheSynchronizationResult>} Synchronization result.
+     */
+    synchronizeScope({ descriptors, online, scopeKey }: {
+        descriptors: import("./types.js").SynchronizedAssetCacheDescriptor[];
+        online: boolean;
+        scopeKey: string;
+    }): Promise<import("./types.js").SynchronizedAssetCacheSynchronizationResult>;
+    /**
      * Resolves a cached asset URI, downloading it on demand when allowed.
      * @param {object} args Resolution inputs.
      * @param {string} args.assetId Attachment descriptor id.
@@ -86,11 +101,11 @@ export default class SynchronizedAssetCache {
      */
     cleanup(protectedDigests?: Set<string>): Promise<number>;
     /**
-     * Serializes cleanup passes started after cache operations release digest guards.
+     * Performs one serialized eviction pass.
      * @param {Set<string>} protectedDigests Digests needed by the active caller.
-     * @returns {Promise<void>} Resolves after cleanup.
+     * @returns {Promise<number>} Bytes removed.
      */
-    cleanupAfterResolve(protectedDigests: Set<string>): Promise<void>;
+    performCleanup(protectedDigests: Set<string>): Promise<number>;
     /**
      * Loads cache state once for this cache instance.
      * @returns {Promise<import("./types.js").SynchronizedAssetCacheState>} Loaded state.

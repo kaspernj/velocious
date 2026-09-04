@@ -41,8 +41,8 @@ export default class SynchronizedAssetCache {
     this.deletionPromises = new Map()
     /** @type {Set<string>} */
     this.cleanupRequiredAfterReleaseDigests = new Set()
-    /** @type {Promise<void>} */
-    this.resolveCleanupPromise = Promise.resolve()
+    /** @type {Promise<number>} */
+    this.cleanupPromise = Promise.resolve(0)
     /** @type {Map<string, Promise<{error: Error, uri: null} | {error: null, uri: string}>>} */
     this.downloadPromises = new Map()
     /** @type {import("./types.js").SynchronizedAssetCacheState | null} */
@@ -51,6 +51,8 @@ export default class SynchronizedAssetCache {
     this.statePromise = null
     /** @type {Promise<void>} */
     this.saveStatePromise = Promise.resolve()
+    /** @type {Map<string, Promise<import("./types.js").SynchronizedAssetCacheSynchronizationResult>>} */
+    this.synchronizePromises = new Map()
   }
 
   /**
@@ -63,6 +65,32 @@ export default class SynchronizedAssetCache {
    * @returns {Promise<import("./types.js").SynchronizedAssetCacheSynchronizationResult>} Synchronization result.
    */
   async synchronize({descriptors, online, scopeKey}) {
+    const synchronize = async () => await this.synchronizeScope({descriptors, online, scopeKey})
+    const previousSynchronizationPromise = this.synchronizePromises.get(scopeKey)
+    const synchronizationPromise = previousSynchronizationPromise
+      ? previousSynchronizationPromise.then(synchronize, synchronize)
+      : synchronize()
+
+    this.synchronizePromises.set(scopeKey, synchronizationPromise)
+
+    try {
+      return await synchronizationPromise
+    } finally {
+      if (this.synchronizePromises.get(scopeKey) === synchronizationPromise) {
+        this.synchronizePromises.delete(scopeKey)
+      }
+    }
+  }
+
+  /**
+   * Runs one scope synchronization after prior calls for that scope finish.
+   * @param {object} args Reconciliation inputs.
+   * @param {import("./types.js").SynchronizedAssetCacheDescriptor[]} args.descriptors Current descriptors in the scope.
+   * @param {boolean} args.online Whether authenticated downloads are available.
+   * @param {string} args.scopeKey Stable synchronized scope key.
+   * @returns {Promise<import("./types.js").SynchronizedAssetCacheSynchronizationResult>} Synchronization result.
+   */
+  async synchronizeScope({descriptors, online, scopeKey}) {
     await this.loadState()
     /** @type {Map<string, import("./types.js").SynchronizedAssetCacheDescriptor[]>} */
     const descriptorsByDigest = new Map()
@@ -176,7 +204,7 @@ export default class SynchronizedAssetCache {
       await this.finishActiveDigest(digest, shouldCleanup ? new Set([digest]) : new Set())
     }
 
-    if (shouldCleanup) await this.cleanupAfterResolve(new Set([digest]))
+    if (shouldCleanup) await this.cleanup(new Set([digest]))
     if (!resolvedUri) return null
     const resolvedEntry = state.assets.find((candidate) => candidate.descriptor.id === assetId && candidate.descriptor.digest === digest)
 
@@ -193,6 +221,20 @@ export default class SynchronizedAssetCache {
    * @returns {Promise<number>} Bytes removed.
    */
   async cleanup(protectedDigests = new Set()) {
+    const cleanup = async () => await this.performCleanup(protectedDigests)
+    const cleanupPromise = this.cleanupPromise.then(cleanup, cleanup)
+
+    this.cleanupPromise = cleanupPromise
+
+    return await cleanupPromise
+  }
+
+  /**
+   * Performs one serialized eviction pass.
+   * @param {Set<string>} protectedDigests Digests needed by the active caller.
+   * @returns {Promise<number>} Bytes removed.
+   */
+  async performCleanup(protectedDigests) {
     const state = await this.loadState()
     /** @type {Map<string, import("./types.js").SynchronizedAssetCacheEntry[]>} */
     const entriesByDigest = new Map()
@@ -290,20 +332,6 @@ export default class SynchronizedAssetCache {
     await this.saveState()
 
     return removedBytes
-  }
-
-  /**
-   * Serializes cleanup passes started after cache operations release digest guards.
-   * @param {Set<string>} protectedDigests Digests needed by the active caller.
-   * @returns {Promise<void>} Resolves after cleanup.
-   */
-  async cleanupAfterResolve(protectedDigests) {
-    const cleanup = async () => {
-      await this.cleanup(protectedDigests)
-    }
-
-    this.resolveCleanupPromise = this.resolveCleanupPromise.then(cleanup, cleanup)
-    await this.resolveCleanupPromise
   }
 
   /**
@@ -750,7 +778,7 @@ export default class SynchronizedAssetCache {
     await this.deletePendingDigestIfUnreferenced(digest)
 
     if (this.cleanupRequiredAfterReleaseDigests.delete(digest)) {
-      await this.cleanupAfterResolve(protectedCleanupDigests)
+      await this.cleanup(protectedCleanupDigests)
     }
   }
 
