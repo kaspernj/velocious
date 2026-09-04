@@ -73,7 +73,10 @@ on-demand download rejects after its retry metadata has been persisted.
 Concurrent on-demand downloads serialize their cleanup after releasing digest
 guards, so the final cleanup pass re-enforces the configured byte budget. Each
 resolver then rechecks its descriptor through a protected blob lookup and
-returns `null` if another resolver's cleanup evicted its selected bytes.
+returns `null` if another resolver's cleanup evicted its selected bytes. When
+cleanup skips a cached digest that is still in active use, releasing its final
+guard schedules another serialized pass so the byte budget does not remain
+exceeded after overlapping synchronization.
 
 ## Integrity, retries, and interrupted work
 

@@ -14,6 +14,8 @@ export default class SynchronizedAssetCache {
     activeDigestCounts: Map<string, number>;
     /** @type {Map<string, Promise<void>>} */
     deletionPromises: Map<string, Promise<void>>;
+    /** @type {Set<string>} */
+    cleanupRequiredAfterReleaseDigests: Set<string>;
     /** @type {Promise<void>} */
     resolveCleanupPromise: Promise<void>;
     /** @type {Map<string, Promise<{error: Error, uri: null} | {error: null, uri: string}>>} */
@@ -84,8 +86,8 @@ export default class SynchronizedAssetCache {
      */
     cleanup(protectedDigests?: Set<string>): Promise<number>;
     /**
-     * Serializes cleanup passes started after on-demand resolution releases its digest guard.
-     * @param {Set<string>} protectedDigests Digests needed by the resolving caller.
+     * Serializes cleanup passes started after cache operations release digest guards.
+     * @param {Set<string>} protectedDigests Digests needed by the active caller.
      * @returns {Promise<void>} Resolves after cleanup.
      */
     cleanupAfterResolve(protectedDigests: Set<string>): Promise<void>;
@@ -211,9 +213,10 @@ export default class SynchronizedAssetCache {
     /**
      * Releases one cache operation and processes deferred deletion after the last.
      * @param {string} digest Content digest.
+     * @param {Set<string>} [protectedCleanupDigests] Digests needed by the resolving caller.
      * @returns {Promise<void>} Resolves after any pending deletion.
      */
-    finishActiveDigest(digest: string): Promise<void>;
+    finishActiveDigest(digest: string, protectedCleanupDigests?: Set<string>): Promise<void>;
     /**
      * Releases every acquired digest before propagating finalization failures.
      * @param {string[]} digests Content digests.

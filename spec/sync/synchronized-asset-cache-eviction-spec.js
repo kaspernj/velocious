@@ -155,6 +155,36 @@ describe("SynchronizedAssetCache eviction", {databaseCleaning: {transaction: fal
     expect(resolvedUris.filter((uri) => uri !== null)).toEqual(retainedUris)
   })
 
+  it("re-enforces the byte budget after a cached resolution releases its guard", async () => {
+    const cachedContent = bytes([115, 116, 117])
+    const durableContent = bytes([118, 119, 120])
+    const cachedAsset = descriptor({bytes: cachedContent, id: "cached"})
+    const durableAsset = descriptor({bytes: durableContent, id: "durable", retention: "durable"})
+    const contents = new Map([[cachedAsset.id, cachedContent], [durableAsset.id, durableContent]])
+    const adapter = new PausedBlobLookupAssetCacheAdapter()
+    const cache = new SynchronizedAssetCache({
+      accountId: "account-1",
+      adapter,
+      download: async (asset) => /** @type {Uint8Array} */ (contents.get(asset.id)),
+      maxBytes: 3
+    })
+
+    await cache.synchronize({descriptors: [cachedAsset], online: true, scopeKey: "cached-scope"})
+    adapter.pauseNextBlobLookup = true
+
+    const resolvePromise = cache.resolve({assetId: cachedAsset.id, online: false})
+
+    await adapter.blobLookupStarted.promise
+    await cache.synchronize({descriptors: [durableAsset], online: true, scopeKey: "durable-scope"})
+
+    expect(adapter.blobs.size).toEqual(2)
+    adapter.releaseBlobLookup.resolve(undefined)
+
+    expect(await resolvePromise).toEqual(null)
+    expect(adapter.blobs.size).toEqual(1)
+    expect(adapter.blobs.has(`account-1:${durableAsset.digest}`)).toEqual(true)
+  })
+
   it("waits for an in-flight eviction before resolving the same digest", async () => {
     const content = bytes([67, 68, 69])
     const asset = descriptor({bytes: content})

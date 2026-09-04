@@ -39,6 +39,8 @@ export default class SynchronizedAssetCache {
     this.activeDigestCounts = new Map()
     /** @type {Map<string, Promise<void>>} */
     this.deletionPromises = new Map()
+    /** @type {Set<string>} */
+    this.cleanupRequiredAfterReleaseDigests = new Set()
     /** @type {Promise<void>} */
     this.resolveCleanupPromise = Promise.resolve()
     /** @type {Map<string, Promise<{error: Error, uri: null} | {error: null, uri: string}>>} */
@@ -171,7 +173,7 @@ export default class SynchronizedAssetCache {
         }
       }
     } finally {
-      await this.finishActiveDigest(digest)
+      await this.finishActiveDigest(digest, shouldCleanup ? new Set([digest]) : new Set())
     }
 
     if (shouldCleanup) await this.cleanupAfterResolve(new Set([digest]))
@@ -246,7 +248,10 @@ export default class SynchronizedAssetCache {
       if (!blob) throw new Error("Expected a synchronized asset cache eviction candidate")
       if (protectedDigests.has(blob.digest)) continue
       let blobWasAlreadyMissing = false
+      let deletionChecked = false
       const deleted = await this.deleteDigestIfInactive(blob.digest, async () => {
+        deletionChecked = true
+
         if (!this.state) throw new Error("Cannot clean synchronized asset blobs before loading state")
 
         const currentUri = await this.adapter.blobUri({accountId: this.accountId, digest: blob.digest})
@@ -274,6 +279,7 @@ export default class SynchronizedAssetCache {
         return true
       })
 
+      if (!deletionChecked) this.cleanupRequiredAfterReleaseDigests.add(blob.digest)
       if (blobWasAlreadyMissing) cachedBytes -= blob.byteSize
       if (!deleted) continue
 
@@ -287,8 +293,8 @@ export default class SynchronizedAssetCache {
   }
 
   /**
-   * Serializes cleanup passes started after on-demand resolution releases its digest guard.
-   * @param {Set<string>} protectedDigests Digests needed by the resolving caller.
+   * Serializes cleanup passes started after cache operations release digest guards.
+   * @param {Set<string>} protectedDigests Digests needed by the active caller.
    * @returns {Promise<void>} Resolves after cleanup.
    */
   async cleanupAfterResolve(protectedDigests) {
@@ -725,9 +731,10 @@ export default class SynchronizedAssetCache {
   /**
    * Releases one cache operation and processes deferred deletion after the last.
    * @param {string} digest Content digest.
+   * @param {Set<string>} [protectedCleanupDigests] Digests needed by the resolving caller.
    * @returns {Promise<void>} Resolves after any pending deletion.
    */
-  async finishActiveDigest(digest) {
+  async finishActiveDigest(digest, protectedCleanupDigests = new Set()) {
     const activeCount = this.activeDigestCounts.get(digest)
 
     if (activeCount === undefined) {
@@ -741,6 +748,10 @@ export default class SynchronizedAssetCache {
 
     this.activeDigestCounts.delete(digest)
     await this.deletePendingDigestIfUnreferenced(digest)
+
+    if (this.cleanupRequiredAfterReleaseDigests.delete(digest)) {
+      await this.cleanupAfterResolve(protectedCleanupDigests)
+    }
   }
 
   /**
