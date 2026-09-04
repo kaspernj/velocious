@@ -4639,7 +4639,9 @@ class VelociousDatabaseRecord {
    */
   async _applyInsertResult({connection, data, insertResult, primaryKey}) {
     if (Array.isArray(primaryKey)) {
-      await this._reloadWithId(readModelPrimaryKeyValue(primaryKey, (columnName) => data[columnName]))
+      const insertedRow = Array.isArray(insertResult) ? insertResult[0] : undefined
+
+      await this._reloadWithId(readModelPrimaryKeyValue(primaryKey, (columnName) => insertedRow?.[columnName] ?? data[columnName]))
       return
     }
 

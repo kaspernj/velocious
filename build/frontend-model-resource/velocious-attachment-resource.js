@@ -267,6 +267,8 @@ export default class VelociousAttachmentResource extends FrontendModelBaseResour
         throw new Error(`No model class configured for attachment owner ${ownerScope.resourceName}`)
       }
 
+      if (ownerModelClass.getModelName() !== ownerScope.recordType) continue
+
       const attachmentDefinitions = ownerResource.resourceConfiguration.attachments || {}
 
       if (attachmentDefinitions[ownerScope.name]) return ownerResource

@@ -3,6 +3,7 @@
 import {waitFor} from "awaitery"
 import {describe, expect, it} from "../../src/testing/test.js"
 import Configuration from "../../src/configuration.js"
+import VelociousAttachmentRecord from "../../src/database/record/attachments/attachment-record.js"
 import FrontendModelBase, {VelociousAttachment} from "../../src/frontend-models/base.js"
 import WebsocketClient from "../../src/http-client/websocket-client.js"
 import {modelPrimaryKeyCacheKey} from "../../src/utils/model-primary-key.js"
@@ -358,6 +359,40 @@ describe("Frontend models - composite primary key HTTP integration", {databaseCl
         expect((await VelociousAttachment.find(attachment.id())).filename()).toEqual("description.txt")
       } finally {
         configuredBackendProjects.splice(0, configuredBackendProjects.length, ...originalBackendProjects)
+        resetFrontendModelTransport()
+      }
+    })
+  })
+
+  it("rejects attachment scopes whose resource and record types disagree", async () => {
+    await Dummy.run(async () => {
+      const project = await ProjectRecord.create({name: "Secret attachment project"})
+      await TaskRecord.create({id: project.id(), name: "Readable attachment task", projectId: project.id()})
+      const now = Date.now()
+
+      await VelociousAttachmentRecord.initializeRecord({configuration: Configuration.current()})
+      await VelociousAttachmentRecord.create({
+        byteSize: Buffer.byteLength("secret attachment"),
+        contentBase64: Buffer.from("secret attachment").toString("base64"),
+        contentType: "text/plain",
+        createdAtMs: now,
+        filename: "secret.txt",
+        id: "00000000-0000-4000-8000-000000001129",
+        name: "descriptionFile",
+        position: 0,
+        recordId: String(project.id()),
+        recordType: "Project",
+        updatedAtMs: now
+      })
+      configureNodeTransport()
+
+      try {
+        await expect(async () => {
+          await VelociousAttachment
+            .where({name: "descriptionFile", recordId: String(project.id()), recordType: "Project", resourceName: "Task"})
+            .toArray()
+        }).toThrow(/No frontend model resource configured for attachment owner/u)
+      } finally {
         resetFrontendModelTransport()
       }
     })
