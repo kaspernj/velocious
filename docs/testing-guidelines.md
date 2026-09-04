@@ -46,13 +46,15 @@ The compatibility contract is covered by
 - a line filter selecting a suite includes its descendants, while a test line
   selects only that test;
 - retries repeat `beforeEach`, the callback, and `afterEach`, while `beforeAll`
-  and `afterAll` run once;
+  and `afterAll` run once; invalid, negative, or non-finite retry counts normalize
+  to zero retries, and only positive finite timeout values enable a deadline;
 - suite hooks receive `{configuration}`; per-test hooks receive
   `{configuration, testArgs, testData}`; and the callback receives the same
   `testArgs` object across retries;
 - a failed `beforeAll` prevents descendant callbacks, records every selected
-  descendant as failed, and still runs `afterAll`; after-all failures reject the
-  Velocious run after same-scope cleanup continues in reverse order;
+  descendant as a matched failure outcome even though it has no attempt, and
+  still runs `afterAll`; after-all failures reject the Velocious run after
+  same-scope cleanup continues in reverse order;
 - legacy attempt/retry/final-failure event listeners are awaited in order; and
 - cleanup aggregation retains falsy values thrown or rejected by the test body.
 

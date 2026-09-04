@@ -45,6 +45,18 @@ function declareAttempt({body, context, beforeEach = [], afterEach = []}) {
 }
 
 describe("VelociousAttemptExecutor", {databaseCleaning: {transaction: false, truncate: false}}, () => {
+  it("disables non-positive and non-finite timeout values", () => {
+    const context = createTestContext()
+    const testRunner = buildTestingRunner({context})
+    const executor = new VelociousAttemptExecutor({testRunner})
+
+    expect(executor.normalizeTimeoutMs(1000)).toBe(1000)
+    expect(executor.normalizeTimeoutMs(0)).toBeUndefined()
+    expect(executor.normalizeTimeoutMs(-1)).toBeUndefined()
+    expect(executor.normalizeTimeoutMs(Number.NaN)).toBeUndefined()
+    expect(executor.normalizeTimeoutMs(Number.POSITIVE_INFINITY)).toBeUndefined()
+  })
+
   it("runs exactly one package attempt with legacy hook arguments", async () => {
     const context = createTestContext()
     const testRunner = buildTestingRunner({context})

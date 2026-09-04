@@ -6,3 +6,5 @@
 - Make the Velocious testing facade share the package default context directly,
   preserve legacy awaited test events and expectations, support skip/todo/table
   declarations, and remove the package-to-legacy synchronization adapter.
+- Preserve legacy execution accounting for descendants blocked by `beforeAll`
+  failures and normalize invalid retry and timeout values at compatibility seams.

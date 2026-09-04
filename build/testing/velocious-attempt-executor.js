@@ -99,6 +99,15 @@ export default class VelociousAttemptExecutor {
   }
 
   /**
+   * Normalizes the legacy timeout contract at the framework adapter boundary.
+   * @param {number | undefined} timeoutMs - Declared package timeout.
+   * @returns {number | undefined} - Positive finite timeout, or no timeout.
+   */
+  normalizeTimeoutMs(timeoutMs) {
+    return typeof timeoutMs === "number" && Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : undefined
+  }
+
+  /**
    * Executes exactly one complete Velocious-owned test attempt.
    * @param {import("@velocious/testing/runner").AttemptExecutorInput} input - Package attempt.
    * @returns {Promise<void>} - Resolves after one complete framework attempt.
@@ -109,6 +118,7 @@ export default class VelociousAttemptExecutor {
     void defaultExecute
     void suite
     const testRunner = this.testRunner
+    const effectiveTimeoutMs = this.normalizeTimeoutMs(timeoutMs)
     const compatibility = await testRunner.testCompatibility(test)
     const {testArgs, testData} = compatibility
     const metadata = testRunner.testMetadata(test)
@@ -261,8 +271,8 @@ export default class VelociousAttemptExecutor {
         ? profiler.runAttempt(profileAttempt, lifecycleCallback)
         : lifecycleCallback()
 
-      if (timeoutMs !== undefined) {
-        await runWithTimeout(testLifecycle, timeoutMs, testDescription)
+      if (effectiveTimeoutMs !== undefined) {
+        await runWithTimeout(testLifecycle, effectiveTimeoutMs, testDescription)
       } else {
         await testLifecycle
       }
@@ -276,7 +286,7 @@ export default class VelociousAttemptExecutor {
         const emergencyCleanupErrors = []
 
         if (profileAttempt && profiler) profiler.finishAttempt(profileAttempt, "timed-out")
-        const lifecycleOutcome = await awaitSettledOrGrace(testLifecycle, timeoutMs ?? 60000)
+        const lifecycleOutcome = await awaitSettledOrGrace(testLifecycle, effectiveTimeoutMs ?? 60000)
 
         if (lifecycleOutcome.settled && lifecycleOutcome.status === "rejected") {
           emergencyCleanupErrors.push(lifecycleOutcome.reason)
@@ -289,7 +299,7 @@ export default class VelociousAttemptExecutor {
             testRunner.recordTimeoutCleanupFailure(cleanupError, "test lifecycle", recordedTimeoutCleanupErrors)
           })
           const quarantine = testRunner.quarantineBrowserDummyConnections(browserDummyConnectionRegistrations)
-          const quarantineOutcome = await awaitSettledOrGrace(quarantine, timeoutMs ?? 60000)
+          const quarantineOutcome = await awaitSettledOrGrace(quarantine, effectiveTimeoutMs ?? 60000)
           const usesBrowserTransactions = testArgs.databaseCleaning?.transaction === true
           const usesBrowserTruncation = testArgs.databaseCleaning?.truncate ?? !usesBrowserTransactions
 
@@ -317,7 +327,7 @@ export default class VelociousAttemptExecutor {
         }
 
         const brokerCleanup = testRunner.stopSharedTransactionBroker(sharedTransactionBrokerRegistration || sharedTransactionBrokerPreparation)
-        const brokerCleanupOutcome = await awaitSettledOrGrace(brokerCleanup, timeoutMs ?? 60000)
+        const brokerCleanupOutcome = await awaitSettledOrGrace(brokerCleanup, effectiveTimeoutMs ?? 60000)
 
         if (brokerCleanupOutcome.settled && brokerCleanupOutcome.status === "rejected") {
           emergencyCleanupErrors.push(brokerCleanupOutcome.reason)
@@ -329,7 +339,7 @@ export default class VelociousAttemptExecutor {
         sharedTransactionBrokerRegistration = undefined
         sharedTransactionBrokerPreparation = undefined
         const emergencyCleanup = testRunner.cleanupTransactionalTenants(transactionalTenantRegistrations, {discard: true})
-        const emergencyCleanupOutcome = await awaitSettledOrGrace(emergencyCleanup, timeoutMs ?? 60000)
+        const emergencyCleanupOutcome = await awaitSettledOrGrace(emergencyCleanup, effectiveTimeoutMs ?? 60000)
 
         if (emergencyCleanupOutcome.settled && emergencyCleanupOutcome.status === "rejected") {
           emergencyCleanupErrors.push(emergencyCleanupOutcome.reason)

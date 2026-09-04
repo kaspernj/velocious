@@ -23,6 +23,7 @@ import VelociousTestArguments from "./velocious-test-arguments.js"
 /** @typedef {PackageSuiteDeclaration["tests"][number]} PackageTestDeclaration */
 /** @typedef {PackageSuiteDeclaration["hooks"]["beforeAll"][number]} PackageHookDeclaration */
 /** @typedef {PackageSuiteDeclaration | PackageTestDeclaration | PackageHookDeclaration} PackageRegistration */
+/** @typedef {{hadRetries: boolean, options: PackageTestDeclaration["options"], retries: number | undefined}} PackageRetryOptionRestoration */
 
 /**
  * AttemptConsoleOutput type.
@@ -1083,7 +1084,7 @@ export default class TestRunner {
    * @returns {number} - The executed tests count.
    */
   getExecutedTestsCount() {
-    return this._testDurations.length
+    return this._packageResult?.tests.length ?? this._testDurations.length
   }
 
   /**
@@ -1519,6 +1520,44 @@ export default class TestRunner {
   }
 
   /**
+   * Normalizes retry inputs for the package execution boundary while retaining
+   * the declarations' original public options after the run.
+   * @returns {() => void} - Restores original declaration options.
+   */
+  normalizePackageRetriesForExecution() {
+    /** @type {PackageRetryOptionRestoration[]} */
+    const restorations = []
+    /**
+     * Normalizes declarations in one suite.
+     * @param {PackageSuiteDeclaration} suite - Suite whose tests are normalized.
+     */
+    const visit = (suite) => {
+      for (const test of suite.tests) {
+        // Capture compatibility arguments before temporarily adapting package
+        // execution options so callbacks retain their declared values/identity.
+        this.testData(test)
+        restorations.push({
+          hadRetries: Object.hasOwn(test.options, "retries"),
+          options: test.options,
+          retries: test.options.retries
+        })
+        test.options.retries = this.retryCount(test)
+      }
+
+      for (const childSuite of suite.suites) visit(childSuite)
+    }
+
+    for (const suite of this.getTestContext().registry.suites) visit(suite)
+
+    return () => {
+      for (const restoration of restorations) {
+        if (restoration.hadRetries) restoration.options.retries = restoration.retries
+        else delete restoration.options.retries
+      }
+    }
+  }
+
+  /**
    * Records one completed test duration.
    * @param {{durationMs: number, filePath: string, fullDescription: string, line: number}} duration - Completed test duration.
    * @returns {void}
@@ -1580,20 +1619,25 @@ export default class TestRunner {
       reporter: this._runnerReporter
     })
     const failureStart = this._suiteHookFailures.length
+    const restoreRetryOptions = this.normalizePackageRetriesForExecution()
     let result
 
     try {
-      result = await this._packageRunner.run()
-    } catch (error) {
-      if (!(error instanceof AbortRemainingTestsError)) throw error
+      try {
+        result = await this._packageRunner.run()
+      } catch (error) {
+        if (!(error instanceof AbortRemainingTestsError)) throw error
 
-      const afterAll = this.afterAllOutcome(this._suiteHookFailures.slice(failureStart))
-      if (afterAll.failed) this.recordTimeoutCleanupFailure(afterAll.error, "afterAll")
-      return
+        const afterAll = this.afterAllOutcome(this._suiteHookFailures.slice(failureStart))
+        if (afterAll.failed) this.recordTimeoutCleanupFailure(afterAll.error, "afterAll")
+        return
+      }
+
+      this.recordPackageResult(result)
+      this.throwAfterAllFailures(this._suiteHookFailures.slice(failureStart))
+    } finally {
+      restoreRetryOptions()
     }
-
-    this.recordPackageResult(result)
-    this.throwAfterAllFailures(this._suiteHookFailures.slice(failureStart))
   }
 
   /**

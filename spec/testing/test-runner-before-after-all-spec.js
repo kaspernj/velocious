@@ -293,6 +293,7 @@ describe("TestRunner beforeAll/afterAll", {databaseCleaning: {transaction: false
     })
 
     expect(afterAllRuns).toBe(1)
+    expect(testRunner.getExecutedTestsCount()).toBe(1)
     expect(testRunner.getFailedTests()).toBe(1)
     expect(testRunner.getFailedTestDetails()[0].error.message).toBe("boom")
   })

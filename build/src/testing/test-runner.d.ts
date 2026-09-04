@@ -13,6 +13,11 @@ export type PackageSuiteDeclaration = (typeof defaultTestContext.registry.suites
 export type PackageTestDeclaration = PackageSuiteDeclaration["tests"][number];
 export type PackageHookDeclaration = PackageSuiteDeclaration["hooks"]["beforeAll"][number];
 export type PackageRegistration = PackageSuiteDeclaration | PackageTestDeclaration | PackageHookDeclaration;
+export type PackageRetryOptionRestoration = {
+    hadRetries: boolean;
+    options: PackageTestDeclaration["options"];
+    retries: number | undefined;
+};
 export type AttemptConsoleOutput = {
     /**
      * - Attempt number.
@@ -855,6 +860,12 @@ export default class TestRunner {
      * @returns {number} - Effective retry count.
      */
     retryCount(test: PackageTestDeclaration): number;
+    /**
+     * Normalizes retry inputs for the package execution boundary while retaining
+     * the declarations' original public options after the run.
+     * @returns {() => void} - Restores original declaration options.
+     */
+    normalizePackageRetriesForExecution(): () => void;
     /**
      * Records one completed test duration.
      * @param {{durationMs: number, filePath: string, fullDescription: string, line: number}} duration - Completed test duration.

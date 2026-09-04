@@ -13,6 +13,12 @@ export default class VelociousAttemptExecutor {
         testRunner: import("./test-runner.js").default;
     });
     /**
+     * Normalizes the legacy timeout contract at the framework adapter boundary.
+     * @param {number | undefined} timeoutMs - Declared package timeout.
+     * @returns {number | undefined} - Positive finite timeout, or no timeout.
+     */
+    normalizeTimeoutMs(timeoutMs: number | undefined): number | undefined;
+    /**
      * Executes exactly one complete Velocious-owned test attempt.
      * @param {import("@velocious/testing/runner").AttemptExecutorInput} input - Package attempt.
      * @returns {Promise<void>} - Resolves after one complete framework attempt.
