@@ -821,17 +821,15 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
      * @param {boolean} args.markOrphaned - Whether marking orphaned.
      * @param {number} args.nextAttempt - Next attempt count.
      * @param {number} args.now - Current timestamp.
-     * @param {BackgroundJobQueuedConcurrency | null} args.queuedConcurrency - Current queue policy for a retry.
      * @param {number | null} args.scheduledAt - Next scheduled timestamp.
      * @param {boolean} args.shouldRetry - Whether the job should retry.
      * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Database update data.
      */
-    _failureUpdate({ failureMessage, markOrphaned, nextAttempt, now, queuedConcurrency, scheduledAt, shouldRetry }: {
+    _failureUpdate({ failureMessage, markOrphaned, nextAttempt, now, scheduledAt, shouldRetry }: {
         failureMessage: string;
         markOrphaned: boolean;
         nextAttempt: number;
         now: number;
-        queuedConcurrency: BackgroundJobQueuedConcurrency | null;
         scheduledAt: number | null;
         shouldRetry: boolean;
     }): Record<string, ReturnType<typeof JSON.parse>>;
@@ -893,14 +891,13 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
         queueDerived: boolean;
     } | null;
     /**
-     * Resolves the current concurrency policy for a transition back to queued.
-     * Explicit concurrency remains owned by the enqueue request; queue-derived
-     * concurrency adopts the queue's current cap or removal.
+     * Applies the active generation's queue policy immediately before handoff.
+     * Explicit concurrency remains owned by the enqueue request.
      * @param {import("../database/drivers/base.js").default} db - Database connection.
-     * @param {import("./types.js").BackgroundJobRow} job - Active handoff snapshot.
-     * @returns {Promise<BackgroundJobQueuedConcurrency>} - Current queued concurrency.
+     * @param {import("./types.js").BackgroundJobRow} job - Queued job snapshot.
+     * @returns {Promise<import("./types.js").BackgroundJobRow | null>} - Reconciled job, or null when its queued-state fence lost.
      */
-    _requeuedJobConcurrency(db: import("../database/drivers/base.js").default, job: import("./types.js").BackgroundJobRow): Promise<BackgroundJobQueuedConcurrency>;
+    _reconcileQueuedJobConcurrency(db: import("../database/drivers/base.js").default, job: import("./types.js").BackgroundJobRow): Promise<import("./types.js").BackgroundJobRow | null>;
     /**
      * Reads the configured max concurrency for a queue from the background-jobs config.
      * @param {string} queue - Queue name.

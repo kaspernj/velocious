@@ -21,6 +21,20 @@ async function readActiveCount({store, concurrencyKey}) {
 }
 
 /**
+ * @param {{store: BackgroundJobsStore, concurrencyKey: string}} args - Options.
+ * @returns {Promise<number>} - The persisted maximum for the key.
+ */
+async function readMaxConcurrency({store, concurrencyKey}) {
+  const rows = await store._withDb(async (db) =>
+    await db.newQuery().from("background_job_concurrency").where({concurrency_key: concurrencyKey}).results()
+  )
+
+  if (!rows[0]) throw new Error(`Missing concurrency row for ${concurrencyKey}`)
+
+  return Number(/** @type {{max_concurrency: number | string}} */ (rows[0]).max_concurrency)
+}
+
+/**
  * @param {object} args - Options.
  * @param {number} args.activeCount - Persisted active count.
  * @param {BackgroundJobsStore} args.store - Background jobs store.
@@ -79,6 +93,22 @@ class TransactionObservedConcurrencyReconciliationStore extends BackgroundJobsSt
     this.snapshotInsideTransaction = this.reconciliationTransactionDepth > 0
 
     return await super._reconcileConcurrency(db, options)
+  }
+}
+
+/** A store pinned to the queue policy of one release generation. */
+class ReleaseQueuePolicyStore extends BackgroundJobsStore {
+  /** @param {{configuration: import("../../src/configuration.js").default, maxConcurrent: number}} args - Store options and release-local builds cap. */
+  constructor(args) {
+    super({configuration: args.configuration})
+    this.maxConcurrent = args.maxConcurrent
+  }
+
+  /** @param {import("../../src/background-jobs/types.js").BackgroundJobOptions | undefined} options - Job options. @param {string} queue - Queue name. @returns {{concurrencyKey: string, maxConcurrency: number, queueDerived: boolean} | null} - Release-local concurrency. */
+  _resolveConcurrency(options, queue) {
+    if (options?.concurrencyKey || queue !== "builds") return super._resolveConcurrency(options, queue)
+
+    return {concurrencyKey: "queue:builds", maxConcurrency: this.maxConcurrent, queueDerived: true}
   }
 }
 
@@ -258,7 +288,7 @@ describe("Background jobs store concurrency reconciliation", {databaseCleaning: 
     expect(await store.getJob(jobId)).toMatchObject({concurrencyKey: "queue:builds", status: "queued"})
   })
 
-  it("adopts an added queue cap when an active handoff returns to the queue", async () => {
+  it("adopts an added queue cap before a returned job is handed off again", async () => {
     dummyConfiguration.setBackgroundJobsConfig({queues: {}})
     const store = await clearBackgroundJobs()
     const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {queue: "builds"}})
@@ -271,17 +301,23 @@ describe("Background jobs store concurrency reconciliation", {databaseCleaning: 
       await store.markReturnedToQueue({handoffId: handoff.handoffId, jobId})
 
       expect(await store.getJob(jobId)).toMatchObject({
-        concurrencyKey: "queue:builds",
-        maxConcurrency: 2,
+        concurrencyKey: null,
+        maxConcurrency: null,
         status: "queued"
       })
-      expect(await readActiveCount({store, concurrencyKey: "queue:builds"})).toEqual(0)
+      expect(await store.markHandedOff({jobId, workerId: "active-worker"})).not.toBeNull()
+      expect(await store.getJob(jobId)).toMatchObject({
+        concurrencyKey: "queue:builds",
+        maxConcurrency: 2,
+        status: "handed_off"
+      })
+      expect(await readActiveCount({store, concurrencyKey: "queue:builds"})).toEqual(1)
     } finally {
       dummyConfiguration.setBackgroundJobsConfig({queues: {}})
     }
   })
 
-  it("drops a removed queue cap when an active handoff is rescheduled", async () => {
+  it("drops a removed queue cap before a rescheduled job is handed off again", async () => {
     dummyConfiguration.setBackgroundJobsConfig({queues: {builds: {maxConcurrent: 2}}})
     const store = await clearBackgroundJobs()
     const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {queue: "builds"}})
@@ -293,9 +329,15 @@ describe("Background jobs store concurrency reconciliation", {databaseCleaning: 
       dummyConfiguration.setBackgroundJobsConfig({queues: {}})
       expect(await store.markRescheduled({delayMs: 0, jobId, workerId: "worker-1", ...handoff})).toEqual(true)
       expect(await store.getJob(jobId)).toMatchObject({
+        concurrencyKey: "queue:builds",
+        maxConcurrency: 2,
+        status: "queued"
+      })
+      expect(await store.markHandedOff({jobId, workerId: "active-worker"})).not.toBeNull()
+      expect(await store.getJob(jobId)).toMatchObject({
         concurrencyKey: null,
         maxConcurrency: null,
-        status: "queued"
+        status: "handed_off"
       })
       expect(await readActiveCount({store, concurrencyKey: "queue:builds"})).toEqual(0)
     } finally {
@@ -303,7 +345,7 @@ describe("Background jobs store concurrency reconciliation", {databaseCleaning: 
     }
   })
 
-  it("adopts a changed queue cap when a failed handoff retries", async () => {
+  it("adopts a changed queue cap before a retry is handed off again", async () => {
     dummyConfiguration.setBackgroundJobsConfig({queues: {builds: {maxConcurrent: 3}}})
     const store = await clearBackgroundJobs()
     const jobId = await store.enqueue({
@@ -321,15 +363,50 @@ describe("Background jobs store concurrency reconciliation", {databaseCleaning: 
 
       expect(retriedJob).toMatchObject({
         concurrencyKey: "queue:builds",
-        maxConcurrency: 1,
+        maxConcurrency: 3,
         status: "queued"
       })
       expect(await store.getJob(jobId)).toMatchObject({
         concurrencyKey: "queue:builds",
-        maxConcurrency: 1,
+        maxConcurrency: 3,
         status: "queued"
       })
-      expect(await readActiveCount({store, concurrencyKey: "queue:builds"})).toEqual(0)
+      expect(await store.markHandedOff({jobId, workerId: "active-worker"})).not.toBeNull()
+      expect(await store.getJob(jobId)).toMatchObject({
+        concurrencyKey: "queue:builds",
+        maxConcurrency: 1,
+        status: "handed_off"
+      })
+      expect(await readActiveCount({store, concurrencyKey: "queue:builds"})).toEqual(1)
+    } finally {
+      dummyConfiguration.setBackgroundJobsConfig({queues: {}})
+    }
+  })
+
+  it("keeps retired reports from restoring obsolete queue policy", async () => {
+    dummyConfiguration.setBackgroundJobsConfig({queues: {builds: {maxConcurrent: 1}}})
+    await clearBackgroundJobs()
+    const retiredStore = new ReleaseQueuePolicyStore({configuration: dummyConfiguration, maxConcurrent: 3})
+    const jobId = await retiredStore.enqueue({jobName: "TestJob", args: [], options: {queue: "builds"}})
+    const handoff = await retiredStore.markHandedOff({jobId, workerId: "retired-worker"})
+
+    if (!handoff) throw new Error("Expected the retired release job to be handed off")
+
+    try {
+      const activeStore = new BackgroundJobsStore({configuration: dummyConfiguration})
+
+      await activeStore.reconcileQueueConcurrency()
+      expect(await readMaxConcurrency({store: activeStore, concurrencyKey: "queue:builds"})).toEqual(1)
+
+      await retiredStore.markReturnedToQueue({handoffId: handoff.handoffId, jobId})
+
+      expect(await readMaxConcurrency({store: activeStore, concurrencyKey: "queue:builds"})).toEqual(1)
+      expect(await activeStore.markHandedOff({jobId, workerId: "active-worker"})).not.toBeNull()
+      expect(await activeStore.getJob(jobId)).toMatchObject({
+        concurrencyKey: "queue:builds",
+        maxConcurrency: 1,
+        status: "handed_off"
+      })
     } finally {
       dummyConfiguration.setBackgroundJobsConfig({queues: {}})
     }
