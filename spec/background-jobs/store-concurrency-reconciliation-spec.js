@@ -51,6 +51,37 @@ class ObservedConcurrencyReconciliationStore extends BackgroundJobsStore {
   }
 }
 
+/** A store that records whether candidate discovery shares a repair transaction. */
+class TransactionObservedConcurrencyReconciliationStore extends BackgroundJobsStore {
+  /** @param {object} args - Options forwarded to the store constructor. */
+  constructor(args) {
+    super(args)
+    this.reconciliationTransactionDepth = 0
+    /** @type {boolean | null} */
+    this.snapshotInsideTransaction = null
+    this.transactionCount = 0
+  }
+
+  /** @param {import("../../src/database/drivers/base.js").default} db - Database connection. @param {() => Promise<ReturnType<typeof JSON.parse>>} callback - Transaction callback. @returns {Promise<ReturnType<typeof JSON.parse>>} - Callback result. */
+  async _transactionResult(db, callback) {
+    this.reconciliationTransactionDepth++
+    this.transactionCount++
+
+    try {
+      return await super._transactionResult(db, callback)
+    } finally {
+      this.reconciliationTransactionDepth--
+    }
+  }
+
+  /** @param {import("../../src/database/drivers/base.js").default} db - Database connection. @param {{insideTransaction?: boolean}} [options] - Reconciliation options. @returns {Promise<import("../../src/background-jobs/types.js").BackgroundJobConcurrencyReconciliation>} - Reconciliation summary. */
+  async _reconcileConcurrency(db, options) {
+    this.snapshotInsideTransaction = this.reconciliationTransactionDepth > 0
+
+    return await super._reconcileConcurrency(db, options)
+  }
+}
+
 /** A store that simulates queue-policy adoption between handoff selection and persistence. */
 class InterleavedQueuePolicyStore extends BackgroundJobsStore {
   /** @param {object} args - Options forwarded to the store constructor. */
@@ -147,6 +178,27 @@ describe("Background jobs store concurrency reconciliation", {databaseCleaning: 
     expect(store.reconciledConcurrencyKeys).toEqual(["active", "stale"])
     expect(await readActiveCount({store, concurrencyKey: "active"})).toEqual(1)
     expect(await readActiveCount({store, concurrencyKey: "stale"})).toEqual(0)
+  })
+
+  it("discovers live repair candidates before opening fresh repair transactions", async () => {
+    const seedStore = await clearBackgroundJobs()
+
+    for (const concurrencyKey of ["stale-a", "stale-b"]) {
+      await seedStore.enqueue({
+        jobName: "TestJob",
+        args: [],
+        options: {concurrencyKey, maxConcurrency: 1}
+      })
+      await writeActiveCount({store: seedStore, concurrencyKey, activeCount: 7})
+    }
+
+    const store = new TransactionObservedConcurrencyReconciliationStore({configuration: dummyConfiguration})
+
+    expect((await store.reconcileActiveConcurrency()).repairedCount).toEqual(2)
+    expect(store.snapshotInsideTransaction).toEqual(false)
+    expect(store.transactionCount).toEqual(2)
+    expect(await readActiveCount({store, concurrencyKey: "stale-a"})).toEqual(0)
+    expect(await readActiveCount({store, concurrencyKey: "stale-b"})).toEqual(0)
   })
 
   it("does not lock or write healthy active counters during live reconciliation", async () => {

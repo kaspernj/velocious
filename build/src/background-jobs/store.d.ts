@@ -1158,15 +1158,23 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
      */
     _serializedCountMutation<T>(callback: (db: import("../database/drivers/base.js").default) => Promise<T>, options?: BackgroundJobTransactionSerializationOptions): Promise<T>;
     /**
-     * Admits transactions to the process-local FIFO before they check out a
-     * connection. Cross-process ordering remains the responsibility of durable
-     * row/advisory locks and unique constraints acquired around the callback.
+     * Runs a serialized callback inside one transaction.
      * @template T
      * @param {(db: import("../database/drivers/base.js").default) => Promise<T>} callback - Transaction callback.
      * @param {BackgroundJobTransactionSerializationOptions} [options] - Serialization options.
      * @returns {Promise<T>} Callback result.
      */
     _serializedTransactionMutation<T>(callback: (db: import("../database/drivers/base.js").default) => Promise<T>, options?: BackgroundJobTransactionSerializationOptions): Promise<T>;
+    /**
+     * Admits mutation callbacks to the process-local FIFO before they check out a
+     * connection. Cross-process ordering remains the responsibility of durable
+     * row/advisory locks and unique constraints acquired around the callback.
+     * @template T
+     * @param {(db: import("../database/drivers/base.js").default) => Promise<T>} callback - Connection callback.
+     * @param {BackgroundJobTransactionSerializationOptions} [options] - Serialization options.
+     * @returns {Promise<T>} Callback result.
+     */
+    _serializedConnectionMutation<T>(callback: (db: import("../database/drivers/base.js").default) => Promise<T>, options?: BackgroundJobTransactionSerializationOptions): Promise<T>;
     /**
      * Runs should accept report.
      * @param {object} args - Options.

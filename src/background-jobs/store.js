@@ -273,8 +273,8 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
 
     await this.ensureReady()
 
-    const result = await this._serializedTransactionMutation(
-      async (db) => await this._reconcileConcurrency(db, {insideTransaction: true}),
+    const result = await this._serializedConnectionMutation(
+      async (db) => await this._reconcileConcurrency(db),
       {
         advisoryLock: {
           failureMessage: "Failed to acquire background job active-concurrency reconcile lock",
@@ -3182,15 +3182,29 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
   }
 
   /**
-   * Admits transactions to the process-local FIFO before they check out a
-   * connection. Cross-process ordering remains the responsibility of durable
-   * row/advisory locks and unique constraints acquired around the callback.
+   * Runs a serialized callback inside one transaction.
    * @template T
    * @param {(db: import("../database/drivers/base.js").default) => Promise<T>} callback - Transaction callback.
    * @param {BackgroundJobTransactionSerializationOptions} [options] - Serialization options.
    * @returns {Promise<T>} Callback result.
    */
   async _serializedTransactionMutation(callback, options = {}) {
+    return await this._serializedConnectionMutation(
+      async (db) => await this._transactionResult(db, async () => await callback(db)),
+      options
+    )
+  }
+
+  /**
+   * Admits mutation callbacks to the process-local FIFO before they check out a
+   * connection. Cross-process ordering remains the responsibility of durable
+   * row/advisory locks and unique constraints acquired around the callback.
+   * @template T
+   * @param {(db: import("../database/drivers/base.js").default) => Promise<T>} callback - Connection callback.
+   * @param {BackgroundJobTransactionSerializationOptions} [options] - Serialization options.
+   * @returns {Promise<T>} Callback result.
+   */
+  async _serializedConnectionMutation(callback, options = {}) {
     const identifier = this.getDatabaseIdentifier() || "default"
     const previous = transactionMutationChains.get(identifier) || Promise.resolve()
     let resolveRun = () => {}
@@ -3214,7 +3228,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
         }
 
         try {
-          return await this._transactionResult(db, async () => await callback(db))
+          return await callback(db)
         } finally {
           if (advisoryLock) await db.releaseAdvisoryLock(advisoryLock.name)
         }
