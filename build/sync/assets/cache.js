@@ -2,6 +2,13 @@
 
 import sha256BytesHex from "../../utils/sha256-bytes-hex.js"
 
+/**
+ * @typedef {{
+ *   byteSize: number,
+ *   contentType: string | null,
+ *   promise: Promise<{error: Error, uri: null} | {error: null, uri: string}>
+ * }} SynchronizedAssetDownloadFlight */
+
 const CACHE_STATE_VERSION = 1
 const DEFAULT_RETRY_BASE_DELAY_MS = 1000
 const DEFAULT_RETRY_MAX_DELAY_MS = 1000 * 60 * 5
@@ -43,7 +50,7 @@ export default class SynchronizedAssetCache {
     this.cleanupRequiredAfterReleaseDigests = new Set()
     /** @type {Promise<number>} */
     this.cleanupPromise = Promise.resolve(0)
-    /** @type {Map<string, Promise<{error: Error, uri: null} | {error: null, uri: string}>>} */
+    /** @type {Map<string, SynchronizedAssetDownloadFlight>} */
     this.downloadPromises = new Map()
     /** @type {import("./types.js").SynchronizedAssetCacheState | null} */
     this.state = null
@@ -450,6 +457,7 @@ export default class SynchronizedAssetCache {
 
     for (const asset of descriptors) {
       const knownDescriptor = descriptorsById.get(asset.id)
+      const downloadFlight = this.downloadPromises.get(asset.digest)
 
       if (knownDescriptor && knownDescriptor.digest !== asset.digest) {
         throw new Error(`Synchronized asset descriptor ${asset.id} changed its immutable digest`)
@@ -459,6 +467,12 @@ export default class SynchronizedAssetCache {
       }
       if (knownDescriptor && knownDescriptor.contentType !== asset.contentType) {
         throw new Error(`Synchronized asset descriptor ${asset.id} changed its immutable content type`)
+      }
+      if (downloadFlight && downloadFlight.byteSize !== asset.byteSize) {
+        throw new Error(`Synchronized asset digest ${asset.digest} has inconsistent byte sizes`)
+      }
+      if (downloadFlight && downloadFlight.contentType !== asset.contentType) {
+        throw new Error(`Synchronized asset digest ${asset.digest} has inconsistent content types`)
       }
 
       descriptorsById.set(asset.id, asset)
@@ -585,22 +599,37 @@ export default class SynchronizedAssetCache {
       return {error: null, uri: existingUri}
     }
 
-    for (const digestEntry of entries) digestEntry.status = "downloading"
-
     const digest = entry.descriptor.digest
-    let downloadPromise = this.downloadPromises.get(digest)
+    let downloadFlight = this.downloadPromises.get(digest)
     let ownsDownloadPromise = false
 
-    if (!downloadPromise) {
-      downloadPromise = this.downloadAfterPersistingState(entry.descriptor)
-      this.downloadPromises.set(digest, downloadPromise)
+    if (downloadFlight) {
+      for (const digestEntry of entries) {
+        if (downloadFlight.byteSize !== digestEntry.descriptor.byteSize) {
+          throw new Error(`Synchronized asset digest ${digest} has inconsistent byte sizes`)
+        }
+        if (downloadFlight.contentType !== digestEntry.descriptor.contentType) {
+          throw new Error(`Synchronized asset digest ${digest} has inconsistent content types`)
+        }
+      }
+    }
+
+    for (const digestEntry of entries) digestEntry.status = "downloading"
+
+    if (!downloadFlight) {
+      downloadFlight = {
+        byteSize: entry.descriptor.byteSize,
+        contentType: entry.descriptor.contentType,
+        promise: this.downloadAfterPersistingState(entry.descriptor)
+      }
+      this.downloadPromises.set(digest, downloadFlight)
       ownsDownloadPromise = true
     } else {
       await this.saveState()
     }
 
     try {
-      const cacheResult = await downloadPromise
+      const cacheResult = await downloadFlight.promise
 
       if (cacheResult.error) {
         if (entry.status === "downloading") await this.recordDownloadFailure(digest)
@@ -612,7 +641,7 @@ export default class SynchronizedAssetCache {
 
       return cacheResult
     } finally {
-      if (ownsDownloadPromise && this.downloadPromises.get(digest) === downloadPromise) {
+      if (ownsDownloadPromise && this.downloadPromises.get(digest) === downloadFlight) {
         this.downloadPromises.delete(digest)
       }
     }

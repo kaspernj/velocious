@@ -215,6 +215,41 @@ describe("SynchronizedAssetCache fetching", {databaseCleaning: {transaction: fal
     expect(adapter.maximumActiveSaveCount).toEqual(1)
   })
 
+  it("rejects descriptor metadata that conflicts with an in-flight digest download", async () => {
+    const content = bytes([108, 109, 110])
+    const firstAsset = descriptor({bytes: content, fetch: "on-demand", id: "attachment-1"})
+    const secondAsset = {...descriptor({bytes: content, fetch: "on-demand", id: "attachment-2"}), byteSize: content.byteLength + 1}
+    const adapter = new MemoryAssetCacheAdapter()
+    const downloadStarted = deferred()
+    const releaseDownload = deferred()
+    const cache = new SynchronizedAssetCache({
+      accountId: "account-1",
+      adapter,
+      download: async () => {
+        downloadStarted.resolve(undefined)
+        await releaseDownload.promise
+        return content
+      },
+      maxBytes: 1024
+    })
+
+    await cache.synchronize({descriptors: [firstAsset], online: true, scopeKey: "first-scope"})
+
+    const firstResolve = cache.resolve({assetId: firstAsset.id, online: true})
+
+    await downloadStarted.promise
+    await cache.synchronize({descriptors: [], online: true, scopeKey: "first-scope"})
+
+    try {
+      await expect(async () => {
+        await cache.synchronize({descriptors: [secondAsset], online: false, scopeKey: "second-scope"})
+      }).toThrowError(`Synchronized asset digest ${secondAsset.digest} has inconsistent byte sizes`)
+    } finally {
+      releaseDownload.resolve(undefined)
+      await firstResolve
+    }
+  })
+
   it("joins a failed digest flight while its retry metadata is still persisting", async () => {
     const content = bytes([102, 103, 104])
     const firstAsset = descriptor({bytes: content, fetch: "on-demand", id: "attachment-1"})

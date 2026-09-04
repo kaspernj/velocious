@@ -1,3 +1,14 @@
+export type SynchronizedAssetDownloadFlight = {
+    byteSize: number;
+    contentType: string | null;
+    promise: Promise<{
+        error: Error;
+        uri: null;
+    } | {
+        error: null;
+        uri: string;
+    }>;
+};
 /**
  * Core synchronized asset cache. Platform packages own byte and metadata
  * persistence while this class owns policy, integrity, and lifecycle.
@@ -18,14 +29,8 @@ export default class SynchronizedAssetCache {
     cleanupRequiredAfterReleaseDigests: Set<string>;
     /** @type {Promise<number>} */
     cleanupPromise: Promise<number>;
-    /** @type {Map<string, Promise<{error: Error, uri: null} | {error: null, uri: string}>>} */
-    downloadPromises: Map<string, Promise<{
-        error: Error;
-        uri: null;
-    } | {
-        error: null;
-        uri: string;
-    }>>;
+    /** @type {Map<string, SynchronizedAssetDownloadFlight>} */
+    downloadPromises: Map<string, SynchronizedAssetDownloadFlight>;
     /** @type {import("./types.js").SynchronizedAssetCacheState | null} */
     state: import("./types.js").SynchronizedAssetCacheState | null;
     /** @type {Promise<import("./types.js").SynchronizedAssetCacheState> | null} */
