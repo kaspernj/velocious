@@ -41,6 +41,6 @@ Authorization and per-record ability checks match complete identity tuples and b
 
 ## Scalar-only boundaries
 
-Offline frontend-model mutation queues, sync clients/publishers, sync-envelope replay, and generated custom member commands currently require a scalar primary key. Scalar foreign-key relationships, relationship preloaders, aggregate helpers, list ordering, auditing, and MSSQL distinct pagination also reject composite keys when invoked. These paths throw an operation-specific `does not support composite primary keys` error instead of coercing an object into an ambiguous string.
+Offline frontend-model mutation queues, sync clients/publishers, sync-envelope replay, and generated custom member commands currently require a scalar primary key. Scalar foreign-key relationships, relationship preloaders, aggregate helpers, list ordering, auditing, joined `updateAll()` queries, and MSSQL distinct pagination also reject composite keys when invoked. These paths throw an operation-specific `does not support composite primary keys` error instead of coercing an object into an ambiguous string.
 
 Use online frontend-model CRUD for composite resources until the relevant scalar-only feature gains a tuple-aware storage or query contract.

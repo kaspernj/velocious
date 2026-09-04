@@ -4821,20 +4821,20 @@ class VelociousDatabaseRecord {
         conditions
       })
       await connection.query(sql, {logName: `${this.getModelClass().name} Update`})
+      await this._reloadWithId(nextPrimaryKeyValue)
+      const reloadedPrimaryKeyValue = this.id()
 
       if (
         Object.keys(this.getModelClass().getAttachments()).length > 0
-        && modelPrimaryKeyCacheKey(primaryKey, persistedPrimaryKeyValue) !== modelPrimaryKeyCacheKey(primaryKey, nextPrimaryKeyValue)
+        && modelPrimaryKeyCacheKey(primaryKey, persistedPrimaryKeyValue) !== modelPrimaryKeyCacheKey(primaryKey, reloadedPrimaryKeyValue)
       ) {
         await recordAttachmentsStoreForModel(this).migrateRecordIdentity({
           connection,
           model: this,
-          nextIdentity: nextPrimaryKeyValue,
+          nextIdentity: reloadedPrimaryKeyValue,
           previousIdentity: persistedPrimaryKeyValue
         })
       }
-
-      await this._reloadWithId(nextPrimaryKeyValue)
     }
   }
 

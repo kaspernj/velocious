@@ -224,6 +224,26 @@ describe("Record - composite primary key", {tags: ["dummy"]}, () => {
     expect(attachment.content().toString()).toEqual("composite attachment")
   })
 
+  it("uses the database-normalized composite identity when migrating attachment ownership", async () => {
+    const project = await Project.create({name: "Normalized composite attachment project"})
+    const task = await CompositePrimaryKeyTask.create({name: "Normalized composite attachment task", project_id: project.id()})
+
+    await task.getAttachmentByName("descriptionFile").attach({
+      content: "normalized composite attachment",
+      filename: "normalized-composite.txt"
+    })
+    await task.update({name: 1})
+
+    expect(task.id()).toEqual({name: "1", project_id: project.id()})
+
+    const attachment = await task.getAttachmentByName("descriptionFile").download()
+
+    expect(attachment).not.toBeNull()
+    if (!attachment) throw new Error("Expected attachment under the database-normalized identity")
+    expect(attachment.filename()).toEqual("normalized-composite.txt")
+    expect(attachment.content().toString()).toEqual("normalized composite attachment")
+  })
+
   it("rolls attachment ownership back when a later update callback rejects", async () => {
     const project = await Project.create({name: "Composite rollback project"})
     const task = await FailingAfterUpdateCompositePrimaryKeyTask.create({

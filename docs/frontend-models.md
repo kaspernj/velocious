@@ -203,7 +203,7 @@ const unsubscribe = await BuildGroup.onDestroy(onBuildGroupDestroyed, {
   import {VelociousAttachment} from "velocious/build/src/frontend-models/base.js"
 
   const attachments = await VelociousAttachment
-    .where({recordType: "Task", recordId: String(task.id()), name: "files"})
+    .where({resourceName: "Task", recordType: "Task", recordId: String(task.id()), name: "files"})
     .order([["position", "asc"]])
     .toArray()
 
