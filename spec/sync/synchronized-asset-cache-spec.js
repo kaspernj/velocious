@@ -109,6 +109,25 @@ class FailSelectedSaveAssetCacheAdapter extends MemoryAssetCacheAdapter {
   }
 }
 
+/** Adapter that pauses before rejecting one selected metadata write. */
+class PausedFailingSaveAssetCacheAdapter extends FailSelectedSaveAssetCacheAdapter {
+  constructor() {
+    super()
+    this.releaseFailingSave = deferred()
+    this.failingSaveStarted = deferred()
+  }
+
+  /** @param {{accountId: string, state: SynchronizedAssetCacheState}} args State write. @returns {Promise<void>} */
+  async saveState(args) {
+    if (this.saveCount + 1 === this.failOnSaveCount) {
+      this.failingSaveStarted.resolve(undefined)
+      await this.releaseFailingSave.promise
+    }
+
+    await super.saveState(args)
+  }
+}
+
 /** Adapter that pauses the next metadata write after committing it. */
 class PausedSaveAssetCacheAdapter extends MemoryAssetCacheAdapter {
   constructor() {
@@ -657,6 +676,55 @@ describe("SynchronizedAssetCache", {databaseCleaning: {transaction: false, trunc
     adapter.failOnSaveCount = null
 
     await cache.synchronize({descriptors: [], online: false, scopeKey: "users"})
+
+    expect(adapter.blobs.size).toEqual(0)
+  })
+
+  it("preserves deletion markers added while another marker rollback is pending", async () => {
+    const firstContent = bytes([82, 83, 84])
+    const secondContent = bytes([85, 86, 87])
+    const firstAsset = descriptor({bytes: firstContent, fetch: "on-demand", id: "first"})
+    const secondAsset = descriptor({bytes: secondContent, fetch: "on-demand", id: "second"})
+    const adapter = new PausedFailingSaveAssetCacheAdapter()
+
+    adapter.blobs.set(`account-1:${firstAsset.digest}`, firstContent)
+    adapter.blobs.set(`account-1:${secondAsset.digest}`, secondContent)
+    adapter.states.set("account-1", {
+      assets: [firstAsset, secondAsset].map((asset) => ({
+        attempts: 0,
+        descriptor: asset,
+        lastAccessedAt: 1000,
+        nextRetryAt: null,
+        scopeKeys: ["users"],
+        status: /** @type {const} */ ("cached")
+      })),
+      pendingDeletionDigests: [firstAsset.digest],
+      version: 1
+    })
+
+    const cache = new SynchronizedAssetCache({
+      accountId: "account-1",
+      adapter,
+      download: async () => firstContent,
+      maxBytes: 1024
+    })
+
+    adapter.failOnSaveCount = 2
+
+    const failingSynchronization = expect(async () => {
+      await cache.synchronize({descriptors: [firstAsset, secondAsset], online: false, scopeKey: "users"})
+    }).toThrowError("planned selected metadata persistence failure")
+
+    await adapter.failingSaveStarted.promise
+
+    const removalSynchronization = cache.synchronize({descriptors: [], online: false, scopeKey: "users"})
+    const liveState = await cache.loadState()
+
+    expect(liveState.pendingDeletionDigests).toEqual([firstAsset.digest, secondAsset.digest])
+    adapter.releaseFailingSave.resolve(undefined)
+
+    await failingSynchronization
+    await removalSynchronization
 
     expect(adapter.blobs.size).toEqual(0)
   })

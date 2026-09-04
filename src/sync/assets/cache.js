@@ -623,7 +623,7 @@ export default class SynchronizedAssetCache {
       try {
         await this.saveState()
       } catch (error) {
-        this.state.pendingDeletionDigests = pendingDeletionDigests
+        if (!this.state.pendingDeletionDigests.includes(digest)) this.state.pendingDeletionDigests.push(digest)
         throw error
       }
 

@@ -13,3 +13,5 @@
   before eviction, and count shared download failures once per network attempt.
 - Retain digest protection through eager synchronization and release every
   incoming digest when one pending-deletion finalizer fails.
+- Preserve deletion markers added concurrently while another marker's
+  persistence rollback is pending.

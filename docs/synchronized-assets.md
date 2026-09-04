@@ -101,6 +101,8 @@ serialized per digest with new lookup and descriptor-reconciliation work, so a
 caller cannot receive a URI or offline-ready result for bytes being removed.
 If finalizing one incoming digest cannot persist its pending-deletion update,
 the cache releases the other incoming digests before propagating the failure.
+Rollback restores only that digest's marker, preserving deletion work added by
+concurrent synchronizations.
 
 Every operation includes `accountId`. Adapters must use it as a physical
 namespace rather than trusting a digest to isolate users. Signing out or
