@@ -59,8 +59,10 @@ any completed blob for deletion instead of leaving unreferenced bytes behind.
 Call `resolve({assetId, online})` when rendering an asset. A cached URI is
 returned immediately. An absent on-demand asset downloads when online; offline
 or retry-delayed optional assets return `null`, so consumers can render a text
-or initials fallback. A failed eligible on-demand download rejects after its
-retry metadata has been persisted.
+or initials fallback. If concurrent synchronization removes the requested
+descriptor's final scope reference, resolution returns `null` after deleting
+the now-unreferenced bytes instead of returning a stale URI. A failed eligible
+on-demand download rejects after its retry metadata has been persisted.
 
 ## Integrity, retries, and interrupted work
 

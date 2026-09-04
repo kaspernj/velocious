@@ -15,3 +15,5 @@
   incoming digest when one pending-deletion finalizer fails.
 - Preserve deletion markers added concurrently while another marker's
   persistence rollback is pending.
+- Return `null` instead of a deleted local URI when concurrent synchronization
+  removes the requested descriptor's final scope reference during resolution.

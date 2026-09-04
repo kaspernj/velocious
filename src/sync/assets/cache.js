@@ -162,6 +162,7 @@ export default class SynchronizedAssetCache {
     if (!entry) return null
 
     const digest = entry.descriptor.digest
+    let resolvedUri = null
 
     await this.beginActiveDigest(digest)
 
@@ -173,22 +174,26 @@ export default class SynchronizedAssetCache {
         entry.status = "cached"
         await this.saveState()
 
-        return cachedUri
+        resolvedUri = cachedUri
+      } else if (online && this.retryEligible(entry)) {
+        const cacheResult = await this.ensureCachedWhileActive(entry)
+
+        if (cacheResult.error) throw cacheResult.error
+
+        if (cacheResult.uri) {
+          await this.cleanup(new Set([digest]))
+
+          resolvedUri = cacheResult.uri
+        }
       }
-
-      if (!online || !this.retryEligible(entry)) return null
-
-      const cacheResult = await this.ensureCachedWhileActive(entry)
-
-      if (cacheResult.error) throw cacheResult.error
-      if (!cacheResult.uri) return null
-
-      await this.cleanup(new Set([digest]))
-
-      return cacheResult.uri
     } finally {
       await this.finishActiveDigest(digest)
     }
+
+    if (!resolvedUri) return null
+    if (!state.assets.some((candidate) => candidate.descriptor.id === assetId && candidate.descriptor.digest === digest)) return null
+
+    return resolvedUri
   }
 
   /**
