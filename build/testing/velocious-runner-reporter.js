@@ -1,10 +1,10 @@
 // @ts-check
 
-import {addTrackedStackToError} from "../utils/with-tracked-stack.js"
+import { addTrackedStackToError } from "../utils/with-tracked-stack.js"
 import BacktraceCleaner from "../utils/backtrace-cleaner-node.js"
 import picocolors from "picocolors"
 import restArgsError from "../utils/rest-args-error.js"
-import {testEvents} from "./test.js"
+import { testEvents } from "./test.js"
 
 export default class VelociousRunnerReporter {
   /**

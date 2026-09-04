@@ -1,9 +1,9 @@
 // @ts-check
 
-import {TestDatabaseAccessRevokedError} from "../environment-handlers/base.js"
-import {clearDeliveries} from "../mailer.js"
+import { TestDatabaseAccessRevokedError } from "../environment-handlers/base.js"
+import { clearDeliveries } from "../mailer.js"
 import restArgsError from "../utils/rest-args-error.js"
-import {testConfig} from "./test.js"
+import { testConfig } from "./test.js"
 
 /**
  * Marks one whole-lifecycle timeout while its underlying promise keeps running.
