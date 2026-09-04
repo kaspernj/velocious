@@ -1,5 +1,6 @@
 // @ts-check
 
+import {createHash} from "node:crypto"
 import {wait, waitFor} from "awaitery"
 import {describe, expect, it} from "../../src/testing/test.js"
 import Configuration from "../../src/configuration.js"
@@ -451,6 +452,7 @@ describe("Frontend models - composite primary key HTTP integration", {databaseCl
       const project = await ProjectRecord.create({name: "Secret attachment project"})
       await TaskRecord.create({id: project.id(), name: "Readable attachment task", projectId: project.id()})
       const now = Date.now()
+      const recordId = String(project.id())
 
       await VelociousAttachmentRecord.initializeRecord({configuration: Configuration.current()})
       await VelociousAttachmentRecord.create({
@@ -462,7 +464,8 @@ describe("Frontend models - composite primary key HTTP integration", {databaseCl
         id: "00000000-0000-4000-8000-000000001129",
         name: "descriptionFile",
         position: 0,
-        recordId: String(project.id()),
+        recordId,
+        recordIdDigest: createHash("sha256").update(recordId).digest("hex"),
         recordType: "Project",
         updatedAtMs: now
       })
@@ -471,7 +474,7 @@ describe("Frontend models - composite primary key HTTP integration", {databaseCl
       try {
         await expect(async () => {
           await VelociousAttachment
-            .where({name: "descriptionFile", recordId: String(project.id()), recordType: "Project", resourceName: "Task"})
+            .where({name: "descriptionFile", recordId, recordType: "Project", resourceName: "Task"})
             .toArray()
         }).toThrow(/No frontend model resource configured for attachment owner/u)
       } finally {
