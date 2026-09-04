@@ -1,4 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { defaultTestContext } from "@velocious/testing";
+import { TestRunner as PackageTestRunner } from "@velocious/testing/runner";
 import Application from "../../src/application.js";
 import RequestClient from "./request-client.js";
 import SharedTransactionBroker from "./shared-transaction-broker.js";
@@ -6,7 +8,11 @@ import VelociousAttemptExecutor from "./velocious-attempt-executor.js";
 import VelociousRunnerReporter from "./velocious-runner-reporter.js";
 import VelociousSuiteHookExecutor from "./velocious-suite-hook-executor.js";
 import VelociousTestArguments from "./velocious-test-arguments.js";
-export type ConsoleMethodName = "log" | "info" | "warn" | "error" | "debug";
+export type PackageTestContext = typeof defaultTestContext;
+export type PackageSuiteDeclaration = (typeof defaultTestContext.registry.suites)[number];
+export type PackageTestDeclaration = PackageSuiteDeclaration["tests"][number];
+export type PackageHookDeclaration = PackageSuiteDeclaration["hooks"]["beforeAll"][number];
+export type PackageRegistration = PackageSuiteDeclaration | PackageTestDeclaration | PackageHookDeclaration;
 export type AttemptConsoleOutput = {
     /**
      * - Attempt number.
@@ -113,6 +119,10 @@ export type TestData = {
      * - Test callback to execute.
      */
     function: (arg: TestArgs) => (void | Promise<void>);
+    /**
+     * - Package declaration.
+     */
+    declaration?: PackageTestDeclaration;
 };
 export type FailedTestDetail = {
     /**
@@ -139,20 +149,6 @@ export type FailedTestDetail = {
      * - Saved console log path.
      */
     consoleLogPath?: string;
-};
-export type ActiveAfterAllScopeEntry = {
-    /**
-     * - Scope test tree.
-     */
-    tests: TestsArgument;
-    /**
-     * - Whether cleanup hooks have run.
-     */
-    afterAllsRun: boolean;
-    /**
-     * - Opaque profile scope identifier.
-     */
-    profileScopeId?: string;
 };
 export type AfterBeforeEachCallbackType = (args: {
     configuration: import("../configuration.js").default;
@@ -303,9 +299,7 @@ export default class TestRunner {
     _sharedTransactionCoordinatorOwnerStorage: AsyncLocalStorage<any>;
     _testDatabaseAccessScopeStorage: AsyncLocalStorage<any>;
     _excludeTags: string[];
-    _excludeTagSet: Set<string>;
     _includeTags: string[];
-    _includeTagSet: Set<string>;
     _testFiles: string[];
     _lineFilters: Record<string, number[]>;
     _examplePatterns: RegExp[];
@@ -327,6 +321,56 @@ export default class TestRunner {
         line: number;
         durationMs: number;
     }>;
+    /** @type {WeakMap<PackageTestDeclaration, {testArgs: TestArgs, testData: TestData}>} */
+    _testCompatibility: WeakMap<PackageTestDeclaration, {
+        testArgs: TestArgs;
+        testData: TestData;
+    }>;
+    /** @type {WeakSet<PackageTestDeclaration>} */
+    _injectedTests: WeakSet<PackageTestDeclaration>;
+    /** @type {WeakSet<PackageTestDeclaration>} */
+    _completedTests: WeakSet<PackageTestDeclaration>;
+    /** @type {WeakMap<PackageTestDeclaration, {descriptions: string[], testDescription: string, fullDescription: string, ownerFilePath: string | undefined, suites: PackageSuiteDeclaration[]}>} */
+    _testMetadata: WeakMap<PackageTestDeclaration, {
+        descriptions: string[];
+        testDescription: string;
+        fullDescription: string;
+        ownerFilePath: string | undefined;
+        suites: PackageSuiteDeclaration[];
+    }>;
+    /** @type {WeakMap<PackageHookDeclaration, {declarationIndex: number, declarationScopeId: string | undefined, ownerFilePath: string | undefined}>} */
+    _hookMetadata: WeakMap<PackageHookDeclaration, {
+        declarationIndex: number;
+        declarationScopeId: string | undefined;
+        ownerFilePath: string | undefined;
+    }>;
+    /** @type {WeakMap<PackageTestDeclaration, Map<number, {abortRemainingTests: boolean, error: ReturnType<typeof JSON.parse>, failed: boolean}>>} */
+    _attemptOutcomes: WeakMap<PackageTestDeclaration, Map<number, {
+        abortRemainingTests: boolean;
+        error: ReturnType<typeof JSON.parse>;
+        failed: boolean;
+    }>>;
+    /** @type {Array<{suite: PackageSuiteDeclaration, phase: "beforeAll" | "afterAll", error: ReturnType<typeof JSON.parse>}>} */
+    _suiteHookFailures: Array<{
+        suite: PackageSuiteDeclaration;
+        phase: "beforeAll" | "afterAll";
+        error: ReturnType<typeof JSON.parse>;
+    }>;
+    /** @type {Map<string, PackageTestDeclaration[]>} */
+    _testsByFullName: Map<string, PackageTestDeclaration[]>;
+    /** @type {WeakMap<PackageRegistration, string>} */
+    _declarationOwners: WeakMap<PackageRegistration, string>;
+    /** @type {PackageTestRunner | undefined} */
+    _packageRunner: PackageTestRunner | undefined;
+    /** @type {import("@velocious/testing/runner").TestRunResult | undefined} */
+    _packageResult: import("@velocious/testing/runner").TestRunResult | undefined;
+    /** @type {Map<string, TestData> | undefined} */
+    _legacyFixtureDataByFullName: Map<string, TestData> | undefined;
+    /** @type {{filePath?: string, line?: number}} */
+    _legacyFixtureLocation: {
+        filePath?: string;
+        line?: number;
+    };
     _attemptExecutor: VelociousAttemptExecutor;
     _runnerReporter: VelociousRunnerReporter;
     _suiteHookExecutor: VelociousSuiteHookExecutor;
@@ -334,11 +378,8 @@ export default class TestRunner {
     _application: Application | undefined;
     _requestClient: RequestClient | undefined;
     anyTestsFocussed: boolean | undefined;
-    _onlyFocussed: boolean | undefined;
-    /**
-     * Narrows the runtime value to the documented type.
-     * @type {ActiveAfterAllScopeEntry[]} */
-    _activeAfterAllScopes: ActiveAfterAllScopeEntry[];
+    /** @type {PackageTestContext} */
+    _context: PackageTestContext;
     /**
      * Narrows the runtime value to the documented type.
      * @type {FailedTestDetail[]} */
@@ -347,6 +388,7 @@ export default class TestRunner {
      * Runs constructor.
      * @param {object} args - Options object.
      * @param {import("../configuration.js").default} args.configuration - Configuration instance.
+     * @param {PackageTestContext} [args.context] - Declaration context.
      * @param {string[] | string} [args.excludeTags] - Tags to exclude.
      * @param {string[] | string} [args.includeTags] - Tags to include.
      * @param {Array<string>} args.testFiles - Test files.
@@ -354,8 +396,9 @@ export default class TestRunner {
      * @param {RegExp[]} [args.examplePatterns] - Example patterns.
      * @param {import("./test-profiler.js").default} [args.profiler] - Opt-in profiler.
      */
-    constructor({ configuration, excludeTags, includeTags, testFiles, lineFilters, examplePatterns, profiler, ...restArgs }: {
+    constructor({ configuration, context, excludeTags, includeTags, testFiles, lineFilters, examplePatterns, profiler, ...restArgs }: {
         configuration: import("../configuration.js").default;
+        context?: PackageTestContext;
         excludeTags?: string[] | string;
         includeTags?: string[] | string;
         testFiles: Array<string>;
@@ -363,6 +406,11 @@ export default class TestRunner {
         examplePatterns?: RegExp[];
         profiler?: import("./test-profiler.js").default;
     });
+    /**
+     * Gets the package declaration context.
+     * @returns {PackageTestContext} - Package declaration context.
+     */
+    getTestContext(): PackageTestContext;
     /**
      * Runs get configuration.
      * @returns {import("../configuration.js").default} - The configuration.
@@ -400,15 +448,6 @@ export default class TestRunner {
         declarationScopeId?: string;
         filePath?: string;
     }, callback: () => (T | Promise<T>)): Promise<T>;
-    /**
-     * Adds declaration metadata to hooks only for an active profile.
-     * @template {AfterBeforeEachCallbackObjectType | BeforeAfterAllCallbackObjectType} T
-     * @param {T[]} hooks - Hooks declared in one scope.
-     * @param {string | undefined} declarationScopeId - Profile scope identifier.
-     * @param {string | undefined} ownerFilePath - Scope owner file.
-     * @returns {T[]} - Profile-aware hook entries.
-     */
-    profileHookEntries<T extends AfterBeforeEachCallbackObjectType | BeforeAfterAllCallbackObjectType>(hooks: T[], declarationScopeId: string | undefined, ownerFilePath: string | undefined): T[];
     /**
      * Runs normalize tags.
      * @param {string[] | string | undefined} tags - Tags.
@@ -490,37 +529,6 @@ export default class TestRunner {
      * @returns {Set<string>} - Exclude tag set.
      */
     getExcludeTagSet(): Set<string>;
-    /**
-     * Runs has matching tag.
-     * @param {string[] | string | undefined} testTags - Test tags.
-     * @param {Set<string>} tagSet - Tag set.
-     * @returns {boolean} - Whether any tags match.
-     */
-    hasMatchingTag(testTags: string[] | string | undefined, tagSet: Set<string>): boolean;
-    /**
-     * Runs has runnable tests.
-     * @param {TestsArgument} tests - Tests.
-     * @param {string[]} [descriptions] - Description stack.
-     * @param {boolean} [lineMatchedInScope] - Whether line matched in scope.
-     * @returns {boolean} - Whether any tests in this scope will run.
-     */
-    hasRunnableTests(tests: TestsArgument, descriptions?: string[], lineMatchedInScope?: boolean): boolean;
-    /**
-     * Runs should skip test.
-     * @param {TestArgs} testArgs - Test args.
-     * @param {TestData} testData - Test data.
-     * @param {string} testDescription - Test description.
-     * @param {string[]} descriptions - Description stack.
-     * @param {boolean} lineMatchedInScope - Whether line matched in scope.
-     * @returns {boolean} - Whether the test should be skipped.
-     */
-    shouldSkipTest(testArgs: TestArgs, testData: TestData, testDescription: string, descriptions: string[], lineMatchedInScope: boolean): boolean;
-    /**
-     * Runs matches line filter.
-     * @param {TestData | TestsArgument} entry - Test entry.
-     * @returns {boolean} - Whether line filter matches entry.
-     */
-    matchesLineFilter(entry: TestData | TestsArgument): boolean;
     /**
      * Runs build full description.
      * @param {string[]} descriptions - Description stack.
@@ -628,21 +636,18 @@ export default class TestRunner {
      */
     importTestFiles(): Promise<void>;
     /**
-     * Collects registered scope, hook, and test objects by identity.
-     * @param {TestsArgument} scope - Test scope.
-     * @param {Set<object>} [registrations] - Accumulated identities.
-     * @returns {Set<object>} - Registration identities.
+     * Collects package declaration objects by identity.
+     * @param {Set<PackageRegistration>} [registrations] - Accumulated identities.
+     * @returns {Set<PackageRegistration>} - Registration identities.
      */
-    testRegistrationObjects(scope: TestsArgument, registrations?: Set<object>): Set<object>;
+    testRegistrationObjects(registrations?: Set<PackageRegistration>): Set<PackageRegistration>;
     /**
-     * Assigns deterministic ownership to registrations added by one entry file,
-     * including declarations originating in a helper imported by that entry file.
-     * @param {TestsArgument} scope - Test scope.
-     * @param {Set<object>} previousRegistrations - Identities present before import.
+     * Assigns deterministic ownership to package declarations added by one entry file.
+     * @param {Set<PackageRegistration>} previousRegistrations - Identities present before import.
      * @param {string} ownerFilePath - Importing entry file.
      * @returns {void}
      */
-    assignTestRegistrationOwnership(scope: TestsArgument, previousRegistrations: Set<object>, ownerFilePath: string): void;
+    assignTestRegistrationOwnership(previousRegistrations: Set<PackageRegistration>, ownerFilePath: string): void;
     /**
      * Runs is failed.
      * @returns {boolean} - Whether failed.
@@ -699,6 +704,15 @@ export default class TestRunner {
      */
     prepare(): Promise<void>;
     /**
+     * Captures a test source location without attributing package/facade frames.
+     * @param {string | undefined} ownerFilePath - Importing entry file fallback.
+     * @returns {{filePath?: string, line?: number}} - Declaration location.
+     */
+    captureTestDeclarationLocation(ownerFilePath: string | undefined): {
+        filePath?: string;
+        line?: number;
+    };
+    /**
      * Runs are any tests focussed.
      * @returns {boolean} - Whether any tests focussed.
      */
@@ -739,54 +753,192 @@ export default class TestRunner {
      * @returns {Promise<void>} - Resolves when cleanup hooks finish.
      */
     runAfterAllsForActiveScopes(): Promise<void>;
+    /** Builds declaration metadata used only by framework adapters and projections. */
+    analyzeDeclarations(): void;
     /**
-     * Runs analyze tests.
-     * @param {TestsArgument} tests - Tests.
-     * @returns {{anyTestsFocussed: boolean}} - Whether any tests in the tree are focused.
+     * Gets package hook compatibility metadata.
+     * @param {PackageHookDeclaration} hook - Package hook declaration.
+     * @returns {{declarationIndex: number, declarationScopeId: string | undefined, ownerFilePath: string | undefined}} - Hook metadata.
      */
-    analyzeTests(tests: TestsArgument): {
-        anyTestsFocussed: boolean;
+    hookMetadata(hook: PackageHookDeclaration): {
+        declarationIndex: number;
+        declarationScopeId: string | undefined;
+        ownerFilePath: string | undefined;
     };
     /**
-     * Runs every after-each hook while preserving the first failure.
-     * @param {object} args - Hook execution arguments.
-     * @param {AfterBeforeEachCallbackObjectType[]} args.afterEaches - Hooks to run.
-     * @param {TestArgs} args.testArgs - Current test arguments.
-     * @param {TestData} args.testData - Current test data.
-     * @returns {Promise<void>} - Resolves after every hook runs.
+     * Gets package test compatibility metadata.
+     * @param {PackageTestDeclaration} test - Package test declaration.
+     * @returns {{descriptions: string[], testDescription: string, fullDescription: string, ownerFilePath: string | undefined, suites: PackageSuiteDeclaration[]}} - Declaration metadata.
      */
-    runAfterEaches({ afterEaches, testArgs, testData }: {
-        afterEaches: AfterBeforeEachCallbackObjectType[];
+    testMetadata(test: PackageTestDeclaration): {
+        descriptions: string[];
+        testDescription: string;
+        fullDescription: string;
+        ownerFilePath: string | undefined;
+        suites: PackageSuiteDeclaration[];
+    };
+    /**
+     * Gets stable compatibility data for a package declaration.
+     * @param {PackageTestDeclaration} test - Package test declaration.
+     * @returns {{testArgs: TestArgs, testData: TestData}} - Stable compatibility data.
+     */
+    testData(test: PackageTestDeclaration): {
         testArgs: TestArgs;
         testData: TestData;
-    }): Promise<void>;
+    };
     /**
-     * Runs run tests.
-     * @param {object} args - Options object.
-     * @param {Array<AfterBeforeEachCallbackObjectType>} args.afterEaches - After eaches.
-     * @param {Array<AfterBeforeEachCallbackObjectType>} args.beforeEaches - Before eaches.
-     * @param {TestsArgument} args.tests - Tests.
-     * @param {string[]} args.descriptions - Descriptions.
-     * @param {number} args.indentLevel - Indent level.
-     * @param {boolean} [args.lineMatchedInScope] - Whether line matched in scope.
-     * @param {string} [args.parentProfileScopeId] - Parent profile scope.
-     * @returns {Promise<void>} - Resolves when complete.
+     * Injects framework collaborators into stable compatibility data once.
+     * @param {PackageTestDeclaration} test - Package test declaration.
+     * @returns {Promise<{testArgs: TestArgs, testData: TestData}>} - Injected compatibility data.
      */
-    runTests({ afterEaches, beforeEaches, tests, descriptions, indentLevel, lineMatchedInScope, parentProfileScopeId }: {
-        afterEaches: Array<AfterBeforeEachCallbackObjectType>;
-        beforeEaches: Array<AfterBeforeEachCallbackObjectType>;
-        tests: TestsArgument;
+    testCompatibility(test: PackageTestDeclaration): Promise<{
+        testArgs: TestArgs;
+        testData: TestData;
+    }>;
+    /**
+     * Records a raw framework attempt outcome.
+     * @param {PackageTestDeclaration} test - Package test declaration.
+     * @param {number} attemptNumber - One-based attempt number.
+     * @param {{abortRemainingTests: boolean, error: ReturnType<typeof JSON.parse>, failed: boolean}} outcome - Raw attempt outcome.
+     * @returns {void}
+     */
+    recordAttemptOutcome(test: PackageTestDeclaration, attemptNumber: number, outcome: {
+        abortRemainingTests: boolean;
+        error: ReturnType<typeof JSON.parse>;
+        failed: boolean;
+    }): void;
+    /**
+     * Gets a raw framework attempt outcome.
+     * @param {PackageTestDeclaration} test - Package test declaration.
+     * @param {number} attemptNumber - One-based attempt number.
+     * @returns {{abortRemainingTests: boolean, error: ReturnType<typeof JSON.parse>, failed: boolean} | undefined} - Raw attempt outcome.
+     */
+    attemptOutcome(test: PackageTestDeclaration, attemptNumber: number): {
+        abortRemainingTests: boolean;
+        error: ReturnType<typeof JSON.parse>;
+        failed: boolean;
+    } | undefined;
+    /**
+     * Records a raw suite-hook failure.
+     * @param {object} failure - Suite-hook failure.
+     * @param {PackageSuiteDeclaration} failure.suite - Owning package suite.
+     * @param {"beforeAll" | "afterAll"} failure.phase - Hook phase.
+     * @param {ReturnType<typeof JSON.parse>} failure.error - Raw hook failure.
+     * @returns {void}
+     */
+    recordSuiteHookFailure(failure: {
+        suite: PackageSuiteDeclaration;
+        phase: "beforeAll" | "afterAll";
+        error: ReturnType<typeof JSON.parse>;
+    }): void;
+    /**
+     * Gets the raw ancestor setup failure for a package test.
+     * @param {PackageTestDeclaration} test - Package test declaration.
+     * @returns {ReturnType<typeof JSON.parse>} - Raw setup failure.
+     */
+    setupFailureFor(test: PackageTestDeclaration): ReturnType<typeof JSON.parse>;
+    /**
+     * Finds the next incomplete declaration with a package full name.
+     * @param {string} fullName - Package full name.
+     * @returns {PackageTestDeclaration | undefined} - Next matching declaration.
+     */
+    findTestDeclaration(fullName: string): PackageTestDeclaration | undefined;
+    /**
+     * Marks a package declaration complete.
+     * @param {PackageTestDeclaration} test - Completed declaration.
+     * @returns {void}
+     */
+    completeTestDeclaration(test: PackageTestDeclaration): void;
+    /**
+     * Gets the effective package retry count.
+     * @param {PackageTestDeclaration} test - Package test declaration.
+     * @returns {number} - Effective retry count.
+     */
+    retryCount(test: PackageTestDeclaration): number;
+    /**
+     * Records one completed test duration.
+     * @param {{durationMs: number, filePath: string, fullDescription: string, line: number}} duration - Completed test duration.
+     * @returns {void}
+     */
+    recordTestDuration(duration: {
+        durationMs: number;
+        filePath: string;
+        fullDescription: string;
+        line: number;
+    }): void;
+    /** Records one successful package result. */
+    recordSuccessfulTest(): void;
+    /**
+     * Records one failed package test in the legacy result projection.
+     * @param {object} args - Failed test metadata.
+     * @param {string[]} args.descriptions - Parent descriptions.
+     * @param {ReturnType<typeof JSON.parse>} args.error - Raw failure.
+     * @param {string} args.consoleOutput - Captured console output.
+     * @param {TestData} args.testData - Compatibility test data.
+     * @param {string} args.testDescription - Test description.
+     * @returns {void}
+     */
+    recordFailedTest({ descriptions, error, consoleOutput, testData, testDescription }: {
         descriptions: string[];
-        indentLevel: number;
-        lineMatchedInScope?: boolean;
-        parentProfileScopeId?: string;
+        error: ReturnType<typeof JSON.parse>;
+        consoleOutput: string;
+        testData: TestData;
+        testDescription: string;
+    }): void;
+    /**
+     * Stores the completed package result.
+     * @param {import("@velocious/testing/runner").TestRunResult} result - Package result.
+     * @returns {void}
+     */
+    recordPackageResult(result: import("@velocious/testing/runner").TestRunResult): void;
+    /**
+     * Runs the package kernel with Velocious framework adapters.
+     * @returns {Promise<void>} - Resolves after execution and teardown.
+     */
+    runPackageTests(): Promise<void>;
+    /**
+     * Aggregates raw after-all failures without using error truthiness.
+     * @param {Array<{phase: "beforeAll" | "afterAll", error: ReturnType<typeof JSON.parse>}>} failures - Hook failures.
+     * @returns {{failed: false} | {failed: true, error: ReturnType<typeof JSON.parse>}} - Explicit afterAll outcome.
+     */
+    afterAllOutcome(failures: Array<{
+        phase: "beforeAll" | "afterAll";
+        error: ReturnType<typeof JSON.parse>;
+    }>): {
+        failed: false;
+    } | {
+        failed: true;
+        error: ReturnType<typeof JSON.parse>;
+    };
+    /**
+     * Throws one raw or aggregated after-all failure.
+     * @param {Array<{phase: "beforeAll" | "afterAll", error: ReturnType<typeof JSON.parse>}>} failures - Hook failures.
+     * @returns {void}
+     */
+    throwAfterAllFailures(failures: Array<{
+        phase: "beforeAll" | "afterAll";
+        error: ReturnType<typeof JSON.parse>;
+    }>): void;
+    /**
+     * Compatibility helper for focused framework lifecycle specs. It converts an
+     * explicit legacy fixture into isolated package declarations; the package
+     * runner remains the sole execution engine.
+     * @param {object} args - Legacy fixture arguments.
+     * @param {TestsArgument} args.tests - Fixture tree.
+     * @returns {Promise<void>} - Resolves after package execution.
+     */
+    runTests({ tests }: {
+        tests: TestsArgument;
     }): Promise<void>;
     /**
-     * Runs run after alls for scope.
-     * @param {ActiveAfterAllScopeEntry} scopeEntry - Scope entry.
-     * @returns {Promise<void>} - Resolves when scope cleanup finishes.
+     * Declares an isolated legacy-shaped test fixture into a package context.
+     * @param {PackageTestContext} context - Isolated package context.
+     * @param {string} name - Suite name.
+     * @param {TestsArgument} scope - Legacy fixture scope.
+     * @param {string[]} descriptions - Ancestor descriptions.
+     * @returns {void}
      */
-    runAfterAllsForScope(scopeEntry: ActiveAfterAllScopeEntry): Promise<void>;
+    declareLegacyFixture(context: PackageTestContext, name: string, scope: TestsArgument, descriptions: string[]): void;
     /**
      * Runs emit event.
      * @param {string} eventName - Event name.
@@ -850,14 +1002,5 @@ export default class TestRunner {
         consoleOutput: string;
         leftPadding: string;
     }): void;
-    /**
-     * Runs start console capture.
-     * @param {object} [args] - Options object.
-     * @param {boolean} [args.passthrough] - Whether to pass through to the original console.
-     * @returns {() => string} - Stops the capture and returns captured text.
-     */
-    startConsoleCapture({ passthrough }?: {
-        passthrough?: boolean;
-    }): () => string;
 }
 //# sourceMappingURL=test-runner.d.ts.map

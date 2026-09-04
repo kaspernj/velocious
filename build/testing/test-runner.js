@@ -2,25 +2,28 @@
 
 import fs from "node:fs/promises"
 import path from "path"
-import {format} from "node:util"
 import {AsyncLocalStorage} from "node:async_hooks"
+import {createTestContext, defaultTestContext} from "@velocious/testing"
+import {TestRunner as PackageTestRunner} from "@velocious/testing/runner"
 import Application from "../../src/application.js"
 import RequestClient from "./request-client.js"
 import picocolors from "picocolors"
 import restArgsError from "../utils/rest-args-error.js"
-import {testConfig, tests} from "./test.js"
-import {pathToFileURL} from "url"
+import {testConfig} from "./test.js"
+import {fileURLToPath, pathToFileURL} from "url"
 import SharedTransactionBroker from "./shared-transaction-broker.js"
 import { SHARED_TRANSACTION_BROKER_ENV } from "./shared-transaction-proxy-driver.js"
-import {synchronizeTestingPackageTests} from "./testing-package-adapter.js"
 import VelociousAttemptExecutor from "./velocious-attempt-executor.js"
-import VelociousRunnerReporter from "./velocious-runner-reporter.js"
+import VelociousRunnerReporter, {AbortRemainingTestsError} from "./velocious-runner-reporter.js"
 import VelociousSuiteHookExecutor from "./velocious-suite-hook-executor.js"
 import VelociousTestArguments from "./velocious-test-arguments.js"
 
-/**
- * ConsoleMethodName type.
- * @typedef {"log" | "info" | "warn" | "error" | "debug"} ConsoleMethodName */
+/** @typedef {typeof defaultTestContext} PackageTestContext */
+/** @typedef {(typeof defaultTestContext.registry.suites)[number]} PackageSuiteDeclaration */
+/** @typedef {PackageSuiteDeclaration["tests"][number]} PackageTestDeclaration */
+/** @typedef {PackageSuiteDeclaration["hooks"]["beforeAll"][number]} PackageHookDeclaration */
+/** @typedef {PackageSuiteDeclaration | PackageTestDeclaration | PackageHookDeclaration} PackageRegistration */
+
 /**
  * AttemptConsoleOutput type.
  * @typedef {object} AttemptConsoleOutput
@@ -62,6 +65,7 @@ import VelociousTestArguments from "./velocious-test-arguments.js"
  * @property {number} [line] - Source line number.
  * @property {string} [ownerFilePath] - Deterministic importing test file.
  * @property {(arg: TestArgs) => (void|Promise<void>)} function - Test callback to execute.
+ * @property {PackageTestDeclaration} [declaration] - Package declaration.
  */
 /**
  * FailedTestDetail type.
@@ -72,13 +76,6 @@ import VelociousTestArguments from "./velocious-test-arguments.js"
  * @property {ReturnType<typeof JSON.parse>} error - Failure error.
  * @property {string} [consoleOutput] - Captured console output while test ran.
  * @property {string} [consoleLogPath] - Saved console log path.
- */
-/**
- * ActiveAfterAllScopeEntry type.
- * @typedef {object} ActiveAfterAllScopeEntry
- * @property {TestsArgument} tests - Scope test tree.
- * @property {boolean} afterAllsRun - Whether cleanup hooks have run.
- * @property {string} [profileScopeId] - Opaque profile scope identifier.
  */
 /**
  * Defines this typedef.
@@ -145,11 +142,6 @@ import VelociousTestArguments from "./velocious-test-arguments.js"
  */
 
 /**
- * Captured console methods.
- * @type {ConsoleMethodName[]} */
-const CAPTURED_CONSOLE_METHODS = ["log", "info", "warn", "error", "debug"]
-
-/**
  * Runs to file slug.
  * @param {string} value - Value to sanitize.
  * @returns {string} - Slug-safe value.
@@ -163,10 +155,8 @@ function toFileSlug(value) {
 }
 
 export default class TestRunner {
-  /**
-   * Narrows the runtime value to the documented type.
-   * @type {ActiveAfterAllScopeEntry[]} */
-  _activeAfterAllScopes
+  /** @type {PackageTestContext} */
+  _context
 
   /**
    * Narrows the runtime value to the documented type.
@@ -177,6 +167,7 @@ export default class TestRunner {
    * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("../configuration.js").default} args.configuration - Configuration instance.
+   * @param {PackageTestContext} [args.context] - Declaration context.
    * @param {string[] | string} [args.excludeTags] - Tags to exclude.
    * @param {string[] | string} [args.includeTags] - Tags to include.
    * @param {Array<string>} args.testFiles - Test files.
@@ -184,18 +175,17 @@ export default class TestRunner {
    * @param {RegExp[]} [args.examplePatterns] - Example patterns.
    * @param {import("./test-profiler.js").default} [args.profiler] - Opt-in profiler.
    */
-  constructor({configuration, excludeTags, includeTags, testFiles, lineFilters, examplePatterns, profiler, ...restArgs}) {
+  constructor({configuration, context = defaultTestContext, excludeTags, includeTags, testFiles, lineFilters, examplePatterns, profiler, ...restArgs}) {
     restArgsError(restArgs)
 
     if (!configuration) throw new Error("configuration is required")
 
     this._configuration = configuration
+    this._context = context
     this._sharedTransactionCoordinatorOwnerStorage = new AsyncLocalStorage()
     this._testDatabaseAccessScopeStorage = new AsyncLocalStorage()
     this._excludeTags = this.normalizeTags(excludeTags)
-    this._excludeTagSet = new Set(this._excludeTags)
     this._includeTags = this.normalizeTags(includeTags)
-    this._includeTagSet = new Set(this._includeTags)
     this._testFiles = testFiles
     this._lineFilters = lineFilters || {}
     this._examplePatterns = examplePatterns || []
@@ -205,17 +195,48 @@ export default class TestRunner {
     this._failedTests = 0
     this._successfulTests = 0
     this._testsCount = 0
-    this._activeAfterAllScopes = []
     this._failedTestDetails = []
     /** @type {{fullDescription: string, filePath: string, line: number} | null} */
     this._lastTestContext = null
     /** @type {Array<{fullDescription: string, filePath: string, line: number, durationMs: number}>} */
     this._testDurations = []
+    /** @type {WeakMap<PackageTestDeclaration, {testArgs: TestArgs, testData: TestData}>} */
+    this._testCompatibility = new WeakMap()
+    /** @type {WeakSet<PackageTestDeclaration>} */
+    this._injectedTests = new WeakSet()
+    /** @type {WeakSet<PackageTestDeclaration>} */
+    this._completedTests = new WeakSet()
+    /** @type {WeakMap<PackageTestDeclaration, {descriptions: string[], testDescription: string, fullDescription: string, ownerFilePath: string | undefined, suites: PackageSuiteDeclaration[]}>} */
+    this._testMetadata = new WeakMap()
+    /** @type {WeakMap<PackageHookDeclaration, {declarationIndex: number, declarationScopeId: string | undefined, ownerFilePath: string | undefined}>} */
+    this._hookMetadata = new WeakMap()
+    /** @type {WeakMap<PackageTestDeclaration, Map<number, {abortRemainingTests: boolean, error: ReturnType<typeof JSON.parse>, failed: boolean}>>} */
+    this._attemptOutcomes = new WeakMap()
+    /** @type {Array<{suite: PackageSuiteDeclaration, phase: "beforeAll" | "afterAll", error: ReturnType<typeof JSON.parse>}>} */
+    this._suiteHookFailures = []
+    /** @type {Map<string, PackageTestDeclaration[]>} */
+    this._testsByFullName = new Map()
+    /** @type {WeakMap<PackageRegistration, string>} */
+    this._declarationOwners = new WeakMap()
+    /** @type {PackageTestRunner | undefined} */
+    this._packageRunner = undefined
+    /** @type {import("@velocious/testing/runner").TestRunResult | undefined} */
+    this._packageResult = undefined
+    /** @type {Map<string, TestData> | undefined} */
+    this._legacyFixtureDataByFullName = undefined
+    /** @type {{filePath?: string, line?: number}} */
+    this._legacyFixtureLocation = {}
     this._attemptExecutor = new VelociousAttemptExecutor({testRunner: this})
     this._runnerReporter = new VelociousRunnerReporter({testRunner: this})
     this._suiteHookExecutor = new VelociousSuiteHookExecutor({testRunner: this})
     this._testArguments = new VelociousTestArguments({testRunner: this})
   }
+
+  /**
+   * Gets the package declaration context.
+   * @returns {PackageTestContext} - Package declaration context.
+   */
+  getTestContext() { return this._context }
 
   /**
    * Runs get configuration.
@@ -256,24 +277,6 @@ export default class TestRunner {
     if (!this._profiler) return await callback()
 
     return await this._profiler.runSpan(metadata, callback)
-  }
-
-  /**
-   * Adds declaration metadata to hooks only for an active profile.
-   * @template {AfterBeforeEachCallbackObjectType | BeforeAfterAllCallbackObjectType} T
-   * @param {T[]} hooks - Hooks declared in one scope.
-   * @param {string | undefined} declarationScopeId - Profile scope identifier.
-   * @param {string | undefined} ownerFilePath - Scope owner file.
-   * @returns {T[]} - Profile-aware hook entries.
-   */
-  profileHookEntries(hooks, declarationScopeId, ownerFilePath) {
-    if (!this._profiler) return hooks
-
-    return hooks.map((hook, declarationIndex) => Object.assign({}, hook, {
-      declarationIndex: hook.declarationIndex ?? declarationIndex,
-      declarationScopeId: hook.declarationScopeId ?? declarationScopeId,
-      ownerFilePath: hook.ownerFilePath ?? ownerFilePath
-    }))
   }
 
   /**
@@ -579,107 +582,6 @@ export default class TestRunner {
     const configTags = Array.isArray(testConfig.excludeTags) ? testConfig.excludeTags : []
 
     return new Set([...this._excludeTags, ...configTags])
-  }
-
-  /**
-   * Runs has matching tag.
-   * @param {string[] | string | undefined} testTags - Test tags.
-   * @param {Set<string>} tagSet - Tag set.
-   * @returns {boolean} - Whether any tags match.
-   */
-  hasMatchingTag(testTags, tagSet) {
-    if (!tagSet.size) return false
-
-    const normalized = this.normalizeTags(testTags)
-
-    for (const tag of normalized) {
-      if (tagSet.has(tag)) return true
-    }
-
-    return false
-  }
-
-  /**
-   * Runs has runnable tests.
-   * @param {TestsArgument} tests - Tests.
-   * @param {string[]} [descriptions] - Description stack.
-   * @param {boolean} [lineMatchedInScope] - Whether line matched in scope.
-   * @returns {boolean} - Whether any tests in this scope will run.
-   */
-  hasRunnableTests(tests, descriptions = [], lineMatchedInScope = false) {
-    for (const testDescription in tests.tests) {
-      const testData = tests.tests[testDescription]
-      const testArgs = /** @type {TestArgs} */ (Object.assign({}, testData.args))
-      const includeByLine = lineMatchedInScope || this.matchesLineFilter(testData)
-
-      if (this._onlyFocussed && !testArgs.focus) continue
-      if (this.shouldSkipTest(testArgs, testData, testDescription, descriptions, includeByLine)) continue
-
-      return true
-    }
-
-    for (const subDescription in tests.subs) {
-      const subTest = tests.subs[subDescription]
-      const scopeLineMatch = lineMatchedInScope || this.matchesLineFilter(subTest)
-      const nextDescriptions = descriptions.concat([subDescription])
-
-      if (this._onlyFocussed && !subTest.anyTestsFocussed) continue
-      if (this.hasRunnableTests(subTest, nextDescriptions, scopeLineMatch)) return true
-    }
-
-    return false
-  }
-
-  /**
-   * Runs should skip test.
-   * @param {TestArgs} testArgs - Test args.
-   * @param {TestData} testData - Test data.
-   * @param {string} testDescription - Test description.
-   * @param {string[]} descriptions - Description stack.
-   * @param {boolean} lineMatchedInScope - Whether line matched in scope.
-   * @returns {boolean} - Whether the test should be skipped.
-   */
-  shouldSkipTest(testArgs, testData, testDescription, descriptions, lineMatchedInScope) {
-    if (this.hasTag(testArgs, "browser-only") && !this.isBrowserTestMode()) return true
-    if (this.hasMatchingTag(testArgs.tags, this.getExcludeTagSet())) return true
-
-    if (this._includeTagSet.size > 0 && !testArgs.focus) {
-      if (!this.hasMatchingTag(testArgs.tags, this._includeTagSet)) return true
-    }
-
-    if (this.getExamplePatterns().length > 0) {
-      const fullDescription = this.buildFullDescription(descriptions, testDescription)
-      const matches = this.getExamplePatterns().some((pattern) => {
-        pattern.lastIndex = 0
-        return pattern.test(fullDescription)
-      })
-
-      if (!matches) return true
-    }
-
-    const lineFilters = this.getLineFilters()
-
-    if (Object.keys(lineFilters).length > 0) {
-      if (!lineMatchedInScope && !this.matchesLineFilter(testData)) return true
-    }
-
-    return false
-  }
-
-  /**
-   * Runs matches line filter.
-   * @param {TestData | TestsArgument} entry - Test entry.
-   * @returns {boolean} - Whether line filter matches entry.
-   */
-  matchesLineFilter(entry) {
-    if (!entry || !entry.filePath || !entry.line) return false
-
-    const filePath = path.resolve(entry.filePath)
-    const lines = this.getLineFilters()[filePath]
-
-    if (!lines || lines.length === 0) return false
-
-    return lines.includes(entry.line)
   }
 
   /**
@@ -1043,61 +945,48 @@ export default class TestRunner {
 
     if (!this._profiler) {
       await environmentHandler.importTestFiles(this.getTestFiles())
-      synchronizeTestingPackageTests(tests)
       return
     }
 
     for (const testFile of this.getTestFiles()) {
-      const existingRegistrations = this.testRegistrationObjects(tests)
+      const existingRegistrations = this.testRegistrationObjects()
 
       await this._profiler.measurePhase("imports", async () => {
         await environmentHandler.importTestFiles([testFile])
       }, {filePath: testFile})
-      synchronizeTestingPackageTests(tests)
-      this.assignTestRegistrationOwnership(tests, existingRegistrations, testFile)
+      this.assignTestRegistrationOwnership(existingRegistrations, testFile)
     }
   }
 
   /**
-   * Collects registered scope, hook, and test objects by identity.
-   * @param {TestsArgument} scope - Test scope.
-   * @param {Set<object>} [registrations] - Accumulated identities.
-   * @returns {Set<object>} - Registration identities.
+   * Collects package declaration objects by identity.
+   * @param {Set<PackageRegistration>} [registrations] - Accumulated identities.
+   * @returns {Set<PackageRegistration>} - Registration identities.
    */
-  testRegistrationObjects(scope, registrations = new Set()) {
-    registrations.add(scope)
-
-    for (const hook of [...scope.beforeAlls, ...scope.beforeEaches, ...scope.afterEaches, ...scope.afterAlls]) {
-      registrations.add(hook)
+  testRegistrationObjects(registrations = new Set()) {
+    const visit = (/** @type {PackageSuiteDeclaration} */ suite) => {
+      registrations.add(suite)
+      for (const hook of [...suite.hooks.beforeAll, ...suite.hooks.beforeEach, ...suite.hooks.afterEach, ...suite.hooks.afterAll]) {
+        registrations.add(hook)
+      }
+      for (const testDeclaration of suite.tests) registrations.add(testDeclaration)
+      for (const childSuite of suite.suites) visit(childSuite)
     }
 
-    for (const testData of Object.values(scope.tests)) registrations.add(testData)
-    for (const childScope of Object.values(scope.subs)) this.testRegistrationObjects(childScope, registrations)
+    for (const suite of this.getTestContext().registry.suites) visit(suite)
 
     return registrations
   }
 
   /**
-   * Assigns deterministic ownership to registrations added by one entry file,
-   * including declarations originating in a helper imported by that entry file.
-   * @param {TestsArgument} scope - Test scope.
-   * @param {Set<object>} previousRegistrations - Identities present before import.
+   * Assigns deterministic ownership to package declarations added by one entry file.
+   * @param {Set<PackageRegistration>} previousRegistrations - Identities present before import.
    * @param {string} ownerFilePath - Importing entry file.
    * @returns {void}
    */
-  assignTestRegistrationOwnership(scope, previousRegistrations, ownerFilePath) {
-    if (!previousRegistrations.has(scope)) scope.ownerFilePath ??= ownerFilePath
-
-    for (const hook of [...scope.beforeAlls, ...scope.beforeEaches, ...scope.afterEaches, ...scope.afterAlls]) {
-      if (!previousRegistrations.has(hook)) hook.ownerFilePath ??= ownerFilePath
-    }
-
-    for (const testData of Object.values(scope.tests)) {
-      if (!previousRegistrations.has(testData)) testData.ownerFilePath ??= ownerFilePath
-    }
-
-    for (const childScope of Object.values(scope.subs)) {
-      this.assignTestRegistrationOwnership(childScope, previousRegistrations, ownerFilePath)
+  assignTestRegistrationOwnership(previousRegistrations, ownerFilePath) {
+    for (const registration of this.testRegistrationObjects()) {
+      if (!previousRegistrations.has(registration)) this._declarationOwners.set(registration, ownerFilePath)
     }
   }
 
@@ -1105,7 +994,7 @@ export default class TestRunner {
    * Runs is failed.
    * @returns {boolean} - Whether failed.
    */
-  isFailed() { return this._failedTests !== undefined && this._failedTests > 0 }
+  isFailed() { return this._failedTests !== undefined && (this._failedTests > 0 || this._packageResult?.status === "failed") }
 
   /**
    * Runs get failed tests.
@@ -1220,17 +1109,79 @@ export default class TestRunner {
     this._abortRemainingTests = false
     this._failedTestDetails = []
     this._testDurations = []
+    this._testCompatibility = new WeakMap()
+    this._injectedTests = new WeakSet()
+    this._completedTests = new WeakSet()
+    this._testMetadata = new WeakMap()
+    this._hookMetadata = new WeakMap()
+    this._attemptOutcomes = new WeakMap()
+    this._suiteHookFailures = []
+    this._testsByFullName = new Map()
+    this._packageResult = undefined
+    const context = this.getTestContext()
+    /** @type {string | undefined} */
+    let ownerFilePath
+
+    context.reset({config: true})
+    context.setDeclarationLocator(() => this.captureTestDeclarationLocation(ownerFilePath))
     const testingConfigPath = this.getConfiguration().getTesting()
 
-    if (testingConfigPath) {
-      await this.runProfileSpan({phase: "testing config/global setup"}, async () => {
-        await this.getConfiguration().getEnvironmentHandler().importTestingConfigPath()
-      })
+    await context.describe("", {databaseCleaning: {transaction: true}}, async () => {
+      if (testingConfigPath) {
+        await this.runProfileSpan({phase: "testing config/global setup"}, async () => {
+          await this.getConfiguration().getEnvironmentHandler().importTestingConfigPath()
+        })
+      }
+
+      if (!this._profiler) {
+        await this.importTestFiles()
+      } else {
+        for (const testFile of this.getTestFiles()) {
+          ownerFilePath = testFile
+          const existingRegistrations = this.testRegistrationObjects()
+
+          await this._profiler.measurePhase("imports", async () => {
+            await this.getConfiguration().getEnvironmentHandler().importTestFiles([testFile])
+          }, {filePath: testFile})
+          this.assignTestRegistrationOwnership(existingRegistrations, testFile)
+        }
+      }
+    })
+    ownerFilePath = undefined
+    this.analyzeDeclarations()
+  }
+
+  /**
+   * Captures a test source location without attributing package/facade frames.
+   * @param {string | undefined} ownerFilePath - Importing entry file fallback.
+   * @returns {{filePath?: string, line?: number}} - Declaration location.
+   */
+  captureTestDeclarationLocation(ownerFilePath) {
+    const stack = new Error().stack?.split("\n") || []
+
+    for (const stackLine of stack) {
+      const match = stackLine.match(/(?:\(|\s)(file:\/\/.*?|\/[^"]*?):(\d+):(\d+)\)?$/u)
+      if (!match) continue
+
+      let filePath = match[1]
+      if (filePath.startsWith("file://")) {
+        try {
+          filePath = fileURLToPath(filePath)
+        } catch {
+          continue
+        }
+      }
+      const resolvedFilePath = path.resolve(filePath)
+      const portablePath = resolvedFilePath.replaceAll(path.sep, "/")
+
+      if (portablePath.endsWith("/src/testing/test-runner.js")) continue
+      if (portablePath.endsWith("/src/testing/test.js")) continue
+      if (portablePath.includes("/node_modules/@velocious/testing/")) continue
+
+      return {filePath: resolvedFilePath, line: Number(match[2])}
     }
 
-    await this.importTestFiles()
-    await this.analyzeTests(tests)
-    this._onlyFocussed = this.anyTestsFocussed
+    return ownerFilePath ? {filePath: ownerFilePath} : {}
   }
 
   /**
@@ -1355,13 +1306,7 @@ export default class TestRunner {
     process.on("uncaughtException", onUncaughtException)
 
     try {
-      await this.runTests({
-        afterEaches: [],
-        beforeEaches: [],
-        tests,
-        descriptions: [],
-        indentLevel: 0
-      })
+      await this.runPackageTests()
 
       // A rejection scheduled by the final test (a detached rejected promise,
       // or an afterCommit callback rejecting as the suite drains) is reported
@@ -1382,259 +1327,367 @@ export default class TestRunner {
    * @returns {Promise<void>} - Resolves when cleanup hooks finish.
    */
   async runAfterAllsForActiveScopes() {
-    const scopes = [...this._activeAfterAllScopes].reverse()
-    /** @type {unknown[]} */
-    const afterAllErrors = []
+    const failureStart = this._suiteHookFailures.length
 
-    for (const scope of scopes) {
-      try {
-        await this.runAfterAllsForScope(scope)
-      } catch (error) {
-        afterAllErrors.push(error)
+    await this._packageRunner?.cleanupActiveSuites()
+    this.throwAfterAllFailures(this._suiteHookFailures.slice(failureStart))
+  }
+
+  /** Builds declaration metadata used only by framework adapters and projections. */
+  analyzeDeclarations() {
+    const visit = (/** @type {PackageSuiteDeclaration} */ suite, /** @type {PackageSuiteDeclaration[]} */ ancestors, /** @type {string | undefined} */ parentProfileScopeId) => {
+      const suites = [...ancestors, suite]
+      const descriptions = suites.map((entry) => entry.name).filter((name) => name !== "")
+      const ownerFilePath = this._declarationOwners.get(suite) ?? suite.location.filePath
+      const profileScopeId = this._profiler?.scopeId(suite, {
+        descriptions,
+        filePath: ownerFilePath,
+        line: suite.location.line,
+        parentId: parentProfileScopeId
+      })
+
+      for (const hooks of Object.values(suite.hooks)) {
+        hooks.forEach((hook, declarationIndex) => {
+          this._hookMetadata.set(hook, {
+            declarationIndex,
+            declarationScopeId: profileScopeId,
+            ownerFilePath: this._declarationOwners.get(hook) ?? hook.location.filePath ?? ownerFilePath
+          })
+        })
       }
+
+      for (const testDeclaration of suite.tests) {
+        const fullDescription = this.buildFullDescription(descriptions, testDeclaration.name)
+        const declarations = this._testsByFullName.get(fullDescription) || []
+
+        declarations.push(testDeclaration)
+        this._testsByFullName.set(fullDescription, declarations)
+        this._testMetadata.set(testDeclaration, {
+          descriptions,
+          testDescription: testDeclaration.name,
+          fullDescription,
+          ownerFilePath: this._declarationOwners.get(testDeclaration) ?? testDeclaration.location.filePath ?? ownerFilePath,
+          suites
+        })
+        const legacyTestData = this._legacyFixtureDataByFullName?.get(fullDescription)
+        if (legacyTestData) {
+          this._testCompatibility.set(testDeclaration, {
+            testArgs: this._testArguments.copy(testDeclaration),
+            testData: legacyTestData
+          })
+        }
+        this._testsCount++
+        if (testDeclaration.state === "run" && (testDeclaration.focus || suites.some((entry) => entry.focus))) {
+          this.anyTestsFocussed = true
+        }
+      }
+
+      for (const childSuite of suite.suites) visit(childSuite, suites, profileScopeId)
     }
 
-    this._activeAfterAllScopes = []
-
-    if (afterAllErrors.length == 1) throw afterAllErrors[0]
-    if (afterAllErrors.length > 1) {
-      throw new AggregateError(afterAllErrors, "Multiple active afterAll scopes failed", {cause: afterAllErrors[0]})
-    }
+    for (const suite of this.getTestContext().registry.suites) visit(suite, [], undefined)
   }
 
   /**
-   * Runs analyze tests.
-   * @param {TestsArgument} tests - Tests.
-   * @returns {{anyTestsFocussed: boolean}} - Whether any tests in the tree are focused.
+   * Gets package hook compatibility metadata.
+   * @param {PackageHookDeclaration} hook - Package hook declaration.
+   * @returns {{declarationIndex: number, declarationScopeId: string | undefined, ownerFilePath: string | undefined}} - Hook metadata.
    */
-  analyzeTests(tests) {
-    let anyTestsFocussedFound = false
-
-    for (const testDescription in tests.tests) {
-      const testData = tests.tests[testDescription]
-      const testArgs = Object.assign({}, testData.args)
-
-      this._testsCount++
-
-      if (testArgs.focus) {
-        anyTestsFocussedFound = true
-        this.anyTestsFocussed = true
-      }
-    }
-
-    for (const subDescription in tests.subs) {
-      const subTest = tests.subs[subDescription]
-      const {anyTestsFocussed} = this.analyzeTests(subTest)
-
-      if (anyTestsFocussed) {
-        anyTestsFocussedFound = true
-      }
-
-      subTest.anyTestsFocussed = anyTestsFocussed
-    }
-
-    return {anyTestsFocussed: anyTestsFocussedFound}
+  hookMetadata(hook) {
+    return this._hookMetadata.get(hook) || {declarationIndex: 0, declarationScopeId: undefined, ownerFilePath: hook.location.filePath}
   }
 
   /**
-   * Runs every after-each hook while preserving the first failure.
-   * @param {object} args - Hook execution arguments.
-   * @param {AfterBeforeEachCallbackObjectType[]} args.afterEaches - Hooks to run.
-   * @param {TestArgs} args.testArgs - Current test arguments.
-   * @param {TestData} args.testData - Current test data.
-   * @returns {Promise<void>} - Resolves after every hook runs.
+   * Gets package test compatibility metadata.
+   * @param {PackageTestDeclaration} test - Package test declaration.
+   * @returns {{descriptions: string[], testDescription: string, fullDescription: string, ownerFilePath: string | undefined, suites: PackageSuiteDeclaration[]}} - Declaration metadata.
    */
-  async runAfterEaches({afterEaches, testArgs, testData}) {
-    await this._attemptExecutor.runAfterEaches({afterEaches, testArgs, testData})
+  testMetadata(test) {
+    const metadata = this._testMetadata.get(test)
+    if (!metadata) throw new Error(`Missing package test metadata: ${test.name}`)
+    return metadata
   }
 
   /**
-   * Runs run tests.
-   * @param {object} args - Options object.
-   * @param {Array<AfterBeforeEachCallbackObjectType>} args.afterEaches - After eaches.
-   * @param {Array<AfterBeforeEachCallbackObjectType>} args.beforeEaches - Before eaches.
-   * @param {TestsArgument} args.tests - Tests.
-   * @param {string[]} args.descriptions - Descriptions.
-   * @param {number} args.indentLevel - Indent level.
-   * @param {boolean} [args.lineMatchedInScope] - Whether line matched in scope.
-   * @param {string} [args.parentProfileScopeId] - Parent profile scope.
-   * @returns {Promise<void>} - Resolves when complete.
+   * Gets stable compatibility data for a package declaration.
+   * @param {PackageTestDeclaration} test - Package test declaration.
+   * @returns {{testArgs: TestArgs, testData: TestData}} - Stable compatibility data.
    */
-  async runTests({afterEaches, beforeEaches, tests, descriptions, indentLevel, lineMatchedInScope = false, parentProfileScopeId}) {
+  testData(test) {
+    let compatibility = this._testCompatibility.get(test)
+
+    if (!compatibility) {
+      const testArgs = this._testArguments.copy(test)
+      const metadata = this.testMetadata(test)
+      const testData = {
+        args: testArgs,
+        declaration: test,
+        filePath: test.location.filePath,
+        function: test.callback,
+        line: test.location.line,
+        ownerFilePath: metadata.ownerFilePath
+      }
+      compatibility = {testArgs, testData}
+      this._testCompatibility.set(test, compatibility)
+    }
+
+    return compatibility
+  }
+
+  /**
+   * Injects framework collaborators into stable compatibility data once.
+   * @param {PackageTestDeclaration} test - Package test declaration.
+   * @returns {Promise<{testArgs: TestArgs, testData: TestData}>} - Injected compatibility data.
+   */
+  async testCompatibility(test) {
+    const compatibility = this.testData(test)
+
+    if (!this._injectedTests.has(test)) {
+      await this._testArguments.inject(compatibility.testArgs)
+      this._injectedTests.add(test)
+    }
+
+    return compatibility
+  }
+
+  /**
+   * Records a raw framework attempt outcome.
+   * @param {PackageTestDeclaration} test - Package test declaration.
+   * @param {number} attemptNumber - One-based attempt number.
+   * @param {{abortRemainingTests: boolean, error: ReturnType<typeof JSON.parse>, failed: boolean}} outcome - Raw attempt outcome.
+   * @returns {void}
+   */
+  recordAttemptOutcome(test, attemptNumber, outcome) {
+    const outcomes = this._attemptOutcomes.get(test) || new Map()
+    outcomes.set(attemptNumber, outcome)
+    this._attemptOutcomes.set(test, outcomes)
+    if (outcome.abortRemainingTests) this._abortRemainingTests = true
+  }
+
+  /**
+   * Gets a raw framework attempt outcome.
+   * @param {PackageTestDeclaration} test - Package test declaration.
+   * @param {number} attemptNumber - One-based attempt number.
+   * @returns {{abortRemainingTests: boolean, error: ReturnType<typeof JSON.parse>, failed: boolean} | undefined} - Raw attempt outcome.
+   */
+  attemptOutcome(test, attemptNumber) { return this._attemptOutcomes.get(test)?.get(attemptNumber) }
+
+  /**
+   * Records a raw suite-hook failure.
+   * @param {object} failure - Suite-hook failure.
+   * @param {PackageSuiteDeclaration} failure.suite - Owning package suite.
+   * @param {"beforeAll" | "afterAll"} failure.phase - Hook phase.
+   * @param {ReturnType<typeof JSON.parse>} failure.error - Raw hook failure.
+   * @returns {void}
+   */
+  recordSuiteHookFailure(failure) { this._suiteHookFailures.push(failure) }
+
+  /**
+   * Gets the raw ancestor setup failure for a package test.
+   * @param {PackageTestDeclaration} test - Package test declaration.
+   * @returns {ReturnType<typeof JSON.parse>} - Raw setup failure.
+   */
+  setupFailureFor(test) {
+    const suites = this.testMetadata(test).suites
+    return this._suiteHookFailures.find((failure) => failure.phase === "beforeAll" && suites.includes(failure.suite))?.error
+  }
+
+  /**
+   * Finds the next incomplete declaration with a package full name.
+   * @param {string} fullName - Package full name.
+   * @returns {PackageTestDeclaration | undefined} - Next matching declaration.
+   */
+  findTestDeclaration(fullName) {
+    return this._testsByFullName.get(fullName)?.find((test) => !this._completedTests.has(test))
+  }
+
+  /**
+   * Marks a package declaration complete.
+   * @param {PackageTestDeclaration} test - Completed declaration.
+   * @returns {void}
+   */
+  completeTestDeclaration(test) { this._completedTests.add(test) }
+
+  /**
+   * Gets the effective package retry count.
+   * @param {PackageTestDeclaration} test - Package test declaration.
+   * @returns {number} - Effective retry count.
+   */
+  retryCount(test) {
+    const value = test.options.retries ?? test.options.retry ?? this.getTestContext().config.retries
+    return typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0
+  }
+
+  /**
+   * Records one completed test duration.
+   * @param {{durationMs: number, filePath: string, fullDescription: string, line: number}} duration - Completed test duration.
+   * @returns {void}
+   */
+  recordTestDuration(duration) { this._testDurations.push(duration) }
+
+  /** Records one successful package result. */
+  recordSuccessfulTest() { this._successfulTests++ }
+
+  /**
+   * Records one failed package test in the legacy result projection.
+   * @param {object} args - Failed test metadata.
+   * @param {string[]} args.descriptions - Parent descriptions.
+   * @param {ReturnType<typeof JSON.parse>} args.error - Raw failure.
+   * @param {string} args.consoleOutput - Captured console output.
+   * @param {TestData} args.testData - Compatibility test data.
+   * @param {string} args.testDescription - Test description.
+   * @returns {void}
+   */
+  recordFailedTest({descriptions, error, consoleOutput, testData, testDescription}) {
+    this._failedTests++
+    this._failedTestDetails.push({
+      fullDescription: this.buildFullDescription(descriptions, testDescription),
+      filePath: testData.filePath,
+      line: testData.line,
+      error,
+      consoleOutput: consoleOutput || undefined
+    })
+  }
+
+  /**
+   * Stores the completed package result.
+   * @param {import("@velocious/testing/runner").TestRunResult} result - Package result.
+   * @returns {void}
+   */
+  recordPackageResult(result) { this._packageResult = result }
+
+  /**
+   * Runs the package kernel with Velocious framework adapters.
+   * @returns {Promise<void>} - Resolves after execution and teardown.
+   */
+  async runPackageTests() {
     const environmentHandler = this.getConfiguration().getEnvironmentHandler()
-
     environmentHandler.installSharedTransactionCoordinatorOwnerStorage(this._sharedTransactionCoordinatorOwnerStorage)
     environmentHandler.installTestDatabaseAccessScopeStorage(this._testDatabaseAccessScopeStorage)
-    const leftPadding = " ".repeat(indentLevel * 2)
-    const scopeOwnerFilePath = tests.ownerFilePath ?? tests.filePath
-    const profileScopeId = this._profiler?.scopeId(tests, {
-      descriptions,
-      filePath: scopeOwnerFilePath,
-      line: tests.line,
-      parentId: parentProfileScopeId
+    this._packageRunner = new PackageTestRunner({
+      context: this.getTestContext(),
+      includeTags: this._includeTags,
+      excludeTags: [...this.getExcludeTagSet(), ...(this.isBrowserTestMode() ? [] : ["browser-only"])],
+      examples: this.getExamplePatterns(),
+      lineFilters: this.getLineFilters(),
+      includeTagMode: "any",
+      focusedTestsBypassIncludeTags: true,
+      omitEmptySuiteNames: true,
+      attemptExecutorOwnsTimeout: true,
+      attemptExecutor: (input) => this._attemptExecutor.execute(input),
+      testArgumentResolver: (input) => this._testArguments.resolve(input),
+      suiteHookExecutor: (input) => this._suiteHookExecutor.execute(input),
+      reporter: this._runnerReporter
     })
-    const ownAfterEaches = [...this.profileHookEntries(tests.afterEaches, profileScopeId, scopeOwnerFilePath)].reverse()
-    const ownBeforeEaches = this.profileHookEntries(tests.beforeEaches, profileScopeId, scopeOwnerFilePath)
-    const newAfterEaches = [...ownAfterEaches, ...afterEaches]
-    const newBeforeEaches = [...beforeEaches, ...ownBeforeEaches]
-    const scopeLineMatch = lineMatchedInScope || this.matchesLineFilter(tests)
-    const shouldRunAnyTests = this.hasRunnableTests(tests, descriptions, scopeLineMatch)
-
-    if (!shouldRunAnyTests) return
-
-    /** @type {ActiveAfterAllScopeEntry} */
-    const scopeEntry = {tests, afterAllsRun: false, profileScopeId}
-    this._activeAfterAllScopes.push(scopeEntry)
-    /** @type {unknown[]} */
-    const scopeErrors = []
+    const failureStart = this._suiteHookFailures.length
+    let result
 
     try {
-      const beforeAlls = this.profileHookEntries(tests.beforeAlls || [], profileScopeId, scopeOwnerFilePath)
-
-      await this._suiteHookExecutor.runBeforeAlls({hooks: beforeAlls})
-
-      for (const testDescription in tests.tests) {
-        const testData = tests.tests[testDescription]
-        const testArgs = this._testArguments.copy(testData)
-        const includeByLine = scopeLineMatch || this.matchesLineFilter(testData)
-
-        if (this._onlyFocussed && !testArgs.focus) continue
-        if (this.shouldSkipTest(testArgs, testData, testDescription, descriptions, includeByLine)) continue
-
-        await this._testArguments.inject(testArgs)
-
-        const retryCount = typeof testArgs.retry === "number" && Number.isFinite(testArgs.retry)
-          ? Math.max(0, Math.floor(testArgs.retry))
-          : 0
-        const configTimeoutSeconds = typeof testConfig.defaultTimeoutSeconds === "number" ? testConfig.defaultTimeoutSeconds : undefined
-        const timeoutSeconds = typeof testArgs.timeoutSeconds === "number" ? testArgs.timeoutSeconds : configTimeoutSeconds
-        const useTimeout = typeof timeoutSeconds === "number" && Number.isFinite(timeoutSeconds) && timeoutSeconds > 0
-        const timeoutMs = useTimeout ? timeoutSeconds * 1000 : undefined
-        let retriesUsed = 0
-        let attemptNumber = 1
-        /**
-         * Attempt console outputs.
-         * @type {AttemptConsoleOutput[]} */
-        const attemptConsoleOutputs = []
-
-        console.log(`${leftPadding}it ${testDescription}`)
-
-        const testStartMs = Date.now()
-
-        while (true) {
-          const attemptResult = await this._attemptExecutor.execute({
-            afterEaches: newAfterEaches,
-            attemptNumber,
-            beforeEaches: newBeforeEaches,
-            descriptions,
-            testArgs,
-            testData,
-            testDescription,
-            timeoutMs
-          })
-
-          if (attemptResult.consoleOutput) {
-            attemptConsoleOutputs.push({attemptNumber, output: attemptResult.consoleOutput})
-          }
-          if (attemptResult.abortRemainingTests) this._abortRemainingTests = true
-
-          const willRetry = attemptResult.failed && !this._abortRemainingTests && retriesUsed < retryCount
-          if (willRetry) retriesUsed++
-
-          await this._runnerReporter.reportAttempt({
-            attemptConsoleOutputs,
-            attemptNumber,
-            descriptions,
-            error: attemptResult.error,
-            failed: attemptResult.failed,
-            leftPadding,
-            retriesUsed,
-            retryCount,
-            testArgs,
-            testData,
-            testDescription,
-            willRetry
-          })
-          attemptNumber++
-
-          if (!willRetry) break
-        }
-
-        this._testDurations.push({
-          fullDescription: this.buildFullDescription(descriptions, testDescription),
-          filePath: testData.filePath ?? "<unknown>",
-          line: testData.line ?? 0,
-          durationMs: Date.now() - testStartMs
-        })
-
-        if (this._abortRemainingTests) break
-      }
-
-      for (const subDescription in tests.subs) {
-        if (this._abortRemainingTests) break
-
-        const subTest = tests.subs[subDescription]
-        const newDecriptions = descriptions.concat([subDescription])
-        const childScopeLineMatch = scopeLineMatch || this.matchesLineFilter(subTest)
-
-        if (!this._onlyFocussed || subTest.anyTestsFocussed) {
-          console.log(`${leftPadding}${subDescription}`)
-          await this.runTests({
-            afterEaches: newAfterEaches,
-            beforeEaches: newBeforeEaches,
-            tests: subTest,
-            descriptions: newDecriptions,
-            indentLevel: indentLevel + 1,
-            lineMatchedInScope: childScopeLineMatch,
-            parentProfileScopeId: profileScopeId
-          })
-        }
-      }
+      result = await this._packageRunner.run()
     } catch (error) {
-      scopeErrors.push(error)
-    }
+      if (!(error instanceof AbortRemainingTestsError)) throw error
 
-    try {
-      await this.runAfterAllsForScope(scopeEntry)
-    } catch (error) {
-      scopeErrors.push(error)
-    }
-    const scopeIndex = this._activeAfterAllScopes.indexOf(scopeEntry)
-
-    if (scopeIndex >= 0) {
-      this._activeAfterAllScopes.splice(scopeIndex, 1)
-    }
-
-    if (scopeErrors.length > 0 && this._abortRemainingTests) {
-      const error = scopeErrors.length == 1
-        ? scopeErrors[0]
-        : new AggregateError(scopeErrors, "Test scope and afterAll cleanup failed", {cause: scopeErrors[0]})
-
-      this.recordTimeoutCleanupFailure(error, "afterAll")
+      const afterAll = this.afterAllOutcome(this._suiteHookFailures.slice(failureStart))
+      if (afterAll.failed) this.recordTimeoutCleanupFailure(afterAll.error, "afterAll")
       return
     }
-    if (scopeErrors.length == 1) throw scopeErrors[0]
-    if (scopeErrors.length > 1) throw new AggregateError(scopeErrors, "Test scope and afterAll cleanup failed", {cause: scopeErrors[0]})
+
+    this.recordPackageResult(result)
+    this.throwAfterAllFailures(this._suiteHookFailures.slice(failureStart))
   }
 
   /**
-   * Runs run after alls for scope.
-   * @param {ActiveAfterAllScopeEntry} scopeEntry - Scope entry.
-   * @returns {Promise<void>} - Resolves when scope cleanup finishes.
+   * Aggregates raw after-all failures without using error truthiness.
+   * @param {Array<{phase: "beforeAll" | "afterAll", error: ReturnType<typeof JSON.parse>}>} failures - Hook failures.
+   * @returns {{failed: false} | {failed: true, error: ReturnType<typeof JSON.parse>}} - Explicit afterAll outcome.
    */
-  async runAfterAllsForScope(scopeEntry) {
-    if (scopeEntry.afterAllsRun) return
+  afterAllOutcome(failures) {
+    const afterAllErrors = failures.filter((failure) => failure.phase === "afterAll").map((failure) => failure.error)
 
-    scopeEntry.afterAllsRun = true
+    if (afterAllErrors.length === 0) return {failed: false}
+    if (afterAllErrors.length === 1) return {failed: true, error: afterAllErrors[0]}
+    return {
+      failed: true,
+      error: new AggregateError(afterAllErrors, "Multiple active afterAll scopes failed", {cause: afterAllErrors[0]})
+    }
+  }
 
-    const scopeOwnerFilePath = scopeEntry.tests.ownerFilePath ?? scopeEntry.tests.filePath
-    const afterAlls = this.profileHookEntries(
-      scopeEntry.tests.afterAlls || [],
-      scopeEntry.profileScopeId,
-      scopeOwnerFilePath
-    )
+  /**
+   * Throws one raw or aggregated after-all failure.
+   * @param {Array<{phase: "beforeAll" | "afterAll", error: ReturnType<typeof JSON.parse>}>} failures - Hook failures.
+   * @returns {void}
+   */
+  throwAfterAllFailures(failures) {
+    const afterAll = this.afterAllOutcome(failures)
 
-    await this._suiteHookExecutor.runAfterAlls({hooks: afterAlls})
+    if (afterAll.failed) throw afterAll.error
+  }
+
+  /**
+   * Compatibility helper for focused framework lifecycle specs. It converts an
+   * explicit legacy fixture into isolated package declarations; the package
+   * runner remains the sole execution engine.
+   * @param {object} args - Legacy fixture arguments.
+   * @param {TestsArgument} args.tests - Fixture tree.
+   * @returns {Promise<void>} - Resolves after package execution.
+   */
+  async runTests({tests}) {
+    const context = createTestContext()
+    const originalContext = this._context
+    context.configureTests({
+      consoleOutput: originalContext.config.consoleOutput,
+      defaultTimeoutMs: originalContext.config.defaultTimeoutMs,
+      excludeTags: originalContext.config.excludeTags,
+      failedConsoleOutputMaxLines: originalContext.config.failedConsoleOutputMaxLines,
+      retries: originalContext.config.retries
+    })
+    this._context = context
+    this._testsCount = 0
+    this._testCompatibility = new WeakMap()
+    this._injectedTests = new WeakSet()
+    this._completedTests = new WeakSet()
+    this._testMetadata = new WeakMap()
+    this._hookMetadata = new WeakMap()
+    this._attemptOutcomes = new WeakMap()
+    this._suiteHookFailures = []
+    this._testsByFullName = new Map()
+    this._legacyFixtureDataByFullName = new Map()
+    context.setDeclarationLocator(() => this._legacyFixtureLocation)
+    this.declareLegacyFixture(context, "", tests, [])
+    this.analyzeDeclarations()
+
+    try {
+      await this.runPackageTests()
+    } finally {
+      this._context = originalContext
+    }
+  }
+
+  /**
+   * Declares an isolated legacy-shaped test fixture into a package context.
+   * @param {PackageTestContext} context - Isolated package context.
+   * @param {string} name - Suite name.
+   * @param {TestsArgument} scope - Legacy fixture scope.
+   * @param {string[]} descriptions - Ancestor descriptions.
+   * @returns {void}
+   */
+  declareLegacyFixture(context, name, scope, descriptions) {
+    this._legacyFixtureLocation = {filePath: scope.filePath, line: scope.line}
+    context.describe(name, scope.args || {}, () => {
+      for (const hook of scope.beforeAlls || []) context.beforeAll(hook.callback)
+      for (const hook of scope.beforeEaches || []) context.beforeEach(hook.callback)
+      for (const hook of scope.afterEaches || []) context.afterEach(hook.callback)
+      for (const hook of scope.afterAlls || []) context.afterAll(hook.callback)
+      const nextDescriptions = name === "" ? descriptions : [...descriptions, name]
+      for (const [testName, testData] of Object.entries(scope.tests || {})) {
+        this._legacyFixtureLocation = {filePath: testData.filePath, line: testData.line}
+        this._legacyFixtureDataByFullName?.set(this.buildFullDescription(nextDescriptions, testName), testData)
+        context.it(testName, testData.args, testData.function)
+      }
+      for (const [suiteName, childScope] of Object.entries(scope.subs || {})) {
+        this.declareLegacyFixture(context, suiteName, childScope, nextDescriptions)
+      }
+    })
   }
 
   /**
@@ -1760,57 +1813,4 @@ export default class TestRunner {
     }
   }
 
-  /**
-   * Runs start console capture.
-   * @param {object} [args] - Options object.
-   * @param {boolean} [args.passthrough] - Whether to pass through to the original console.
-   * @returns {() => string} - Stops the capture and returns captured text.
-   */
-  startConsoleCapture({passthrough = false} = {}) {
-    /**
-     * Lines.
-     * @type {string[]} */
-    const lines = []
-    /**
-     * Console object.
-     * @type {Record<ConsoleMethodName, (...args: Array<ReturnType<typeof JSON.parse>>) => void>} */
-    const consoleObject = /** @type {Record<ConsoleMethodName, (...args: Array<ReturnType<typeof JSON.parse>>) => void>} */ (console)
-    /**
-     * Original console methods captured as direct references so stopping restores
-     * the exact method that was installed at capture start.
-     * @type {Record<ConsoleMethodName, (...args: Array<ReturnType<typeof JSON.parse>>) => void>} */
-    const originalConsoleMethods = {
-      debug: consoleObject.debug,
-      error: consoleObject.error,
-      info: consoleObject.info,
-      log: consoleObject.log,
-      warn: consoleObject.warn
-    }
-    let stopped = false
-    let outputText = ""
-
-    for (const methodName of CAPTURED_CONSOLE_METHODS) {
-      consoleObject[methodName] = (...args) => {
-        lines.push(`[${new Date().toISOString()}] [${methodName}] ${format(...args)}`)
-
-        if (passthrough) {
-          originalConsoleMethods[methodName].apply(consoleObject, args)
-        }
-      }
-    }
-
-    return () => {
-      if (!stopped) {
-        stopped = true
-
-        for (const methodName of CAPTURED_CONSOLE_METHODS) {
-          consoleObject[methodName] = originalConsoleMethods[methodName]
-        }
-
-        outputText = lines.join("\n")
-      }
-
-      return outputText
-    }
-  }
 }

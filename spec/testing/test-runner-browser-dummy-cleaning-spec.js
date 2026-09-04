@@ -192,7 +192,7 @@ class BrowserDummyCleaningTestRunner extends TestRunner {
   }
 }
 
-describe("TestRunner browser dummy cleaning", () => {
+describe("TestRunner browser dummy cleaning", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("leaves database cleanup to transaction rollback", async () => {
     const testRunner = new BrowserDummyCleaningTestRunner()
     let callbackRuns = 0

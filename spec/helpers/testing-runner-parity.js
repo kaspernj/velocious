@@ -6,34 +6,21 @@ import { promisify } from "node:util"
 
 import { forcedString } from "typanic"
 
-import Configuration from "../../src/configuration.js"
-import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
 import TestRunner from "../../src/testing/test-runner.js"
-import repoRoot from "./repo-root.js"
+import buildTestingConfiguration from "./testing-configuration.js"
 
 /**
  * @typedef {object} TestingRunnerOptions
+ * @property {import("@velocious/testing/runner").TestContext} [context] - Isolated package context.
  * @property {string[] | string} [excludeTags] - Tags excluded from the run.
  * @property {RegExp[]} [examplePatterns] - Full-name filters for the run.
  * @property {string[] | string} [includeTags] - Tags included in the run.
  * @property {Record<string, number[]>} [lineFilters] - Declaration lines included in the run.
  */
 
-const execFileAsync = promisify(execFile)
+export {default as buildTestingConfiguration} from "./testing-configuration.js"
 
-/** @returns {Configuration} - Minimal framework configuration for runner characterization. */
-export function buildTestingConfiguration() {
-  return new Configuration({
-    database: {test: {}},
-    directory: repoRoot(),
-    environment: "test",
-    environmentHandler: new EnvironmentHandlerNode(),
-    initializeModels: async () => {},
-    locale: "en",
-    localeFallbacks: {en: ["en"]},
-    locales: ["en"]
-  })
-}
+const execFileAsync = promisify(execFile)
 
 /**
  * @param {TestingRunnerOptions} [options] - Selection options for the runner.

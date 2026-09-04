@@ -1,5 +1,6 @@
 // @ts-check
 
+import {createTestContext} from "@velocious/testing"
 import VelociousAttemptExecutor from "../../src/testing/velocious-attempt-executor.js"
 import TestProfiler from "../../src/testing/test-profiler.js"
 import { describe, expect, it } from "../../src/testing/test.js"
@@ -17,114 +18,140 @@ class ConsoleOrderProfiler extends TestProfiler {
     this.consoleRestoredBeforeFinish = false
   }
 
-  /**
-   * @param {import("../../src/testing/test-profiler.js").TestProfileAttemptHandle} handle - Attempt handle.
-   * @param {import("../../src/testing/test-profiler.js").TestProfileAttemptStatus} status - Attempt status.
-   * @returns {void}
-   */
+  /** @param {import("../../src/testing/test-profiler.js").TestProfileAttemptHandle} handle @param {import("../../src/testing/test-profiler.js").TestProfileAttemptStatus} status */
   finishAttempt(handle, status) {
     this.consoleRestoredBeforeFinish = console.log === this.originalConsoleLog
     super.finishAttempt(handle, status)
   }
 }
 
+/**
+ * @param {object} args - Attempt fixture.
+ * @param {() => (void | Promise<void>)} args.body - Test callback.
+ * @param {import("@velocious/testing/runner").TestContext} args.context - Package context.
+ * @param {Array<(args: ReturnType<typeof JSON.parse>) => (void | Promise<void>)} [args.beforeEach] - Setup hooks.
+ * @param {Array<(args: ReturnType<typeof JSON.parse>) => (void | Promise<void>)} [args.afterEach] - Cleanup hooks.
+ * @returns {{suite: import("@velocious/testing/runner").SuiteDeclaration, test: import("@velocious/testing/runner").TestDeclaration}}
+ */
+function declareAttempt({body, context, beforeEach = [], afterEach = []}) {
+  context.describe("adapter", {databaseCleaning: {transaction: false, truncate: false}}, () => {
+    for (const hook of beforeEach) context.beforeEach(hook)
+    for (const hook of afterEach) context.afterEach(hook)
+    context.it("one attempt", body)
+  })
+  const suite = context.registry.suites[0]
+  const test = suite.tests[0]
+  return {suite, test}
+}
+
 describe("VelociousAttemptExecutor", {databaseCleaning: {transaction: false, truncate: false}}, () => {
-  it("runs exactly one complete attempt with legacy hook arguments", async () => {
-    const testRunner = buildTestingRunner()
+  it("runs exactly one package attempt with legacy hook arguments", async () => {
+    const context = createTestContext()
+    const testRunner = buildTestingRunner({context})
     const executor = new VelociousAttemptExecutor({testRunner})
     const order = []
     const hookArguments = []
-    const testArgs = {databaseCleaning: {transaction: false, truncate: false}, retry: 3}
-    const testData = {
-      args: testArgs,
-      function: async (callbackArgs) => {
-        order.push("body")
-        expect(callbackArgs).toBe(testArgs)
-      }
-    }
+    let callbackArgument
+    const {suite, test} = declareAttempt({
+      context,
+      beforeEach: [async (args) => { order.push("beforeEach"); hookArguments.push(args) }],
+      body: async (testArgs) => { order.push("body"); callbackArgument = testArgs },
+      afterEach: [async (args) => { order.push("afterEach"); hookArguments.push(args) }]
+    })
 
-    const result = await executor.execute({
-      afterEaches: [{callback: async (args) => {
-        order.push("afterEach")
-        hookArguments.push(args)
-      }}],
+    testRunner.analyzeDeclarations()
+    const compatibility = await testRunner.testCompatibility(test)
+    await executor.execute({
+      afterEach: suite.hooks.afterEach,
+      args: [compatibility.testArgs],
       attemptNumber: 1,
-      beforeEaches: [{callback: async (args) => {
-        order.push("beforeEach")
-        hookArguments.push(args)
-      }}],
-      descriptions: ["adapter"],
-      testArgs,
-      testData,
-      testDescription: "one attempt"
+      beforeEach: suite.hooks.beforeEach,
+      context,
+      defaultExecute: async () => {},
+      fullName: "adapter one attempt",
+      suite,
+      test,
+      timeoutMs: 1000
     })
 
     expect(order).toEqual(["beforeEach", "body", "afterEach"])
+    expect(callbackArgument).toBe(compatibility.testArgs)
     expect(hookArguments.map((args) => Object.keys(args).sort())).toEqual([
       ["configuration", "testArgs", "testData"],
       ["configuration", "testArgs", "testData"]
     ])
-    expect(hookArguments.every((args) => args.configuration === testRunner.getConfiguration())).toBeTrue()
-    expect(hookArguments.every((args) => args.testArgs === testArgs)).toBeTrue()
-    expect(hookArguments.every((args) => args.testData === testData)).toBeTrue()
-    expect(result.failed).toBeFalse()
+    expect(hookArguments.every((args) => args.testArgs === compatibility.testArgs)).toBeTrue()
+    expect(hookArguments.every((args) => args.testData === compatibility.testData)).toBeTrue()
+    expect(testRunner.attemptOutcome(test, 1)?.failed).toBeFalse()
   })
 
   it("retains falsy lifecycle failures and still runs cleanup hooks", async () => {
-    const testRunner = buildTestingRunner()
+    const context = createTestContext()
+    const testRunner = buildTestingRunner({context})
     const executor = new VelociousAttemptExecutor({testRunner})
     const bodyFailure = null
     const cleanupFailure = false
-    let bodyRuns = 0
     let cleanupRuns = 0
-    const testArgs = {databaseCleaning: {transaction: false, truncate: false}}
-    const testData = {
-      args: testArgs,
-      function: async () => {
-        bodyRuns++
-        throw bodyFailure
-      }
-    }
-
-    const result = await executor.execute({
-      afterEaches: [{callback: async () => {
+    const {suite, test} = declareAttempt({
+      context,
+      body: async () => { throw bodyFailure },
+      afterEach: [async () => {
         cleanupRuns++
         throw cleanupFailure
-      }}],
-      attemptNumber: 1,
-      beforeEaches: [],
-      descriptions: [],
-      testArgs,
-      testData,
-      testDescription: "falsy failures"
+      }]
     })
 
-    expect(bodyRuns).toBe(1)
+    testRunner.analyzeDeclarations()
+    const compatibility = await testRunner.testCompatibility(test)
+    let caughtError
+    try {
+      await executor.execute({
+        afterEach: suite.hooks.afterEach,
+        args: [compatibility.testArgs],
+        attemptNumber: 1,
+        beforeEach: suite.hooks.beforeEach,
+        context,
+        defaultExecute: async () => {},
+        fullName: "adapter one attempt",
+        suite,
+        test,
+        timeoutMs: 1000
+      })
+    } catch (error) {
+      caughtError = error
+    }
+
     expect(cleanupRuns).toBe(1)
-    expect(result.failed).toBeTrue()
-    expect(result.error).toBeInstanceOf(AggregateError)
-    expect(result.error.errors).toEqual([bodyFailure, cleanupFailure])
+    expect(caughtError).toBeInstanceOf(AggregateError)
+    expect(caughtError.errors).toEqual([bodyFailure, cleanupFailure])
+    expect(testRunner.attemptOutcome(test, 1)?.failed).toBeTrue()
+    expect(testRunner.attemptOutcome(test, 1)?.error).toBe(caughtError)
   })
 
-  it("restores console capture before profiler finalization", async () => {
-    const testRunner = buildTestingRunner()
+  it("finalizes the profiler after the framework lifecycle settles", async () => {
+    const context = createTestContext()
+    const testRunner = buildTestingRunner({context})
     const profiler = new ConsoleOrderProfiler({
       configuration: testRunner.getConfiguration(),
       originalConsoleLog: console.log
     })
     testRunner._profiler = profiler
     const executor = new VelociousAttemptExecutor({testRunner})
-    const testArgs = {databaseCleaning: {transaction: false, truncate: false}}
-    const testData = {args: testArgs, function: async () => {}}
+    const {suite, test} = declareAttempt({context, body: async () => {}})
 
+    testRunner.analyzeDeclarations()
+    const compatibility = await testRunner.testCompatibility(test)
     await executor.execute({
-      afterEaches: [],
+      afterEach: [],
+      args: [compatibility.testArgs],
       attemptNumber: 1,
-      beforeEaches: [],
-      descriptions: [],
-      testArgs,
-      testData,
-      testDescription: "console ordering"
+      beforeEach: [],
+      context,
+      defaultExecute: async () => {},
+      fullName: "adapter one attempt",
+      suite,
+      test,
+      timeoutMs: 1000
     })
 
     expect(profiler.consoleRestoredBeforeFinish).toBeTrue()

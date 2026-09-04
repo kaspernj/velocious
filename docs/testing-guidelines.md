@@ -25,13 +25,19 @@ real browser, add `tags: ["browser-only"]` to its metadata. The Node runner stil
 discovers the definition but filters its tests before lifecycle hooks or callbacks
 run; the browser runner executes them normally.
 
-## Package-runner migration parity
+## Package runner and Velocious compatibility
 
-The package-runner migration is guarded by a reusable characterization harness in
-`spec/testing/testing-package-runner-parity-spec.js` and
-`spec/testing/testing-package-integration-spec.js`. The harness currently runs the
-authoritative Velocious runner and records the compatibility behavior that a later
-`@velocious/testing` runner adapter must preserve:
+Velocious uses `@velocious/testing` `0.0.9` as its framework-neutral declaration
+registry and execution engine. The package owns focus/tag/example/line selection,
+suite traversal, retries, console capture, structured runner events, and result
+accounting. Velocious adapts each package attempt with application/request arguments,
+database and tenant cleanup, shared-transaction brokers, pending broadcasts, dummy
+handling, timeout quarantine, and framework profiler spans. Framework effects run
+once per package attempt and are never replayed by a second runner.
+
+The compatibility contract is covered by
+`spec/testing/testing-package-runner-parity-spec.js`,
+`spec/testing/testing-package-integration-spec.js`, and the focused runner specs:
 
 - include tags match any requested tag; focus bypasses inclusion tags but never
   exclusion tags;
@@ -44,41 +50,32 @@ authoritative Velocious runner and records the compatibility behavior that a lat
 - suite hooks receive `{configuration}`; per-test hooks receive
   `{configuration, testArgs, testData}`; and the callback receives the same
   `testArgs` object across retries;
-- a failed `beforeAll` prevents descendant callbacks and still runs `afterAll`;
-  after-all failures reject the run and same-scope cleanup continues in reverse
-  order;
+- a failed `beforeAll` prevents descendant callbacks, records every selected
+  descendant as failed, and still runs `afterAll`; after-all failures reject the
+  Velocious run after same-scope cleanup continues in reverse order;
 - legacy attempt/retry/final-failure event listeners are awaited in order; and
 - cleanup aggregation retains falsy values thrown or rejected by the test body.
 
-The identity fixtures additionally prove both facade/package import orders,
-shared default-context identity across compatible physical package copies, and
-deterministic schema incompatibility in both orders. The current facade and direct
-package declarations are still separate registries joined by the existing
-conversion adapter; this characterization does not claim that the package runner
-has been adopted.
+The backward-compatible `velocious/build/src/testing/test.js` facade exports the
+package DSL and configuration functions, so facade-first and package-first imports
+declare into the same `defaultTestContext`. Its `tests` export is a deprecated,
+read-only inspection snapshot and never drives execution. Velocious keeps its
+legacy `expect` implementation and awaited `testEvents` in this migration slice.
 
-The legacy runner remains the active orchestrator while its Velocious-owned
-lifecycle is split into internal adapters. `VelociousTestArguments` owns the
-application/request-client argument projection, `VelociousAttemptExecutor` runs
-exactly one complete attempt, `VelociousSuiteHookExecutor` preserves suite hook
-arguments and teardown order, and `VelociousRunnerReporter` projects attempt
-outcomes into legacy events and counters. Selection, suite traversal, and retry
-decisions remain in `TestRunner`; the attempt executor does not perform any of
-them. Database cleanup, tenant rollback, shared-transaction brokers, broadcast
-draining, timeout quarantine, dummy handling, and profiler spans remain
-Velocious-owned. This boundary prepares a later package-runner switch without
-switching orchestration or changing the pinned `@velocious/testing` dependency.
+Under Velocious, an ordinary callback receives exactly one `testArgs` object. An
+`it.each` callback receives `(...rowArguments, testArgs)`. The same derived
+`testArgs` and compatibility `testData` identities are reused across retries.
+`beforeEach` and `afterEach` receive `{configuration, testArgs, testData}`;
+`beforeAll` and `afterAll` receive `{configuration}`. Standalone package execution
+continues to call table callbacks with only their row arguments and ordinary
+callbacks with no arguments.
 
-Several adoption assertions intentionally remain RED because making them pass
-requires the later runner switch rather than a test-only change. The current
-conversion drops package declaration `state` and `rowArguments`, so skip/todo
-state and table callback rows cannot yet reach the legacy runner. A `beforeAll`
-failure rejects the scope without creating one failed result for every selected
-descendant. The package-backed adapter must close these gaps, add Velocious
-`testArgs` after table row arguments, and make facade and direct-package
-declarations share the one package registry. The extracted legacy result bridge
-tracks attempt failure independently of error truthiness, so standalone falsy
-throws and rejections remain failures.
+The package stores serializable errors in its results. Velocious separately retains
+the raw thrown value for awaited `testAttemptFailed`, `testRetrying`, `testRetried`,
+and `testFailed` payloads, including `undefined`, `null`, `false`, `0`, and an empty
+string. Compatible physical copies share protocol-1/schema-3 declarations, matcher
+context, runner events, and real deadline primitives; schema-1 copies fail at import
+in either order.
 
 ## Truncation cleanup
 

@@ -1,3 +1,4 @@
+export type PackageHookDeclaration = import("@velocious/testing/runner").AttemptExecutorInput["beforeEach"][number];
 export type TestTimeoutError = Error & {
     velociousTestTimeout?: true;
 };
@@ -13,55 +14,33 @@ export default class VelociousAttemptExecutor {
     });
     /**
      * Executes exactly one complete Velocious-owned test attempt.
-     * @param {object} args - Attempt arguments.
-     * @param {import("./test-runner.js").AfterBeforeEachCallbackObjectType[]} args.afterEaches - Cleanup hooks.
-     * @param {number} args.attemptNumber - One-based attempt number.
-     * @param {import("./test-runner.js").AfterBeforeEachCallbackObjectType[]} args.beforeEaches - Setup hooks.
-     * @param {string[]} args.descriptions - Parent descriptions.
-     * @param {import("./velocious-test-arguments.js").TestArgs} args.testArgs - Stable test arguments.
-     * @param {import("./velocious-test-arguments.js").TestData} args.testData - Test registration.
-     * @param {string} args.testDescription - Test description.
-     * @param {number} [args.timeoutMs] - Whole-lifecycle timeout.
-     * @returns {Promise<{abortRemainingTests: boolean, consoleOutput: string, error: ReturnType<typeof JSON.parse>, failed: boolean}>} - Attempt outcome.
+     * @param {import("@velocious/testing/runner").AttemptExecutorInput} input - Package attempt.
+     * @returns {Promise<void>} - Resolves after one complete framework attempt.
      */
-    execute({ afterEaches, attemptNumber, beforeEaches, descriptions, testArgs, testData, testDescription, timeoutMs, ...restArgs }: {
-        afterEaches: import("./test-runner.js").AfterBeforeEachCallbackObjectType[];
-        attemptNumber: number;
-        beforeEaches: import("./test-runner.js").AfterBeforeEachCallbackObjectType[];
-        descriptions: string[];
-        testArgs: import("./velocious-test-arguments.js").TestArgs;
-        testData: import("./velocious-test-arguments.js").TestData;
-        testDescription: string;
-        timeoutMs?: number;
-    }): Promise<{
-        abortRemainingTests: boolean;
-        consoleOutput: string;
-        error: ReturnType<typeof JSON.parse>;
-        failed: boolean;
-    }>;
+    execute({ afterEach, args, attemptNumber, beforeEach, context, defaultExecute, fullName, suite, test, timeoutMs, ...restArgs }: import("@velocious/testing/runner").AttemptExecutorInput): Promise<void>;
     /**
      * Runs before-each hooks in inherited declaration order.
      * @param {object} args - Hook arguments.
-     * @param {import("./test-runner.js").AfterBeforeEachCallbackObjectType[]} args.beforeEaches - Setup hooks.
+     * @param {PackageHookDeclaration[]} args.beforeEaches - Setup hooks.
      * @param {import("./velocious-test-arguments.js").TestArgs} args.testArgs - Stable test arguments.
      * @param {import("./velocious-test-arguments.js").TestData} args.testData - Test registration.
      * @returns {Promise<void>} - Resolves after all setup hooks complete.
      */
     runBeforeEaches({ beforeEaches, testArgs, testData }: {
-        beforeEaches: import("./test-runner.js").AfterBeforeEachCallbackObjectType[];
+        beforeEaches: PackageHookDeclaration[];
         testArgs: import("./velocious-test-arguments.js").TestArgs;
         testData: import("./velocious-test-arguments.js").TestData;
     }): Promise<void>;
     /**
      * Runs every after-each hook while preserving all failures.
      * @param {object} args - Hook arguments.
-     * @param {import("./test-runner.js").AfterBeforeEachCallbackObjectType[]} args.afterEaches - Cleanup hooks.
+     * @param {PackageHookDeclaration[]} args.afterEaches - Cleanup hooks.
      * @param {import("./velocious-test-arguments.js").TestArgs} args.testArgs - Stable test arguments.
      * @param {import("./velocious-test-arguments.js").TestData} args.testData - Test registration.
      * @returns {Promise<void>} - Resolves after every cleanup hook settles.
      */
     runAfterEaches({ afterEaches, testArgs, testData }: {
-        afterEaches: import("./test-runner.js").AfterBeforeEachCallbackObjectType[];
+        afterEaches: PackageHookDeclaration[];
         testArgs: import("./velocious-test-arguments.js").TestArgs;
         testData: import("./velocious-test-arguments.js").TestData;
     }): Promise<void>;

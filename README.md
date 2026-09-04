@@ -178,10 +178,10 @@ Baselines are generated against a fresh checkout (no generated dummy `configurat
 # Testing
 
 Application tests may import the testing DSL from the independent public package.
-`@velocious/testing` `0.0.1` uses one compatible default registry across installed copies,
-and the framework runner discovers these declarations while retaining its database,
-request, retry, profiling, and cleanup behavior. The existing Velocious facade remains
-supported.
+`@velocious/testing` `0.0.9` is the declaration and execution engine. Compatible
+installed copies share one protocol-1/schema-3 default registry. Velocious adapts each
+package-owned attempt with its database, request, profiling, and cleanup behavior; the
+existing Velocious facade exports the same declaration DSL and remains supported.
 
 ```js
 import {describe, expect, it} from "@velocious/testing"
@@ -2237,8 +2237,10 @@ If you are using Velocious for an app, Velocious has a built-in testing framewor
 npx velocious test
 ```
 
-Test declarations can be imported from `@velocious/testing`; the legacy
-`velocious/build/src/testing/test.js` facade remains supported.
+Test declarations can be imported from `@velocious/testing`; the compatibility
+`velocious/build/src/testing/test.js` facade uses the same package registry and remains
+supported. Under Velocious, ordinary callbacks receive `testArgs`, while `it.each`
+callbacks receive their row arguments followed by `testArgs`.
 
 If you are developing on Velocious, you can run the tests with:
 

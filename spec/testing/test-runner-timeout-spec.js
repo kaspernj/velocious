@@ -6,7 +6,7 @@ import {configureTests, describe, expect, it, testConfig, testEvents} from "../.
 import TestRunner from "../../src/testing/test-runner.js"
 import wait from "awaitery/build/wait.js"
 
-describe("TestRunner timeouts", {databaseCleaning: {transaction: true}}, () => {
+describe("TestRunner timeouts", {databaseCleaning: {transaction: false, truncate: false}}, () => {
 
   it("times out tests using the configured default", async () => {
     const previousTimeoutSeconds = testConfig.defaultTimeoutSeconds

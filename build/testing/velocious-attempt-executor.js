@@ -3,7 +3,9 @@
 import { TestDatabaseAccessRevokedError } from "../environment-handlers/base.js"
 import { clearDeliveries } from "../mailer.js"
 import restArgsError from "../utils/rest-args-error.js"
-import { testConfig } from "./test.js"
+import {clearTimeout as realClearTimeout, setTimeout as realSetTimeout} from "node:timers"
+
+/** @typedef {import("@velocious/testing/runner").AttemptExecutorInput["beforeEach"][number]} PackageHookDeclaration */
 
 /**
  * Marks one whole-lifecycle timeout while its underlying promise keeps running.
@@ -24,13 +26,13 @@ function runWithTimeout(promise, timeoutMs, testDescription) {
   timeoutError.velociousTestTimeout = true
 
   return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(timeoutError), timeoutMs)
+    const timeout = realSetTimeout(() => reject(timeoutError), timeoutMs)
 
     Promise.resolve(promise).then((result) => {
-      clearTimeout(timeout)
+      realClearTimeout(timeout)
       resolve(result)
     }).catch((error) => {
-      clearTimeout(timeout)
+      realClearTimeout(timeout)
       reject(error)
     })
   })
@@ -45,7 +47,7 @@ function runWithTimeout(promise, timeoutMs, testDescription) {
 function awaitSettledOrGrace(lifecycle, graceMs) {
   return new Promise((resolve) => {
     let settled = false
-    const graceTimer = setTimeout(() => {
+    const graceTimer = realSetTimeout(() => {
       if (settled) return
 
       settled = true
@@ -57,14 +59,14 @@ function awaitSettledOrGrace(lifecycle, graceMs) {
         if (settled) return
 
         settled = true
-        clearTimeout(graceTimer)
+        realClearTimeout(graceTimer)
         resolve({settled: true, status: "fulfilled"})
       },
       (reason) => {
         if (settled) return
 
         settled = true
-        clearTimeout(graceTimer)
+        realClearTimeout(graceTimer)
         resolve({settled: true, status: "rejected", reason})
       }
     )
@@ -98,20 +100,19 @@ export default class VelociousAttemptExecutor {
 
   /**
    * Executes exactly one complete Velocious-owned test attempt.
-   * @param {object} args - Attempt arguments.
-   * @param {import("./test-runner.js").AfterBeforeEachCallbackObjectType[]} args.afterEaches - Cleanup hooks.
-   * @param {number} args.attemptNumber - One-based attempt number.
-   * @param {import("./test-runner.js").AfterBeforeEachCallbackObjectType[]} args.beforeEaches - Setup hooks.
-   * @param {string[]} args.descriptions - Parent descriptions.
-   * @param {import("./velocious-test-arguments.js").TestArgs} args.testArgs - Stable test arguments.
-   * @param {import("./velocious-test-arguments.js").TestData} args.testData - Test registration.
-   * @param {string} args.testDescription - Test description.
-   * @param {number} [args.timeoutMs] - Whole-lifecycle timeout.
-   * @returns {Promise<{abortRemainingTests: boolean, consoleOutput: string, error: ReturnType<typeof JSON.parse>, failed: boolean}>} - Attempt outcome.
+   * @param {import("@velocious/testing/runner").AttemptExecutorInput} input - Package attempt.
+   * @returns {Promise<void>} - Resolves after one complete framework attempt.
    */
-  async execute({afterEaches, attemptNumber, beforeEaches, descriptions, testArgs, testData, testDescription, timeoutMs, ...restArgs}) {
+  async execute({afterEach, args, attemptNumber, beforeEach, context, defaultExecute, fullName, suite, test, timeoutMs, ...restArgs}) {
     restArgsError(restArgs)
+    void context
+    void defaultExecute
+    void suite
     const testRunner = this.testRunner
+    const compatibility = await testRunner.testCompatibility(test)
+    const {testArgs, testData} = compatibility
+    const metadata = testRunner.testMetadata(test)
+    const {descriptions, testDescription} = metadata
     /** @type {ReturnType<typeof JSON.parse>} */
     let caughtError
     let failed = false
@@ -133,14 +134,9 @@ export default class VelociousAttemptExecutor {
     const recordedTimeoutCleanupErrors = new Set()
     let abortRemainingTests = false
     let attemptTimedOut = false
-    /** @type {string} */
-    let consoleOutput
     testArgs.registerTransactionalTenant = async (args) => {
       await testRunner.registerTransactionalTenant(args, transactionalTenantRegistrations)
     }
-    const stopConsoleCapture = testRunner.startConsoleCapture({
-      passthrough: testConfig.consoleOutput === "live"
-    })
     const profiler = testRunner._profiler
     const profileAttempt = profiler?.startAttempt({
       descriptions,
@@ -171,7 +167,7 @@ export default class VelociousAttemptExecutor {
             runCleanupHooks = true
 
             clearDeliveries()
-            await this.runBeforeEaches({beforeEaches, testArgs, testData})
+            await this.runBeforeEaches({beforeEaches: beforeEach, testArgs, testData})
 
             if (useSharedTestConnections) {
               const activeConnections = testRunner.sharedTransactionConnections({transactionsOnly: true})
@@ -190,12 +186,12 @@ export default class VelociousAttemptExecutor {
             }
 
             testRunner._lastTestContext = {
-              fullDescription: testRunner.buildFullDescription(descriptions, testDescription),
+              fullDescription: fullName,
               filePath: testData.filePath ?? "<unknown>",
               line: testData.line ?? 0
             }
             await testRunner.runProfileSpan({phase: "test body", filePath: testData.ownerFilePath ?? testData.filePath}, async () => {
-              await testData.function(testArgs)
+              await test.callback(...args)
             })
           } catch (error) {
             lifecycleErrors.push(error)
@@ -227,7 +223,7 @@ export default class VelociousAttemptExecutor {
             }
 
             try {
-              await this.runAfterEaches({afterEaches, testArgs, testData})
+              await this.runAfterEaches({afterEaches: [...afterEach].reverse(), testArgs, testData})
             } catch (error) {
               lifecycleErrors.push(error)
             }
@@ -358,7 +354,6 @@ export default class VelociousAttemptExecutor {
       }
     } finally {
       testDatabaseAccessScope.revoked = true
-      consoleOutput = stopConsoleCapture()
 
       if (profileAttempt && profiler) {
         profiler.finishAttempt(profileAttempt, failed
@@ -367,29 +362,32 @@ export default class VelociousAttemptExecutor {
       }
     }
 
-    return {
+    testRunner.recordAttemptOutcome(test, attemptNumber, {
       abortRemainingTests,
-      consoleOutput,
       error: caughtError,
       failed
-    }
+    })
+
+    if (failed) throw caughtError
   }
 
   /**
    * Runs before-each hooks in inherited declaration order.
    * @param {object} args - Hook arguments.
-   * @param {import("./test-runner.js").AfterBeforeEachCallbackObjectType[]} args.beforeEaches - Setup hooks.
+   * @param {PackageHookDeclaration[]} args.beforeEaches - Setup hooks.
    * @param {import("./velocious-test-arguments.js").TestArgs} args.testArgs - Stable test arguments.
    * @param {import("./velocious-test-arguments.js").TestData} args.testData - Test registration.
    * @returns {Promise<void>} - Resolves after all setup hooks complete.
    */
   async runBeforeEaches({beforeEaches, testArgs, testData}) {
     for (const hook of beforeEaches) {
+      const metadata = this.testRunner.hookMetadata(hook)
+
       await this.testRunner.runProfileSpan({
         phase: "beforeEach",
-        declarationIndex: hook.declarationIndex,
-        declarationScopeId: hook.declarationScopeId,
-        filePath: hook.ownerFilePath
+        declarationIndex: metadata.declarationIndex,
+        declarationScopeId: metadata.declarationScopeId,
+        filePath: metadata.ownerFilePath
       }, async () => {
         await hook.callback({configuration: this.testRunner.getConfiguration(), testArgs, testData})
       })
@@ -399,7 +397,7 @@ export default class VelociousAttemptExecutor {
   /**
    * Runs every after-each hook while preserving all failures.
    * @param {object} args - Hook arguments.
-   * @param {import("./test-runner.js").AfterBeforeEachCallbackObjectType[]} args.afterEaches - Cleanup hooks.
+   * @param {PackageHookDeclaration[]} args.afterEaches - Cleanup hooks.
    * @param {import("./velocious-test-arguments.js").TestArgs} args.testArgs - Stable test arguments.
    * @param {import("./velocious-test-arguments.js").TestData} args.testData - Test registration.
    * @returns {Promise<void>} - Resolves after every cleanup hook settles.
@@ -409,12 +407,14 @@ export default class VelociousAttemptExecutor {
     const errors = []
 
     for (const hook of afterEaches) {
+      const metadata = this.testRunner.hookMetadata(hook)
+
       try {
         await this.testRunner.runProfileSpan({
           phase: "afterEach",
-          declarationIndex: hook.declarationIndex,
-          declarationScopeId: hook.declarationScopeId,
-          filePath: hook.ownerFilePath
+          declarationIndex: metadata.declarationIndex,
+          declarationScopeId: metadata.declarationScopeId,
+          filePath: metadata.ownerFilePath
         }, async () => {
           await hook.callback({configuration: this.testRunner.getConfiguration(), testArgs, testData})
         })
