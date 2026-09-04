@@ -4575,7 +4575,10 @@ class VelociousDatabaseRecord {
 
     const data = Object.assign({}, this._belongsToChanges(), this.rawAttributes())
     const primaryKey = this.getModelClass().primaryKey()
-    const primaryKeyColumn = Array.isArray(primaryKey) ? undefined : this.getModelClass().getColumns().find((column) => column.getName() == primaryKey)
+    const primaryKeyColumns = this.getModelClass().getColumns().filter((column) => {
+      return Array.isArray(primaryKey) ? primaryKey.includes(column.getName()) : column.getName() == primaryKey
+    })
+    const primaryKeyColumn = Array.isArray(primaryKey) ? undefined : primaryKeyColumns[0]
     const primaryKeyType = primaryKeyColumn?.getType()?.toLowerCase()
     const driverSupportsDefaultUUID = typeof connection.supportsDefaultPrimaryKeyUUID == "function" && connection.supportsDefaultPrimaryKeyUUID()
     const isUUIDPrimaryKey = primaryKeyType?.includes("uuid")
@@ -4586,6 +4589,11 @@ class VelociousDatabaseRecord {
     const hasUserProvidedPrimaryKey = Array.isArray(primaryKey)
       ? primaryKey.every((columnName) => data[columnName] !== undefined && data[columnName] !== null && data[columnName] !== "")
       : data[primaryKey] !== undefined && data[primaryKey] !== null && data[primaryKey] !== ""
+    const hasUserProvidedAutoIncrementPrimaryKey = primaryKeyColumns.some((column) => {
+      const value = data[column.getName()]
+
+      return column.getAutoIncrement() === true && value !== undefined && value !== null && value !== ""
+    })
 
     if (shouldAssignUUIDPrimaryKey && !hasUserProvidedPrimaryKey) {
       if (Array.isArray(primaryKey)) throw new Error("Composite UUID primary keys must be provided explicitly.")
@@ -4604,7 +4612,7 @@ class VelociousDatabaseRecord {
     // Explicit primary-key inserts into auto-increment columns go through the
     // driver's explicit-primary-key insert (MSSQL wraps it in IDENTITY_INSERT);
     // everything else uses the plain query path.
-    const insertResult = hasUserProvidedPrimaryKey && primaryKeyColumn?.getAutoIncrement() === true
+    const insertResult = hasUserProvidedAutoIncrementPrimaryKey
       ? await connection.insertWithExplicitPrimaryKey({options: insertOptions, sql, tableName: this._tableName()})
       : await connection.query(sql, insertOptions)
 
