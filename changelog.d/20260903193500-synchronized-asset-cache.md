@@ -10,8 +10,8 @@
   blobs from deletion or eviction throughout active cache lookup and download
   operations.
 - Serialize per-digest deletion with new cache activity, recheck live retention
-  before eviction, and keep late callers on the same failed download while
-  persisting retry metadata for every participating descriptor.
+  and LRU metadata before eviction, and keep late callers on the same failed
+  download while persisting retry metadata for every participating descriptor.
 - Retain each digest's protection through its eager processing, enforce cleanup
   between digest groups, and release every remaining incoming digest when one
   pending-deletion finalizer fails.

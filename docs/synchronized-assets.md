@@ -131,8 +131,10 @@ least-recently-used blob whose live references are all `evictable`. A blob with
 any `durable` reference or an active lookup/download operation is retained even
 when that leaves the cache above its budget. Retention references are re-read
 inside the protected deletion boundary so synchronization cannot add a durable
-reference after the eviction decision. Evicted descriptor metadata remains,
-allowing the bytes to be fetched again later.
+reference after the eviction decision. Access timestamps are re-read before
+each victim enters that boundary, so a lookup completed during cleanup keeps
+the newly accessed blob ahead of older candidates. Evicted descriptor metadata
+remains, allowing the bytes to be fetched again later.
 
 The `missingRequiredAssetIds` result is the offline-readiness boundary. A sync
 coordinator must not mark a scope offline-ready while this list is non-empty.

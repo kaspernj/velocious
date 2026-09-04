@@ -1,10 +1,70 @@
 // @ts-check
 
+import { deferred } from "awaitery"
 import { describe, expect, it } from "../../src/testing/test.js"
 import SynchronizedAssetCache from "../../src/sync/assets/cache.js"
 import { bytes, descriptor, MemoryAssetCacheAdapter, PausedBlobLookupAssetCacheAdapter, PausedDeleteAssetCacheAdapter, PausedWriteAssetCacheAdapter } from "../helpers/synchronized-asset-cache.js"
 
 describe("SynchronizedAssetCache eviction", {databaseCleaning: {transaction: false, truncate: false}}, () => {
+  it("reselects the least-recently-used blob after concurrent access", async () => {
+    class PausedSecondBlobLookupAssetCacheAdapter extends MemoryAssetCacheAdapter {
+      constructor() {
+        super()
+        this.blobLookupCount = 0
+        this.blobLookupStarted = deferred()
+        this.pauseOnSecondBlobLookup = false
+        this.releaseBlobLookup = deferred()
+      }
+
+      /** @param {{accountId: string, digest: string}} args Blob identity. @returns {Promise<string | null>} Resolvable URI. */
+      async blobUri(args) {
+        this.blobLookupCount += 1
+
+        if (this.pauseOnSecondBlobLookup && this.blobLookupCount === 2) {
+          this.blobLookupStarted.resolve(undefined)
+          await this.releaseBlobLookup.promise
+        }
+
+        return await super.blobUri(args)
+      }
+    }
+
+    const oldContent = bytes([102, 103, 104])
+    const newerContent = bytes([105, 106, 107])
+    const oldAsset = descriptor({bytes: oldContent, id: "old"})
+    const newerAsset = descriptor({bytes: newerContent, id: "newer"})
+    const adapter = new PausedSecondBlobLookupAssetCacheAdapter()
+    const contents = new Map([[oldAsset.id, oldContent], [newerAsset.id, newerContent]])
+    let currentTime = 1000
+    const cache = new SynchronizedAssetCache({
+      accountId: "account-1",
+      adapter,
+      download: async (asset) => /** @type {Uint8Array} */ (contents.get(asset.id)),
+      maxBytes: 1024,
+      now: () => new Date(currentTime)
+    })
+
+    await cache.synchronize({descriptors: [oldAsset], online: true, scopeKey: "old-scope"})
+    currentTime = 2000
+    await cache.synchronize({descriptors: [newerAsset], online: true, scopeKey: "newer-scope"})
+
+    adapter.blobLookupCount = 0
+    adapter.pauseOnSecondBlobLookup = true
+    cache.maxBytes = oldContent.byteLength
+
+    const cleanupPromise = cache.cleanup()
+
+    await adapter.blobLookupStarted.promise
+    currentTime = 3000
+
+    expect(await cache.resolve({assetId: oldAsset.id, online: false})).toEqual(`memory://account-1:${oldAsset.digest}`)
+    adapter.releaseBlobLookup.resolve(undefined)
+
+    expect(await cleanupPromise).toEqual(newerContent.byteLength)
+    expect(adapter.deletedBlobKeys).toEqual([`account-1:${newerAsset.digest}`])
+    expect(adapter.blobs.has(`account-1:${oldAsset.digest}`)).toEqual(true)
+  })
+
   it("enforces the byte budget incrementally during eager synchronization", async () => {
     class PeakBytesAssetCacheAdapter extends MemoryAssetCacheAdapter {
       constructor() {

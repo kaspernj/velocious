@@ -210,12 +210,24 @@ export default class SynchronizedAssetCache {
       })
     }
 
-    cachedBlobs.sort((left, right) => left.lastAccessedAt - right.lastAccessedAt || left.digest.localeCompare(right.digest))
-
     let removedBytes = 0
 
-    for (const blob of cachedBlobs) {
+    while (cachedBlobs.length > 0) {
       if (cachedBytes <= this.maxBytes) break
+
+      for (const cachedBlob of cachedBlobs) {
+        const currentReferences = state.assets.filter((entry) => entry.descriptor.digest === cachedBlob.digest)
+
+        if (currentReferences.length > 0) {
+          cachedBlob.lastAccessedAt = Math.max(...currentReferences.map((entry) => entry.lastAccessedAt))
+        }
+      }
+
+      cachedBlobs.sort((left, right) => left.lastAccessedAt - right.lastAccessedAt || left.digest.localeCompare(right.digest))
+
+      const blob = cachedBlobs.shift()
+
+      if (!blob) throw new Error("Expected a synchronized asset cache eviction candidate")
       if (protectedDigests.has(blob.digest)) continue
       let blobWasAlreadyMissing = false
       const deleted = await this.deleteDigestIfInactive(blob.digest, async () => {
