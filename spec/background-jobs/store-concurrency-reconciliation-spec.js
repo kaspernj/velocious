@@ -205,4 +205,81 @@ describe("Background jobs store concurrency reconciliation", {databaseCleaning: 
     expect(await store.markHandedOff({jobId, workerId: "worker-1"})).toBeNull()
     expect(await store.getJob(jobId)).toMatchObject({concurrencyKey: "queue:builds", status: "queued"})
   })
+
+  it("adopts an added queue cap when an active handoff returns to the queue", async () => {
+    dummyConfiguration.setBackgroundJobsConfig({queues: {}})
+    const store = await clearBackgroundJobs()
+    const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {queue: "builds"}})
+    const handoff = await store.markHandedOff({jobId, workerId: "worker-1"})
+
+    if (!handoff) throw new Error("Expected the job to be handed off")
+
+    try {
+      dummyConfiguration.setBackgroundJobsConfig({queues: {builds: {maxConcurrent: 2}}})
+      await store.markReturnedToQueue({handoffId: handoff.handoffId, jobId})
+
+      expect(await store.getJob(jobId)).toMatchObject({
+        concurrencyKey: "queue:builds",
+        maxConcurrency: 2,
+        status: "queued"
+      })
+      expect(await readActiveCount({store, concurrencyKey: "queue:builds"})).toEqual(0)
+    } finally {
+      dummyConfiguration.setBackgroundJobsConfig({queues: {}})
+    }
+  })
+
+  it("drops a removed queue cap when an active handoff is rescheduled", async () => {
+    dummyConfiguration.setBackgroundJobsConfig({queues: {builds: {maxConcurrent: 2}}})
+    const store = await clearBackgroundJobs()
+    const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {queue: "builds"}})
+    const handoff = await store.markHandedOff({jobId, workerId: "worker-1"})
+
+    if (!handoff) throw new Error("Expected the job to be handed off")
+
+    try {
+      dummyConfiguration.setBackgroundJobsConfig({queues: {}})
+      expect(await store.markRescheduled({delayMs: 0, jobId, workerId: "worker-1", ...handoff})).toEqual(true)
+      expect(await store.getJob(jobId)).toMatchObject({
+        concurrencyKey: null,
+        maxConcurrency: null,
+        status: "queued"
+      })
+      expect(await readActiveCount({store, concurrencyKey: "queue:builds"})).toEqual(0)
+    } finally {
+      dummyConfiguration.setBackgroundJobsConfig({queues: {}})
+    }
+  })
+
+  it("adopts a changed queue cap when a failed handoff retries", async () => {
+    dummyConfiguration.setBackgroundJobsConfig({queues: {builds: {maxConcurrent: 3}}})
+    const store = await clearBackgroundJobs()
+    const jobId = await store.enqueue({
+      jobName: "TestJob",
+      args: [],
+      options: {maxRetries: 1, queue: "builds"}
+    })
+    const handoff = await store.markHandedOff({jobId, workerId: "worker-1"})
+
+    if (!handoff) throw new Error("Expected the job to be handed off")
+
+    try {
+      dummyConfiguration.setBackgroundJobsConfig({queues: {builds: {maxConcurrent: 1}}})
+      const retriedJob = await store.markFailed({error: "retry", jobId, workerId: "worker-1", ...handoff})
+
+      expect(retriedJob).toMatchObject({
+        concurrencyKey: "queue:builds",
+        maxConcurrency: 1,
+        status: "queued"
+      })
+      expect(await store.getJob(jobId)).toMatchObject({
+        concurrencyKey: "queue:builds",
+        maxConcurrency: 1,
+        status: "queued"
+      })
+      expect(await readActiveCount({store, concurrencyKey: "queue:builds"})).toEqual(0)
+    } finally {
+      dummyConfiguration.setBackgroundJobsConfig({queues: {}})
+    }
+  })
 })

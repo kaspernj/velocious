@@ -75,6 +75,16 @@ export type BackgroundJobConcurrencyCountRow = {
      */
     concurrency_key: string;
 };
+export type BackgroundJobQueuedConcurrency = {
+    /**
+     * - Current concurrency key for queued work.
+     */
+    concurrencyKey: string | null;
+    /**
+     * - Current concurrency cap for queued work.
+     */
+    maxConcurrency: number | null;
+};
 export declare const BACKGROUND_JOB_COUNTS_CHANNEL = "velocious-background-job-counts";
 export declare const BACKGROUND_JOB_COUNT_BUCKETS: string[];
 export default class BackgroundJobsStore extends BackgroundJobsAdapter {
@@ -811,15 +821,17 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
      * @param {boolean} args.markOrphaned - Whether marking orphaned.
      * @param {number} args.nextAttempt - Next attempt count.
      * @param {number} args.now - Current timestamp.
+     * @param {BackgroundJobQueuedConcurrency | null} args.queuedConcurrency - Current queue policy for a retry.
      * @param {number | null} args.scheduledAt - Next scheduled timestamp.
      * @param {boolean} args.shouldRetry - Whether the job should retry.
      * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Database update data.
      */
-    _failureUpdate({ failureMessage, markOrphaned, nextAttempt, now, scheduledAt, shouldRetry }: {
+    _failureUpdate({ failureMessage, markOrphaned, nextAttempt, now, queuedConcurrency, scheduledAt, shouldRetry }: {
         failureMessage: string;
         markOrphaned: boolean;
         nextAttempt: number;
         now: number;
+        queuedConcurrency: BackgroundJobQueuedConcurrency | null;
         scheduledAt: number | null;
         shouldRetry: boolean;
     }): Record<string, ReturnType<typeof JSON.parse>>;
@@ -880,6 +892,15 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
         maxConcurrency: number;
         queueDerived: boolean;
     } | null;
+    /**
+     * Resolves the current concurrency policy for a transition back to queued.
+     * Explicit concurrency remains owned by the enqueue request; queue-derived
+     * concurrency adopts the queue's current cap or removal.
+     * @param {import("../database/drivers/base.js").default} db - Database connection.
+     * @param {import("./types.js").BackgroundJobRow} job - Active handoff snapshot.
+     * @returns {Promise<BackgroundJobQueuedConcurrency>} - Current queued concurrency.
+     */
+    _requeuedJobConcurrency(db: import("../database/drivers/base.js").default, job: import("./types.js").BackgroundJobRow): Promise<BackgroundJobQueuedConcurrency>;
     /**
      * Reads the configured max concurrency for a queue from the background-jobs config.
      * @param {string} queue - Queue name.

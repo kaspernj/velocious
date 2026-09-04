@@ -63,6 +63,13 @@ import {
  * @property {string} concurrency_key - Durable cap identity.
  */
 
+/**
+ * BackgroundJobQueuedConcurrency type.
+ * @typedef {object} BackgroundJobQueuedConcurrency
+ * @property {string | null} concurrencyKey - Current concurrency key for queued work.
+ * @property {number | null} maxConcurrency - Current concurrency cap for queued work.
+ */
+
 const MIGRATIONS_TABLE = "velocious_internal_migrations"
 const MIGRATION_SCOPE = "background_jobs"
 const MIGRATION_VERSION = "20250215000000"
@@ -1077,10 +1084,13 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       if (!this._shouldAcceptReport({job, handoffId, workerId, handedOffAtMs})) return false
 
       await this._lockConcurrencyRow(db, job.concurrencyKey)
+      const queuedConcurrency = await this._requeuedJobConcurrency(db, job)
       const scheduledAtMs = this._rescheduledAtMs(delayMs)
       const affectedRows = await this._updateAffectedRows(db, {
         tableName: JOBS_TABLE,
         data: {
+          concurrency_key: queuedConcurrency.concurrencyKey,
+          max_concurrency: queuedConcurrency.maxConcurrency,
           status: "queued",
           scheduled_at_ms: scheduledAtMs,
           handed_off_at_ms: null,
@@ -1111,9 +1121,12 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       const job = await this._getJobRowById(db, jobId)
       if (!job || job.handoffId !== handoffId || job.status !== "handed_off") return
       await this._lockConcurrencyRow(db, job.concurrencyKey)
+      const queuedConcurrency = await this._requeuedJobConcurrency(db, job)
       const affectedRows = await this._updateAffectedRows(db, {
         tableName: JOBS_TABLE,
         data: {
+          concurrency_key: queuedConcurrency.concurrencyKey,
+          max_concurrency: queuedConcurrency.maxConcurrency,
           status: "queued",
           scheduled_at_ms: Date.now(),
           handed_off_at_ms: null,
@@ -2225,11 +2238,13 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
     const shouldRetry = nextAttempt <= maxRetries
     const failureMessage = normalizeBackgroundJobError(error)
     const scheduledAt = shouldRetry ? now + this.getRetryDelayMs(nextAttempt) : job.scheduledAtMs
+    const queuedConcurrency = shouldRetry ? await this._requeuedJobConcurrency(db, job) : null
     const update = this._failureUpdate({
       failureMessage,
       markOrphaned,
       nextAttempt,
       now,
+      queuedConcurrency,
       scheduledAt,
       shouldRetry
     })
@@ -2261,6 +2276,10 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       workerId: null
     }
 
+    if (queuedConcurrency) {
+      transitionedJob.concurrencyKey = queuedConcurrency.concurrencyKey
+      transitionedJob.maxConcurrency = queuedConcurrency.maxConcurrency
+    }
     if (markOrphaned) transitionedJob.orphanedAtMs = now
     if (shouldRetry) {
       transitionedJob.scheduledAtMs = scheduledAt
@@ -2278,11 +2297,12 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
    * @param {boolean} args.markOrphaned - Whether marking orphaned.
    * @param {number} args.nextAttempt - Next attempt count.
    * @param {number} args.now - Current timestamp.
+   * @param {BackgroundJobQueuedConcurrency | null} args.queuedConcurrency - Current queue policy for a retry.
    * @param {number | null} args.scheduledAt - Next scheduled timestamp.
    * @param {boolean} args.shouldRetry - Whether the job should retry.
    * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Database update data.
    */
-  _failureUpdate({failureMessage, markOrphaned, nextAttempt, now, scheduledAt, shouldRetry}) {
+  _failureUpdate({failureMessage, markOrphaned, nextAttempt, now, queuedConcurrency, scheduledAt, shouldRetry}) {
     /**
      * Update.
      * @type {Record<string, ReturnType<typeof JSON.parse>>} */
@@ -2293,6 +2313,10 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       last_error: failureMessage
     }
 
+    if (queuedConcurrency) {
+      update.concurrency_key = queuedConcurrency.concurrencyKey
+      update.max_concurrency = queuedConcurrency.maxConcurrency
+    }
     this._applyOrphanedFailureUpdate({markOrphaned, now, update})
     this._applyFailureStatusUpdate({markOrphaned, now, scheduledAt, shouldRetry, update})
 
@@ -2399,6 +2423,28 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       queue,
       queues: this.configuration.getBackgroundJobsConfig().queues
     })
+  }
+
+  /**
+   * Resolves the current concurrency policy for a transition back to queued.
+   * Explicit concurrency remains owned by the enqueue request; queue-derived
+   * concurrency adopts the queue's current cap or removal.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {import("./types.js").BackgroundJobRow} job - Active handoff snapshot.
+   * @returns {Promise<BackgroundJobQueuedConcurrency>} - Current queued concurrency.
+   */
+  async _requeuedJobConcurrency(db, job) {
+    if (job.concurrencyKey && !job.concurrencyKey.startsWith(QUEUE_CONCURRENCY_KEY_PREFIX)) {
+      return {concurrencyKey: job.concurrencyKey, maxConcurrency: job.maxConcurrency}
+    }
+
+    const concurrency = this._resolveConcurrency({}, job.queue)
+
+    if (!concurrency) return {concurrencyKey: null, maxConcurrency: null}
+
+    await this._ensureQueueConcurrencyKey(db, concurrency)
+
+    return {concurrencyKey: concurrency.concurrencyKey, maxConcurrency: concurrency.maxConcurrency}
   }
 
   /**
