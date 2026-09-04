@@ -65,6 +65,26 @@ export type BackgroundJobTransactionSerializationOptions = {
         name: string;
     };
 };
+export type BackgroundJobConcurrencyCountRow = {
+    /**
+     * - Persisted or aggregated active count.
+     */
+    active_count: number | string;
+    /**
+     * - Durable cap identity.
+     */
+    concurrency_key: string;
+};
+export type BackgroundJobQueuedConcurrency = {
+    /**
+     * - Current concurrency key for queued work.
+     */
+    concurrencyKey: string | null;
+    /**
+     * - Current concurrency cap for queued work.
+     */
+    maxConcurrency: number | null;
+};
 export declare const BACKGROUND_JOB_COUNTS_CHANNEL = "velocious-background-job-counts";
 export declare const BACKGROUND_JOB_COUNT_BUCKETS: string[];
 export default class BackgroundJobsStore extends BackgroundJobsAdapter {
@@ -121,6 +141,13 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
      * @returns {Promise<void>} - Resolves when reconciled.
      */
     reconcileQueueConcurrency(): Promise<void>;
+    /**
+     * Repairs durable active-count drift while a main process remains live. The
+     * initial snapshot is read-only; only suspected mismatches take their
+     * counter lock and re-count inside the serialized transaction path.
+     * @returns {Promise<import("./types.js").BackgroundJobConcurrencyReconciliation>} - Repair summary.
+     */
+    reconcileActiveConcurrency(): Promise<import("./types.js").BackgroundJobConcurrencyReconciliation>;
     /**
      * Runs enqueue.
      * @param {object} args - Options.
@@ -864,6 +891,14 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
         queueDerived: boolean;
     } | null;
     /**
+     * Applies the active generation's queue policy immediately before handoff.
+     * Explicit concurrency remains owned by the enqueue request.
+     * @param {import("../database/drivers/base.js").default} db - Database connection.
+     * @param {import("./types.js").BackgroundJobRow} job - Queued job snapshot.
+     * @returns {Promise<import("./types.js").BackgroundJobRow | null>} - Reconciled job, or null when its queued-state fence lost.
+     */
+    _reconcileQueuedJobConcurrency(db: import("../database/drivers/base.js").default, job: import("./types.js").BackgroundJobRow): Promise<import("./types.js").BackgroundJobRow | null>;
+    /**
      * Reads the configured max concurrency for a queue from the background-jobs config.
      * @param {string} queue - Queue name.
      * @returns {number | null} - Positive integer cap, or null when the queue has no configured cap.
@@ -1012,17 +1047,27 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
     /**
      * Rebuilds durable counts from active handoffs.
      * @param {import("../database/drivers/base.js").default} db - Database connection.
-     * @returns {Promise<void>} - Resolves when reconciled.
+     * @param {{insideTransaction?: boolean}} [options] - Reuse an enclosing transaction.
+     * @returns {Promise<import("./types.js").BackgroundJobConcurrencyReconciliation>} - Repair summary.
      */
-    _reconcileConcurrency(db: import("../database/drivers/base.js").default): Promise<void>;
+    _reconcileConcurrency(db: import("../database/drivers/base.js").default, { insideTransaction }?: {
+        insideTransaction?: boolean;
+    }): Promise<import("./types.js").BackgroundJobConcurrencyReconciliation>;
     /**
      * Rebuilds one counter after locking it ahead of the job rows, matching the
      * lock order used by handoff and completion transitions.
      * @param {import("../database/drivers/base.js").default} db - Database connection.
      * @param {string} concurrencyKey - Counter key.
-     * @returns {Promise<void>} - Resolves when reconciled.
+     * @returns {Promise<import("./types.js").BackgroundJobConcurrencyRepair | null>} - Applied repair.
      */
-    _reconcileConcurrencyKey(db: import("../database/drivers/base.js").default, concurrencyKey: string): Promise<void>;
+    _reconcileConcurrencyKey(db: import("../database/drivers/base.js").default, concurrencyKey: string): Promise<import("./types.js").BackgroundJobConcurrencyRepair | null>;
+    /**
+     * Validates a database count before it participates in reconciliation.
+     * @param {number | string} value - Raw count.
+     * @param {string} concurrencyKey - Counter key for diagnostics.
+     * @returns {number} - Safe non-negative count.
+     */
+    _validatedConcurrencyCount(value: number | string, concurrencyKey: string): number;
     /**
      * Reconciles queue-derived concurrency with the current configuration. Only
      * invoked through {@link reconcileQueueConcurrency} — the explicit lifecycle
@@ -1035,11 +1080,12 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
      * while a backlog exists otherwise leaves persisted rows stale: pre-cap jobs
      * keep a null key and bypass the cap, post-removal jobs stay capped under a
      * now-unconfigured key, and a changed numeric cap stays stale until the next
-     * enqueue. Bring the durable state in line with config: sync each configured
-     * queue's stored cap, adopt not-yet-keyed non-terminal jobs onto their queue
-     * key, and release non-terminal jobs from queue keys whose queue is no
-     * longer capped. Runs before {@link _reconcileConcurrency} so the rebuilt
-     * active counts reflect the adopted/released keys.
+     * enqueue. Bring queued durable state in line with config: sync each configured
+     * queue's stored cap, adopt not-yet-keyed queued jobs onto their queue key,
+     * and release queued jobs from queue keys whose queue is no longer capped.
+     * Existing handoffs retain the policy and reservation they started with, so
+     * reconciliation cannot race their completion/retry transitions. Runs before
+     * {@link _reconcileConcurrency} so any pre-existing active counts are exact.
      * @param {import("../database/drivers/base.js").default} db - Database connection.
      * @returns {Promise<void>} - Resolves when reconciled.
      */
@@ -1109,15 +1155,23 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
      */
     _serializedCountMutation<T>(callback: (db: import("../database/drivers/base.js").default) => Promise<T>, options?: BackgroundJobTransactionSerializationOptions): Promise<T>;
     /**
-     * Admits transactions to the process-local FIFO before they check out a
-     * connection. Cross-process ordering remains the responsibility of durable
-     * row/advisory locks and unique constraints acquired around the callback.
+     * Runs a serialized callback inside one transaction.
      * @template T
      * @param {(db: import("../database/drivers/base.js").default) => Promise<T>} callback - Transaction callback.
      * @param {BackgroundJobTransactionSerializationOptions} [options] - Serialization options.
      * @returns {Promise<T>} Callback result.
      */
     _serializedTransactionMutation<T>(callback: (db: import("../database/drivers/base.js").default) => Promise<T>, options?: BackgroundJobTransactionSerializationOptions): Promise<T>;
+    /**
+     * Admits mutation callbacks to the process-local FIFO before they check out a
+     * connection. Cross-process ordering remains the responsibility of durable
+     * row/advisory locks and unique constraints acquired around the callback.
+     * @template T
+     * @param {(db: import("../database/drivers/base.js").default) => Promise<T>} callback - Connection callback.
+     * @param {BackgroundJobTransactionSerializationOptions} [options] - Serialization options.
+     * @returns {Promise<T>} Callback result.
+     */
+    _serializedConnectionMutation<T>(callback: (db: import("../database/drivers/base.js").default) => Promise<T>, options?: BackgroundJobTransactionSerializationOptions): Promise<T>;
     /**
      * Runs should accept report.
      * @param {object} args - Options.

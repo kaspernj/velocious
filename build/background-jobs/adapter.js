@@ -49,6 +49,15 @@ export default class BackgroundJobsAdapter {
   async reconcileQueueConcurrency() { throw new Error("BackgroundJobsAdapter#reconcileQueueConcurrency is not implemented") }
 
   /**
+   * Repairs drift in adapter-owned durable active concurrency counts. Adapters
+   * without duplicate active-count persistence can keep this no-op result.
+   * @returns {Promise<import("./types.js").BackgroundJobConcurrencyReconciliation>} - Repair summary.
+   */
+  async reconcileActiveConcurrency() {
+    return {candidateCount: 0, checkedCount: 0, repairedCount: 0, repairs: [], repairsTruncatedCount: 0}
+  }
+
+  /**
    * Enqueues a job.
    * @param {{jobName: string, args: Array<ReturnType<typeof JSON.parse>>, options?: import("./types.js").BackgroundJobOptions}} _args - Job request.
    * @returns {Promise<string>} - Job id.

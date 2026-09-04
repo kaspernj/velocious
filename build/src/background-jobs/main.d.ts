@@ -947,6 +947,12 @@ export default class BackgroundJobsMain {
     _armScheduledTimer(): Promise<void>;
     _sweepOrphans(): Promise<void>;
     /**
+     * Repairs durable admission counters on the active main's maintenance cadence
+     * and immediately retries dispatch when capacity was recovered.
+     * @returns {Promise<void>} - Resolves after repair and any resulting drain.
+     */
+    _reconcileActiveConcurrency(): Promise<void>;
+    /**
      * Publishes the common post-orphan lifecycle: wake queued retries, emit one
      * isolated event per accepted transition, and drain so released concurrency
      * can immediately admit other work.
