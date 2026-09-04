@@ -185,6 +185,56 @@ describe("SynchronizedAssetCache eviction", {databaseCleaning: {transaction: fal
     expect(adapter.blobs.has(`account-1:${durableAsset.digest}`)).toEqual(true)
   })
 
+  it("keeps a resolved URI cached through deferred cleanup during its final lookup", async () => {
+    class PausedFinalBlobLookupAssetCacheAdapter extends MemoryAssetCacheAdapter {
+      constructor() {
+        super()
+        this.blobLookupCount = 0
+        this.finalBlobLookupStarted = deferred()
+        this.pauseOnSecondBlobLookup = false
+        this.releaseFinalBlobLookup = deferred()
+      }
+
+      /** @param {{accountId: string, digest: string}} args Blob identity. @returns {Promise<string | null>} Resolvable URI. */
+      async blobUri(args) {
+        this.blobLookupCount += 1
+
+        if (this.pauseOnSecondBlobLookup && this.blobLookupCount === 2) {
+          this.finalBlobLookupStarted.resolve(undefined)
+          await this.releaseFinalBlobLookup.promise
+        }
+
+        return await super.blobUri(args)
+      }
+    }
+
+    const cachedContent = bytes([121, 122, 123])
+    const durableContent = bytes([124, 125, 126])
+    const cachedAsset = descriptor({bytes: cachedContent, id: "cached"})
+    const durableAsset = descriptor({bytes: durableContent, id: "durable", retention: "durable"})
+    const contents = new Map([[cachedAsset.id, cachedContent], [durableAsset.id, durableContent]])
+    const adapter = new PausedFinalBlobLookupAssetCacheAdapter()
+    const cache = new SynchronizedAssetCache({
+      accountId: "account-1",
+      adapter,
+      download: async (asset) => /** @type {Uint8Array} */ (contents.get(asset.id)),
+      maxBytes: 3
+    })
+
+    await cache.synchronize({descriptors: [cachedAsset], online: true, scopeKey: "cached-scope"})
+    adapter.blobLookupCount = 0
+    adapter.pauseOnSecondBlobLookup = true
+
+    const resolvePromise = cache.resolve({assetId: cachedAsset.id, online: false})
+
+    await adapter.finalBlobLookupStarted.promise
+    await cache.synchronize({descriptors: [durableAsset], online: true, scopeKey: "durable-scope"})
+    adapter.releaseFinalBlobLookup.resolve(undefined)
+
+    expect(await resolvePromise).toEqual(`memory://account-1:${cachedAsset.digest}`)
+    expect(adapter.blobs.has(`account-1:${cachedAsset.digest}`)).toEqual(true)
+  })
+
   it("serializes overlapping cleanup passes before selecting another victim", async () => {
     class DelayedBlobLookupAssetCacheAdapter extends MemoryAssetCacheAdapter {
       /** @param {{accountId: string, digest: string}} args Blob identity. @returns {Promise<string | null>} Resolvable URI. */

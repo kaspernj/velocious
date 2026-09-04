@@ -723,7 +723,7 @@ export default class SynchronizedAssetCache {
     try {
       return await this.cachedUriWhileActive(entry)
     } finally {
-      await this.finishActiveDigest(digest)
+      await this.finishActiveDigest(digest, new Set([digest]))
     }
   }
 
