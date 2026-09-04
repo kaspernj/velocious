@@ -1,22 +1,22 @@
 // @ts-check
 
-import {addTrackedStackToError} from "../utils/with-tracked-stack.js"
 import fs from "node:fs/promises"
 import path from "path"
 import {format} from "node:util"
 import {AsyncLocalStorage} from "node:async_hooks"
 import Application from "../../src/application.js"
-import BacktraceCleaner from "../utils/backtrace-cleaner-node.js"
-import {TestDatabaseAccessRevokedError} from "../environment-handlers/base.js"
 import RequestClient from "./request-client.js"
 import picocolors from "picocolors"
 import restArgsError from "../utils/rest-args-error.js"
-import {testConfig, testEvents, tests} from "./test.js"
+import {testConfig, tests} from "./test.js"
 import {pathToFileURL} from "url"
-import {clearDeliveries} from "../mailer.js"
 import SharedTransactionBroker from "./shared-transaction-broker.js"
 import { SHARED_TRANSACTION_BROKER_ENV } from "./shared-transaction-proxy-driver.js"
 import {synchronizeTestingPackageTests} from "./testing-package-adapter.js"
+import VelociousAttemptExecutor from "./velocious-attempt-executor.js"
+import VelociousRunnerReporter from "./velocious-runner-reporter.js"
+import VelociousSuiteHookExecutor from "./velocious-suite-hook-executor.js"
+import VelociousTestArguments from "./velocious-test-arguments.js"
 
 /**
  * ConsoleMethodName type.
@@ -120,9 +120,8 @@ import {synchronizeTestingPackageTests} from "./testing-package-adapter.js"
  * @property {Record<string, TestsArgument>} subs - Optional child nodes. Each item is another `Node`, allowing recursion.
  */
 /**
- * Marks the error thrown by {@link runWithTimeout} so the caller can tell a
- * lifecycle timeout (the promise is still running detached) apart from an
- * ordinary test failure (the promise already settled).
+ * Marks the error thrown by the attempt timeout so the runner can distinguish
+ * detached lifecycle cleanup from an ordinary test failure.
  * @typedef {Error & {velociousTestTimeout?: true}} TestTimeoutError
  */
 /**
@@ -144,94 +143,6 @@ import {synchronizeTestingPackageTests} from "./testing-package-adapter.js"
  * @property {string} reuseKey - Resolved physical configuration identity.
  * @property {import("../database/pool/base.js").TestSharedConnectionRegistration | undefined} sharedRegistration - Physical-key shared registration once published.
  */
-
-/**
- * Runs run with timeout.
- *
- * On timeout the wrapped `promise` is NOT cancelled — it keeps running detached.
- * The rejected error is tagged with `velociousTestTimeout` so the runner knows
- * the lifecycle (and its afterEach database cleanup) is still in flight and can
- * wait for it to settle before the next test reuses the shared connection.
- * @param {Promise<ReturnType<typeof JSON.parse>> | ReturnType<typeof JSON.parse>} promise - Promise or value.
- * @param {number} timeoutMs - Timeout in milliseconds.
- * @param {string} testDescription - Test description.
- * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves or rejects based on timeout or promise result.
- */
-function runWithTimeout(promise, timeoutMs, testDescription) {
-  const timeoutSeconds = (timeoutMs / 1000).toFixed(3).replace(/\.?0+$/, "")
-  /** @type {TestTimeoutError} */
-  const timeoutError = new Error(`Timed out after ${timeoutSeconds}s: ${testDescription}`)
-  timeoutError.velociousTestTimeout = true
-
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(timeoutError), timeoutMs)
-
-    Promise.resolve(promise).then((result) => {
-      clearTimeout(timeout)
-      resolve(result)
-    }).catch((error) => {
-      clearTimeout(timeout)
-      reject(error)
-    })
-  })
-}
-
-/**
- * Waits for an abandoned (timed-out) test lifecycle to settle, bounded by a
- * grace period, so its afterEach database cleanup runs on the shared connection
- * before the next test reuses it. Returns the fulfillment/rejection outcome if
- * the lifecycle settles, or a pending outcome once the grace elapses.
- *
- * The grace timer is kept ref'd so it cannot let Node exit with an unsettled
- * top-level await when the timed-out lifecycle has no ref'd handles of its own
- * (for example a stalled mocked async API). Once the caller continues past this
- * await, the timer has already resolved and no longer anchors the event loop.
- * @param {Promise<ReturnType<typeof JSON.parse>>} lifecycle - The abandoned per-test lifecycle promise.
- * @param {number} graceMs - Maximum time to wait for the lifecycle to settle.
- * @returns {Promise<{settled: false} | {settled: true, status: "fulfilled"} | {settled: true, status: "rejected", reason: unknown}>} - Settlement outcome.
- */
-function awaitSettledOrGrace(lifecycle, graceMs) {
-  return new Promise((resolve) => {
-    let settled = false
-    const graceTimer = setTimeout(() => {
-      if (settled) return
-
-      settled = true
-      resolve({settled: false})
-    }, graceMs)
-
-    Promise.resolve(lifecycle).then(
-      () => {
-        if (settled) return
-
-        settled = true
-        clearTimeout(graceTimer)
-        resolve({settled: true, status: "fulfilled"})
-      },
-      (reason) => {
-        if (settled) return
-
-        settled = true
-        clearTimeout(graceTimer)
-        resolve({settled: true, status: "rejected", reason})
-      }
-    )
-  })
-}
-
-/**
- * Checks whether a late lifecycle stopped only because its test access was revoked.
- * @param {unknown} error - Lifecycle rejection.
- * @returns {boolean} - Whether every contained error is expected revocation.
- */
-function isTestDatabaseAccessRevocation(error) {
-  if (error instanceof TestDatabaseAccessRevokedError) return true
-  if (error instanceof AggregateError) {
-    return error.errors.length > 0 && error.errors.every((nestedError) => isTestDatabaseAccessRevocation(nestedError))
-  }
-
-  return false
-}
 
 /**
  * Captured console methods.
@@ -300,6 +211,10 @@ export default class TestRunner {
     this._lastTestContext = null
     /** @type {Array<{fullDescription: string, filePath: string, line: number, durationMs: number}>} */
     this._testDurations = []
+    this._attemptExecutor = new VelociousAttemptExecutor({testRunner: this})
+    this._runnerReporter = new VelociousRunnerReporter({testRunner: this})
+    this._suiteHookExecutor = new VelociousSuiteHookExecutor({testRunner: this})
+    this._testArguments = new VelociousTestArguments({testRunner: this})
   }
 
   /**
@@ -1530,28 +1445,7 @@ export default class TestRunner {
    * @returns {Promise<void>} - Resolves after every hook runs.
    */
   async runAfterEaches({afterEaches, testArgs, testData}) {
-    /** @type {unknown[]} */
-    const afterEachErrors = []
-
-    for (const afterEachData of afterEaches) {
-      try {
-        await this.runProfileSpan({
-          phase: "afterEach",
-          declarationIndex: afterEachData.declarationIndex,
-          declarationScopeId: afterEachData.declarationScopeId,
-          filePath: afterEachData.ownerFilePath
-        }, async () => {
-          await afterEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
-        })
-      } catch (error) {
-        afterEachErrors.push(error)
-      }
-    }
-
-    if (afterEachErrors.length == 1) throw afterEachErrors[0]
-    if (afterEachErrors.length > 1) {
-      throw new AggregateError(afterEachErrors, "Multiple afterEach hooks failed", {cause: afterEachErrors[0]})
-    }
+    await this._attemptExecutor.runAfterEaches({afterEaches, testArgs, testData})
   }
 
   /**
@@ -1597,32 +1491,17 @@ export default class TestRunner {
     try {
       const beforeAlls = this.profileHookEntries(tests.beforeAlls || [], profileScopeId, scopeOwnerFilePath)
 
-      for (const beforeAllData of beforeAlls) {
-        await this.runProfileSpan({
-          phase: "beforeAll",
-          declarationIndex: beforeAllData.declarationIndex,
-          declarationScopeId: beforeAllData.declarationScopeId,
-          filePath: beforeAllData.ownerFilePath
-        }, async () => {
-          await beforeAllData.callback({configuration: this.getConfiguration()})
-        })
-      }
+      await this._suiteHookExecutor.runBeforeAlls({hooks: beforeAlls})
 
       for (const testDescription in tests.tests) {
         const testData = tests.tests[testDescription]
-        const testArgs = /** @type {TestArgs} */ (Object.assign({}, testData.args))
+        const testArgs = this._testArguments.copy(testData)
         const includeByLine = scopeLineMatch || this.matchesLineFilter(testData)
 
         if (this._onlyFocussed && !testArgs.focus) continue
         if (this.shouldSkipTest(testArgs, testData, testDescription, descriptions, includeByLine)) continue
 
-        if (testArgs.type == "model" || testArgs.type == "request") {
-          testArgs.application = await this.application()
-        }
-
-        if (testArgs.type == "request") {
-          testArgs.client = await this.requestClient()
-        }
+        await this._testArguments.inject(testArgs)
 
         const retryCount = typeof testArgs.retry === "number" && Number.isFinite(testArgs.retry)
           ? Math.max(0, Math.floor(testArgs.retry))
@@ -1643,435 +1522,42 @@ export default class TestRunner {
         const testStartMs = Date.now()
 
         while (true) {
-          let shouldRetry = false
-          /**
-           * Defines caughtError.
-           * @type {ReturnType<typeof JSON.parse>} */
-          let caughtError
-          /**
-           * Defines failedError.
-           * @type {ReturnType<typeof JSON.parse>} */
-          let failedError
-          /**
-           * Defines lastError.
-           * @type {ReturnType<typeof JSON.parse>} */
-          let lastError
-          let willRetry = false
-          /**
-           * The per-test lifecycle promise, hoisted so the timeout branch can
-           * still wait for it to settle after runWithTimeout has abandoned it.
-           * @type {Promise<ReturnType<typeof JSON.parse>> | undefined} */
-          let testLifecycle
-          /** @type {{pool: import("../database/pool/base.js").default, registration: import("../database/pool/base.js").TestSharedConnectionRegistration}[]} */
-          let testSharedConnectionRegistrations = []
-          let testSharedConnectionsActive = false
-          /** @type {SharedTransactionBrokerRegistration | undefined} */
-          let sharedTransactionBrokerRegistration
-          /** @type {SharedTransactionBrokerRegistration | undefined} */
-          let sharedTransactionBrokerPreparation
-          /** @type {TransactionalTenantRegistration[]} */
-          const transactionalTenantRegistrations = []
-          /** @type {BrowserDummyConnectionRegistration[]} */
-          const browserDummyConnectionRegistrations = []
-          const testDatabaseAccessScope = {revoked: false}
-          /** @type {Set<Error>} */
-          const recordedTimeoutCleanupErrors = new Set()
-          testArgs.registerTransactionalTenant = async (args) => {
-            await this.registerTransactionalTenant(args, transactionalTenantRegistrations)
-          }
-          const stopConsoleCapture = this.startConsoleCapture({
-            passthrough: testConfig.consoleOutput === "live"
-          })
-          const profiler = this._profiler
-          const profileAttempt = profiler?.startAttempt({
-            descriptions,
+          const attemptResult = await this._attemptExecutor.execute({
+            afterEaches: newAfterEaches,
             attemptNumber,
+            beforeEaches: newBeforeEaches,
+            descriptions,
+            testArgs,
             testData,
-            testDescription
+            testDescription,
+            timeoutMs
           })
-          let attemptTimedOut = false
 
-          try {
-            // Run the whole per-test lifecycle (dummy/server startup, connection
-            // acquisition, beforeEach hooks, the test body and afterEach hooks) as
-            // one promise so the timeout below can cover all of it.
-            const runLifecycleCallback = async () => await this.runWithDummyIfNeeded(testArgs, async () => {
-              const useTransaction = testArgs.databaseCleaning?.transaction === true
-              const shouldTruncate = testArgs.databaseCleaning?.truncate ?? !useTransaction
-              const useSharedTestConnections = useTransaction || testArgs.type == "request"
-              const useTestConnections = useSharedTestConnections || shouldTruncate
-              const runTestAttempt = async () => {
-                // Register dynamic candidates before hooks so transaction state changes
-                // made during a hook are immediately visible to any in-process work.
-                // Prepare transaction sharing before hooks so long-lived services cannot
-                // use the shared connection while its coordinator is still missing.
-                if (useSharedTestConnections) {
-                  testSharedConnectionRegistrations = this.activateTestSharedConnections()
-                  testSharedConnectionsActive = true
-                }
-                /** @type {unknown[]} */
-                const lifecycleErrors = []
-                let runCleanupHooks = false
-
-                try {
-                  if (useSharedTestConnections) {
-                    sharedTransactionBrokerPreparation = await this.prepareSharedTransactionBroker()
-                  }
-                  runCleanupHooks = true
-
-                  clearDeliveries()
-                  for (const beforeEachData of newBeforeEaches) {
-                    await this.runProfileSpan({
-                      phase: "beforeEach",
-                      declarationIndex: beforeEachData.declarationIndex,
-                      declarationScopeId: beforeEachData.declarationScopeId,
-                      filePath: beforeEachData.ownerFilePath
-                    }, async () => {
-                      await beforeEachData.callback({configuration: this.getConfiguration(), testArgs, testData})
-                    })
-                  }
-
-                  if (useSharedTestConnections) {
-                    const activeSharedTransactionConnections = this.sharedTransactionConnections({transactionsOnly: true})
-                    if (sharedTransactionBrokerPreparation && !this.sharedTransactionBrokerMatchesConnections(sharedTransactionBrokerPreparation, activeSharedTransactionConnections)) {
-                      this.clearTestSharedConnections(testSharedConnectionRegistrations)
-                      testSharedConnectionRegistrations = []
-                      testSharedConnectionsActive = false
-                    }
-
-                    sharedTransactionBrokerRegistration = await this.startSharedTransactionBroker(sharedTransactionBrokerPreparation, activeSharedTransactionConnections)
-                    sharedTransactionBrokerPreparation = undefined
-                    if (sharedTransactionBrokerRegistration && !testSharedConnectionsActive) {
-                      testSharedConnectionRegistrations = this.activateTestSharedConnections()
-                      testSharedConnectionsActive = true
-                    }
-                  }
-
-                  // Record which test is running so an async crash (an unhandled
-                  // rejection detached from any await) that fires during or shortly
-                  // after this test can be attributed to it in run()'s handler.
-                  this._lastTestContext = {
-                    fullDescription: this.buildFullDescription(descriptions, testDescription),
-                    filePath: testData.filePath ?? "<unknown>",
-                    line: testData.line ?? 0
-                  }
-                  await this.runProfileSpan({phase: "test body", filePath: testData.ownerFilePath ?? testData.filePath}, async () => {
-                    await testData.function(testArgs)
-                  })
-                } catch (error) {
-                  lifecycleErrors.push(error)
-                }
-
-                if (runCleanupHooks) {
-                  try {
-                    // Framework-owned post-commit broadcasts are intentionally
-                    // detached; drain them before test cleanup so their DB
-                    // checkouts cannot leak into the next test's lifecycle.
-                    await this.getConfiguration().awaitPendingBroadcasts()
-                  } catch (error) {
-                    lifecycleErrors.push(error)
-                  }
-
-                  try {
-                    if (testSharedConnectionsActive) {
-                      this.clearTestSharedConnections(testSharedConnectionRegistrations)
-                      testSharedConnectionRegistrations = []
-                      testSharedConnectionsActive = false
-                    }
-                  } catch (error) {
-                    lifecycleErrors.push(error)
-                  }
-
-                  try {
-                    await this.stopSharedTransactionBroker(sharedTransactionBrokerRegistration || sharedTransactionBrokerPreparation)
-                    sharedTransactionBrokerRegistration = undefined
-                    sharedTransactionBrokerPreparation = undefined
-                  } catch (error) {
-                    lifecycleErrors.push(error)
-                  }
-
-                  try {
-                    await this.runAfterEaches({afterEaches: newAfterEaches, testArgs, testData})
-                  } catch (error) {
-                    lifecycleErrors.push(error)
-                  }
-
-                  try {
-                    await this.cleanupTransactionalTenants(transactionalTenantRegistrations)
-                  } catch (error) {
-                    lifecycleErrors.push(error)
-                  }
-                }
-
-                if (testSharedConnectionsActive) {
-                  try {
-                    this.clearTestSharedConnections(testSharedConnectionRegistrations)
-                  } catch (error) {
-                    lifecycleErrors.push(error)
-                  }
-                  testSharedConnectionsActive = false
-                }
-
-                if (lifecycleErrors.length == 1) throw lifecycleErrors[0]
-                if (lifecycleErrors.length > 1) {
-                  throw new AggregateError(lifecycleErrors, "Test lifecycle and cleanup failed", {cause: lifecycleErrors[0]})
-                }
-              }
-
-              if (useTestConnections) {
-                // Database cleaning requires one connection for beforeEach, the test
-                // body and afterEach; only transactions and requests share it dynamically.
-                await this.getConfiguration().ensureConnections({name: `Test: ${testDescription}`}, runTestAttempt)
-              } else {
-                await runTestAttempt()
-              }
-            }, browserDummyConnectionRegistrations)
-            const lifecycleCallback = async () => await this.getConfiguration().runWithTestDatabaseAccessScope(testDatabaseAccessScope, runLifecycleCallback)
-            testLifecycle = profileAttempt && profiler
-              ? profiler.runAttempt(profileAttempt, lifecycleCallback)
-              : lifecycleCallback()
-
-            // Time out the ENTIRE lifecycle, not just the test body. A hang in any
-            // phase — a connection checkout that never resolves, a beforeEach/afterEach
-            // waiting on a lock, or dummy server startup — would otherwise stall the
-            // whole run indefinitely (until CI kills the build) instead of failing the
-            // single offending test.
-            if (useTimeout && timeoutMs !== undefined) {
-              await runWithTimeout(testLifecycle, timeoutMs, testDescription)
-            } else {
-              await testLifecycle
-            }
-
-            // A test is successful only after its complete lifecycle settles.
-            // Cleanup failures and timed-out detached work must not overlap the
-            // final successful and failed counters used for executed-test totals.
-            this._successfulTests++
-          } catch (error) {
-            caughtError = error
-            lastError = error
-
-            // A timeout REJECTS while the lifecycle keeps running detached on the
-            // shared per-suite connection — including its afterEach database
-            // cleanup (e.g. transaction rollback). If the next test starts before
-            // that rollback runs, its own startTransaction() implicitly COMMITS
-            // the timed-out test's rows on the shared connection, poisoning every
-            // later test in the shard (duplicate-key / foreign-key cascades from
-            // leaked fixtures). Wait — bounded — for the abandoned lifecycle to
-            // settle so its cleanup lands first. If it remains active after the
-            // bounded grace, quarantine its browser connections and stop running
-            // tests rather than sharing unsafe state.
-            const timedOut = Boolean(/** @type {TestTimeoutError} */ (error)?.velociousTestTimeout)
-            attemptTimedOut = timedOut
-
-            if (timedOut && testLifecycle) {
-              const emergencyCleanupErrors = []
-
-              if (profileAttempt && profiler) profiler.finishAttempt(profileAttempt, "timed-out")
-              const lifecycleOutcome = await awaitSettledOrGrace(testLifecycle, timeoutMs ?? 60000)
-
-              if (lifecycleOutcome.settled && lifecycleOutcome.status === "rejected") {
-                emergencyCleanupErrors.push(lifecycleOutcome.reason)
-              }
-
-              // If the abandoned lifecycle never settled within the grace, its
-              // cleanup has not completed. Quarantine browser-owned connections
-              // before any scope cleanup can race the abandoned callback.
-              if (!lifecycleOutcome.settled) {
-                testDatabaseAccessScope.revoked = true
-                void testLifecycle.catch((cleanupError) => {
-                  if (isTestDatabaseAccessRevocation(cleanupError)) return
-                  this.recordTimeoutCleanupFailure(cleanupError, "test lifecycle", recordedTimeoutCleanupErrors)
-                })
-                const quarantine = this.quarantineBrowserDummyConnections(browserDummyConnectionRegistrations)
-                const quarantineOutcome = await awaitSettledOrGrace(quarantine, timeoutMs ?? 60000)
-                const usesBrowserTransactions = testArgs.databaseCleaning?.transaction === true
-                const usesBrowserTruncation = testArgs.databaseCleaning?.truncate ?? !usesBrowserTransactions
-
-                this._abortRemainingTests = this.isBrowserTestMode()
-                  && this.hasTag(testArgs, "dummy")
-                  && (usesBrowserTransactions || usesBrowserTruncation)
-
-                if (quarantineOutcome.settled && quarantineOutcome.status === "rejected") {
-                  emergencyCleanupErrors.push(quarantineOutcome.reason)
-                } else if (!quarantineOutcome.settled) {
-                  void quarantine.catch((cleanupError) => {
-                    this.recordTimeoutCleanupFailure(cleanupError, "browser dummy connection quarantine", recordedTimeoutCleanupErrors)
-                  })
-                }
-              }
-
-              try {
-                if (testSharedConnectionsActive) {
-                  this.clearTestSharedConnections(testSharedConnectionRegistrations)
-                  testSharedConnectionRegistrations = []
-                  testSharedConnectionsActive = false
-                }
-              } catch (cleanupError) {
-                emergencyCleanupErrors.push(cleanupError)
-              }
-
-              const brokerCleanup = this.stopSharedTransactionBroker(sharedTransactionBrokerRegistration || sharedTransactionBrokerPreparation)
-              const brokerCleanupOutcome = await awaitSettledOrGrace(brokerCleanup, timeoutMs ?? 60000)
-
-              if (brokerCleanupOutcome.settled && brokerCleanupOutcome.status === "rejected") {
-                emergencyCleanupErrors.push(brokerCleanupOutcome.reason)
-              } else if (!brokerCleanupOutcome.settled) {
-                void brokerCleanup.catch((cleanupError) => {
-                  this.recordTimeoutCleanupFailure(cleanupError, "shared transaction broker", recordedTimeoutCleanupErrors)
-                })
-              }
-              sharedTransactionBrokerRegistration = undefined
-              sharedTransactionBrokerPreparation = undefined
-              const emergencyCleanup = this.cleanupTransactionalTenants(transactionalTenantRegistrations, {discard: true})
-              const emergencyCleanupOutcome = await awaitSettledOrGrace(emergencyCleanup, timeoutMs ?? 60000)
-
-              if (emergencyCleanupOutcome.settled && emergencyCleanupOutcome.status === "rejected") {
-                emergencyCleanupErrors.push(emergencyCleanupOutcome.reason)
-              } else if (!emergencyCleanupOutcome.settled) {
-                // The timed-out attempt must not block the runner indefinitely, but a
-                // later rollback/discard failure still becomes a visible test failure.
-                void emergencyCleanup.catch((cleanupError) => {
-                  this.recordTimeoutCleanupFailure(cleanupError, "transactional tenant", recordedTimeoutCleanupErrors)
-                })
-              }
-
-              if (emergencyCleanupErrors.length > 0) {
-                caughtError = new AggregateError(
-                  [caughtError, ...emergencyCleanupErrors],
-                  "Test timeout and emergency cleanup failed",
-                  {cause: caughtError}
-                )
-                lastError = caughtError
-              }
-            }
-
-            if (browserDummyConnectionRegistrations.some((registration) => registration.quarantined)) {
-              testDatabaseAccessScope.revoked = true
-              this._abortRemainingTests = true
-            }
-
-            willRetry = !this._abortRemainingTests && retriesUsed < retryCount
-
-            if (willRetry) {
-              retriesUsed++
-            }
-
-            if (willRetry) {
-              shouldRetry = true
-            } else {
-              failedError = caughtError
-            }
-          } finally {
-            testDatabaseAccessScope.revoked = true
-            const consoleOutput = stopConsoleCapture()
-
-            if (profileAttempt && profiler) {
-              profiler.finishAttempt(profileAttempt, caughtError === undefined
-                ? "passed"
-                : (attemptTimedOut ? "timed-out" : "failed"))
-            }
-
-            if (consoleOutput) {
-              attemptConsoleOutputs.push({attemptNumber, output: consoleOutput})
-            }
+          if (attemptResult.consoleOutput) {
+            attemptConsoleOutputs.push({attemptNumber, output: attemptResult.consoleOutput})
           }
+          if (attemptResult.abortRemainingTests) this._abortRemainingTests = true
 
-          if (caughtError !== undefined) {
-            await this.emitEvent("testAttemptFailed", {
-              configuration: this.getConfiguration(),
-              descriptions,
-              error: caughtError,
-              attemptNumber,
-              nextAttempt: willRetry ? attemptNumber + 1 : undefined,
-              retriesUsed,
-              retryCount,
-              testArgs,
-              testData,
-              testDescription,
-              testRunner: this,
-              willRetry
-            })
-          }
+          const willRetry = attemptResult.failed && !this._abortRemainingTests && retriesUsed < retryCount
+          if (willRetry) retriesUsed++
 
-          if (shouldRetry) {
-            console.warn(picocolors.red(`${leftPadding}  Retrying (${retriesUsed}/${retryCount}) after error: ${lastError instanceof Error ? lastError.message : String(lastError)}`))
-            await this.emitEvent("testRetrying", {
-              configuration: this.getConfiguration(),
-              descriptions,
-              error: lastError,
-              nextAttempt: attemptNumber + 1,
-              retriesUsed,
-              retryCount,
-              testArgs,
-              testData,
-              testDescription,
-              testRunner: this
-            })
-          }
-
-          if (attemptNumber > 1) {
-            await this.emitEvent("testRetried", {
-              configuration: this.getConfiguration(),
-              descriptions,
-              error: lastError,
-              attemptNumber,
-              retriesUsed,
-              retryCount,
-              testArgs,
-              testData,
-              testDescription,
-              testRunner: this
-            })
-          }
-
+          await this._runnerReporter.reportAttempt({
+            attemptConsoleOutputs,
+            attemptNumber,
+            descriptions,
+            error: attemptResult.error,
+            failed: attemptResult.failed,
+            leftPadding,
+            retriesUsed,
+            retryCount,
+            testArgs,
+            testData,
+            testDescription,
+            willRetry
+          })
           attemptNumber++
 
-          if (shouldRetry) continue
-
-          if (failedError) {
-            const consoleOutput = this.buildConsoleOutput(attemptConsoleOutputs)
-
-            if (failedError instanceof Error) {
-              console.error(picocolors.red(`${leftPadding}  Test failed: ${failedError.message}`))
-              addTrackedStackToError(failedError)
-
-              const backtraceCleaner = new BacktraceCleaner(failedError)
-              const cleanedStack = backtraceCleaner.getCleanedStack()
-              const stackLines = cleanedStack?.split("\n")
-
-              if (stackLines) {
-                for (const stackLine of stackLines) {
-                  console.error(picocolors.red(`${leftPadding}  ${stackLine}`))
-                }
-              }
-            } else {
-              console.error(picocolors.red(`${leftPadding}  Test failed with a ${typeof failedError}: ${String(failedError)}`))
-            }
-
-            this.printFailedConsoleOutput({consoleOutput, leftPadding})
-            this._failedTests++
-            this._failedTestDetails.push({
-              fullDescription: this.buildFullDescription(descriptions, testDescription),
-              filePath: testData.filePath,
-              line: testData.line,
-              error: failedError,
-              consoleOutput: consoleOutput || undefined
-            })
-
-            await this.emitEvent("testFailed", {
-              configuration: this.getConfiguration(),
-              descriptions,
-              error: failedError,
-              testArgs,
-              testData,
-              testDescription,
-              testRunner: this
-            })
-
-            this.printRerunCommand({descriptions, testDescription, testData, leftPadding})
-          }
-
-          break
+          if (!willRetry) break
         }
 
         this._testDurations.push({
@@ -2142,33 +1628,13 @@ export default class TestRunner {
     scopeEntry.afterAllsRun = true
 
     const scopeOwnerFilePath = scopeEntry.tests.ownerFilePath ?? scopeEntry.tests.filePath
-    const afterAlls = [...this.profileHookEntries(
+    const afterAlls = this.profileHookEntries(
       scopeEntry.tests.afterAlls || [],
       scopeEntry.profileScopeId,
       scopeOwnerFilePath
-    )].reverse()
-    /** @type {unknown[]} */
-    const afterAllErrors = []
+    )
 
-    for (const afterAllData of afterAlls) {
-      try {
-        await this.runProfileSpan({
-          phase: "afterAll",
-          declarationIndex: afterAllData.declarationIndex,
-          declarationScopeId: afterAllData.declarationScopeId,
-          filePath: afterAllData.ownerFilePath
-        }, async () => {
-          await afterAllData.callback({configuration: this.getConfiguration()})
-        })
-      } catch (error) {
-        afterAllErrors.push(error)
-      }
-    }
-
-    if (afterAllErrors.length == 1) throw afterAllErrors[0]
-    if (afterAllErrors.length > 1) {
-      throw new AggregateError(afterAllErrors, "Multiple afterAll hooks failed", {cause: afterAllErrors[0]})
-    }
+    await this._suiteHookExecutor.runAfterAlls({hooks: afterAlls})
   }
 
   /**
@@ -2178,11 +1644,7 @@ export default class TestRunner {
    * @returns {Promise<void>} - Resolves when all listeners complete.
    */
   async emitEvent(eventName, payload) {
-    const listeners = testEvents.listeners(eventName)
-
-    for (const listener of listeners) {
-      await listener(payload)
-    }
+    await this._runnerReporter.emitEvent(eventName, payload)
   }
 
   /**

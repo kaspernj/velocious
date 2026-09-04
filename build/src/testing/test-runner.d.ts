@@ -2,6 +2,10 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import Application from "../../src/application.js";
 import RequestClient from "./request-client.js";
 import SharedTransactionBroker from "./shared-transaction-broker.js";
+import VelociousAttemptExecutor from "./velocious-attempt-executor.js";
+import VelociousRunnerReporter from "./velocious-runner-reporter.js";
+import VelociousSuiteHookExecutor from "./velocious-suite-hook-executor.js";
+import VelociousTestArguments from "./velocious-test-arguments.js";
 export type ConsoleMethodName = "log" | "info" | "warn" | "error" | "debug";
 export type AttemptConsoleOutput = {
     /**
@@ -323,6 +327,10 @@ export default class TestRunner {
         line: number;
         durationMs: number;
     }>;
+    _attemptExecutor: VelociousAttemptExecutor;
+    _runnerReporter: VelociousRunnerReporter;
+    _suiteHookExecutor: VelociousSuiteHookExecutor;
+    _testArguments: VelociousTestArguments;
     _application: Application | undefined;
     _requestClient: RequestClient | undefined;
     anyTestsFocussed: boolean | undefined;
