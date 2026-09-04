@@ -280,6 +280,8 @@ export default class VelociousConfiguration {
      * lets a shutdown close them and release the lock instead of orphaning it.
      * @type {Set<import("./database/drivers/base.js").default>} */
     _advisoryLockConnections: Set<import("./database/drivers/base.js").default>;
+    /** @type {Map<string, number>} */
+    _schemaCacheGenerationsByReuseKey: Map<string, number>;
     /**
      * Runs current.
      * @returns {VelociousConfiguration} - The current.
@@ -509,6 +511,12 @@ export default class VelociousConfiguration {
      * @returns {void} - No return value.
      */
     clearSchemaCachesForReuseKey(reuseKey: string): void;
+    /**
+     * Returns the current schema-cache generation for one physical database.
+     * @param {string} reuseKey - Connection reuse key identifying the shared database.
+     * @returns {number} - Current schema-cache generation.
+     */
+    schemaCacheGenerationForReuseKey(reuseKey: string): number;
     /**
      * Invalidates record metadata owned by one closed/deleted physical tenant
      * database while preserving every other tenant generation.

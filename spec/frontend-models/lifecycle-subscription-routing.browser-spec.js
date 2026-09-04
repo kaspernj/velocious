@@ -313,6 +313,48 @@ describe("Frontend model lifecycle subscription routing", () => {
     }
   })
 
+  it("registers persisted composite listeners under the stored identity after unsaved key edits", async () => {
+    const CompositeRoutedTask = buildCompositeRoutedTaskClass()
+    const websocketClient = buildWebsocketClient()
+    const task = CompositeRoutedTask.instantiateFromResponse({name: "Composite task", state: "open", workspaceId: "alpha"})
+    /** @type {Array<string | import("../../src/utils/model-primary-key.js").CompositeModelPrimaryKeyValue>} */
+    const updateIds = []
+    /** @type {Array<string | import("../../src/utils/model-primary-key.js").CompositeModelPrimaryKeyValue>} */
+    const destroyIds = []
+
+    FrontendModelBase.configureTransport({websocketClient})
+
+    try {
+      task.setAttribute("name", "Unsaved composite rename")
+
+      const unsubscribeUpdate = await task.onUpdate(({id}) => updateIds.push(id))
+      const unsubscribeDestroy = await task.onDestroy(({id}) => destroyIds.push(id))
+      const subscription = websocketClient.subscriptions[websocketClient.subscriptions.length - 1]
+
+      if (!subscription) throw new Error("Expected composite model subscription")
+
+      const persistedIdentity = {name: "Composite task", workspaceId: "alpha"}
+
+      subscription.options.onMessage({
+        action: "update",
+        id: persistedIdentity,
+        record: {...persistedIdentity, state: "updated remotely"}
+      })
+
+      expect(updateIds).toEqual([persistedIdentity])
+      expect(task.state()).toEqual("updated remotely")
+
+      subscription.options.onMessage({action: "destroy", id: persistedIdentity})
+
+      expect(destroyIds).toEqual([persistedIdentity])
+
+      unsubscribeUpdate()
+      unsubscribeDestroy()
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
   it("re-keys composite instance listeners after a create normalizes the identity", async () => {
     const CompositeRoutedTask = buildCompositeRoutedTaskClass()
     const websocketClient = buildWebsocketClient()

@@ -272,6 +272,12 @@ describe("Record - composite primary key", {tags: ["dummy"]}, () => {
       name: "Composite migration connection task",
       project_id: project.id()
     })
+
+    await task.getAttachmentByName("descriptionFile").attach({
+      content: "schema preparation",
+      filename: "schema-preparation.txt"
+    })
+
     const store = new SchemaPreparingAttachmentStore({
       configuration: Configuration.current(),
       databaseIdentifier: CompositePrimaryKeyTask.getDatabaseIdentifier()
@@ -280,9 +286,16 @@ describe("Record - composite primary key", {tags: ["dummy"]}, () => {
     const connection = task.connection()
 
     await store.prepareRecordIdentityMigration({connection})
+    await store.prepareRecordIdentityMigration({connection})
 
     expect(store.schemaConnections).toEqual([connection])
     expect(store.schemaLocksHeld).toEqual([true])
+
+    connection.clearSchemaCache()
+    await store.prepareRecordIdentityMigration({connection})
+
+    expect(store.schemaConnections).toEqual([connection, connection])
+    expect(store.schemaLocksHeld).toEqual([true, true])
 
     store.schemaConnections = []
     store.schemaLocksHeld = []

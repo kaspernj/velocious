@@ -170,6 +170,8 @@ export default class RecordAttachmentsStore {
     this.databaseIdentifier = databaseIdentifier
     this._readyPromise = null
     this._schemaUpgradePromise = null
+    /** @type {number | undefined} */
+    this._schemaReadyGeneration = undefined
     this._driverColumnsAvailable = false
     this._contentBase64Nullable = true
     /**
@@ -212,8 +214,6 @@ export default class RecordAttachmentsStore {
    * @returns {Promise<void>} - Resolves when schema is ready.
    */
   async ensureSchema(db) {
-    db.clearSchemaCache()
-
     if (await db.tableExists(ATTACHMENTS_TABLE)) {
       await this.ensureAttachmentStoreSchema({db})
       return
@@ -240,6 +240,7 @@ export default class RecordAttachmentsStore {
     await db.createTable(table)
     this._driverColumnsAvailable = true
     this._contentBase64Nullable = true
+    this._schemaReadyGeneration = this._schemaCacheGeneration(db)
   }
 
   /**
@@ -449,6 +450,7 @@ export default class RecordAttachmentsStore {
    * @returns {Promise<void>} - Resolves when schema columns are ensured.
    */
   async ensureAttachmentStoreSchema({db}) {
+    if (this._schemaReadyGeneration === this._schemaCacheGeneration(db)) return
     if (this._schemaUpgradePromise) return await this._schemaUpgradePromise
 
     this._schemaUpgradePromise = (async () => {
@@ -467,9 +469,22 @@ export default class RecordAttachmentsStore {
 
     try {
       await this._schemaUpgradePromise
+      this._schemaReadyGeneration = this._schemaCacheGeneration(db)
     } finally {
       this._schemaUpgradePromise = null
     }
+  }
+
+  /**
+   * Returns the schema-cache generation for the connection's physical database.
+   * @param {import("../../../database/drivers/base.js").default} db - DB connection.
+   * @returns {number} - Current schema-cache generation.
+   */
+  _schemaCacheGeneration(db) {
+    const pool = this.configuration.getDatabasePool(this.databaseIdentifier)
+    const reuseKey = pool.getConnectionConfigurationReuseKey(db)
+
+    return this.configuration.schemaCacheGenerationForReuseKey(reuseKey)
   }
 
   /**

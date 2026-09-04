@@ -229,6 +229,9 @@ export default class VelociousConfiguration {
    * @type {Set<import("./database/drivers/base.js").default>} */
   _advisoryLockConnections = new Set()
 
+  /** @type {Map<string, number>} */
+  _schemaCacheGenerationsByReuseKey = new Map()
+
   /**
    * Runs current.
    * @returns {VelociousConfiguration} - The current.
@@ -1144,11 +1147,25 @@ export default class VelociousConfiguration {
    * @returns {void} - No return value.
    */
   clearSchemaCachesForReuseKey(reuseKey) {
+    this._schemaCacheGenerationsByReuseKey.set(
+      reuseKey,
+      this.schemaCacheGenerationForReuseKey(reuseKey) + 1
+    )
+
     for (const pool of Object.values(this.databasePools)) {
       if (pool.getConfigurationReuseKey() === reuseKey) {
         pool.clearSchemaCache()
       }
     }
+  }
+
+  /**
+   * Returns the current schema-cache generation for one physical database.
+   * @param {string} reuseKey - Connection reuse key identifying the shared database.
+   * @returns {number} - Current schema-cache generation.
+   */
+  schemaCacheGenerationForReuseKey(reuseKey) {
+    return this._schemaCacheGenerationsByReuseKey.get(reuseKey) || 0
   }
 
   /**

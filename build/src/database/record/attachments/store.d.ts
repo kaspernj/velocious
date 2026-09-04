@@ -20,6 +20,8 @@ export default class RecordAttachmentsStore {
     databaseIdentifier: string;
     _readyPromise: Promise<void> | null;
     _schemaUpgradePromise: Promise<void> | null;
+    /** @type {number | undefined} */
+    _schemaReadyGeneration: number | undefined;
     _driverColumnsAvailable: boolean;
     _contentBase64Nullable: boolean;
     /**
@@ -103,6 +105,12 @@ export default class RecordAttachmentsStore {
     ensureAttachmentStoreSchema({ db }: {
         db: import("../../../database/drivers/base.js").default;
     }): Promise<void>;
+    /**
+     * Returns the schema-cache generation for the connection's physical database.
+     * @param {import("../../../database/drivers/base.js").default} db - DB connection.
+     * @returns {number} - Current schema-cache generation.
+     */
+    _schemaCacheGeneration(db: import("../../../database/drivers/base.js").default): number;
     /**
      * Ensures attachment columns and indexes after schema-upgrade serialization is acquired.
      * @param {object} args - Options.

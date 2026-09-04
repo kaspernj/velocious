@@ -4009,7 +4009,8 @@ export default class FrontendModelBase {
     const ModelClass = frontendModelClassFor(this)
     const {requestContext, ...eventOptionsPayload} = frontendModelEventOptionsPayload(ModelClass, options)
     const sub = ensureFrontendModelEventSubscription(ModelClass, frontendModelEventRequestContext(requestContext))
-    const id = modelPrimaryKeyCacheKey(ModelClass.primaryKey(), this.primaryKeyValue())
+    const identity = this.isNewRecord() ? this.primaryKeyValue() : this.persistedPrimaryKeyValue()
+    const id = modelPrimaryKeyCacheKey(ModelClass.primaryKey(), identity)
     const entry = {callback, ...eventOptionsPayload}
     const listener = ensureFrontendModelInstanceListener(sub, id, this)
 
@@ -4040,7 +4041,8 @@ export default class FrontendModelBase {
 
     const {requestContext} = frontendModelEventOptionsPayload(ModelClass, options)
     const sub = ensureFrontendModelEventSubscription(ModelClass, frontendModelEventRequestContext(requestContext))
-    const id = modelPrimaryKeyCacheKey(ModelClass.primaryKey(), this.primaryKeyValue())
+    const identity = this.isNewRecord() ? this.primaryKeyValue() : this.persistedPrimaryKeyValue()
+    const id = modelPrimaryKeyCacheKey(ModelClass.primaryKey(), identity)
     const entry = {callback}
     const listener = ensureFrontendModelInstanceListener(sub, id, this)
 
