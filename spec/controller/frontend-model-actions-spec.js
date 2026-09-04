@@ -1639,6 +1639,34 @@ describe("Controller frontend model actions", () => {
     })
   })
 
+  it("rejects non-scalar nested ids for scalar child primary keys", async () => {
+    await Dummy.run(async () => {
+      const project = await Project.create({name: "Scalar nested id project"})
+      const firstTask = await Task.create({name: "First scalar nested id task", projectId: project.id()})
+      const secondTask = await Task.create({name: "Second scalar nested id task", projectId: project.id()})
+      const arrayIdPayload = await postSharedProjectFrontendModelCommand("update", {
+        attributes: {
+          tasksAttributes: [{id: [firstTask.id(), secondTask.id()], name: "Incorrectly updated"}]
+        },
+        id: project.id()
+      })
+
+      expect(arrayIdPayload.status).toEqual("error")
+      expect((await Task.find(firstTask.id())).name()).toEqual("First scalar nested id task")
+      expect((await Task.find(secondTask.id())).name()).toEqual("Second scalar nested id task")
+
+      const nullIdPayload = await postSharedProjectFrontendModelCommand("update", {
+        attributes: {
+          tasksAttributes: [{id: null, name: "Incorrectly created"}]
+        },
+        id: project.id()
+      })
+
+      expect(nullIdPayload.status).toEqual("error")
+      expect(await Task.findBy({name: "Incorrectly created", projectId: project.id()})).toBeNull()
+    })
+  })
+
   it("creates and scopes polymorphic has-many nested attributes", async () => {
     await Dummy.run(async () => {
       const createPayload = await postSharedProjectFrontendModelCommand("create", {

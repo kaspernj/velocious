@@ -1442,8 +1442,16 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
     for (const [attributeName, value] of Object.entries(entry)) {
       if (attributeName === "id") {
-        modelPrimaryKeyConditions(childPrimaryKey, value)
-        normalized.id = /** @type {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} */ (value)
+        if (Array.isArray(childPrimaryKey)) {
+          modelPrimaryKeyConditions(childPrimaryKey, value)
+          normalized.id = /** @type {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} */ (value)
+        } else {
+          if (typeof value !== "string" && typeof value !== "number") {
+            throw new Error(`nestedAttributes['${relationshipName}'] entry id must be a string or number.`)
+          }
+
+          normalized.id = value
+        }
         continue
       }
 
