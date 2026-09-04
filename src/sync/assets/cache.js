@@ -39,6 +39,8 @@ export default class SynchronizedAssetCache {
     this.activeDigestCounts = new Map()
     /** @type {Map<string, Promise<void>>} */
     this.deletionPromises = new Map()
+    /** @type {Promise<void>} */
+    this.resolveCleanupPromise = Promise.resolve()
     /** @type {Map<string, Promise<{error: Error, uri: null} | {error: null, uri: string}>>} */
     this.downloadPromises = new Map()
     /** @type {import("./types.js").SynchronizedAssetCacheState | null} */
@@ -145,6 +147,7 @@ export default class SynchronizedAssetCache {
 
     const digest = entry.descriptor.digest
     let resolvedUri = null
+    let shouldCleanup = false
 
     await this.beginActiveDigest(digest)
 
@@ -163,15 +166,15 @@ export default class SynchronizedAssetCache {
         if (cacheResult.error) throw cacheResult.error
 
         if (cacheResult.uri) {
-          await this.cleanup(new Set([digest]))
-
           resolvedUri = cacheResult.uri
+          shouldCleanup = true
         }
       }
     } finally {
       await this.finishActiveDigest(digest)
     }
 
+    if (shouldCleanup) await this.cleanupAfterResolve(new Set([digest]))
     if (!resolvedUri) return null
     if (!state.assets.some((candidate) => candidate.descriptor.id === assetId && candidate.descriptor.digest === digest)) return null
 
@@ -279,6 +282,20 @@ export default class SynchronizedAssetCache {
     await this.saveState()
 
     return removedBytes
+  }
+
+  /**
+   * Serializes cleanup passes started after on-demand resolution releases its digest guard.
+   * @param {Set<string>} protectedDigests Digests needed by the resolving caller.
+   * @returns {Promise<void>} Resolves after cleanup.
+   */
+  async cleanupAfterResolve(protectedDigests) {
+    const cleanup = async () => {
+      await this.cleanup(protectedDigests)
+    }
+
+    this.resolveCleanupPromise = this.resolveCleanupPromise.then(cleanup, cleanup)
+    await this.resolveCleanupPromise
   }
 
   /**
@@ -432,15 +449,22 @@ export default class SynchronizedAssetCache {
 
     /** @type {Map<string, number>} */
     const byteSizesByDigest = new Map()
+    /** @type {Map<string, string | null>} */
+    const contentTypesByDigest = new Map()
 
     for (const entry of state.assets) {
       const knownByteSize = byteSizesByDigest.get(entry.descriptor.digest)
+      const knownContentType = contentTypesByDigest.get(entry.descriptor.digest)
 
       if (knownByteSize !== undefined && knownByteSize !== entry.descriptor.byteSize) {
         throw new Error(`Synchronized asset digest ${entry.descriptor.digest} has inconsistent byte sizes`)
       }
+      if (knownContentType !== undefined && knownContentType !== entry.descriptor.contentType) {
+        throw new Error(`Synchronized asset digest ${entry.descriptor.digest} has inconsistent content types`)
+      }
 
       byteSizesByDigest.set(entry.descriptor.digest, entry.descriptor.byteSize)
+      contentTypesByDigest.set(entry.descriptor.digest, entry.descriptor.contentType)
     }
 
     for (const digest of removedDigests) {

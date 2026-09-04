@@ -33,6 +33,34 @@ describe("SynchronizedAssetCache state", {databaseCleaning: {transaction: false,
     expect(await adapter.loadState({accountId: "account-1"})).toEqual(null)
   })
 
+  it("rejects inconsistent content types before reconciling a shared digest", async () => {
+    const content = bytes([115, 116, 117])
+    const firstAsset = descriptor({bytes: content, id: "attachment-1"})
+    const secondAsset = {
+      ...descriptor({bytes: content, id: "attachment-2"}),
+      contentType: "image/jpeg",
+      recordId: "user-2"
+    }
+    const adapter = new MemoryAssetCacheAdapter()
+    let downloadCount = 0
+    const cache = new SynchronizedAssetCache({
+      accountId: "account-1",
+      adapter,
+      download: async () => {
+        downloadCount += 1
+        return content
+      },
+      maxBytes: 1024
+    })
+
+    await expect(async () => {
+      await cache.synchronize({descriptors: [firstAsset, secondAsset], online: true, scopeKey: "users"})
+    }).toThrowError(`Synchronized asset digest ${firstAsset.digest} has inconsistent content types`)
+
+    expect(downloadCount).toEqual(0)
+    expect(await adapter.loadState({accountId: "account-1"})).toEqual(null)
+  })
+
   it("does not mutate cache state when immutable descriptor validation fails", async () => {
     const retainedContent = bytes([46, 47, 48])
     const removedContent = bytes([49, 50, 51])

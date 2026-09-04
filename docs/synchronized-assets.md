@@ -70,14 +70,17 @@ or initials fallback. If concurrent synchronization removes the requested
 descriptor's final scope reference, resolution returns `null` after deleting
 the now-unreferenced bytes instead of returning a stale URI. A failed eligible
 on-demand download rejects after its retry metadata has been persisted.
+Concurrent on-demand downloads serialize their cleanup after releasing digest
+guards, so the final cleanup pass re-enforces the configured byte budget.
 
 ## Integrity, retries, and interrupted work
 
 Bytes are accepted only when both their byte count and SHA-256 digest match the
 descriptor. Hashing reuses a fixed-size block rather than expanding the full
 attachment into a JavaScript number array. The platform adapter does not see
-unverified content. Before the download begins, cache metadata records
-`downloading`; after a failure it stores the attempt count and
+unverified content. Descriptors sharing a digest must agree on both byte size
+and content type before reconciliation persists them. Before the download
+begins, cache metadata records `downloading`; after a failure it stores the attempt count and
 exponential-backoff deadline. A process that restarts with `downloading` state
 converts it to an immediately eligible failed attempt, so interrupted work
 resumes without treating a partial file as valid.

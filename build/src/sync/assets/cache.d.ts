@@ -14,6 +14,8 @@ export default class SynchronizedAssetCache {
     activeDigestCounts: Map<string, number>;
     /** @type {Map<string, Promise<void>>} */
     deletionPromises: Map<string, Promise<void>>;
+    /** @type {Promise<void>} */
+    resolveCleanupPromise: Promise<void>;
     /** @type {Map<string, Promise<{error: Error, uri: null} | {error: null, uri: string}>>} */
     downloadPromises: Map<string, Promise<{
         error: Error;
@@ -81,6 +83,12 @@ export default class SynchronizedAssetCache {
      * @returns {Promise<number>} Bytes removed.
      */
     cleanup(protectedDigests?: Set<string>): Promise<number>;
+    /**
+     * Serializes cleanup passes started after on-demand resolution releases its digest guard.
+     * @param {Set<string>} protectedDigests Digests needed by the resolving caller.
+     * @returns {Promise<void>} Resolves after cleanup.
+     */
+    cleanupAfterResolve(protectedDigests: Set<string>): Promise<void>;
     /**
      * Loads cache state once for this cache instance.
      * @returns {Promise<import("./types.js").SynchronizedAssetCacheState>} Loaded state.

@@ -102,6 +102,57 @@ describe("SynchronizedAssetCache eviction", {databaseCleaning: {transaction: fal
     expect(storedBytes).toBeLessThanOrEqual(3)
   })
 
+  it("re-enforces the byte budget after concurrent on-demand downloads release their guards", async () => {
+    class PausedConcurrentWriteAssetCacheAdapter extends MemoryAssetCacheAdapter {
+      constructor() {
+        super()
+        this.blobWritesCommitted = deferred()
+        this.committedWriteCount = 0
+        this.releaseBlobWrites = deferred()
+      }
+
+      /** @param {{accountId: string, bytes: Uint8Array, contentType: string | null, digest: string}} args Blob write. @returns {Promise<string>} Resolvable URI. */
+      async writeBlob(args) {
+        const uri = await super.writeBlob(args)
+
+        this.committedWriteCount += 1
+        if (this.committedWriteCount === 2) this.blobWritesCommitted.resolve(undefined)
+        await this.releaseBlobWrites.promise
+
+        return uri
+      }
+    }
+
+    const firstContent = bytes([109, 110, 111])
+    const secondContent = bytes([112, 113, 114])
+    const firstAsset = descriptor({bytes: firstContent, fetch: "on-demand", id: "first"})
+    const secondAsset = descriptor({bytes: secondContent, fetch: "on-demand", id: "second"})
+    const contents = new Map([[firstAsset.id, firstContent], [secondAsset.id, secondContent]])
+    const adapter = new PausedConcurrentWriteAssetCacheAdapter()
+    const cache = new SynchronizedAssetCache({
+      accountId: "account-1",
+      adapter,
+      download: async (asset) => /** @type {Uint8Array} */ (contents.get(asset.id)),
+      maxBytes: 3
+    })
+
+    await cache.synchronize({descriptors: [firstAsset, secondAsset], online: true, scopeKey: "users"})
+
+    const resolutions = Promise.all([
+      cache.resolve({assetId: firstAsset.id, online: true}),
+      cache.resolve({assetId: secondAsset.id, online: true})
+    ])
+
+    await adapter.blobWritesCommitted.promise
+    adapter.releaseBlobWrites.resolve(undefined)
+    await resolutions
+
+    const storedBytes = [...adapter.blobs.values()].reduce((total, blob) => total + blob.byteLength, 0)
+
+    expect(adapter.blobs.size).toEqual(1)
+    expect(storedBytes).toEqual(3)
+  })
+
   it("waits for an in-flight eviction before resolving the same digest", async () => {
     const content = bytes([67, 68, 69])
     const asset = descriptor({bytes: content})
