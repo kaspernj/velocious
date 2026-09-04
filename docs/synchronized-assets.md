@@ -47,6 +47,8 @@ Each descriptor identifies one immutable attachment row and contains:
 Call `synchronize({scopeKey, descriptors, online})` after applying one complete
 descriptor scope. Descriptors removed from that scope lose the scope reference;
 their bytes are deleted only after no active scope references the digest.
+The complete incoming descriptor set is validated before cache state changes,
+so an immutable-digest conflict rejects without partially reconciling the scope.
 `synchronize` downloads eligible eager descriptors and returns both attempted
 download failures and required asset ids in that scope that remain absent. It
 does not hide a failed authenticated request or corrupt payload. Removing the
@@ -108,9 +110,9 @@ pressure handling.
 `cleanup()` counts each digest once, regardless of how many descriptors refer
 to it. When the unique cached total exceeds `maxBytes`, it removes the
 least-recently-used blob whose live references are all `evictable`. A blob with
-any `durable` reference is retained even when that leaves the cache above its
-budget. Evicted descriptor metadata remains, allowing the bytes to be fetched
-again later.
+any `durable` reference or an active download is retained even when that leaves
+the cache above its budget. Evicted descriptor metadata remains, allowing the
+bytes to be fetched again later.
 
 The `missingRequiredAssetIds` result is the offline-readiness boundary. A sync
 coordinator must not mark a scope offline-ready while this list is non-empty.

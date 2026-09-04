@@ -112,6 +112,25 @@ class FailNextDeleteAssetCacheAdapter extends MemoryAssetCacheAdapter {
   }
 }
 
+/** Adapter that pauses after atomically committing blob bytes. */
+class PausedWriteAssetCacheAdapter extends MemoryAssetCacheAdapter {
+  constructor() {
+    super()
+    this.blobWriteCommitted = deferred()
+    this.releaseBlobWrite = deferred()
+  }
+
+  /** @param {{accountId: string, bytes: Uint8Array, contentType: string | null, digest: string}} args Blob write. @returns {Promise<string>} Resolvable URI. */
+  async writeBlob(args) {
+    const uri = await super.writeBlob(args)
+
+    this.blobWriteCommitted.resolve(undefined)
+    await this.releaseBlobWrite.promise
+
+    return uri
+  }
+}
+
 /**
  * Builds an immutable synchronized attachment descriptor.
  * @param {object} args Descriptor overrides.
@@ -342,6 +361,42 @@ describe("SynchronizedAssetCache", {databaseCleaning: {transaction: false, trunc
     expect(secondResult.missingRequiredAssetIds).toEqual([])
   })
 
+  it("does not mutate cache state when immutable descriptor validation fails", async () => {
+    const retainedContent = bytes([46, 47, 48])
+    const removedContent = bytes([49, 50, 51])
+    const replacementContent = bytes([52, 53, 54])
+    const addedContent = bytes([55, 56, 57])
+    const retainedAsset = descriptor({bytes: retainedContent, id: "retained"})
+    const removedAsset = descriptor({bytes: removedContent, id: "removed"})
+    const changedAsset = descriptor({bytes: replacementContent, id: retainedAsset.id})
+    const addedAsset = descriptor({bytes: addedContent, id: "added"})
+    const contents = new Map([
+      [retainedAsset.id, retainedContent],
+      [removedAsset.id, removedContent]
+    ])
+    const adapter = new MemoryAssetCacheAdapter()
+    const cache = new SynchronizedAssetCache({
+      accountId: "account-1",
+      adapter,
+      download: async (asset) => /** @type {Uint8Array} */ (contents.get(asset.id)),
+      maxBytes: 1024
+    })
+
+    await cache.synchronize({descriptors: [retainedAsset, removedAsset], online: true, scopeKey: "users"})
+
+    await expect(async () => {
+      await cache.synchronize({descriptors: [addedAsset, changedAsset], online: false, scopeKey: "users"})
+    }).toThrowError(`Synchronized asset descriptor ${retainedAsset.id} changed its immutable digest`)
+
+    await cache.resolve({assetId: retainedAsset.id, online: false})
+
+    const persistedState = adapter.states.get("account-1")
+
+    if (!persistedState) throw new Error("Expected persisted asset cache state")
+
+    expect(persistedState.assets.map((entry) => entry.descriptor.id).sort()).toEqual([removedAsset.id, retainedAsset.id])
+  })
+
   it("continues serializing metadata writes after one persistence failure", async () => {
     const content = bytes([37, 38, 39])
     const asset = descriptor({bytes: content, fetch: "on-demand"})
@@ -392,6 +447,31 @@ describe("SynchronizedAssetCache", {databaseCleaning: {transaction: false, trunc
 
     expect(adapter.blobs.size).toEqual(0)
     expect(adapter.deletedBlobKeys).toEqual([`account-1:${asset.digest}`])
+  })
+
+  it("does not evict a blob while its download is still completing", async () => {
+    const content = bytes([58, 59, 60])
+    const asset = descriptor({bytes: content, fetch: "on-demand"})
+    const adapter = new PausedWriteAssetCacheAdapter()
+    const cache = new SynchronizedAssetCache({
+      accountId: "account-1",
+      adapter,
+      download: async () => content,
+      maxBytes: 0
+    })
+
+    await cache.synchronize({descriptors: [asset], online: true, scopeKey: "users"})
+
+    const resolvePromise = cache.resolve({assetId: asset.id, online: true})
+
+    await adapter.blobWriteCommitted.promise
+
+    expect(await cache.cleanup()).toEqual(0)
+    expect(adapter.blobs.size).toEqual(1)
+
+    adapter.releaseBlobWrite.resolve(undefined)
+
+    expect(await resolvePromise).toEqual(`memory://account-1:${asset.digest}`)
   })
 
   it("persists failed blob deletions and retries them on the next synchronization", async () => {

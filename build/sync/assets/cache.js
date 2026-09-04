@@ -58,7 +58,18 @@ export default class SynchronizedAssetCache {
     const state = await this.loadState()
     const incomingIds = new Set(descriptors.map((asset) => asset.id))
     const entriesById = new Map(state.assets.map((entry) => [entry.descriptor.id, entry]))
+    const digestsById = new Map(state.assets.map((entry) => [entry.descriptor.id, entry.descriptor.digest]))
     const removedDigests = new Set()
+
+    for (const asset of descriptors) {
+      const knownDigest = digestsById.get(asset.id)
+
+      if (knownDigest !== undefined && knownDigest !== asset.digest) {
+        throw new Error(`Synchronized asset descriptor ${asset.id} changed its immutable digest`)
+      }
+
+      digestsById.set(asset.id, asset.digest)
+    }
 
     for (const entry of state.assets) {
       if (!entry.scopeKeys.includes(scopeKey) || incomingIds.has(entry.descriptor.id)) continue
@@ -73,9 +84,6 @@ export default class SynchronizedAssetCache {
       const existing = entriesById.get(asset.id)
 
       if (existing && state.assets.includes(existing)) {
-        if (existing.descriptor.digest !== asset.digest) {
-          throw new Error(`Synchronized asset descriptor ${asset.id} changed its immutable digest`)
-        }
         existing.descriptor = asset
         if (!existing.scopeKeys.includes(scopeKey)) existing.scopeKeys.push(scopeKey)
       } else {
@@ -212,6 +220,7 @@ export default class SynchronizedAssetCache {
     for (const blob of cachedBlobs) {
       if (cachedBytes <= this.maxBytes) break
       if (protectedDigests.has(blob.digest)) continue
+      if (this.downloadPromises.has(blob.digest)) continue
       if (blob.references.some((entry) => entry.descriptor.retention === "durable")) continue
 
       await this.adapter.deleteBlob({accountId: this.accountId, digest: blob.digest})
