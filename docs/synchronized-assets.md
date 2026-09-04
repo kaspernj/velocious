@@ -52,8 +52,8 @@ so an immutable-digest conflict rejects without partially reconciling the scope.
 `synchronize` downloads eligible eager descriptors and returns both attempted
 download failures and required asset ids in that scope that remain absent. It
 does not hide a failed authenticated request or corrupt payload. Removing the
-last reference while a download is active schedules the completed blob for
-deletion instead of leaving unreferenced bytes behind.
+last reference while a cache lookup or download is active schedules any
+completed blob for deletion instead of leaving unreferenced bytes behind.
 
 Call `resolve({assetId, online})` when rendering an asset. A cached URI is
 returned immediately. An absent on-demand asset downloads when online; offline
@@ -110,9 +110,9 @@ pressure handling.
 `cleanup()` counts each digest once, regardless of how many descriptors refer
 to it. When the unique cached total exceeds `maxBytes`, it removes the
 least-recently-used blob whose live references are all `evictable`. A blob with
-any `durable` reference or an active download is retained even when that leaves
-the cache above its budget. Evicted descriptor metadata remains, allowing the
-bytes to be fetched again later.
+any `durable` reference or an active lookup/download operation is retained even
+when that leaves the cache above its budget. Evicted descriptor metadata
+remains, allowing the bytes to be fetched again later.
 
 The `missingRequiredAssetIds` result is the offline-readiness boundary. A sync
 coordinator must not mark a scope offline-ready while this list is non-empty.

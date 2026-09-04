@@ -131,6 +131,27 @@ class PausedWriteAssetCacheAdapter extends MemoryAssetCacheAdapter {
   }
 }
 
+/** Adapter that pauses exactly the next local blob lookup. */
+class PausedBlobLookupAssetCacheAdapter extends MemoryAssetCacheAdapter {
+  constructor() {
+    super()
+    this.blobLookupStarted = deferred()
+    this.pauseNextBlobLookup = false
+    this.releaseBlobLookup = deferred()
+  }
+
+  /** @param {{accountId: string, digest: string}} args Blob identity. @returns {Promise<string | null>} Resolvable URI. */
+  async blobUri(args) {
+    if (this.pauseNextBlobLookup) {
+      this.pauseNextBlobLookup = false
+      this.blobLookupStarted.resolve(undefined)
+      await this.releaseBlobLookup.promise
+    }
+
+    return await super.blobUri(args)
+  }
+}
+
 /**
  * Builds an immutable synchronized attachment descriptor.
  * @param {object} args Descriptor overrides.
@@ -443,6 +464,33 @@ describe("SynchronizedAssetCache", {databaseCleaning: {transaction: false, trunc
 
     await removalPromise
     releaseDownload.resolve(undefined)
+    await resolvePromise
+
+    expect(adapter.blobs.size).toEqual(0)
+    expect(adapter.deletedBlobKeys).toEqual([`account-1:${asset.digest}`])
+  })
+
+  it("deletes a download whose final scope reference is removed during cache lookup", async () => {
+    const content = bytes([61, 62, 63])
+    const asset = descriptor({bytes: content, fetch: "on-demand"})
+    const adapter = new PausedBlobLookupAssetCacheAdapter()
+    const cache = new SynchronizedAssetCache({
+      accountId: "account-1",
+      adapter,
+      download: async () => content,
+      maxBytes: 1024
+    })
+
+    await cache.synchronize({descriptors: [asset], online: true, scopeKey: "users"})
+
+    adapter.pauseNextBlobLookup = true
+
+    const resolvePromise = cache.resolve({assetId: asset.id, online: true})
+
+    await adapter.blobLookupStarted.promise
+    await cache.synchronize({descriptors: [], online: true, scopeKey: "users"})
+
+    adapter.releaseBlobLookup.resolve(undefined)
     await resolvePromise
 
     expect(adapter.blobs.size).toEqual(0)

@@ -35,6 +35,8 @@ export default class SynchronizedAssetCache {
     this.now = now
     this.retryBaseDelayMs = retryBaseDelayMs
     this.retryMaxDelayMs = retryMaxDelayMs
+    /** @type {Map<string, number>} */
+    this.activeDigestCounts = new Map()
     /** @type {Map<string, Promise<string>>} */
     this.downloadPromises = new Map()
     /** @type {import("./types.js").SynchronizedAssetCacheState | null} */
@@ -147,26 +149,34 @@ export default class SynchronizedAssetCache {
 
     if (!entry) return null
 
-    const cachedUri = await this.cachedUri(entry)
+    const digest = entry.descriptor.digest
 
-    if (cachedUri) {
-      entry.lastAccessedAt = this.nowMilliseconds()
-      entry.status = "cached"
-      await this.saveState()
+    this.beginActiveDigest(digest)
 
-      return cachedUri
+    try {
+      const cachedUri = await this.cachedUri(entry)
+
+      if (cachedUri) {
+        entry.lastAccessedAt = this.nowMilliseconds()
+        entry.status = "cached"
+        await this.saveState()
+
+        return cachedUri
+      }
+
+      if (!online || !this.retryEligible(entry)) return null
+
+      const cacheResult = await this.ensureCachedWhileActive(entry)
+
+      if (cacheResult.error) throw cacheResult.error
+      if (!cacheResult.uri) return null
+
+      await this.cleanup(new Set([digest]))
+
+      return cacheResult.uri
+    } finally {
+      await this.finishActiveDigest(digest)
     }
-
-    if (!online || !this.retryEligible(entry)) return null
-
-    const cacheResult = await this.ensureCached(entry)
-
-    if (cacheResult.error) throw cacheResult.error
-    if (!cacheResult.uri) return null
-
-    await this.cleanup(new Set([entry.descriptor.digest]))
-
-    return cacheResult.uri
   }
 
   /**
@@ -220,7 +230,7 @@ export default class SynchronizedAssetCache {
     for (const blob of cachedBlobs) {
       if (cachedBytes <= this.maxBytes) break
       if (protectedDigests.has(blob.digest)) continue
-      if (this.downloadPromises.has(blob.digest)) continue
+      if (this.activeDigestCounts.has(blob.digest)) continue
       if (blob.references.some((entry) => entry.descriptor.retention === "durable")) continue
 
       await this.adapter.deleteBlob({accountId: this.accountId, digest: blob.digest})
@@ -312,6 +322,23 @@ export default class SynchronizedAssetCache {
    * @returns {Promise<{error: Error | null, uri: string | null}>} Cache result.
    */
   async ensureCached(entry) {
+    const digest = entry.descriptor.digest
+
+    this.beginActiveDigest(digest)
+
+    try {
+      return await this.ensureCachedWhileActive(entry)
+    } finally {
+      await this.finishActiveDigest(digest)
+    }
+  }
+
+  /**
+   * Resolves or downloads one descriptor while its digest is protected.
+   * @param {import("./types.js").SynchronizedAssetCacheEntry} entry Descriptor state.
+   * @returns {Promise<{error: Error | null, uri: string | null}>} Cache result.
+   */
+  async ensureCachedWhileActive(entry) {
     const existingUri = await this.cachedUri(entry)
 
     if (existingUri) {
@@ -359,8 +386,6 @@ export default class SynchronizedAssetCache {
     } finally {
       if (ownsDownloadPromise && this.downloadPromises.get(digest) === downloadPromise) {
         this.downloadPromises.delete(digest)
-
-        await this.deletePendingDigestIfUnreferenced(digest)
       }
     }
   }
@@ -415,6 +440,38 @@ export default class SynchronizedAssetCache {
   }
 
   /**
+   * Protects a digest for the duration of one active cache operation.
+   * @param {string} digest Content digest.
+   * @returns {void}
+   */
+  beginActiveDigest(digest) {
+    const activeCount = this.activeDigestCounts.get(digest) ?? 0
+
+    this.activeDigestCounts.set(digest, activeCount + 1)
+  }
+
+  /**
+   * Releases one cache operation and processes deferred deletion after the last.
+   * @param {string} digest Content digest.
+   * @returns {Promise<void>} Resolves after any pending deletion.
+   */
+  async finishActiveDigest(digest) {
+    const activeCount = this.activeDigestCounts.get(digest)
+
+    if (activeCount === undefined) {
+      throw new Error(`Missing active synchronized asset digest count for ${digest}`)
+    }
+
+    if (activeCount > 1) {
+      this.activeDigestCounts.set(digest, activeCount - 1)
+      return
+    }
+
+    this.activeDigestCounts.delete(digest)
+    await this.deletePendingDigestIfUnreferenced(digest)
+  }
+
+  /**
    * Deletes blobs that lost their final descriptor reference.
    * @returns {Promise<void>} Resolves after deletion.
    */
@@ -427,14 +484,14 @@ export default class SynchronizedAssetCache {
   }
 
   /**
-   * Deletes one persisted pending digest when no descriptor or download owns it.
+   * Deletes one persisted pending digest when no descriptor or active operation owns it.
    * @param {string} digest Content digest.
    * @returns {Promise<void>} Resolves after any required deletion.
    */
   async deletePendingDigestIfUnreferenced(digest) {
     if (!this.state) throw new Error("Cannot delete synchronized asset blobs before loading state")
     if (!this.state.pendingDeletionDigests.includes(digest)) return
-    if (this.downloadPromises.has(digest)) return
+    if (this.activeDigestCounts.has(digest)) return
 
     if (!this.state.assets.some((entry) => entry.descriptor.digest === digest)) {
       await this.adapter.deleteBlob({accountId: this.accountId, digest})

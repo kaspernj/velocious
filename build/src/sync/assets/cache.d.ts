@@ -10,6 +10,8 @@ export default class SynchronizedAssetCache {
     now: () => Date;
     retryBaseDelayMs: number;
     retryMaxDelayMs: number;
+    /** @type {Map<string, number>} */
+    activeDigestCounts: Map<string, number>;
     /** @type {Map<string, Promise<string>>} */
     downloadPromises: Map<string, Promise<string>>;
     /** @type {import("./types.js").SynchronizedAssetCacheState | null} */
@@ -96,6 +98,15 @@ export default class SynchronizedAssetCache {
         uri: string | null;
     }>;
     /**
+     * Resolves or downloads one descriptor while its digest is protected.
+     * @param {import("./types.js").SynchronizedAssetCacheEntry} entry Descriptor state.
+     * @returns {Promise<{error: Error | null, uri: string | null}>} Cache result.
+     */
+    ensureCachedWhileActive(entry: import("./types.js").SynchronizedAssetCacheEntry): Promise<{
+        error: Error | null;
+        uri: string | null;
+    }>;
+    /**
      * Downloads, verifies, and atomically persists one content digest.
      * @param {import("./types.js").SynchronizedAssetCacheDescriptor} descriptor Asset descriptor.
      * @returns {Promise<string>} Adapter URI.
@@ -108,12 +119,24 @@ export default class SynchronizedAssetCache {
      */
     cachedUri(entry: import("./types.js").SynchronizedAssetCacheEntry): Promise<string | null>;
     /**
+     * Protects a digest for the duration of one active cache operation.
+     * @param {string} digest Content digest.
+     * @returns {void}
+     */
+    beginActiveDigest(digest: string): void;
+    /**
+     * Releases one cache operation and processes deferred deletion after the last.
+     * @param {string} digest Content digest.
+     * @returns {Promise<void>} Resolves after any pending deletion.
+     */
+    finishActiveDigest(digest: string): Promise<void>;
+    /**
      * Deletes blobs that lost their final descriptor reference.
      * @returns {Promise<void>} Resolves after deletion.
      */
     deleteUnreferencedDigests(): Promise<void>;
     /**
-     * Deletes one persisted pending digest when no descriptor or download owns it.
+     * Deletes one persisted pending digest when no descriptor or active operation owns it.
      * @param {string} digest Content digest.
      * @returns {Promise<void>} Resolves after any required deletion.
      */
