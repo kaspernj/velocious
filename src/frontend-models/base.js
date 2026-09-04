@@ -1695,6 +1695,7 @@ class FrontendModelEventSubscription {
     const listener = this.instanceListeners.get(id) || (previousId === null ? undefined : this.instanceListeners.get(previousId))
 
     if (action === "update" && listener && previousIdentity !== null) {
+      applyFrontendModelPersistedIdentity(this.ModelClass, listener.instance, identity)
       rekeyFrontendModelInstanceListeners(this.ModelClass, listener.instance, previousIdentity, identity)
     }
 
@@ -1913,6 +1914,23 @@ function aliasFrontendModelInstanceListeners(ModelClass, instance, previousIdent
         sub.instanceListeners.delete(nextId)
       }
     }
+  }
+}
+
+/**
+ * Applies a remotely persisted identity to a listener instance without merging an unavailable record payload.
+ * @param {FrontendModelClass} ModelClass - Frontend model class.
+ * @param {FrontendModelBase} instance - Listener instance receiving the identity.
+ * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} identity - Persisted identity.
+ * @returns {void}
+ */
+function applyFrontendModelPersistedIdentity(ModelClass, instance, identity) {
+  const identityAttributes = modelPrimaryKeyConditions(ModelClass.primaryKey(), identity)
+
+  instance.assignAttributes(identityAttributes)
+
+  for (const attributeName of Object.keys(identityAttributes)) {
+    instance.markAttributeUnchanged(attributeName)
   }
 }
 

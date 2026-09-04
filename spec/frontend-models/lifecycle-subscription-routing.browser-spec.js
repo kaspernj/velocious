@@ -220,6 +220,10 @@ describe("Frontend model lifecycle subscription routing", () => {
         id: rekeyedIdentity,
         previousId: previousIdentity
       })
+
+      expect(task.primaryKeyValue()).toEqual(rekeyedIdentity)
+      expect(task.persistedPrimaryKeyValue()).toEqual(rekeyedIdentity)
+
       subscription.options.onMessage({
         action: "update",
         id: rekeyedIdentity,
