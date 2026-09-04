@@ -31,6 +31,7 @@
  * Versioned persistent cache metadata owned by a platform adapter.
  * @typedef {object} SynchronizedAssetCacheState
  * @property {SynchronizedAssetCacheEntry[]} assets - Descriptor entries.
+ * @property {string[]} pendingDeletionDigests - Unreferenced blobs awaiting confirmed deletion.
  * @property {1} version - State schema version.
  */
 

@@ -6,27 +6,39 @@
  * @returns {string} Hex digest.
  */
 export default function sha256BytesHex(bytes) {
-  const padded = [...bytes]
   const bitLength = bytes.length * 8
-  const hash = [...SHA256_INITIAL_HASH]
+  const blockCount = Math.ceil((bytes.length + 9) / 64)
+  const block = new Uint8Array(64)
+  const hash = SHA256_INITIAL_HASH.slice()
   /** @type {number[]} */
   const words = new Array(64)
-
-  padded.push(0x80)
-  while (padded.length % 64 !== 56) padded.push(0)
 
   const highLength = Math.floor(bitLength / 0x100000000)
   const lowLength = bitLength >>> 0
 
-  for (const value of [highLength, lowLength]) {
-    padded.push((value >>> 24) & 0xff, (value >>> 16) & 0xff, (value >>> 8) & 0xff, value & 0xff)
-  }
+  for (let blockIndex = 0; blockIndex < blockCount; blockIndex += 1) {
+    const offset = blockIndex * 64
+    const chunkLength = Math.min(64, Math.max(0, bytes.length - offset))
 
-  for (let offset = 0; offset < padded.length; offset += 64) {
+    block.fill(0)
+    if (chunkLength > 0) block.set(bytes.subarray(offset, offset + chunkLength))
+    if (bytes.length >= offset && bytes.length < offset + 64) block[bytes.length - offset] = 0x80
+
+    if (blockIndex === blockCount - 1) {
+      block[56] = (highLength >>> 24) & 0xff
+      block[57] = (highLength >>> 16) & 0xff
+      block[58] = (highLength >>> 8) & 0xff
+      block[59] = highLength & 0xff
+      block[60] = (lowLength >>> 24) & 0xff
+      block[61] = (lowLength >>> 16) & 0xff
+      block[62] = (lowLength >>> 8) & 0xff
+      block[63] = lowLength & 0xff
+    }
+
     for (let index = 0; index < 16; index++) {
-      const byteIndex = offset + (index * 4)
+      const byteIndex = index * 4
 
-      words[index] = (((padded[byteIndex] || 0) << 24) | ((padded[byteIndex + 1] || 0) << 16) | ((padded[byteIndex + 2] || 0) << 8) | (padded[byteIndex + 3] || 0)) >>> 0
+      words[index] = ((block[byteIndex] << 24) | (block[byteIndex + 1] << 16) | (block[byteIndex + 2] << 8) | block[byteIndex + 3]) >>> 0
     }
 
     for (let index = 16; index < 64; index++) {
@@ -36,7 +48,14 @@ export default function sha256BytesHex(bytes) {
       words[index] = add32(words[index - 16], s0, words[index - 7], s1)
     }
 
-    let [a, b, c, d, e, f, g, h] = hash
+    let a = hash[0]
+    let b = hash[1]
+    let c = hash[2]
+    let d = hash[3]
+    let e = hash[4]
+    let f = hash[5]
+    let g = hash[6]
+    let h = hash[7]
 
     for (let index = 0; index < 64; index++) {
       const s1 = rotateRight(e, 6) ^ rotateRight(e, 11) ^ rotateRight(e, 25)

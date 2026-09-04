@@ -62,11 +62,13 @@ retry metadata has been persisted.
 ## Integrity, retries, and interrupted work
 
 Bytes are accepted only when both their byte count and SHA-256 digest match the
-descriptor. The platform adapter does not see unverified content. Before the
-download begins, cache metadata records `downloading`; after a failure it stores
-the attempt count and exponential-backoff deadline. A process that restarts
-with `downloading` state converts it to an immediately eligible failed attempt,
-so interrupted work resumes without treating a partial file as valid.
+descriptor. Hashing reuses a fixed-size block rather than expanding the full
+attachment into a JavaScript number array. The platform adapter does not see
+unverified content. Before the download begins, cache metadata records
+`downloading`; after a failure it stores the attempt count and
+exponential-backoff deadline. A process that restarts with `downloading` state
+converts it to an immediately eligible failed attempt, so interrupted work
+resumes without treating a partial file as valid.
 
 Requests for one digest are single-flighted. Different descriptors with the
 same digest share one stored blob, including concurrent requests.
@@ -77,13 +79,19 @@ An adapter implements the `SynchronizedAssetCacheAdapter` typedef from
 `src/sync/assets/types.js`:
 
 - `loadState({accountId})` and `saveState({accountId, state})` persist the
-  versioned descriptor/retry manifest. `saveState` must replace it atomically.
+  versioned descriptor/retry manifest and pending blob deletions. `saveState`
+  must replace it atomically.
 - `blobUri({accountId, digest})` returns a renderable local URI only when the
   complete blob exists.
 - `writeBlob({accountId, digest, bytes, contentType})` atomically commits the
   already-verified bytes and returns their URI. Temporary writes must never be
   visible through `blobUri`.
 - `deleteBlob({accountId, digest})` is idempotent.
+
+The cache records an unreferenced digest before asking the adapter to delete
+it, then clears that record only after deletion succeeds. A transient deletion
+failure therefore rejects the current synchronization and is retried by the
+next synchronization, including after a process restart.
 
 Every operation includes `accountId`. Adapters must use it as a physical
 namespace rather than trusting a digest to isolate users. Signing out or

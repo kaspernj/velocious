@@ -1,7 +1,7 @@
 // @ts-check
 
-import {deferred} from "awaitery"
-import {describe, expect, it} from "../../src/testing/test.js"
+import { deferred } from "awaitery"
+import { describe, expect, it } from "../../src/testing/test.js"
 import SynchronizedAssetCache from "../../src/sync/assets/cache.js"
 import sha256BytesHex from "../../src/utils/sha256-bytes-hex.js"
 
@@ -88,6 +88,27 @@ class FailNextSaveAssetCacheAdapter extends MemoryAssetCacheAdapter {
     }
 
     await super.saveState(args)
+  }
+}
+
+/** Adapter that can reject exactly the next blob deletion. */
+class FailNextDeleteAssetCacheAdapter extends MemoryAssetCacheAdapter {
+  constructor() {
+    super()
+    this.deletionAttempts = 0
+    this.failNextDelete = false
+  }
+
+  /** @param {{accountId: string, digest: string}} args Blob identity. @returns {Promise<void>} */
+  async deleteBlob(args) {
+    this.deletionAttempts += 1
+
+    if (this.failNextDelete) {
+      this.failNextDelete = false
+      throw new Error("planned blob deletion failure")
+    }
+
+    await super.deleteBlob(args)
   }
 }
 
@@ -226,6 +247,7 @@ describe("SynchronizedAssetCache", {databaseCleaning: {transaction: false, trunc
         scopeKeys: ["users"],
         status: "downloading"
       }],
+      pendingDeletionDigests: [],
       version: 1
     })
 
@@ -370,6 +392,44 @@ describe("SynchronizedAssetCache", {databaseCleaning: {transaction: false, trunc
 
     expect(adapter.blobs.size).toEqual(0)
     expect(adapter.deletedBlobKeys).toEqual([`account-1:${asset.digest}`])
+  })
+
+  it("persists failed blob deletions and retries them on the next synchronization", async () => {
+    const content = bytes([43, 44, 45])
+    const asset = descriptor({bytes: content})
+    const adapter = new FailNextDeleteAssetCacheAdapter()
+    const buildCache = () => new SynchronizedAssetCache({
+      accountId: "account-1",
+      adapter,
+      download: async () => content,
+      maxBytes: 1024
+    })
+    const cache = buildCache()
+
+    await cache.synchronize({descriptors: [asset], online: true, scopeKey: "users"})
+    adapter.failNextDelete = true
+
+    await expect(async () => {
+      await cache.synchronize({descriptors: [], online: true, scopeKey: "users"})
+    }).toThrowError("planned blob deletion failure")
+
+    const failedState = adapter.states.get("account-1")
+
+    if (!failedState) throw new Error("Expected persisted asset cache state")
+
+    expect(failedState.assets).toEqual([])
+    expect(failedState.pendingDeletionDigests).toEqual([asset.digest])
+    expect(adapter.blobs.size).toEqual(1)
+
+    await buildCache().synchronize({descriptors: [], online: true, scopeKey: "users"})
+
+    const recoveredState = adapter.states.get("account-1")
+
+    if (!recoveredState) throw new Error("Expected recovered asset cache state")
+
+    expect(recoveredState.pendingDeletionDigests).toEqual([])
+    expect(adapter.blobs.size).toEqual(0)
+    expect(adapter.deletionAttempts).toEqual(2)
   })
 
   it("evicts least-recently-used optional blobs but retains durable content", async () => {

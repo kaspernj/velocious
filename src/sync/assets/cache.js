@@ -37,8 +37,6 @@ export default class SynchronizedAssetCache {
     this.retryMaxDelayMs = retryMaxDelayMs
     /** @type {Map<string, Promise<string>>} */
     this.downloadPromises = new Map()
-    /** @type {Set<string>} */
-    this.pendingDeletionDigests = new Set()
     /** @type {import("./types.js").SynchronizedAssetCacheState | null} */
     this.state = null
     /** @type {Promise<import("./types.js").SynchronizedAssetCacheState> | null} */
@@ -95,8 +93,13 @@ export default class SynchronizedAssetCache {
       }
     }
 
+    for (const digest of removedDigests) {
+      if (state.assets.some((entry) => entry.descriptor.digest === digest)) continue
+      if (!state.pendingDeletionDigests.includes(digest)) state.pendingDeletionDigests.push(digest)
+    }
+
     await this.saveState()
-    await this.deleteUnreferencedDigests(removedDigests)
+    await this.deleteUnreferencedDigests()
 
     /** @type {import("./types.js").SynchronizedAssetCacheFailure[]} */
     const failures = []
@@ -253,7 +256,7 @@ export default class SynchronizedAssetCache {
   async loadStateFromAdapter() {
     const loadedState = await this.adapter.loadState({accountId: this.accountId})
 
-    if (!loadedState) return {assets: [], version: CACHE_STATE_VERSION}
+    if (!loadedState) return {assets: [], pendingDeletionDigests: [], version: CACHE_STATE_VERSION}
     if (loadedState.version !== CACHE_STATE_VERSION) {
       throw new Error(`Unsupported synchronized asset cache state version: ${loadedState.version}`)
     }
@@ -348,9 +351,7 @@ export default class SynchronizedAssetCache {
       if (ownsDownloadPromise && this.downloadPromises.get(digest) === downloadPromise) {
         this.downloadPromises.delete(digest)
 
-        if (this.pendingDeletionDigests.delete(digest)) {
-          await this.deleteDigestIfUnreferenced(digest)
-        }
+        await this.deletePendingDigestIfUnreferenced(digest)
       }
     }
   }
@@ -406,33 +407,40 @@ export default class SynchronizedAssetCache {
 
   /**
    * Deletes blobs that lost their final descriptor reference.
-   * @param {Set<string>} removedDigests Candidate digests.
    * @returns {Promise<void>} Resolves after deletion.
    */
-  async deleteUnreferencedDigests(removedDigests) {
+  async deleteUnreferencedDigests() {
     if (!this.state) throw new Error("Cannot delete synchronized asset blobs before loading state")
 
-    for (const digest of removedDigests) {
-      if (this.state.assets.some((entry) => entry.descriptor.digest === digest)) continue
-      if (this.downloadPromises.has(digest)) {
-        this.pendingDeletionDigests.add(digest)
-        continue
-      }
-
-      await this.adapter.deleteBlob({accountId: this.accountId, digest})
+    for (const digest of [...this.state.pendingDeletionDigests]) {
+      await this.deletePendingDigestIfUnreferenced(digest)
     }
   }
 
   /**
-   * Deletes a digest only when no current descriptor references it.
+   * Deletes one persisted pending digest when no descriptor or download owns it.
    * @param {string} digest Content digest.
    * @returns {Promise<void>} Resolves after any required deletion.
    */
-  async deleteDigestIfUnreferenced(digest) {
+  async deletePendingDigestIfUnreferenced(digest) {
     if (!this.state) throw new Error("Cannot delete synchronized asset blobs before loading state")
-    if (this.state.assets.some((entry) => entry.descriptor.digest === digest)) return
+    if (!this.state.pendingDeletionDigests.includes(digest)) return
+    if (this.downloadPromises.has(digest)) return
 
-    await this.adapter.deleteBlob({accountId: this.accountId, digest})
+    if (!this.state.assets.some((entry) => entry.descriptor.digest === digest)) {
+      await this.adapter.deleteBlob({accountId: this.accountId, digest})
+    }
+
+    const pendingDeletionDigests = this.state.pendingDeletionDigests
+
+    this.state.pendingDeletionDigests = pendingDeletionDigests.filter((candidate) => candidate !== digest)
+
+    try {
+      await this.saveState()
+    } catch (error) {
+      this.state.pendingDeletionDigests = pendingDeletionDigests
+      throw error
+    }
   }
 
   /**

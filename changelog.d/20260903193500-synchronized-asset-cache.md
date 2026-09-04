@@ -4,3 +4,5 @@
 - Keep synchronization readiness scoped to the reconciled descriptor set,
   recover metadata persistence after transient adapter failures, and delete
   unreferenced blobs after concurrent downloads finish.
+- Hash attachment bytes in fixed-size blocks and persist unconfirmed blob
+  deletions so transient adapter failures are retried.
