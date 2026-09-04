@@ -2936,7 +2936,7 @@ class VelociousDatabaseRecord {
 
     const connection = this.connection()
 
-    if (!connection.insideTransaction() && Object.keys(this.getAttachments()).length > 0) {
+    if (!connection.insideTransaction()) {
       await this._prepareAttachmentStoreSchema(connection)
     }
 
@@ -2955,7 +2955,7 @@ class VelociousDatabaseRecord {
    * @returns {Promise<void>} - Resolves when the attachment schema is current.
    */
   static async _prepareAttachmentStoreSchema(connection) {
-    await recordAttachmentsStoreForModelClass(this).prepareRecordIdentityMigration({connection})
+    await recordAttachmentsStoreForModelClass(this, connection).prepareRecordIdentityMigration({connection})
   }
 
   /**

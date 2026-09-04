@@ -1,10 +1,11 @@
 export type AttachmentDriverConstructor = import("../../../configuration-types.js").AttachmentDriverConstructor;
 /**
  * Returns the attachment store used before a model-level transaction starts.
- * @param {typeof import("../index.js").default} modelClass - Attachment-owning model class.
+ * @param {typeof import("../index.js").default} modelClass - Model class opening the transaction.
+ * @param {import("../../drivers/base.js").default} connection - Selected physical connection.
  * @returns {RecordAttachmentsStore} - Store instance.
  */
-export declare function recordAttachmentsStoreForModelClass(modelClass: typeof import("../index.js").default): RecordAttachmentsStore;
+export declare function recordAttachmentsStoreForModelClass(modelClass: typeof import("../index.js").default, connection: import("../../drivers/base.js").default): RecordAttachmentsStore;
 /**
  * Runs the recordAttachmentsStoreForModel helper.
  * @param {import("../index.js").default} model - Model instance.

@@ -4,7 +4,7 @@ import {createHash} from "node:crypto"
 import Configuration from "../../../src/configuration.js"
 import Project from "../../dummy/src/models/project.js"
 import Record from "../../../src/database/record/index.js"
-import RecordAttachmentsStore from "../../../src/database/record/attachments/store.js"
+import RecordAttachmentsStore, {recordAttachmentsStoreForModelClass} from "../../../src/database/record/attachments/store.js"
 import Task from "../../dummy/src/models/task.js"
 import {modelPrimaryKeyCacheKey} from "../../../src/utils/model-primary-key.js"
 
@@ -62,8 +62,8 @@ class FailingAfterUpdateCompositePrimaryKeyTask extends Record {
   }
 }
 
-/** Composite-key view that records attachment preparation transaction state. */
-class TransactionPreparingCompositePrimaryKeyTask extends Record {
+/** Plain model view that records attachment preparation transaction state. */
+class TransactionPreparingPlainTask extends Record {
   /** @type {boolean[]} */
   static preparationTransactionStates = []
 
@@ -120,9 +120,7 @@ GeneratedCompositePrimaryKeyTask.setPrimaryKey(["id", "project_id"])
 FailingAfterUpdateCompositePrimaryKeyTask.setTableName("tasks")
 FailingAfterUpdateCompositePrimaryKeyTask.setPrimaryKey(["name", "project_id"])
 FailingAfterUpdateCompositePrimaryKeyTask.hasOneAttachment("descriptionFile", {driver: CompositePrimaryKeyAttachmentDriver})
-TransactionPreparingCompositePrimaryKeyTask.setTableName("tasks")
-TransactionPreparingCompositePrimaryKeyTask.setPrimaryKey(["name", "project_id"])
-TransactionPreparingCompositePrimaryKeyTask.hasOneAttachment("descriptionFile", {driver: CompositePrimaryKeyAttachmentDriver})
+TransactionPreparingPlainTask.setTableName("tasks")
 
 describe("Record - composite primary key", {tags: ["dummy"]}, () => {
   it("keeps scalar primary-key behavior unchanged", async () => {
@@ -302,15 +300,36 @@ describe("Record - composite primary key", {tags: ["dummy"]}, () => {
     expect(store.schemaLocksHeld).toEqual([])
   })
 
-  it("prepares attachment schema before a caller-owned transaction", {databaseCleaning: {transaction: false, truncate: false}}, async () => {
-    TransactionPreparingCompositePrimaryKeyTask.preparationTransactionStates = []
+  it("keys transaction attachment stores by physical database identity", async () => {
+    const configuration = Configuration.current()
+    const databaseIdentifier = CompositePrimaryKeyTask.getDatabaseIdentifier()
+    const pool = configuration.getDatabasePool(databaseIdentifier)
+    const connection = CompositePrimaryKeyTask.connection()
+    const originalReuseKey = pool.getConnectionConfigurationReuseKey(connection)
+    let firstStore
+    let secondStore
 
-    await TransactionPreparingCompositePrimaryKeyTask.transaction(async () => {
-      expect(TransactionPreparingCompositePrimaryKeyTask.connection().insideTransaction()).toBeTrue()
-      await TransactionPreparingCompositePrimaryKeyTask.transaction(async () => {})
+    try {
+      pool.stampConnectionForConfigurationReuseKey(connection, `${originalReuseKey}:first`)
+      firstStore = recordAttachmentsStoreForModelClass(CompositePrimaryKeyTask, connection)
+      pool.stampConnectionForConfigurationReuseKey(connection, `${originalReuseKey}:second`)
+      secondStore = recordAttachmentsStoreForModelClass(CompositePrimaryKeyTask, connection)
+    } finally {
+      pool.stampConnectionForConfigurationReuseKey(connection, originalReuseKey)
+    }
+
+    expect(firstStore).not.toEqual(secondStore)
+  })
+
+  it("prepares attachment schema before a cross-model caller-owned transaction", {databaseCleaning: {transaction: false, truncate: false}}, async () => {
+    TransactionPreparingPlainTask.preparationTransactionStates = []
+
+    await TransactionPreparingPlainTask.transaction(async () => {
+      expect(TransactionPreparingPlainTask.connection().insideTransaction()).toBeTrue()
+      await CompositePrimaryKeyTask.transaction(async () => {})
     })
 
-    expect(TransactionPreparingCompositePrimaryKeyTask.preparationTransactionStates).toEqual([false])
+    expect(TransactionPreparingPlainTask.preparationTransactionStates).toEqual([false])
   })
 
   it("stores canonical composite attachment identities without a length limit", async () => {

@@ -82,6 +82,22 @@ function storeKeyForModel(model) {
 }
 
 /**
+ * Returns the physical store key for an already-selected model connection.
+ * @param {typeof import("../index.js").default} modelClass - Model class.
+ * @param {import("../../drivers/base.js").default} connection - Selected physical connection.
+ * @returns {string} - Physical store key.
+ */
+function storeKeyForModelClass(modelClass, connection) {
+  const databaseIdentifier = modelClass.getDatabaseIdentifier()
+  const reuseKey = modelClass
+    ._getConfiguration()
+    .getDatabasePool(databaseIdentifier)
+    .getConnectionConfigurationReuseKey(connection)
+
+  return `${databaseIdentifier}:${reuseKey}`
+}
+
+/**
  * Returns the shared attachment store for one configured database identity.
  * @param {object} args - Store identity.
  * @param {import("../../../configuration.js").default} args.configuration - Owning configuration.
@@ -109,16 +125,17 @@ function recordAttachmentsStore({configuration, databaseIdentifier, storeKey}) {
 
 /**
  * Returns the attachment store used before a model-level transaction starts.
- * @param {typeof import("../index.js").default} modelClass - Attachment-owning model class.
+ * @param {typeof import("../index.js").default} modelClass - Model class opening the transaction.
+ * @param {import("../../drivers/base.js").default} connection - Selected physical connection.
  * @returns {RecordAttachmentsStore} - Store instance.
  */
-export function recordAttachmentsStoreForModelClass(modelClass) {
+export function recordAttachmentsStoreForModelClass(modelClass, connection) {
   const databaseIdentifier = modelClass.getDatabaseIdentifier()
 
   return recordAttachmentsStore({
     configuration: modelClass._getConfiguration(),
     databaseIdentifier,
-    storeKey: databaseIdentifier
+    storeKey: storeKeyForModelClass(modelClass, connection)
   })
 }
 
