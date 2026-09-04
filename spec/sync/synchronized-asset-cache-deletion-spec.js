@@ -66,6 +66,35 @@ describe("SynchronizedAssetCache deletion", {databaseCleaning: {transaction: fal
     expect(adapter.deletedBlobKeys).toEqual([`account-1:${asset.digest}`])
   })
 
+  it("returns null when the requested descriptor is removed but its digest stays referenced during lookup", async () => {
+    const content = bytes([64, 65, 66])
+    const removedAsset = descriptor({bytes: content, id: "removed"})
+    const retainedAsset = descriptor({bytes: content, id: "retained"})
+    const adapter = new PausedBlobLookupAssetCacheAdapter()
+    const cache = new SynchronizedAssetCache({
+      accountId: "account-1",
+      adapter,
+      download: async () => content,
+      maxBytes: 1024
+    })
+
+    await cache.synchronize({descriptors: [removedAsset, retainedAsset], online: true, scopeKey: "users"})
+    const state = await cache.loadState()
+    const removedEntry = state.assets.find((entry) => entry.descriptor.id === removedAsset.id)
+
+    if (!removedEntry) throw new Error(`Missing synchronized asset cache entry ${removedAsset.id}`)
+
+    adapter.pauseNextBlobLookup = true
+    const cachedUriPromise = cache.cachedUri(removedEntry)
+
+    await adapter.blobLookupStarted.promise
+    await cache.synchronize({descriptors: [retainedAsset], online: false, scopeKey: "users"})
+    adapter.releaseBlobLookup.resolve(undefined)
+
+    expect(await cachedUriPromise).toEqual(null)
+    expect(adapter.blobs.has(`account-1:${removedAsset.digest}`)).toEqual(true)
+  })
+
   it("deletes an eager download whose scope is removed during descriptor persistence", async () => {
     const content = bytes([73, 74, 75])
     const asset = descriptor({bytes: content})
@@ -268,5 +297,64 @@ describe("SynchronizedAssetCache deletion", {databaseCleaning: {transaction: fal
     expect(adapter.deletionAttempts).toEqual(1)
     expect(adapter.blobs.size).toEqual(1)
     expect(await replacementCache.resolve({assetId: replacementAsset.id, online: false})).toEqual(null)
+  })
+
+  it("does not reuse a retained digest when replacement byte size changes", async () => {
+    const content = bytes([133, 134, 135])
+    const removedAsset = descriptor({bytes: content, id: "removed"})
+    const replacementAsset = {
+      ...descriptor({bytes: content, id: "replacement", offlineRequirement: "required"}),
+      byteSize: content.byteLength + 1
+    }
+    const adapter = new MemoryAssetCacheAdapter()
+    let downloadCount = 0
+    const cache = new SynchronizedAssetCache({
+      accountId: "account-1",
+      adapter,
+      download: async () => {
+        downloadCount += 1
+        return content
+      },
+      maxBytes: 1024
+    })
+
+    await cache.synchronize({descriptors: [removedAsset], online: true, scopeKey: "users"})
+    downloadCount = 0
+
+    const result = await cache.synchronize({descriptors: [replacementAsset], online: true, scopeKey: "users"})
+
+    expect(result.failures.map((failure) => failure.assetId)).toEqual([replacementAsset.id])
+    expect(result.missingRequiredAssetIds).toEqual([replacementAsset.id])
+    expect(downloadCount).toEqual(1)
+    expect(await cache.resolve({assetId: replacementAsset.id, online: false})).toEqual(null)
+  })
+
+  it("redownloads a retained digest when replacement content type changes", async () => {
+    const content = bytes([136, 137, 138])
+    const removedAsset = descriptor({bytes: content, id: "removed"})
+    const replacementAsset = {
+      ...descriptor({bytes: content, id: "replacement"}),
+      contentType: "image/jpeg"
+    }
+    const adapter = new MemoryAssetCacheAdapter()
+    let downloadCount = 0
+    const cache = new SynchronizedAssetCache({
+      accountId: "account-1",
+      adapter,
+      download: async () => {
+        downloadCount += 1
+        return content
+      },
+      maxBytes: 1024
+    })
+
+    await cache.synchronize({descriptors: [removedAsset], online: true, scopeKey: "users"})
+    downloadCount = 0
+
+    const result = await cache.synchronize({descriptors: [replacementAsset], online: true, scopeKey: "users"})
+
+    expect(result.failures).toEqual([])
+    expect(downloadCount).toEqual(1)
+    expect(await cache.resolve({assetId: replacementAsset.id, online: false})).toMatch(/^memory:/)
   })
 })

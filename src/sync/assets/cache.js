@@ -452,7 +452,8 @@ export default class SynchronizedAssetCache {
     const incomingIds = new Set(descriptors.map((asset) => asset.id))
     const entriesById = new Map(state.assets.map((entry) => [entry.descriptor.id, entry]))
     const descriptorsById = new Map(state.assets.map((entry) => [entry.descriptor.id, entry.descriptor]))
-    const removedDigests = new Set()
+    /** @type {Map<string, import("./types.js").SynchronizedAssetCacheDescriptor>} */
+    const removedDescriptorsByDigest = new Map()
 
     for (const asset of descriptors) {
       const knownDescriptor = descriptorsById.get(asset.id)
@@ -481,7 +482,7 @@ export default class SynchronizedAssetCache {
       if (!entry.scopeKeys.includes(scopeKey) || incomingIds.has(entry.descriptor.id)) continue
 
       entry.scopeKeys = entry.scopeKeys.filter((candidate) => candidate !== scopeKey)
-      if (entry.scopeKeys.length === 0) removedDigests.add(entry.descriptor.digest)
+      if (entry.scopeKeys.length === 0) removedDescriptorsByDigest.set(entry.descriptor.digest, entry.descriptor)
     }
 
     state.assets = state.assets.filter((entry) => entry.scopeKeys.length > 0)
@@ -527,8 +528,10 @@ export default class SynchronizedAssetCache {
       contentTypesByDigest.set(entry.descriptor.digest, entry.descriptor.contentType)
     }
 
-    for (const digest of removedDigests) {
-      if (state.assets.some((entry) => entry.descriptor.digest === digest)) continue
+    for (const [digest, removedDescriptor] of removedDescriptorsByDigest) {
+      const retainedEntry = state.assets.find((entry) => entry.descriptor.digest === digest)
+
+      if (retainedEntry && retainedEntry.descriptor.byteSize === removedDescriptor.byteSize && retainedEntry.descriptor.contentType === removedDescriptor.contentType) continue
       if (!state.pendingDeletionDigests.includes(digest)) state.pendingDeletionDigests.push(digest)
     }
 
@@ -765,6 +768,10 @@ export default class SynchronizedAssetCache {
         revalidationRequired = await this.finishActiveDigest(digest)
       }
 
+      if (!this.state) throw new Error("Cannot revalidate synchronized asset cache URI before loading state")
+      if (!this.state.assets.some((candidate) => {
+        return candidate.descriptor.id === entry.descriptor.id && candidate.descriptor.digest === digest
+      })) return null
       if (!revalidationRequired) return uri
     }
   }
