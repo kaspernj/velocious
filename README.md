@@ -844,7 +844,9 @@ The optional model-level `sync` block is client-safe policy metadata for asset
 cache adapters. It distinguishes eager/on-demand fetching,
 durable/evictable retention, and optional/required offline availability.
 Required offline assets must be durable. Backend driver configuration never
-appears in generated frontend models or API manifests.
+appears in generated frontend models or API manifests. Cache descriptors that
+share a digest must agree on byte size, and eager synchronization attempts each
+shared digest only once per reconciliation.
 Attachment metadata is exposed through the built-in `VelociousAttachment` frontend model with safe fields only: `id`, `recordType`, `recordId`, `name`, `position`, `filename`, `contentType`, `byteSize`, `createdAt`, and `updatedAt`. Storage internals such as `driver`, `storageKey`, and `contentBase64` remain hidden and non-queryable. Direct metadata queries require owner filters: `recordType`, `recordId`, and `name`.
 
 When your frontend app calls a backend on another host/port (or under a path prefix), configure transport once:

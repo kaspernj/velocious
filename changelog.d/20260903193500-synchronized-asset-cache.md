@@ -20,3 +20,6 @@
   preserving queued deletion work across an earlier persistence rollback.
 - Return `null` instead of a deleted local URI when concurrent synchronization
   removes the requested descriptor's final scope reference during resolution.
+- Attempt each eager digest once per synchronization, propagate its result to
+  every grouped descriptor, and reject conflicting byte sizes for shared
+  digests before committing descriptor state.

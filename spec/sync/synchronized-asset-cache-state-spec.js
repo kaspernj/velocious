@@ -5,6 +5,34 @@ import SynchronizedAssetCache from "../../src/sync/assets/cache.js"
 import { bytes, descriptor, FailNextSaveAssetCacheAdapter, MemoryAssetCacheAdapter } from "../helpers/synchronized-asset-cache.js"
 
 describe("SynchronizedAssetCache state", {databaseCleaning: {transaction: false, truncate: false}}, () => {
+  it("rejects inconsistent byte sizes before reconciling a shared digest", async () => {
+    const content = bytes([108, 109, 110])
+    const firstAsset = descriptor({bytes: content, id: "attachment-1"})
+    const secondAsset = {
+      ...descriptor({bytes: content, id: "attachment-2"}),
+      byteSize: content.byteLength + 1,
+      recordId: "user-2"
+    }
+    const adapter = new MemoryAssetCacheAdapter()
+    let downloadCount = 0
+    const cache = new SynchronizedAssetCache({
+      accountId: "account-1",
+      adapter,
+      download: async () => {
+        downloadCount += 1
+        return content
+      },
+      maxBytes: 1024
+    })
+
+    await expect(async () => {
+      await cache.synchronize({descriptors: [firstAsset, secondAsset], online: true, scopeKey: "users"})
+    }).toThrowError(`Synchronized asset digest ${firstAsset.digest} has inconsistent byte sizes`)
+
+    expect(downloadCount).toEqual(0)
+    expect(await adapter.loadState({accountId: "account-1"})).toEqual(null)
+  })
+
   it("does not mutate cache state when immutable descriptor validation fails", async () => {
     const retainedContent = bytes([46, 47, 48])
     const removedContent = bytes([49, 50, 51])

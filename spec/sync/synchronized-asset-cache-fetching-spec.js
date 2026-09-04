@@ -151,6 +151,37 @@ describe("SynchronizedAssetCache fetching", {databaseCleaning: {transaction: fal
     expect(await cache.resolve({assetId: secondAsset.id, online: false})).toEqual(`memory://account-1:${secondAsset.digest}`)
   })
 
+  it("attempts a failed eager digest once and propagates the failure to every reference", async () => {
+    const content = bytes([105, 106, 107])
+    const firstAsset = descriptor({bytes: content, id: "attachment-1"})
+    const secondAsset = {...descriptor({bytes: content, id: "attachment-2"}), recordId: "user-2"}
+    const adapter = new MemoryAssetCacheAdapter()
+    let downloadCount = 0
+    const cache = new SynchronizedAssetCache({
+      accountId: "account-1",
+      adapter,
+      download: async () => {
+        downloadCount += 1
+        throw new Error("planned eager download failure")
+      },
+      maxBytes: 1024,
+      now: () => new Date(1000),
+      retryBaseDelayMs: 500
+    })
+
+    const result = await cache.synchronize({descriptors: [firstAsset, secondAsset], online: true, scopeKey: "users"})
+    const persistedState = await adapter.loadState({accountId: "account-1"})
+
+    if (!persistedState) throw new Error("Expected persisted asset cache state")
+
+    expect(result.failures.map((failure) => failure.assetId)).toEqual([firstAsset.id, secondAsset.id])
+    expect(downloadCount).toEqual(1)
+    expect(persistedState.assets.map((entry) => ({attempts: entry.attempts, nextRetryAt: entry.nextRetryAt, status: entry.status}))).toEqual([
+      {attempts: 1, nextRetryAt: 1500, status: "failed"},
+      {attempts: 1, nextRetryAt: 1500, status: "failed"}
+    ])
+  })
+
   it("single-flights concurrent requests for the same content digest", async () => {
     const content = bytes([28, 29, 30])
     const firstAsset = descriptor({bytes: content, fetch: "on-demand", id: "attachment-1"})

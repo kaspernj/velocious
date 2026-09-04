@@ -93,14 +93,25 @@ export default class SynchronizedAssetCache {
           continue
         }
 
+        /** @type {import("./types.js").SynchronizedAssetCacheEntry[]} */
+        const eagerEntries = []
+
         for (const descriptor of eagerDescriptors) {
           const entry = entriesById.get(descriptor.id)
 
-          if (!entry || !this.retryEligible(entry)) continue
+          if (!entry) throw new Error(`Missing reconciled synchronized asset descriptor ${descriptor.id}`)
 
-          const cacheResult = await this.ensureCachedWhileActive(entry)
+          eagerEntries.push(entry)
+        }
 
-          if (cacheResult.error) failures.push({assetId: descriptor.id, error: cacheResult.error})
+        if (eagerEntries.some((entry) => this.retryEligible(entry))) {
+          const cacheResult = await this.ensureCachedWhileActive(eagerEntries)
+
+          if (cacheResult.error) {
+            for (const entry of eagerEntries) {
+              failures.push({assetId: entry.descriptor.id, error: cacheResult.error})
+            }
+          }
         }
 
         activeDigests.delete(digest)
@@ -147,7 +158,7 @@ export default class SynchronizedAssetCache {
 
         resolvedUri = cachedUri
       } else if (online && this.retryEligible(entry)) {
-        const cacheResult = await this.ensureCachedWhileActive(entry)
+        const cacheResult = await this.ensureCachedWhileActive([entry])
 
         if (cacheResult.error) throw cacheResult.error
 
@@ -419,6 +430,19 @@ export default class SynchronizedAssetCache {
       }
     }
 
+    /** @type {Map<string, number>} */
+    const byteSizesByDigest = new Map()
+
+    for (const entry of state.assets) {
+      const knownByteSize = byteSizesByDigest.get(entry.descriptor.digest)
+
+      if (knownByteSize !== undefined && knownByteSize !== entry.descriptor.byteSize) {
+        throw new Error(`Synchronized asset digest ${entry.descriptor.digest} has inconsistent byte sizes`)
+      }
+
+      byteSizesByDigest.set(entry.descriptor.digest, entry.descriptor.byteSize)
+    }
+
     for (const digest of removedDigests) {
       if (state.assets.some((entry) => entry.descriptor.digest === digest)) continue
       if (!state.pendingDeletionDigests.includes(digest)) state.pendingDeletionDigests.push(digest)
@@ -466,31 +490,32 @@ export default class SynchronizedAssetCache {
     await this.beginActiveDigest(digest)
 
     try {
-      return await this.ensureCachedWhileActive(entry)
+      return await this.ensureCachedWhileActive([entry])
     } finally {
       await this.finishActiveDigest(digest)
     }
   }
 
   /**
-   * Resolves or downloads one descriptor while its digest is protected.
-   * @param {import("./types.js").SynchronizedAssetCacheEntry} entry Descriptor state.
+   * Resolves or downloads descriptors sharing one protected digest.
+   * @param {import("./types.js").SynchronizedAssetCacheEntry[]} entries Descriptor states.
    * @returns {Promise<{error: Error | null, uri: string | null}>} Cache result.
    */
-  async ensureCachedWhileActive(entry) {
+  async ensureCachedWhileActive(entries) {
+    const entry = entries[0]
+
+    if (!entry) throw new Error("Cannot cache a synchronized asset digest without descriptor entries")
+
     const existingUri = await this.cachedUriWhileActive(entry)
 
     if (existingUri) {
-      entry.attempts = 0
-      entry.lastAccessedAt = this.nowMilliseconds()
-      entry.nextRetryAt = null
-      entry.status = "cached"
-      await this.saveState()
+      await this.recordCachedEntries(entries)
 
       return {error: null, uri: existingUri}
     }
 
-    entry.status = "downloading"
+    for (const digestEntry of entries) digestEntry.status = "downloading"
+
     const digest = entry.descriptor.digest
     let downloadPromise = this.downloadPromises.get(digest)
     let ownsDownloadPromise = false
@@ -512,11 +537,7 @@ export default class SynchronizedAssetCache {
         return cacheResult
       }
 
-      entry.attempts = 0
-      entry.lastAccessedAt = this.nowMilliseconds()
-      entry.nextRetryAt = null
-      entry.status = "cached"
-      await this.saveState()
+      await this.recordCachedEntries(entries)
 
       return cacheResult
     } finally {
@@ -524,6 +545,24 @@ export default class SynchronizedAssetCache {
         this.downloadPromises.delete(digest)
       }
     }
+  }
+
+  /**
+   * Records one cached digest result for every participating descriptor.
+   * @param {import("./types.js").SynchronizedAssetCacheEntry[]} entries Descriptor states.
+   * @returns {Promise<void>} Resolves after persistence.
+   */
+  async recordCachedEntries(entries) {
+    const lastAccessedAt = this.nowMilliseconds()
+
+    for (const entry of entries) {
+      entry.attempts = 0
+      entry.lastAccessedAt = lastAccessedAt
+      entry.nextRetryAt = null
+      entry.status = "cached"
+    }
+
+    await this.saveState()
   }
 
   /**

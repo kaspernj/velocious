@@ -49,17 +49,19 @@ descriptor scope. Descriptors removed from that scope lose the scope reference;
 their bytes are deleted only after no active scope references the digest.
 The complete incoming descriptor set is validated and atomically persisted
 before cache state changes become visible. An immutable-digest conflict or
-metadata persistence failure therefore leaves the last committed scope active
-without exposing a partially reconciled descriptor set.
+conflicting byte size for one shared digest, or a metadata persistence failure,
+therefore leaves the last committed scope active without exposing a partially
+reconciled descriptor set.
 `synchronize` downloads eligible eager descriptors and returns both attempted
 download failures and required asset ids in that scope that remain absent. It
 does not hide a failed authenticated request or corrupt payload. Incoming
 digests stay protected until their eager descriptors finish, then become
 eligible for cleanup before the next digest downloads. This bounds temporary
 storage growth to the current atomic blob write instead of the complete eager
-manifest. Removing the last reference while descriptor persistence, a cache
-lookup, or a download is active schedules any completed blob for deletion
-instead of leaving unreferenced bytes behind.
+manifest. Eager descriptors sharing a digest make one download attempt and
+receive the same success or failure result. Removing the last reference while
+descriptor persistence, a cache lookup, or a download is active schedules any
+completed blob for deletion instead of leaving unreferenced bytes behind.
 
 Call `resolve({assetId, online})` when rendering an asset. A cached URI is
 returned immediately. An absent on-demand asset downloads when online; offline

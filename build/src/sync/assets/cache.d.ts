@@ -144,14 +144,20 @@ export default class SynchronizedAssetCache {
         uri: string | null;
     }>;
     /**
-     * Resolves or downloads one descriptor while its digest is protected.
-     * @param {import("./types.js").SynchronizedAssetCacheEntry} entry Descriptor state.
+     * Resolves or downloads descriptors sharing one protected digest.
+     * @param {import("./types.js").SynchronizedAssetCacheEntry[]} entries Descriptor states.
      * @returns {Promise<{error: Error | null, uri: string | null}>} Cache result.
      */
-    ensureCachedWhileActive(entry: import("./types.js").SynchronizedAssetCacheEntry): Promise<{
+    ensureCachedWhileActive(entries: import("./types.js").SynchronizedAssetCacheEntry[]): Promise<{
         error: Error | null;
         uri: string | null;
     }>;
+    /**
+     * Records one cached digest result for every participating descriptor.
+     * @param {import("./types.js").SynchronizedAssetCacheEntry[]} entries Descriptor states.
+     * @returns {Promise<void>} Resolves after persistence.
+     */
+    recordCachedEntries(entries: import("./types.js").SynchronizedAssetCacheEntry[]): Promise<void>;
     /**
      * Persists download intent, then downloads one digest and records a shared failure once.
      * @param {import("./types.js").SynchronizedAssetCacheDescriptor} descriptor Asset descriptor.
