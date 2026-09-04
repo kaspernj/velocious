@@ -57,15 +57,28 @@ package declarations are still separate registries joined by the existing
 conversion adapter; this characterization does not claim that the package runner
 has been adopted.
 
+The legacy runner remains the active orchestrator while its Velocious-owned
+lifecycle is split into internal adapters. `VelociousTestArguments` owns the
+application/request-client argument projection, `VelociousAttemptExecutor` runs
+exactly one complete attempt, `VelociousSuiteHookExecutor` preserves suite hook
+arguments and teardown order, and `VelociousRunnerReporter` projects attempt
+outcomes into legacy events and counters. Selection, suite traversal, and retry
+decisions remain in `TestRunner`; the attempt executor does not perform any of
+them. Database cleanup, tenant rollback, shared-transaction brokers, broadcast
+draining, timeout quarantine, dummy handling, and profiler spans remain
+Velocious-owned. This boundary prepares a later package-runner switch without
+switching orchestration or changing the pinned `@velocious/testing` dependency.
+
 Several adoption assertions intentionally remain RED because making them pass
 requires the later runner switch rather than a test-only change. The current
 conversion drops package declaration `state` and `rowArguments`, so skip/todo
-state and table callback rows cannot yet reach the legacy runner. A standalone
-falsy throw or rejection is not counted unless another cleanup failure makes the
-lifecycle error truthy, and a `beforeAll` failure rejects the scope without
-creating one failed result for every selected descendant. The package-backed
-adapter must close these gaps, add Velocious `testArgs` after table row arguments,
-and make facade and direct-package declarations share the one package registry.
+state and table callback rows cannot yet reach the legacy runner. A `beforeAll`
+failure rejects the scope without creating one failed result for every selected
+descendant. The package-backed adapter must close these gaps, add Velocious
+`testArgs` after table row arguments, and make facade and direct-package
+declarations share the one package registry. The extracted legacy result bridge
+tracks attempt failure independently of error truthiness, so standalone falsy
+throws and rejections remain failures.
 
 ## Truncation cleanup
 
