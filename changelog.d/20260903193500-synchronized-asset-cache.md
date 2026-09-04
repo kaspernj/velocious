@@ -26,6 +26,7 @@
 - Re-enforce the cache byte budget after concurrent on-demand downloads release
   their digest guards, revalidate selected blobs before returning resolved
   URIs, rerun cleanup after cached-resolution guards release, and reject
-  conflicting content types for shared digests. Evict an all-evictable digest
-  that is individually larger than the byte budget after its resolver guard
-  releases instead of leaving an oversized on-demand blob cached indefinitely.
+  conflicting content types for shared digests. Follow protected on-demand
+  cleanup with an unprotected pass so durable bytes cannot leave a newly
+  downloaded evictable blob over the combined budget, and evict cached
+  all-evictable digests that individually exceed the budget.

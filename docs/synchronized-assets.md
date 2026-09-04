@@ -76,10 +76,14 @@ resolver then rechecks its descriptor through a protected blob lookup and
 returns `null` if another resolver's cleanup evicted its selected bytes. When
 cleanup skips a cached digest that is still in active use, releasing its final
 guard schedules another serialized pass so the byte budget does not remain
-exceeded after overlapping synchronization. Resolving an all-evictable digest
-that is individually larger than `maxBytes` runs an unprotected cleanup after
-releasing its guard and returns `null` once those bytes are evicted; a durable
-reference to the same digest continues to exempt it from the budget.
+exceeded after overlapping synchronization. Every completed on-demand download
+runs an unprotected pass after its preferred-digest cleanup, so durable bytes
+cannot leave the combined cache over budget by protecting the new evictable
+blob; the pass is a no-op when the first cleanup already restored the budget.
+Resolving a cached all-evictable digest that is individually larger than
+`maxBytes` also runs unprotected cleanup. Resolution returns `null` when cleanup
+evicts the selected bytes; a durable reference to the same digest continues to
+exempt it from eviction.
 
 ## Integrity, retries, and interrupted work
 

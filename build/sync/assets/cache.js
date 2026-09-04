@@ -205,9 +205,9 @@ export default class SynchronizedAssetCache {
     }
 
     if (shouldCleanup) await this.cleanup(new Set([digest]))
-    const requiresUnprotectedCleanup = entry.descriptor.byteSize > this.maxBytes && !state.assets.some((candidate) => {
+    const requiresUnprotectedCleanup = shouldCleanup || (entry.descriptor.byteSize > this.maxBytes && !state.assets.some((candidate) => {
       return candidate.descriptor.digest === digest && candidate.descriptor.retention === "durable"
-    })
+    }))
 
     if (requiresUnprotectedCleanup) await this.cleanup()
     if (!resolvedUri) return null

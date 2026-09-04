@@ -299,6 +299,28 @@ describe("SynchronizedAssetCache eviction", {databaseCleaning: {transaction: fal
     expect(adapter.blobs.size).toEqual(0)
   })
 
+  it("evicts an on-demand blob when durable content leaves insufficient budget", async () => {
+    const durableContent = bytes([64, 65, 66, 67])
+    const onDemandContent = bytes([68, 69, 70])
+    const durableAsset = descriptor({bytes: durableContent, id: "durable", retention: "durable"})
+    const onDemandAsset = descriptor({bytes: onDemandContent, fetch: "on-demand", id: "on-demand"})
+    const contents = new Map([[durableAsset.id, durableContent], [onDemandAsset.id, onDemandContent]])
+    const adapter = new MemoryAssetCacheAdapter()
+    const cache = new SynchronizedAssetCache({
+      accountId: "account-1",
+      adapter,
+      download: async (asset) => /** @type {Uint8Array} */ (contents.get(asset.id)),
+      maxBytes: 5
+    })
+
+    await cache.synchronize({descriptors: [durableAsset], online: true, scopeKey: "durable-scope"})
+    await cache.synchronize({descriptors: [onDemandAsset], online: true, scopeKey: "on-demand-scope"})
+
+    expect(await cache.resolve({assetId: onDemandAsset.id, online: true})).toEqual(null)
+    expect(adapter.blobs.size).toEqual(1)
+    expect(adapter.blobs.has(`account-1:${durableAsset.digest}`)).toEqual(true)
+  })
+
   it("evicts least-recently-used optional blobs but retains durable content", async () => {
     const oldContent = bytes([16, 17, 18])
     const newContent = bytes([19, 20, 21])
