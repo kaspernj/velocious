@@ -1879,7 +1879,15 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @returns {Promise<import("../database/record/index.js").default>} - Authorized, parent-linked child model.
    */
   async _findScopedChild({ability, action, childPrimaryKey, childResourceConfiguration, id, parent, parentLinkAttributes, relationshipName, targetModelClass}) {
-    const lookup = {...modelPrimaryKeyConditions(childPrimaryKey, id), ...parentLinkAttributes}
+    const identityConditions = modelPrimaryKeyConditions(childPrimaryKey, id)
+
+    for (const [attributeName, parentValue] of Object.entries(parentLinkAttributes)) {
+      if (Object.prototype.hasOwnProperty.call(identityConditions, attributeName) && identityConditions[attributeName] !== parentValue) {
+        throw new Error(`Cannot ${action} nested ${relationshipName}[id=${id}]: identity field '${attributeName}' does not match parent ${parent.getModelClass().name}[id=${parent.id()}].`)
+      }
+    }
+
+    const lookup = {...identityConditions, ...parentLinkAttributes}
     const query = ability
       ? targetModelClass.accessibleFor(this._resolveChildAbilityAction(childResourceConfiguration, action), ability)
       : targetModelClass.where({})

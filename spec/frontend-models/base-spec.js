@@ -3208,6 +3208,58 @@ describe("Frontend models - base", {databaseCleaning: {transaction: false, trunc
       }
     })
 
+    it("identifies a rekeyed composite child by its persisted tuple", async () => {
+      /** Composite child frontend model. */
+      class CompositeTask extends FrontendModelBase {
+        /** @returns {import("../../src/frontend-models/base.js").FrontendModelResourceConfig} - Resource config. */
+        static resourceConfig() {
+          return {attributes: ["name", "projectId"], primaryKey: ["name", "projectId"]}
+        }
+
+        /** @param {string} value - Task name. @returns {void} */
+        setName(value) { this.setAttribute("name", value) }
+      }
+
+      /** Parent frontend model with nested composite children. */
+      class CompositeProject extends FrontendModelBase {
+        /** @returns {import("../../src/frontend-models/base.js").FrontendModelResourceConfig} - Resource config. */
+        static resourceConfig() {
+          return {
+            attributes: ["id", "name"],
+            nestedAttributes: {tasks: {allowDestroy: true}},
+            primaryKey: "id"
+          }
+        }
+
+        /** @returns {Record<string, typeof FrontendModelBase>} - Related model classes. */
+        static relationshipModelClasses() { return {tasks: CompositeTask} }
+
+        /** @returns {Record<string, {type: "hasMany"}>} - Relationship definitions. */
+        static relationshipDefinitions() { return {tasks: {type: "hasMany"}} }
+
+        /** @param {string} value - Project name. @returns {void} */
+        setName(value) { this.setAttribute("name", value) }
+      }
+
+      const fetchStub = stubFetch({model: {id: 5, name: "Launch v2"}})
+
+      try {
+        const project = CompositeProject.instantiateFromResponse({model: {id: 5, name: "Launch"}})
+        const task = CompositeTask.instantiateFromResponse({model: {name: "Design", projectId: 5}})
+
+        project.getRelationshipByName("tasks").setLoaded([task])
+        task.setName("Design v2")
+        project.setName("Launch v2")
+
+        await expectNestedAttributesAfterSave(project, fetchStub, {
+          tasks: [{attributes: {name: "Design v2"}, id: {name: "Design", projectId: 5}}]
+        })
+      } finally {
+        resetFrontendModelTransport()
+        fetchStub.restore()
+      }
+    })
+
     it("recurses into grandchildren with nested attributes on the child resource", async () => {
       const {Project} = buildNestedTestClasses()
       const fetchStub = stubFetch({model: {id: 5, name: "Launch"}})

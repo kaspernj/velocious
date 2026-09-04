@@ -4691,7 +4691,7 @@ export default class FrontendModelBase {
   async _nestedAttributesEntryForParentSave() {
     if (this.markedForDestruction()) {
       if (this.isNewRecord()) return null
-      return {id: this.primaryKeyValue(), _destroy: true}
+      return {id: this.persistedPrimaryKeyValue(), _destroy: true}
     }
 
     const nestedAttributes = await this._buildNestedAttributesPayload()
@@ -4718,7 +4718,7 @@ export default class FrontendModelBase {
     /**
      * Entry.
      * @type {Record<string, ReturnType<typeof JSON.parse>>} */
-    const entry = {id: this.primaryKeyValue()}
+    const entry = {id: this.persistedPrimaryKeyValue()}
 
     if (this.isChanged()) entry.attributes = this._changedAttributesForSave()
     if (hasAttachments) entry.attachments = attachments

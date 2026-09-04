@@ -9,7 +9,13 @@ import Dummy from "../dummy/index.js"
 import Project from "../dummy/src/models/project.js"
 
 /** Composite-key view of the dummy tasks table for nested-write coverage. */
-class NestedCompositeTask extends DatabaseRecord {}
+class NestedCompositeTask extends DatabaseRecord {
+  /** @returns {string | null} - Task description. */
+  description() { return this.readAttribute("description") }
+
+  /** @returns {string} - Task name. */
+  name() { return this.readAttribute("name") }
+}
 
 /** Parent view of the dummy projects table for nested-write coverage. */
 class NestedCompositeProject extends DatabaseRecord {}
@@ -100,7 +106,7 @@ describe("Frontend model resource - nested implicit composite keys", {databaseCl
       configuration.setAbilityResolver(undefined)
 
       try {
-        const id = {name: task.readAttribute("name"), projectId: project.id()}
+        const id = {name: task.name(), projectId: project.id()}
         const updatePayload = await postNestedProjectCommand("update", {
           attributes: {
             nestedCompositeTasksAttributes: [{description: "After", id}]
@@ -111,7 +117,7 @@ describe("Frontend model resource - nested implicit composite keys", {databaseCl
         if (updatePayload.status !== "success") {
           throw new Error(`Expected nested update success: ${JSON.stringify(updatePayload)}`)
         }
-        expect((await NestedCompositeTask.findBy(id))?.readAttribute("description")).toEqual("After")
+        expect((await NestedCompositeTask.findBy(id))?.description()).toEqual("After")
 
         const destroyPayload = await postNestedProjectCommand("update", {
           attributes: {
@@ -124,6 +130,70 @@ describe("Frontend model resource - nested implicit composite keys", {databaseCl
           throw new Error(`Expected nested destroy success: ${JSON.stringify(destroyPayload)}`)
         }
         expect(await NestedCompositeTask.findBy(id)).toBeNull()
+      } finally {
+        configuration.setAbilityResolver(originalAbilityResolver)
+        configuredBackendProjects.splice(0, configuredBackendProjects.length, ...originalBackendProjects)
+      }
+    })
+  })
+
+  it("rejects nested identities whose parent key belongs to another parent", async () => {
+    await Dummy.run(async () => {
+      const configuration = Configuration.current()
+      const configuredBackendProjects = configuration.getBackendProjects()
+      const originalBackendProjects = configuredBackendProjects.slice()
+      const originalAbilityResolver = configuration.getAbilityResolver()
+      const firstProject = await Project.create({name: "Nested identity first project"})
+      const secondProject = await Project.create({name: "Nested identity second project"})
+
+      NestedCompositeTask.registerRecordClass({configuration})
+      NestedCompositeProject.registerRecordClass({configuration})
+      await NestedCompositeTask.ensureInitialized({configuration})
+      await NestedCompositeProject.ensureInitialized({configuration})
+
+      const firstTask = await NestedCompositeTask.create({
+        description: "First before",
+        name: "Nested shared task name",
+        projectId: firstProject.id()
+      })
+      const secondTask = await NestedCompositeTask.create({
+        description: "Second before",
+        name: "Nested shared task name",
+        projectId: secondProject.id()
+      })
+
+      configuredBackendProjects.splice(0, configuredBackendProjects.length, {
+        frontendModels: {
+          NestedCompositeProject: NestedCompositeProjectResource,
+          NestedCompositeTask: NestedCompositeTaskResource
+        },
+        path: originalBackendProjects[0].path
+      })
+      configuration.setAbilityResolver(undefined)
+
+      try {
+        const mismatchedId = {name: secondTask.name(), projectId: secondProject.id()}
+        const updatePayload = await postNestedProjectCommand("update", {
+          attributes: {
+            nestedCompositeTasksAttributes: [{description: "Wrongly updated", id: mismatchedId}]
+          },
+          id: firstProject.id()
+        })
+
+        expect(updatePayload.status).toEqual("error")
+        expect((await NestedCompositeTask.find(firstTask.id())).description()).toEqual("First before")
+        expect((await NestedCompositeTask.find(secondTask.id())).description()).toEqual("Second before")
+
+        const destroyPayload = await postNestedProjectCommand("update", {
+          attributes: {
+            nestedCompositeTasksAttributes: [{_destroy: true, id: mismatchedId}]
+          },
+          id: firstProject.id()
+        })
+
+        expect(destroyPayload.status).toEqual("error")
+        expect(await NestedCompositeTask.find(firstTask.id())).not.toBeNull()
+        expect(await NestedCompositeTask.find(secondTask.id())).not.toBeNull()
       } finally {
         configuration.setAbilityResolver(originalAbilityResolver)
         configuredBackendProjects.splice(0, configuredBackendProjects.length, ...originalBackendProjects)

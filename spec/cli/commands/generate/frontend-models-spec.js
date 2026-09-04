@@ -12,6 +12,7 @@ import FrontendModelBaseResource from "../../../../src/frontend-model-resource/b
 import fs from "fs/promises"
 import os from "os"
 import path from "node:path"
+import {pathToFileURL} from "node:url"
 import TableColumn from "../../../../src/database/table-data/table-column.js"
 import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "../../../../src/frontend-models/transport-serialization.js"
 import {typescriptCliDiagnostics} from "../../../helpers/typescript-cli-helpers.js"
@@ -176,6 +177,11 @@ class CompositePrimaryKeyUserFrontendResource extends FrontendModelBaseResource 
   ]
 
   static primaryKey = ["legacyID", "tenantID"]
+
+  static memberCommands = ["refresh"]
+
+  /** @returns {Promise<{refreshed: boolean}>} - Refresh result. */
+  async refresh() { return {refreshed: true} }
 }
 
 /** @returns {void} */
@@ -972,6 +978,16 @@ export default class ReportResource extends FrontendModelBaseResource {
     expect(userContents).toContain("@property {number} legacyID - Attribute value.")
     expect(userContents).toContain("@property {number} tenantID - Attribute value.")
     expect(userContents).toContain('primaryKey: ["legacyID","tenantID"]')
+    expect(userContents).toContain('memberId: this.scalarPrimaryKeyValue("Custom member command CompositePrimaryKeyUser#refresh")')
+
+    const generatedModule = await import(pathToFileURL(`${dummyDirectory()}/src/frontend-models/composite-primary-key-user.js`).href)
+    const generatedUser = generatedModule.default.instantiateFromResponse({
+      model: {email: "composite@example.com", legacyID: 7, tenantID: 12}
+    })
+
+    await expect(async () => await generatedUser.refresh()).toThrow(/Custom member command CompositePrimaryKeyUser#refresh does not support composite primary keys/u)
+
+    await fs.rm(`${dummyDirectory()}/src/frontend-models`, {force: true, recursive: true})
   })
 
   it("emits nestedAttributes relationship names extracted from permittedParams into the generated frontend-model resourceConfig", async () => {
