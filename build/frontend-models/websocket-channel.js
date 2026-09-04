@@ -171,8 +171,9 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
     const matchedEventFilterKeys = hasEventFilters
       ? await this._matchedEventFilterKeysForEventId(body.id, FrontendModelController)
       : []
+    const isIdentityTransition = body.action === "update" && body.previousId !== undefined && body.previousId !== null
 
-    if (hasEventFilters && matchedEventFilterKeys.length === 0 && !this._hasUnfilteredEventDelivery()) {
+    if (hasEventFilters && matchedEventFilterKeys.length === 0 && !this._hasUnfilteredEventDelivery() && !isIdentityTransition) {
       return
     }
 

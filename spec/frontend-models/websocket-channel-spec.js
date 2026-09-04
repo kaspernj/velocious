@@ -158,6 +158,55 @@ describe("FrontendModelWebsocketChannel", {databaseCleaning: {transaction: true}
     ])
   })
 
+  it("delivers filtered identity changes so instance listeners can rekey", {databaseCleaning: {transaction: false, truncate: false}}, async () => {
+    /** @type {Array<{body?: Record<string, ReturnType<typeof JSON.parse>>, type?: string}>} */
+    const sentFrames = []
+    const channel = new FrontendModelWebsocketChannel({
+      params: {
+        eventFilters: [
+          {key: "open", where: {state: "open"}}
+        ],
+        model: "CompositeTask"
+      },
+      // @ts-expect-error Minimal session stub for direct channel delivery.
+      session: {
+        configuration: {
+          getEnvironmentHandler: () => ({getTimeZone: () => "UTC"})
+        },
+        sendJson: (/** @type {{body?: Record<string, ReturnType<typeof JSON.parse>>, type?: string}} */ frame) => sentFrames.push(frame)
+      },
+      subscriptionId: "filtered-identity-change"
+    })
+
+    channel._frontendModelControllerClass = async () => /** @type {typeof import("../../src/frontend-model-controller.js").default} */ (class FrontendModelController {})
+    channel._matchedEventFilterKeysForEventId = async () => []
+    channel._projectedRecordForEventId = async () => ({
+      name: "Renamed task",
+      state: "closed",
+      workspaceId: "alpha"
+    })
+
+    await channel.deliverBroadcast({
+      action: "update",
+      id: {name: "Renamed task", workspaceId: "alpha"},
+      previousId: {name: "Original task", workspaceId: "alpha"}
+    })
+
+    expect(sentFrames.map((frame) => frame.body)).toEqual([
+      {
+        action: "update",
+        id: {name: "Renamed task", workspaceId: "alpha"},
+        matchedEventFilterKeys: [],
+        previousId: {name: "Original task", workspaceId: "alpha"},
+        record: {
+          name: "Renamed task",
+          state: "closed",
+          workspaceId: "alpha"
+        }
+      }
+    ])
+  })
+
   it("does not hold a generic broadcast checkout while resolving tenant-scoped event access", async () => {
     /** @type {string[]} */
     const checkoutNames = []
