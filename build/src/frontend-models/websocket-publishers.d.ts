@@ -1,9 +1,10 @@
 export type FrontendModelPublisherResource = {
     primaryKey: import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition;
 };
+export type FrontendModelDestroyAuthorizationRecord = Record<string, import("./query.js").FrontendModelTransportValue>;
 export type FrontendModelWebsocketRecord = import("../database/record/index.js").default & {
     __frontendModelWebsocketAction?: "create" | "update";
-    __frontendModelWebsocketDestroyAuthorizationRecord?: Record<string, ReturnType<typeof JSON.parse>>;
+    __frontendModelWebsocketDestroyAuthorizationRecord?: FrontendModelDestroyAuthorizationRecord;
     __frontendModelWebsocketPreviousIds?: Map<string, import("../utils/model-primary-key.js").ModelPrimaryKeyValue>;
 };
 /** Shared channel name for all frontend-model lifecycle subscriptions. */

@@ -1,5 +1,9 @@
 export type WebsocketJsonValue = null | boolean | number | string | object;
 export type WebsocketParams = Record<string, WebsocketJsonValue>;
+export type WebsocketBroadcastMetadata = {
+    broadcastParams?: WebsocketParams;
+    eventId?: string;
+};
 /**
  * WebsocketJsonValue type.
  * @typedef {null | boolean | number | string | object} WebsocketJsonValue
@@ -7,6 +11,10 @@ export type WebsocketParams = Record<string, WebsocketJsonValue>;
 /**
  * WebsocketParams type.
  * @typedef {Record<string, WebsocketJsonValue>} WebsocketParams
+ */
+/**
+ * Server-side metadata accompanying a matched broadcast.
+ * @typedef {{broadcastParams?: WebsocketParams, eventId?: string}} WebsocketBroadcastMetadata
  */
 /**
  * Base class for app-defined 1:N pub/sub channels.
@@ -95,23 +103,19 @@ export default class VelociousWebsocketChannel {
      * override when the outbound body must be tailored to subscription
      * params before sending.
      * @param {WebsocketJsonValue} body - Broadcast payload offered to this subscription.
-     * @param {{eventId?: string}} [meta] - Optional event metadata.
+     * @param {WebsocketBroadcastMetadata} [meta] - Optional server-side broadcast metadata.
      * @returns {void | Promise<void>} - Completes after broadcast delivery.
      */
-    deliverBroadcast(body: WebsocketJsonValue, meta?: {
-        eventId?: string;
-    }): void | Promise<void>;
+    deliverBroadcast(body: WebsocketJsonValue, meta?: WebsocketBroadcastMetadata): void | Promise<void>;
     /**
      * Sends a `channel-message` frame to THIS subscriber only.
      * When `meta.eventId` is provided, the client receives it so it
      * can track its checkpoint for `lastEventId` replay on reconnect.
      * @param {WebsocketJsonValue} body - Channel payload to send to the subscribed client.
-     * @param {{eventId?: string}} [meta] - Optional event metadata.
+     * @param {WebsocketBroadcastMetadata} [meta] - Optional server-side broadcast metadata.
      * @returns {void}
      */
-    sendMessage(body: WebsocketJsonValue, meta?: {
-        eventId?: string;
-    }): void;
+    sendMessage(body: WebsocketJsonValue, meta?: WebsocketBroadcastMetadata): void;
     /**
      * Runs is closed.
      * @returns {boolean} - Whether the channel is closed.

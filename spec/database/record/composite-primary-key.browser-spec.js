@@ -47,17 +47,36 @@ class GeneratedCompositePrimaryKeyTask extends Record {}
 
 /** Composite-key view that rejects updates after persistence. */
 class FailingAfterUpdateCompositePrimaryKeyTask extends Record {
+  /** Whether the next update should be rejected after persistence. */
+  rejectNextUpdate = true
+
   /**
    * Rejects the update after the record and attachment identities have changed.
-   * @returns {Promise<void>} - Never resolves successfully.
+   * @returns {Promise<void>} - Resolves after the one configured rejection.
    */
   async afterUpdate() {
+    if (!this.rejectNextUpdate) return
+
+    this.rejectNextUpdate = false
     throw new Error("Composite update rejected after persistence")
   }
 }
 
 /** Attachment store that exposes any attempted fallback connection checkout. */
 class SeparateConnectionRejectingAttachmentStore extends RecordAttachmentsStore {
+  /** @type {Array<import("../../../src/database/drivers/base.js").default>} */
+  schemaConnections = []
+
+  /**
+   * Records the connection used to ensure the attachment schema.
+   * @param {object} args - Options.
+   * @param {import("../../../src/database/drivers/base.js").default} args.db - Database connection.
+   * @returns {Promise<void>} - Resolves after recording the connection.
+   */
+  async ensureAttachmentStoreSchema({db}) {
+    this.schemaConnections.push(db)
+  }
+
   /**
    * Rejects fallback database checkout for transaction-owned identity migration.
    * @template T
@@ -201,9 +220,9 @@ describe("Record - composite primary key", {tags: ["dummy"]}, () => {
       await task.update({name: "Composite rollback renamed"})
     }).toThrow("Composite update rejected after persistence")
 
-    expect(task.id()).toEqual(originalIdentity)
-    await task.reload()
-    expect(task.id()).toEqual(originalIdentity)
+    expect(task.id()).toEqual({name: "Composite rollback renamed", project_id: project.id()})
+    expect(task.changes()).toEqual({name: ["Composite rollback task", "Composite rollback renamed"]})
+    expect(task._persistedPrimaryKeyValue()).toEqual(originalIdentity)
 
     const originalTask = await FailingAfterUpdateCompositePrimaryKeyTask.find(originalIdentity)
 
@@ -218,9 +237,15 @@ describe("Record - composite primary key", {tags: ["dummy"]}, () => {
     if (!attachment) throw new Error("Expected attachment ownership to roll back with its record")
     expect(attachment.filename()).toEqual("rollback.txt")
     expect(attachment.content().toString()).toEqual("rollback attachment")
+
+    await task.save()
+
+    expect(task.changes()).toEqual({})
+    expect(await FailingAfterUpdateCompositePrimaryKeyTask.findBy(originalIdentity)).toBeNull()
+    expect(await task.getAttachmentByName("descriptionFile").download()).not.toBeNull()
   })
 
-  it("uses the record transaction connection when migrating attachment ownership", async () => {
+  it("upgrades the attachment schema on the record transaction connection before migrating ownership", async () => {
     const project = await Project.create({name: "Composite migration connection project"})
     const task = await CompositePrimaryKeyTask.create({
       name: "Composite migration connection task",
@@ -231,12 +256,16 @@ describe("Record - composite primary key", {tags: ["dummy"]}, () => {
       databaseIdentifier: CompositePrimaryKeyTask.getDatabaseIdentifier()
     })
 
+    const connection = task.connection()
+
     await store.migrateRecordIdentity({
-      connection: task.connection(),
+      connection,
       model: task,
       nextIdentity: {name: "Composite migration connection renamed", project_id: project.id()},
       previousIdentity: task.id()
     })
+
+    expect(store.schemaConnections).toEqual([connection])
   })
 
   it("stores canonical composite attachment identities without a length limit", async () => {

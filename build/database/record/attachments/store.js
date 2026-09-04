@@ -691,6 +691,8 @@ export default class RecordAttachmentsStore {
 
     if (!await connection.tableExists(ATTACHMENTS_TABLE)) return
 
+    await this.ensureAttachmentStoreSchema({db: connection})
+
     await connection.update({
       conditions: attachmentOwnerConditions({
         recordId: previousRecordId,

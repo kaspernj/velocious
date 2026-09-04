@@ -180,17 +180,26 @@ describe("Beacon configuration integration", {databaseCleaning: {transaction: fa
     await beacon.stop()
   })
 
-  it("broadcastToChannel falls back to local-only delivery when no Beacon client is connected", async () => {
+  it("broadcastToChannel falls back to local-only delivery when no Beacon client is connected", {databaseCleaning: {transaction: true}}, async () => {
     const configuration = buildConfiguration()
-    const subscription = makeSubscription()
+    /** @type {Array<Record<string, ReturnType<typeof JSON.parse>> | undefined>} */
+    const deliveredMetadata = []
+    const subscription = {
+      ...makeSubscription(),
+      deliverBroadcast: (/** @type {ReturnType<typeof JSON.parse>} */ body, /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ metadata) => {
+        subscription.received.push(body)
+        deliveredMetadata.push(metadata)
+      }
+    }
 
     configuration._registerWebsocketChannelSubscription("frontend-models", /** @type {any} */ (subscription))
 
-    configuration.broadcastToChannel("frontend-models", {}, {hello: "world"})
+    configuration.broadcastToChannel("frontend-models", {authorizationRecord: {secret: "server-only"}}, {hello: "world"})
 
     await wait(0.01)
 
     expect(subscription.received).toEqual([{hello: "world"}])
+    expect(deliveredMetadata).toEqual([{broadcastParams: {authorizationRecord: {secret: "server-only"}}}])
   })
 
   it("continues broadcasting when one subscriber throws synchronously during delivery", async () => {

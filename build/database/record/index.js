@@ -2669,6 +2669,8 @@ class VelociousDatabaseRecord {
       const saveInTransaction = async () => {
         /** @type {Record<string, ReturnType<typeof JSON.parse>> | undefined} */
         let persistedAttributesBeforeUpdate
+        /** @type {Record<string, ReturnType<typeof JSON.parse>> | undefined} */
+        let changesBeforeUpdate
         let updateReloaded = false
 
         try {
@@ -2680,6 +2682,7 @@ class VelociousDatabaseRecord {
           if (this.isPersisted()) {
             persistedAttributesBeforeUpdate = {...this._attributes}
             await this._runLifecycleCallbacks("beforeUpdate")
+            changesBeforeUpdate = {...this._changes}
 
             // If any has-many-relationships will be saved, then updated-at should still be set on this record.
             const autoSaveHasManyrelationships = this._autoSaveHasManyAndHasOneRelationshipsToSave()
@@ -2701,9 +2704,9 @@ class VelociousDatabaseRecord {
           await this._runLifecycleCallbacks("afterSave")
           await this._emitRecordChangeAfterCommit(isNewRecord ? "create" : "update")
         } catch (error) {
-          if (updateReloaded && persistedAttributesBeforeUpdate) {
+          if (updateReloaded && persistedAttributesBeforeUpdate && changesBeforeUpdate) {
             this._attributes = persistedAttributesBeforeUpdate
-            this._changes = {}
+            this._changes = changesBeforeUpdate
             this._assignedAttributeNames = undefined
           }
 

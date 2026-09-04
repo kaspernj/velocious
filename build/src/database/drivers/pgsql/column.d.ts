@@ -12,6 +12,11 @@ export default class VelociousDatabaseDriversPgsqlColumn extends BaseColumn {
     getPrimaryKey(): boolean;
     getIndexes(): Promise<import("../base-columns-index.js").default[]>;
     getDefault(): any;
+    /**
+     * Returns the concrete PostgreSQL type name used in SQL casts.
+     * @returns {string} - Schema-qualified domain or UDT name, or the ordinary data type.
+     */
+    getDatabaseType(): string;
     getMaxLength(): any;
     getName(): any;
     getNotes(): any;

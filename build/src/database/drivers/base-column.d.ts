@@ -89,6 +89,11 @@ export default class VelociousDatabaseDriversBaseColumn {
      */
     getTypeHintFromNotes(): string | undefined;
     /**
+     * Returns the database-native type name used in SQL casts.
+     * @returns {string} - Database-native type name.
+     */
+    getDatabaseType(): string;
+    /**
      * Runs get type.
      * @abstract
      * @returns {string} - The type.

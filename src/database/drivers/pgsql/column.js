@@ -33,6 +33,28 @@ export default class VelociousDatabaseDriversPgsqlColumn extends BaseColumn {
     return digg(this, "data", "column_default")
   }
 
+  /**
+   * Returns the concrete PostgreSQL type name used in SQL casts.
+   * @returns {string} - Schema-qualified domain or UDT name, or the ordinary data type.
+   */
+  getDatabaseType() {
+    const domainName = this.data.domain_name
+    const domainSchema = this.data.domain_schema
+    const dataType = this.data.data_type
+    const udtName = this.data.udt_name
+    const udtSchema = this.data.udt_schema
+
+    if (typeof domainName === "string" && typeof domainSchema === "string") {
+      return `${this.getDriver().quoteColumn(domainSchema)}.${this.getDriver().quoteColumn(domainName)}`
+    }
+
+    if ((dataType === "USER-DEFINED" || dataType === "ARRAY") && typeof udtName === "string" && typeof udtSchema === "string") {
+      return `${this.getDriver().quoteColumn(udtSchema)}.${this.getDriver().quoteColumn(udtName)}`
+    }
+
+    return this.getType()
+  }
+
   getMaxLength() {
     return digg(this, "data", "character_maximum_length")
   }

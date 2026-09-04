@@ -8,6 +8,10 @@
  * WebsocketParams type.
  * @typedef {Record<string, WebsocketJsonValue>} WebsocketParams
  */
+/**
+ * Server-side metadata accompanying a matched broadcast.
+ * @typedef {{broadcastParams?: WebsocketParams, eventId?: string}} WebsocketBroadcastMetadata
+ */
 
 /**
  * Base class for app-defined 1:N pub/sub channels.
@@ -102,7 +106,7 @@ export default class VelociousWebsocketChannel {
    * override when the outbound body must be tailored to subscription
    * params before sending.
    * @param {WebsocketJsonValue} body - Broadcast payload offered to this subscription.
-   * @param {{eventId?: string}} [meta] - Optional event metadata.
+   * @param {WebsocketBroadcastMetadata} [meta] - Optional server-side broadcast metadata.
    * @returns {void | Promise<void>} - Completes after broadcast delivery.
    */
   deliverBroadcast(body, meta) {
@@ -114,7 +118,7 @@ export default class VelociousWebsocketChannel {
    * When `meta.eventId` is provided, the client receives it so it
    * can track its checkpoint for `lastEventId` replay on reconnect.
    * @param {WebsocketJsonValue} body - Channel payload to send to the subscribed client.
-   * @param {{eventId?: string}} [meta] - Optional event metadata.
+   * @param {WebsocketBroadcastMetadata} [meta] - Optional server-side broadcast metadata.
    * @returns {void}
    */
   sendMessage(body, meta) {

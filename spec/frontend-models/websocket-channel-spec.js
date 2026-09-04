@@ -2,6 +2,7 @@
 
 import {describe, expect, it} from "../../src/testing/test.js"
 import FrontendModelWebsocketChannel from "../../src/frontend-models/websocket-channel.js"
+import PgsqlColumn from "../../src/database/drivers/pgsql/column.js"
 
 describe("FrontendModelWebsocketChannel", {databaseCleaning: {transaction: true}}, () => {
   it("exposes websocket metadata separately from upgrade request headers", () => {
@@ -119,7 +120,7 @@ describe("FrontendModelWebsocketChannel", {databaseCleaning: {transaction: true}
     expect(sentFrames).toEqual([])
   })
 
-  it("delivers destroy events without unfiltering create or update events", {databaseCleaning: {transaction: false, truncate: false}}, async () => {
+  it("delivers destroy events without unfiltering create or update events", async () => {
     /** @type {Array<{body?: object, type?: string}>} */
     const sentFrames = []
     const channel = new FrontendModelWebsocketChannel({
@@ -148,8 +149,9 @@ describe("FrontendModelWebsocketChannel", {databaseCleaning: {transaction: true}
     })
     await channel.deliverBroadcast({
       action: "destroy",
-      destroyAuthorizationRecord: {id: "destroyed-task"},
       id: "destroyed-task"
+    }, {
+      broadcastParams: {destroyAuthorizationRecord: {id: "destroyed-task"}}
     })
 
     expect(sentFrames.map((frame) => frame.body)).toEqual([
@@ -160,7 +162,7 @@ describe("FrontendModelWebsocketChannel", {databaseCleaning: {transaction: true}
     ])
   })
 
-  it("does not expose unauthorized destroy identities", {databaseCleaning: {transaction: false, truncate: false}}, async () => {
+  it("does not expose unauthorized destroy identities", async () => {
     /** @type {Array<{body?: object, type?: string}>} */
     const sentFrames = []
     const channel = new FrontendModelWebsocketChannel({
@@ -177,8 +179,9 @@ describe("FrontendModelWebsocketChannel", {databaseCleaning: {transaction: true}
 
     await channel.deliverBroadcast({
       action: "destroy",
-      destroyAuthorizationRecord: {external_id: "secret", tenant_id: "tenant-b"},
       id: {externalId: "secret", tenantId: "tenant-b"}
+    }, {
+      broadcastParams: {destroyAuthorizationRecord: {external_id: "secret", tenant_id: "tenant-b"}}
     })
 
     expect(sentFrames).toEqual([])
@@ -207,7 +210,7 @@ describe("FrontendModelWebsocketChannel", {databaseCleaning: {transaction: true}
     expect(sentFrames).toEqual([])
   })
 
-  it("authorizes destroys against the captured row source and composite identity", {databaseCleaning: {transaction: false, truncate: false}}, async () => {
+  it("authorizes destroys against the captured row source and composite identity", async () => {
     const froms = ["records"]
     let appliedFrom
     let appliedWhere
@@ -230,6 +233,9 @@ describe("FrontendModelWebsocketChannel", {databaseCleaning: {transaction: true}
         return query
       }
     }
+    const pgsqlTable = {
+      getDriver: () => query.driver
+    }
     const ModelClass = class CompositeRecord {
       /** @returns {typeof query} - Fresh model query. */
       static _newQuery() { return query }
@@ -239,11 +245,14 @@ describe("FrontendModelWebsocketChannel", {databaseCleaning: {transaction: true}
         return attributeName === "externalId" ? "external_id" : "tenant_id"
       }
 
-      /** @returns {Record<string, {getType: () => string}>} - Backing columns by name. */
+      /** @returns {Record<string, import("../../src/database/drivers/base-column.js").default>} - Backing columns by name. */
       static getColumnsHash() {
         return {
-          external_id: {getType: () => "uuid"},
-          tenant_id: {getType: () => "bigint"}
+          external_id: new PgsqlColumn(/** @type {any} */ (pgsqlTable), {column_comment: null, column_name: "external_id", data_type: "uuid"}),
+          labels: new PgsqlColumn(/** @type {any} */ (pgsqlTable), {column_comment: null, column_name: "labels", data_type: "ARRAY", udt_name: "_text", udt_schema: "pg_catalog"}),
+          priority: new PgsqlColumn(/** @type {any} */ (pgsqlTable), {column_comment: null, column_name: "priority", data_type: "integer", domain_name: "task_priority", domain_schema: "public"}),
+          status: new PgsqlColumn(/** @type {any} */ (pgsqlTable), {column_comment: null, column_name: "status", data_type: "USER-DEFINED", udt_name: "task_status", udt_schema: "public"}),
+          tenant_id: new PgsqlColumn(/** @type {any} */ (pgsqlTable), {column_comment: null, column_name: "tenant_id", data_type: "bigint"})
         }
       }
 
@@ -268,13 +277,18 @@ describe("FrontendModelWebsocketChannel", {databaseCleaning: {transaction: true}
 
     const authorized = await channel._destroyEventIsAuthorized({
       action: "destroy",
-      destroyAuthorizationRecord: {external_id: "7f0a1b2c-3d4e-4f5a-8b6c-9d0e1f2a3b4c", tenant_id: 42},
       id: {externalId: "7f0a1b2c-3d4e-4f5a-8b6c-9d0e1f2a3b4c", tenantId: 42}
-    }, /** @type {typeof import("../../src/frontend-model-controller.js").default} */ (class FrontendModelController {}))
+    }, /** @type {typeof import("../../src/frontend-model-controller.js").default} */ (class FrontendModelController {}), {
+      external_id: "7f0a1b2c-3d4e-4f5a-8b6c-9d0e1f2a3b4c",
+      labels: ["urgent"],
+      priority: 3,
+      status: "open",
+      tenant_id: 42
+    })
 
     expect(authorized).toEqual(true)
-    expect(froms).toEqual(["(SELECT CAST('7f0a1b2c-3d4e-4f5a-8b6c-9d0e1f2a3b4c' AS uuid) AS \"external_id\", CAST('42' AS bigint) AS \"tenant_id\") AS \"records\""])
-    expect(appliedFrom).toEqual("(SELECT CAST('7f0a1b2c-3d4e-4f5a-8b6c-9d0e1f2a3b4c' AS uuid) AS \"external_id\", CAST('42' AS bigint) AS \"tenant_id\") AS \"records\"")
+    expect(froms).toEqual(["(SELECT CAST('7f0a1b2c-3d4e-4f5a-8b6c-9d0e1f2a3b4c' AS uuid) AS \"external_id\", CAST(ARRAY['urgent'] AS \"pg_catalog\".\"_text\") AS \"labels\", CAST('3' AS \"public\".\"task_priority\") AS \"priority\", CAST('open' AS \"public\".\"task_status\") AS \"status\", CAST('42' AS bigint) AS \"tenant_id\") AS \"records\""])
+    expect(appliedFrom).toEqual("(SELECT CAST('7f0a1b2c-3d4e-4f5a-8b6c-9d0e1f2a3b4c' AS uuid) AS \"external_id\", CAST(ARRAY['urgent'] AS \"pg_catalog\".\"_text\") AS \"labels\", CAST('3' AS \"public\".\"task_priority\") AS \"priority\", CAST('open' AS \"public\".\"task_status\") AS \"status\", CAST('42' AS bigint) AS \"tenant_id\") AS \"records\"")
     expect(appliedWhere).toEqual({records: {external_id: "7f0a1b2c-3d4e-4f5a-8b6c-9d0e1f2a3b4c", tenant_id: 42}})
   })
 

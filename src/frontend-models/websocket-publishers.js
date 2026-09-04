@@ -7,7 +7,8 @@ import {serializeFrontendModelTransportValue} from "./transport-serialization.js
 import {modelPrimaryKeyCacheKey, readModelPrimaryKeyValue} from "../utils/model-primary-key.js"
 
 /** @typedef {{primaryKey: import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition}} FrontendModelPublisherResource */
-/** @typedef {import("../database/record/index.js").default & {__frontendModelWebsocketAction?: "create" | "update", __frontendModelWebsocketDestroyAuthorizationRecord?: Record<string, ReturnType<typeof JSON.parse>>, __frontendModelWebsocketPreviousIds?: Map<string, import("../utils/model-primary-key.js").ModelPrimaryKeyValue>}} FrontendModelWebsocketRecord */
+/** @typedef {Record<string, import("./query.js").FrontendModelTransportValue>} FrontendModelDestroyAuthorizationRecord */
+/** @typedef {import("../database/record/index.js").default & {__frontendModelWebsocketAction?: "create" | "update", __frontendModelWebsocketDestroyAuthorizationRecord?: FrontendModelDestroyAuthorizationRecord, __frontendModelWebsocketPreviousIds?: Map<string, import("../utils/model-primary-key.js").ModelPrimaryKeyValue>}} FrontendModelWebsocketRecord */
 
 const modelClassesWithRegisteredHooks = new WeakSet()
 const channelClassRegisteredConfigurations = new WeakSet()
@@ -271,11 +272,11 @@ function frontendModelResourceIdentities(model) {
  * use a dedicated byte-array marker because the shared transport serializer otherwise
  * leaves Buffers to the JSON implementation used by the worker or Beacon transport.
  * @param {import("../database/record/index.js").default} model - Fully loaded persisted backing record.
- * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Column-keyed transport values.
+ * @returns {FrontendModelDestroyAuthorizationRecord} - Column-keyed transport values.
  */
 function frontendModelDestroyAuthorizationRecord(model) {
   const serializationOptions = transportSerializationOptionsForConfiguration(model._getConfiguration())
-  /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
+  /** @type {FrontendModelDestroyAuthorizationRecord} */
   const authorizationRecord = {}
 
   for (const [columnName, value] of Object.entries(model.rawAttributes())) {
@@ -331,7 +332,7 @@ function frontendModelResourceIdentity({model, previous = false, primaryKey}) {
  * @param {import("../database/record/index.js").default} model - Backing model instance.
  * @param {"create" | "update" | "destroy"} action - Lifecycle action.
  * @param {Map<string, import("../utils/model-primary-key.js").ModelPrimaryKeyValue>} [previousIds] - Persisted identities captured before update or destroy.
- * @param {Record<string, ReturnType<typeof JSON.parse>>} [destroyAuthorizationRecord] - Server-only pre-delete row used to authorize a destroyed record.
+ * @param {FrontendModelDestroyAuthorizationRecord} [destroyAuthorizationRecord] - Server-only pre-delete row used to authorize a destroyed record.
  * @returns {void}
  */
 function broadcastFrontendModelEvents(model, action, previousIds, destroyAuthorizationRecord) {
@@ -367,18 +368,20 @@ function broadcastFrontendModelEvents(model, action, previousIds, destroyAuthori
  * transport serializer so Date/undefined/etc. survive the JSON hop.
  * @param {import("../configuration.js").default} configuration - Configuration instance.
  * @param {string} modelName - Model class name.
- * @param {{action: "create" | "update" | "destroy", destroyAuthorizationRecord?: Record<string, ReturnType<typeof JSON.parse>>, id: ReturnType<typeof JSON.parse>, previousId?: ReturnType<typeof JSON.parse>, record?: Record<string, ReturnType<typeof JSON.parse>>}} event - Lifecycle event.
+ * @param {{action: "create" | "update" | "destroy", destroyAuthorizationRecord?: FrontendModelDestroyAuthorizationRecord, id: import("../utils/model-primary-key.js").ModelPrimaryKeyValue, previousId?: import("../utils/model-primary-key.js").ModelPrimaryKeyValue, record?: Record<string, import("./query.js").FrontendModelTransportValue>}} event - Lifecycle event.
  * @returns {void}
  */
 function broadcastFrontendModelEvent(configuration, modelName, event) {
   const body = {
     action: event.action,
-    ...(event.destroyAuthorizationRecord !== undefined ? {destroyAuthorizationRecord: event.destroyAuthorizationRecord} : {}),
     id: event.id,
     model: modelName,
     ...(event.previousId !== undefined ? {previousId: event.previousId} : {}),
     ...(event.record ? {record: serializeFrontendModelTransportValue(event.record, transportSerializationOptionsForConfiguration(configuration))} : {})
   }
 
-  configuration.broadcastToChannel(FRONTEND_MODELS_CHANNEL_NAME, {model: modelName}, body)
+  configuration.broadcastToChannel(FRONTEND_MODELS_CHANNEL_NAME, {
+    ...(event.destroyAuthorizationRecord !== undefined ? {destroyAuthorizationRecord: event.destroyAuthorizationRecord} : {}),
+    model: modelName
+  }, body)
 }

@@ -10,7 +10,10 @@ import {modelPrimaryKeyConditions} from "../utils/model-primary-key.js"
 
 /**
  * Defines this typedef.
- * @typedef {{action?: string, destroyAuthorizationRecord?: Record<string, ReturnType<typeof JSON.parse>>, id?: import("../utils/model-primary-key.js").ModelPrimaryKeyValue, matchedEventFilterKeys?: string[], previousId?: import("../utils/model-primary-key.js").ModelPrimaryKeyValue, record?: import("./query.js").FrontendModelTransportValue, [key: string]: import("./query.js").FrontendModelTransportValue | string[] | undefined}} FrontendModelLifecycleBroadcastBody
+ * @typedef {{action?: string, id?: import("../utils/model-primary-key.js").ModelPrimaryKeyValue, matchedEventFilterKeys?: string[], previousId?: import("../utils/model-primary-key.js").ModelPrimaryKeyValue, record?: import("./query.js").FrontendModelTransportValue, [key: string]: import("./query.js").FrontendModelTransportValue | string[] | undefined}} FrontendModelLifecycleBroadcastBody
+ */
+/**
+ * @typedef {Record<string, import("./query.js").FrontendModelTransportValue>} DestroyAuthorizationRecord
  */
 /**
  * Defines this typedef.
@@ -25,6 +28,50 @@ const EVENT_FILTER_KEYS = new Set(["joins", "key", "searches", "where"])
 // Mirrors FRONTEND_MODELS_CHANNEL_NAME in ./websocket-publishers.js, duplicated here
 // to avoid the configuration → logger → websocket-publishers import cycle.
 const FRONTEND_MODELS_CHANNEL_NAME = "frontend-models"
+
+/**
+ * Checks whether a server-side broadcast value is a destroy-authorization record.
+ * @param {import("./query.js").FrontendModelTransportValue | undefined} value - Candidate value.
+ * @returns {value is DestroyAuthorizationRecord} - Whether the value is a column-keyed record.
+ */
+function isDestroyAuthorizationRecord(value) {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value))
+}
+
+/**
+ * Checks whether a captured value is a serialized binary-column marker.
+ * @param {import("./query.js").FrontendModelTransportValue} value - Captured column value.
+ * @returns {value is {__velociousDestroyAuthorizationType: "binary", value: number[]}} - Whether the value contains serialized bytes.
+ */
+function isDestroyAuthorizationBinary(value) {
+  return Boolean(
+    value
+    && typeof value === "object"
+    && !Array.isArray(value)
+    && "__velociousDestroyAuthorizationType" in value
+    && value.__velociousDestroyAuthorizationType === "binary"
+    && "value" in value
+    && Array.isArray(value.value)
+    && value.value.every((byte) => typeof byte === "number")
+  )
+}
+
+/**
+ * Builds a PostgreSQL array expression whose elements are quoted by the active driver.
+ * @param {import("../database/drivers/base.js").default} driver - Active PostgreSQL driver.
+ * @param {import("./query.js").FrontendModelTransportValue[]} values - Captured array values.
+ * @returns {string} - PostgreSQL array expression.
+ */
+function pgsqlArrayValueSql(driver, values) {
+  const elements = values.map((value) => {
+    if (Array.isArray(value)) return pgsqlArrayValueSql(driver, value)
+    if (value === null) return "NULL"
+
+    return driver.quote(value)
+  })
+
+  return `ARRAY[${elements.join(", ")}]`
+}
 
 /**
  * Resolves frontend resource identity attributes to backing database columns.
@@ -137,7 +184,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
   /**
    * Runs deliver broadcast.
    * @param {FrontendModelLifecycleBroadcastBody} body - Broadcast body.
-   * @param {{eventId?: string}} [meta] - Optional event metadata.
+   * @param {import("../http-server/websocket-channel.js").WebsocketBroadcastMetadata} [meta] - Optional server-side broadcast metadata.
    * @returns {Promise<void>} Resolves after delivery.
    */
   async deliverBroadcast(body, meta) {
@@ -147,7 +194,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
   /**
    * Runs deliver broadcast.
    * @param {FrontendModelLifecycleBroadcastBody} body - Broadcast body.
-   * @param {{eventId?: string}} [meta] - Optional event metadata.
+   * @param {import("../http-server/websocket-channel.js").WebsocketBroadcastMetadata} [meta] - Optional server-side broadcast metadata.
    * @returns {Promise<void>} Resolves after delivery.
    */
   async _deliverBroadcast(body, meta) {
@@ -164,7 +211,11 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
       if (body.id === undefined || body.id === null) return
 
       const FrontendModelController = await this._frontendModelControllerClass()
-      const authorized = await this._destroyEventIsAuthorized(body, FrontendModelController)
+      const authorized = await this._destroyEventIsAuthorized(
+        body,
+        FrontendModelController,
+        meta?.broadcastParams?.destroyAuthorizationRecord
+      )
 
       if (!authorized) return
 
@@ -238,13 +289,13 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
    * are quoted on this trusted database connection; no broadcast-provided SQL is run.
    * @param {FrontendModelLifecycleBroadcastBody} body - Destroy broadcast body.
    * @param {typeof import("../frontend-model-controller.js").default} FrontendModelController - Server-side frontend-model controller class.
+   * @param {import("./query.js").FrontendModelTransportValue | undefined} destroyAuthorizationRecord - Server-only pre-delete record from live broadcast metadata.
    * @returns {Promise<boolean>} - Whether the subscriber could read the record before deletion.
    */
-  async _destroyEventIsAuthorized(body, FrontendModelController) {
-    const destroyAuthorizationRecord = body.destroyAuthorizationRecord
+  async _destroyEventIsAuthorized(body, FrontendModelController, destroyAuthorizationRecord) {
     const id = body.id
 
-    if (id === undefined || id === null || !destroyAuthorizationRecord || typeof destroyAuthorizationRecord !== "object" || Array.isArray(destroyAuthorizationRecord)) return false
+    if (id === undefined || id === null || !isDestroyAuthorizationRecord(destroyAuthorizationRecord)) return false
 
     return await this._withEventTenant(id, async () => {
       const controller = this._frontendModelController(FrontendModelController)
@@ -268,7 +319,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
   /**
    * Builds a backing-model query whose source is the captured pre-delete row.
    * @param {typeof import("../database/record/index.js").default} ModelClass - Backing model class.
-   * @param {Record<string, ReturnType<typeof JSON.parse>>} destroyAuthorizationRecord - Captured pre-delete record.
+   * @param {DestroyAuthorizationRecord} destroyAuthorizationRecord - Captured pre-delete record.
    * @returns {import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>} - One-row model query.
    */
   _destroyAuthorizationQuery(ModelClass, destroyAuthorizationRecord) {
@@ -283,24 +334,23 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
    * Replaces a query's backing table with a safely quoted one-row derived table.
    * @param {import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>} query - Query to update.
    * @param {typeof import("../database/record/index.js").default} ModelClass - Backing model class.
-   * @param {Record<string, ReturnType<typeof JSON.parse>>} destroyAuthorizationRecord - Captured pre-delete record.
+   * @param {DestroyAuthorizationRecord} destroyAuthorizationRecord - Captured pre-delete record.
    * @returns {void}
    */
   _applyDestroyAuthorizationRecordToQuery(query, ModelClass, destroyAuthorizationRecord) {
     const selectedColumns = Object.entries(destroyAuthorizationRecord).map(([columnName, serializedValue]) => {
-      const binaryMarker = serializedValue && typeof serializedValue === "object" && !Array.isArray(serializedValue)
-        && serializedValue.__velociousDestroyAuthorizationType === "binary"
-        && Array.isArray(serializedValue.value)
-      const value = binaryMarker
+      const value = isDestroyAuthorizationBinary(serializedValue)
         ? Buffer.from(serializedValue.value)
         : deserializeFrontendModelTransportValue(serializedValue)
-      const quotedValue = value === null ? "NULL" : query.driver.quote(value)
       const column = ModelClass.getColumnsHash()[columnName]
 
       if (!column) throw new Error(`Cannot authorize a destroyed ${ModelClass.name} with unknown column ${columnName}`)
+      const quotedValue = query.driver.getType() == "pgsql" && column.getType() === "ARRAY" && Array.isArray(value)
+        ? pgsqlArrayValueSql(query.driver, value)
+        : value === null ? "NULL" : query.driver.quote(value)
 
       const selectedValue = query.driver.getType() == "pgsql"
-        ? `CAST(${quotedValue} AS ${column.getType()})`
+        ? `CAST(${quotedValue} AS ${column.getDatabaseType()})`
         : quotedValue
 
       return `${selectedValue} AS ${query.driver.quoteColumn(columnName)}`

@@ -3249,7 +3249,7 @@ export default class VelociousConfiguration {
    * @param {string} name - Channel name.
    * @param {Record<string, ReturnType<typeof JSON.parse>>} broadcastParams - Params passed to each subscription's `matches()`.
    * @param {ReturnType<typeof JSON.parse>} body - Message body delivered via `sendMessage()`.
-   * @param {{eventId?: string}} [meta] - Optional event metadata for replay tracking.
+   * @param {import("./http-server/websocket-channel.js").WebsocketBroadcastMetadata} [meta] - Optional event metadata for replay tracking.
    * @returns {void}
    */
   _broadcastToChannelLocal(name, broadcastParams, body, meta) {
@@ -3273,10 +3273,14 @@ export default class VelociousConfiguration {
 
       if (!matches) continue
 
+      const deliveryMetadata = {
+        broadcastParams,
+        ...(meta?.eventId ? {eventId: meta.eventId} : {})
+      }
       const delivery = this.withoutCurrentConnectionContexts(() => {
         return Promise
           .resolve()
-          .then(() => this._deliverWebsocketChannelBroadcast(subscription, body, {eventId: meta?.eventId}))
+          .then(() => this._deliverWebsocketChannelBroadcast(subscription, body, deliveryMetadata))
           .catch((error) => {
             console.error(`broadcastToChannel: ${name} subscription ${subscription.subscriptionId} deliverBroadcast threw`, error)
           })
@@ -3314,7 +3318,7 @@ export default class VelociousConfiguration {
    * Runs deliver websocket channel broadcast.
    * @param {import("./http-server/websocket-channel.js").default} subscription - Channel subscription.
    * @param {import("./http-server/websocket-channel.js").WebsocketJsonValue} body - Broadcast body.
-   * @param {{eventId?: string}} meta - Broadcast metadata.
+   * @param {import("./http-server/websocket-channel.js").WebsocketBroadcastMetadata} meta - Broadcast metadata.
    * @returns {void | Promise<void>} Broadcast delivery result.
    */
   _deliverWebsocketChannelBroadcast(subscription, body, meta) {

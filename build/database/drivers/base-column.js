@@ -172,6 +172,14 @@ export default class VelociousDatabaseDriversBaseColumn {
   }
 
   /**
+   * Returns the database-native type name used in SQL casts.
+   * @returns {string} - Database-native type name.
+   */
+  getDatabaseType() {
+    return this.getType()
+  }
+
+  /**
    * Runs get type.
    * @abstract
    * @returns {string} - The type.

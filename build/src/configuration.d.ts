@@ -1380,12 +1380,10 @@ export default class VelociousConfiguration {
      * @param {string} name - Channel name.
      * @param {Record<string, ReturnType<typeof JSON.parse>>} broadcastParams - Params passed to each subscription's `matches()`.
      * @param {ReturnType<typeof JSON.parse>} body - Message body delivered via `sendMessage()`.
-     * @param {{eventId?: string}} [meta] - Optional event metadata for replay tracking.
+     * @param {import("./http-server/websocket-channel.js").WebsocketBroadcastMetadata} [meta] - Optional event metadata for replay tracking.
      * @returns {void}
      */
-    _broadcastToChannelLocal(name: string, broadcastParams: Record<string, ReturnType<typeof JSON.parse>>, body: ReturnType<typeof JSON.parse>, meta?: {
-        eventId?: string;
-    }): void;
+    _broadcastToChannelLocal(name: string, broadcastParams: Record<string, ReturnType<typeof JSON.parse>>, body: ReturnType<typeof JSON.parse>, meta?: import("./http-server/websocket-channel.js").WebsocketBroadcastMetadata): void;
     /**
      * Awaits a snapshot of the in-flight local (per-process) websocket channel
      * broadcast deliveries. Called from `awaitPendingBroadcasts` after the host
@@ -1400,12 +1398,10 @@ export default class VelociousConfiguration {
      * Runs deliver websocket channel broadcast.
      * @param {import("./http-server/websocket-channel.js").default} subscription - Channel subscription.
      * @param {import("./http-server/websocket-channel.js").WebsocketJsonValue} body - Broadcast body.
-     * @param {{eventId?: string}} meta - Broadcast metadata.
+     * @param {import("./http-server/websocket-channel.js").WebsocketBroadcastMetadata} meta - Broadcast metadata.
      * @returns {void | Promise<void>} Broadcast delivery result.
      */
-    _deliverWebsocketChannelBroadcast(subscription: import("./http-server/websocket-channel.js").default, body: import("./http-server/websocket-channel.js").WebsocketJsonValue, meta: {
-        eventId?: string;
-    }): void | Promise<void>;
+    _deliverWebsocketChannelBroadcast(subscription: import("./http-server/websocket-channel.js").default, body: import("./http-server/websocket-channel.js").WebsocketJsonValue, meta: import("./http-server/websocket-channel.js").WebsocketBroadcastMetadata): void | Promise<void>;
     /**
      * Runs get websocket message handler resolver.
      * @returns {import("./configuration-types.js").WebsocketMessageHandlerResolverType | undefined} - The websocket message handler resolver.
