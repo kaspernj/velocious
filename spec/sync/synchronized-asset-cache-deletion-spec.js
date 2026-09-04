@@ -175,7 +175,7 @@ describe("SynchronizedAssetCache deletion", {databaseCleaning: {transaction: fal
     const removalSynchronization = cache.synchronize({descriptors: [], online: false, scopeKey: "users"})
     const liveState = await cache.loadState()
 
-    expect(liveState.pendingDeletionDigests).toEqual([])
+    expect(liveState.pendingDeletionDigests).toEqual([firstAsset.digest])
     adapter.releaseFailingSave.resolve(undefined)
 
     await failingSynchronization
@@ -226,5 +226,47 @@ describe("SynchronizedAssetCache deletion", {databaseCleaning: {transaction: fal
     expect(recoveredState.pendingDeletionDigests).toEqual([])
     expect(adapter.blobs.size).toEqual(0)
     expect(adapter.deletionAttempts).toEqual(2)
+  })
+
+  it("does not reuse a pending blob with new metadata", async () => {
+    const content = bytes([130, 131, 132])
+    const removedAsset = descriptor({bytes: content, id: "removed"})
+    const replacementAsset = {
+      ...descriptor({bytes: content, id: "replacement", offlineRequirement: "required"}),
+      byteSize: content.byteLength + 1
+    }
+    const adapter = new FailNextDeleteAssetCacheAdapter()
+    const removedCache = new SynchronizedAssetCache({
+      accountId: "account-1",
+      adapter,
+      download: async () => content,
+      maxBytes: 1024
+    })
+
+    await removedCache.synchronize({descriptors: [removedAsset], online: true, scopeKey: "removed-scope"})
+    adapter.failNextDelete = true
+
+    await expect(async () => {
+      await removedCache.synchronize({descriptors: [], online: true, scopeKey: "removed-scope"})
+    }).toThrowError("planned blob deletion failure")
+
+    let downloadCount = 0
+    const replacementCache = new SynchronizedAssetCache({
+      accountId: "account-1",
+      adapter,
+      download: async () => {
+        downloadCount += 1
+        return content
+      },
+      maxBytes: 1024
+    })
+    const result = await replacementCache.synchronize({descriptors: [replacementAsset], online: true, scopeKey: "replacement-scope"})
+
+    expect(result.failures.map((failure) => failure.assetId)).toEqual([replacementAsset.id])
+    expect(result.missingRequiredAssetIds).toEqual([replacementAsset.id])
+    expect(downloadCount).toEqual(1)
+    expect(adapter.deletionAttempts).toEqual(1)
+    expect(adapter.blobs.size).toEqual(1)
+    expect(await replacementCache.resolve({assetId: replacementAsset.id, online: false})).toEqual(null)
   })
 })

@@ -401,11 +401,10 @@ export default class SynchronizedAssetCache {
    */
   async saveState() {
     if (!this.state) throw new Error("Cannot save synchronized asset cache before loading state")
+    const state = this.copyState(this.state)
 
     const persist = async () => {
-      if (!this.state) throw new Error("Cannot save synchronized asset cache before loading state")
-
-      await this.adapter.saveState({accountId: this.accountId, state: this.state})
+      await this.adapter.saveState({accountId: this.accountId, state})
     }
 
     await this.serializeStatePersistence(persist)
@@ -653,6 +652,8 @@ export default class SynchronizedAssetCache {
    * @returns {Promise<void>} Resolves after persistence.
    */
   async recordCachedEntries(entries) {
+    if (!this.state) throw new Error("Cannot record synchronized asset cache results before loading state")
+    const state = this.state
     const lastAccessedAt = this.nowMilliseconds()
 
     for (const entry of entries) {
@@ -661,6 +662,12 @@ export default class SynchronizedAssetCache {
       entry.nextRetryAt = null
       entry.status = "cached"
     }
+
+    const verifiedDigests = new Set(entries.map((entry) => entry.descriptor.digest))
+
+    state.pendingDeletionDigests = state.pendingDeletionDigests.filter((digest) => {
+      return !verifiedDigests.has(digest) || !state.assets.some((entry) => entry.descriptor.digest === digest)
+    })
 
     await this.saveState()
   }
@@ -768,6 +775,13 @@ export default class SynchronizedAssetCache {
    * @returns {Promise<string | null>} Existing URI.
    */
   async cachedUriWhileActive(entry) {
+    if (!this.state) throw new Error("Cannot resolve synchronized asset cache URI before loading state")
+    if (this.state.pendingDeletionDigests.includes(entry.descriptor.digest)) {
+      if (entry.status === "cached") entry.status = "missing"
+
+      return null
+    }
+
     const uri = await this.adapter.blobUri({
       accountId: this.accountId,
       digest: entry.descriptor.digest
@@ -870,13 +884,9 @@ export default class SynchronizedAssetCache {
     return await this.deleteDigestIfInactive(digest, async () => {
       if (!this.state) throw new Error("Cannot delete synchronized asset blobs before loading state")
       if (!this.state.pendingDeletionDigests.includes(digest)) return false
+      if (this.state.assets.some((entry) => entry.descriptor.digest === digest)) return false
 
-      let deleted = false
-
-      if (!this.state.assets.some((entry) => entry.descriptor.digest === digest)) {
-        await this.adapter.deleteBlob({accountId: this.accountId, digest})
-        deleted = true
-      }
+      await this.adapter.deleteBlob({accountId: this.accountId, digest})
 
       const pendingDeletionDigests = this.state.pendingDeletionDigests
 
@@ -889,7 +899,7 @@ export default class SynchronizedAssetCache {
         throw error
       }
 
-      return deleted
+      return true
     })
   }
 

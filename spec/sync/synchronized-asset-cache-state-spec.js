@@ -1,5 +1,6 @@
 // @ts-check
 
+import { deferred } from "awaitery"
 import { describe, expect, it } from "../../src/testing/test.js"
 import SynchronizedAssetCache from "../../src/sync/assets/cache.js"
 import { bytes, descriptor, FailNextSaveAssetCacheAdapter, MemoryAssetCacheAdapter, PausedDeleteAssetCacheAdapter } from "../helpers/synchronized-asset-cache.js"
@@ -150,6 +151,74 @@ describe("SynchronizedAssetCache state", {databaseCleaning: {transaction: false,
     await expect(async () => await cache.resolve({assetId: asset.id, online: true})).toThrowError("planned metadata persistence failure")
 
     expect(await cache.resolve({assetId: asset.id, online: true})).toEqual(`memory://account-1:${asset.digest}`)
+  })
+
+  it("snapshots each state save before awaiting adapter persistence", async () => {
+    const content = bytes([124, 125, 126])
+    const asset = descriptor({bytes: content, fetch: "on-demand"})
+
+    class PausedThenFailSaveAssetCacheAdapter extends MemoryAssetCacheAdapter {
+      constructor() {
+        super()
+        this.failNextSave = false
+        this.pauseNextSave = false
+        this.releaseSave = deferred()
+        this.saveStarted = deferred()
+      }
+
+      /** @param {{accountId: string, state: import("../../src/sync/assets/types.js").SynchronizedAssetCacheState}} args State write. @returns {Promise<void>} */
+      async saveState(args) {
+        const failSave = this.failNextSave
+
+        this.failNextSave = false
+
+        if (this.pauseNextSave) {
+          this.pauseNextSave = false
+          this.saveStarted.resolve(undefined)
+          await this.releaseSave.promise
+        }
+
+        if (failSave) throw new Error("planned queued metadata persistence failure")
+
+        await super.saveState(args)
+      }
+    }
+
+    const adapter = new PausedThenFailSaveAssetCacheAdapter()
+    const cache = new SynchronizedAssetCache({
+      accountId: "account-1",
+      adapter,
+      download: async () => content,
+      maxBytes: 1024
+    })
+
+    await cache.synchronize({descriptors: [asset], online: false, scopeKey: "users"})
+
+    const state = await cache.loadState()
+
+    state.assets[0].lastAccessedAt = 2000
+    adapter.pauseNextSave = true
+
+    const firstSave = cache.saveState()
+
+    await adapter.saveStarted.promise
+
+    state.assets[0].status = "downloading"
+    adapter.failNextSave = true
+
+    const secondSave = cache.saveState()
+    const secondFailure = expect(async () => await secondSave).toThrowError("planned queued metadata persistence failure")
+
+    adapter.releaseSave.resolve(undefined)
+    await firstSave
+    await secondFailure
+
+    const persistedState = await adapter.loadState({accountId: "account-1"})
+
+    if (!persistedState) throw new Error("Expected persisted asset cache state")
+
+    expect(persistedState.assets[0].lastAccessedAt).toEqual(2000)
+    expect(persistedState.assets[0].status).toEqual("missing")
   })
 
   it("keeps the last committed descriptors when reconciliation persistence fails", async () => {
