@@ -1145,10 +1145,11 @@ export default class FrontendModelController extends Controller {
       return new Set(authorizedIds.map((value) => modelPrimaryKeyCacheKey(primaryKey, value)))
     }
 
+    const maxCompositeCohortSize = Math.max(1, Math.floor(query.driver.maxInClauseValues() / primaryKey.length))
     const cohorts = query.driver.chunkValues(identities, (cohort) => query
       .clone()
       .where(compositeModelPrimaryKeyCohortSql({modelClass, primaryKey, query, values: cohort}))
-      .toSql())
+      .toSql(), {maxCount: maxCompositeCohortSize})
     const authorizedIdentityKeys = new Set()
 
     for (const cohort of cohorts) {

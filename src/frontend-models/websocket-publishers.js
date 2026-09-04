@@ -203,8 +203,8 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
 }
 
 /**
- * Returns every resource identity represented by the record before its pending update.
- * @param {import("../database/record/index.js").default} model - Backing model before update.
+ * Returns every resource identity represented by the record before its pending changes or destruction.
+ * @param {import("../database/record/index.js").default} model - Backing model before update or destroy.
  * @returns {Promise<Map<string, import("../utils/model-primary-key.js").ModelPrimaryKeyValue>>} - Previous identities by resource name.
  */
 async function frontendModelPreviousResourceIdentities(model) {
@@ -276,7 +276,7 @@ function frontendModelResourceIdentity({model, previous = false, primaryKey}) {
  * Fans one backing-record lifecycle event out through every configured frontend-resource identity.
  * @param {import("../database/record/index.js").default} model - Backing model instance.
  * @param {"create" | "update" | "destroy"} action - Lifecycle action.
- * @param {Map<string, import("../utils/model-primary-key.js").ModelPrimaryKeyValue>} [previousIds] - Previous update identities by resource name.
+ * @param {Map<string, import("../utils/model-primary-key.js").ModelPrimaryKeyValue>} [previousIds] - Persisted identities captured before update or destroy.
  * @returns {void}
  */
 function broadcastFrontendModelEvents(model, action, previousIds) {
@@ -288,7 +288,7 @@ function broadcastFrontendModelEvents(model, action, previousIds) {
   for (const [modelName, {primaryKey}] of publisherResources) {
     const previousId = previousIds?.get(modelName)
     const currentId = frontendModelResourceIdentity({model, primaryKey})
-    const id = currentId ?? previousId
+    const id = action === "destroy" ? previousId : currentId ?? previousId
 
     if (id === null || id === undefined) continue
 

@@ -314,6 +314,7 @@ describe("Frontend models - composite primary key HTTP integration", {databaseCl
       })
 
       try {
+        projectedTask.setName("Unsaved destroy identity")
         await projectedTask.destroy()
 
         await waitFor(() => {
@@ -324,6 +325,34 @@ describe("Frontend models - composite primary key HTTP integration", {databaseCl
         offDestroy()
         resetFrontendModelTransport()
         await websocketClient.close()
+      }
+    })
+  })
+
+  it("chunks large composite authorization cohorts below database expression limits", async () => {
+    await Dummy.run(async () => {
+      const project = await ProjectRecord.create({name: "Large authorization cohort project"})
+      const cohortSize = TaskRecord.connection().maxInClauseValues()
+      const now = new Date()
+      /** @type {Array<Array<ReturnType<typeof JSON.parse>>>} */
+      const taskRows = []
+
+      for (let index = 0; index < cohortSize; index += 1) {
+        taskRows.push([project.id(), `Large authorization cohort task ${index}`, now, now])
+      }
+
+      await TaskRecord.insertMultiple(["project_id", "name", "created_at", "updated_at"], taskRows)
+      configureNodeTransport()
+
+      try {
+        const tasks = await CompositeTask
+          .where({projectId: project.id()})
+          .perPage(cohortSize)
+          .toArray()
+
+        expect(tasks.length).toEqual(cohortSize)
+      } finally {
+        resetFrontendModelTransport()
       }
     })
   })
