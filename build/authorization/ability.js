@@ -262,6 +262,13 @@ export default class VelociousAuthorizationAbility {
         query: scopedQuery
       })
       const finalQuery = resultQuery || scopedQuery
+
+      if (ruleQueryFactory && finalQuery !== scopedQuery) {
+        const finalFroms = finalQuery.getFroms()
+
+        finalFroms.splice(0, finalFroms.length, ...scopedQuery.getFroms())
+      }
+
       const quotedScopedTable = query.driver.quoteTable(finalQuery.getTableReferenceForJoin())
       const primaryKeyColumns = primaryKeyAttributes.map((attributeName) => modelClass.getColumnNameForAttributeName(attributeName))
       const selectedPkSql = primaryKeyColumns.map((columnName) => `${quotedScopedTable}.${query.driver.quoteColumn(columnName)}`)

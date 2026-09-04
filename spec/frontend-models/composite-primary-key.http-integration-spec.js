@@ -329,7 +329,7 @@ describe("Frontend models - composite primary key HTTP integration", {databaseCl
     })
   })
 
-  it("authorizes composite destroy identities against the pre-delete record", async () => {
+  it("authorizes composite destroys when an ability callback returns a scoped query", async () => {
     const previousScope = process.env.VELOCIOUS_DUMMY_FRONTEND_MODEL_SUBQUERY_SCOPE
 
     process.env.VELOCIOUS_DUMMY_FRONTEND_MODEL_SUBQUERY_SCOPE = "composite-scope-owner"
