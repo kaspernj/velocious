@@ -126,6 +126,42 @@ export type ResolvedBackgroundJobConcurrency = {
      */
     queueDerived: boolean;
 };
+export type BackgroundJobConcurrencyRepair = {
+    /**
+     * - Exact handed-off job count persisted by the repair.
+     */
+    activeCount: number;
+    /**
+     * - Durable cap identity.
+     */
+    concurrencyKey: string;
+    /**
+     * - Persisted count replaced by the repair.
+     */
+    previousActiveCount: number;
+};
+export type BackgroundJobConcurrencyReconciliation = {
+    /**
+     * - Snapshot mismatches rechecked under their counter locks.
+     */
+    candidateCount: number;
+    /**
+     * - Active or nonzero durable counters compared in the initial snapshot.
+     */
+    checkedCount: number;
+    /**
+     * - Counters whose persisted values were changed.
+     */
+    repairedCount: number;
+    /**
+     * - Bounded deterministic sample of applied repairs.
+     */
+    repairs: BackgroundJobConcurrencyRepair[];
+    /**
+     * - Applied repairs omitted from the sample.
+     */
+    repairsTruncatedCount: number;
+};
 export type PreparedLocalBackgroundJob = {
     /**
      * - Fixed-width digest of the serialized arguments.
@@ -647,6 +683,20 @@ export type BackgroundJobSocketMessage = BackgroundJobHelloMessage | BackgroundJ
  * @property {string} concurrencyKey - Durable cap identity.
  * @property {number} maxConcurrency - Positive cap.
  * @property {boolean} queueDerived - Whether queue configuration owns the cap.
+ */
+/**
+ * @typedef {object} BackgroundJobConcurrencyRepair
+ * @property {number} activeCount - Exact handed-off job count persisted by the repair.
+ * @property {string} concurrencyKey - Durable cap identity.
+ * @property {number} previousActiveCount - Persisted count replaced by the repair.
+ */
+/**
+ * @typedef {object} BackgroundJobConcurrencyReconciliation
+ * @property {number} candidateCount - Snapshot mismatches rechecked under their counter locks.
+ * @property {number} checkedCount - Active or nonzero durable counters compared in the initial snapshot.
+ * @property {number} repairedCount - Counters whose persisted values were changed.
+ * @property {BackgroundJobConcurrencyRepair[]} repairs - Bounded deterministic sample of applied repairs.
+ * @property {number} repairsTruncatedCount - Applied repairs omitted from the sample.
  */
 /**
  * @typedef {object} PreparedLocalBackgroundJob

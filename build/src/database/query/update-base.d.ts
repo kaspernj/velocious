@@ -28,6 +28,13 @@ export default class VelociousDatabaseQueryUpdateBase {
      * @returns {string | number} - SQL literal.
      */
     formatValue(value: ReturnType<typeof JSON.parse>): string | number;
+    /**
+     * Formats one hash condition with SQL null semantics.
+     * @param {string} columnName - Column name.
+     * @param {ReturnType<typeof JSON.parse>} value - Condition value.
+     * @returns {string} - SQL condition.
+     */
+    formatCondition(columnName: string, value: ReturnType<typeof JSON.parse>): string;
     toSql(): void;
 }
 //# sourceMappingURL=update-base.d.ts.map

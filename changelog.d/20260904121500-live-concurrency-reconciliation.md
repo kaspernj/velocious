@@ -1,0 +1,2 @@
+- Repair stale durable background-job concurrency counts on the active main's maintenance cadence, retry dispatch after capacity is recovered, and fence handoffs against concurrent queue-policy changes.
+- Generate `IS NULL` for null-valued update hash conditions across the SQL drivers.

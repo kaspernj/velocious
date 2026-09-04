@@ -2354,6 +2354,29 @@ export default class BackgroundJobsMain {
       errorEvents.emit("framework-error", payload)
       errorEvents.emit("all-error", {...payload, errorType: "framework-error"})
     }
+
+    if (this.lifecycleState === "active") await this._reconcileActiveConcurrency()
+  }
+
+  /**
+   * Repairs durable admission counters on the active main's maintenance cadence
+   * and immediately retries dispatch when capacity was recovered.
+   * @returns {Promise<void>} - Resolves after repair and any resulting drain.
+   */
+  async _reconcileActiveConcurrency() {
+    try {
+      const result = await this.store.reconcileActiveConcurrency()
+
+      if (result.repairedCount > 0) await this._drain()
+    } catch (error) {
+      const normalizedError = error instanceof Error ? error : new Error(String(error))
+      const payload = {context: {generationId: this.generationId, stage: "background-job-concurrency-reconciliation"}, error: normalizedError}
+      const errorEvents = this.configuration.getErrorEvents()
+
+      this.logger.error(() => ["Failed to reconcile background job active-concurrency counts:", normalizedError])
+      errorEvents.emit("framework-error", payload)
+      errorEvents.emit("all-error", {...payload, errorType: "framework-error"})
+    }
   }
 
   /**

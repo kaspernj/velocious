@@ -56,6 +56,13 @@ import {
  * @property {{failureMessage: string, name: string}} [advisoryLock] - Session lock held around the transaction.
  */
 
+/**
+ * BackgroundJobConcurrencyCountRow type.
+ * @typedef {object} BackgroundJobConcurrencyCountRow
+ * @property {number | string} active_count - Persisted or aggregated active count.
+ * @property {string} concurrency_key - Durable cap identity.
+ */
+
 const MIGRATIONS_TABLE = "velocious_internal_migrations"
 const MIGRATION_SCOPE = "background_jobs"
 const MIGRATION_VERSION = "20250215000000"
@@ -89,6 +96,8 @@ const SCHEDULE_KEYS_TABLE = "background_job_schedule_keys"
 const CONCURRENCY_TABLE = "background_job_concurrency"
 const COUNTS_REVISION_TABLE = "background_job_count_revisions"
 const COUNTS_REVISION_KEY = "counts"
+const CONCURRENCY_RECONCILIATION_LOCK = "background-jobs:queue-concurrency-reconcile"
+const CONCURRENCY_REPAIR_SAMPLE_LIMIT = 10
 export const BACKGROUND_JOB_COUNTS_CHANNEL = "velocious-background-job-counts"
 export const BACKGROUND_JOB_COUNT_BUCKETS = ["all", "queued", "handed_off", "completed", "failed", "orphaned"]
 const COUNTED_JOB_STATUSES = BACKGROUND_JOB_COUNT_BUCKETS.slice(1)
@@ -222,8 +231,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
     await this.ensureReady()
 
     await this._withDb(async (db) => {
-      const lockName = "background-jobs:queue-concurrency-reconcile"
-      const acquired = await db.acquireAdvisoryLock(lockName)
+      const acquired = await db.acquireAdvisoryLock(CONCURRENCY_RECONCILIATION_LOCK)
 
       if (!acquired) throw new Error("Failed to acquire background job queue-concurrency reconcile lock")
 
@@ -236,7 +244,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
         // the counts (adoption itself is idempotent).
         this._queueConcurrencyReconciled = true
       } finally {
-        await db.releaseAdvisoryLock(lockName)
+        await db.releaseAdvisoryLock(CONCURRENCY_RECONCILIATION_LOCK)
       }
     })
 
@@ -244,6 +252,44 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       "Completed background jobs queue-concurrency startup reconciliation",
       {databaseIdentifier, durationMs: Date.now() - startedAtMs}
     ])
+  }
+
+  /**
+   * Repairs durable active-count drift while a main process remains live. The
+   * initial snapshot is read-only; only suspected mismatches take their
+   * counter lock and re-count inside the serialized transaction path.
+   * @returns {Promise<import("./types.js").BackgroundJobConcurrencyReconciliation>} - Repair summary.
+   */
+  async reconcileActiveConcurrency() {
+    const databaseIdentifier = this.getDatabaseIdentifier()
+    const startedAtMs = Date.now()
+
+    await this.ensureReady()
+
+    const result = await this._serializedTransactionMutation(
+      async (db) => await this._reconcileConcurrency(db, {insideTransaction: true}),
+      {
+        advisoryLock: {
+          failureMessage: "Failed to acquire background job active-concurrency reconcile lock",
+          name: CONCURRENCY_RECONCILIATION_LOCK
+        }
+      }
+    )
+
+    if (result.repairedCount > 0) {
+      await this.logger.warn(() => [
+        "Repaired background jobs active-concurrency count drift",
+        {
+          databaseIdentifier,
+          durationMs: Date.now() - startedAtMs,
+          repairedCount: result.repairedCount,
+          repairs: result.repairs,
+          repairsTruncatedCount: result.repairsTruncatedCount
+        }
+      ])
+    }
+
+    return result
   }
 
   /**
@@ -960,7 +1006,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
           handoff_id: handoffId,
           worker_id: workerId || null
         },
-        conditions: {id: jobId, status: "queued"}
+        conditions: {concurrency_key: queuedJob.concurrencyKey, id: jobId, status: "queued"}
       })
 
       if (affectedRows !== 1) {
@@ -2763,14 +2809,19 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
   /**
    * Rebuilds durable counts from active handoffs.
    * @param {import("../database/drivers/base.js").default} db - Database connection.
-   * @returns {Promise<void>} - Resolves when reconciled.
+   * @param {{insideTransaction?: boolean}} [options] - Reuse an enclosing transaction.
+   * @returns {Promise<import("./types.js").BackgroundJobConcurrencyReconciliation>} - Repair summary.
    */
-  async _reconcileConcurrency(db) {
-    if (!(await db.tableExists(CONCURRENCY_TABLE))) return
+  async _reconcileConcurrency(db, {insideTransaction = false} = {}) {
+    if (!(await db.tableExists(CONCURRENCY_TABLE))) {
+      return {candidateCount: 0, checkedCount: 0, repairedCount: 0, repairs: [], repairsTruncatedCount: 0}
+    }
+
     const activeRows = await db
       .newQuery()
       .from(JOBS_TABLE)
       .select("concurrency_key")
+      .select("COUNT(*) AS active_count")
       .where({status: "handed_off"})
       .where(`${db.quoteColumn("concurrency_key")} IS NOT NULL`)
       .group("concurrency_key")
@@ -2779,18 +2830,49 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       .newQuery()
       .from(CONCURRENCY_TABLE)
       .select("concurrency_key")
+      .select("active_count")
       .where(`${db.quoteColumn("active_count")} != 0`)
       .results()
-    const concurrencyKeys = new Set(
-      [...activeRows, ...staleRows].map((row) =>
-        String(/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (row).concurrency_key)
-      )
-    )
+    /** @type {Map<string, number>} */
+    const activeCounts = new Map()
+    /** @type {Map<string, number>} */
+    const persistedCounts = new Map()
 
-    for (const concurrencyKey of [...concurrencyKeys].sort()) {
-      await this._transactionResult(db, async () => {
-        await this._reconcileConcurrencyKey(db, concurrencyKey)
-      })
+    for (const rawRow of activeRows) {
+      const row = /** @type {BackgroundJobConcurrencyCountRow} */ (rawRow)
+      activeCounts.set(row.concurrency_key, this._validatedConcurrencyCount(row.active_count, row.concurrency_key))
+    }
+
+    for (const rawRow of staleRows) {
+      const row = /** @type {BackgroundJobConcurrencyCountRow} */ (rawRow)
+      persistedCounts.set(row.concurrency_key, this._validatedConcurrencyCount(row.active_count, row.concurrency_key))
+    }
+
+    const concurrencyKeys = [...new Set([...activeCounts.keys(), ...persistedCounts.keys()])].sort()
+    const candidateKeys = concurrencyKeys.filter((concurrencyKey) => {
+      return (activeCounts.get(concurrencyKey) || 0) !== (persistedCounts.get(concurrencyKey) || 0)
+    })
+    /** @type {import("./types.js").BackgroundJobConcurrencyRepair[]} */
+    const repairs = []
+    let repairedCount = 0
+
+    for (const concurrencyKey of candidateKeys) {
+      const repair = insideTransaction
+        ? await this._reconcileConcurrencyKey(db, concurrencyKey)
+        : await this._transactionResult(db, async () => await this._reconcileConcurrencyKey(db, concurrencyKey))
+
+      if (!repair) continue
+
+      repairedCount++
+      if (repairs.length < CONCURRENCY_REPAIR_SAMPLE_LIMIT) repairs.push(repair)
+    }
+
+    return {
+      candidateCount: candidateKeys.length,
+      checkedCount: concurrencyKeys.length,
+      repairedCount,
+      repairs,
+      repairsTruncatedCount: repairedCount - repairs.length
     }
   }
 
@@ -2799,29 +2881,57 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
    * lock order used by handoff and completion transitions.
    * @param {import("../database/drivers/base.js").default} db - Database connection.
    * @param {string} concurrencyKey - Counter key.
-   * @returns {Promise<void>} - Resolves when reconciled.
+   * @returns {Promise<import("./types.js").BackgroundJobConcurrencyRepair | null>} - Applied repair.
    */
   async _reconcileConcurrencyKey(db, concurrencyKey) {
     await this._lockConcurrencyRow(db, concurrencyKey)
+    const persistedRows = await db
+      .newQuery()
+      .from(CONCURRENCY_TABLE)
+      .select("active_count")
+      .select("concurrency_key")
+      .where({concurrency_key: concurrencyKey})
+      .limit(1)
+      .results()
+
+    if (!persistedRows[0]) throw new Error(`Missing background job concurrency counter for ${concurrencyKey}`)
+
+    const persistedRow = /** @type {BackgroundJobConcurrencyCountRow} */ (persistedRows[0])
+    const previousActiveCount = this._validatedConcurrencyCount(persistedRow.active_count, concurrencyKey)
     const rows = await db
       .newQuery()
       .from(JOBS_TABLE)
       .select("COUNT(*) AS active_count")
       .where({concurrency_key: concurrencyKey, status: "handed_off"})
       .results()
-    const activeCount = this._normalizeNumber(
-      /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (rows[0] || {}).active_count
-    )
+    const countRow = /** @type {{active_count: number | string}} */ (rows[0])
+    const activeCount = this._validatedConcurrencyCount(countRow.active_count, concurrencyKey)
 
-    if (activeCount === null || !Number.isSafeInteger(activeCount) || activeCount < 0) {
-      throw new Error(`Invalid reconciled background job concurrency count for ${concurrencyKey}: ${activeCount}`)
-    }
+    if (activeCount === previousActiveCount) return null
 
     await db.update({
       tableName: CONCURRENCY_TABLE,
       data: {active_count: activeCount},
       conditions: {concurrency_key: concurrencyKey}
     })
+
+    return {activeCount, concurrencyKey, previousActiveCount}
+  }
+
+  /**
+   * Validates a database count before it participates in reconciliation.
+   * @param {number | string} value - Raw count.
+   * @param {string} concurrencyKey - Counter key for diagnostics.
+   * @returns {number} - Safe non-negative count.
+   */
+  _validatedConcurrencyCount(value, concurrencyKey) {
+    const count = this._normalizeNumber(value)
+
+    if (count === null || !Number.isSafeInteger(count) || count < 0) {
+      throw new Error(`Invalid reconciled background job concurrency count for ${concurrencyKey}: ${count}`)
+    }
+
+    return count
   }
 
   /**
@@ -2836,11 +2946,12 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
    * while a backlog exists otherwise leaves persisted rows stale: pre-cap jobs
    * keep a null key and bypass the cap, post-removal jobs stay capped under a
    * now-unconfigured key, and a changed numeric cap stays stale until the next
-   * enqueue. Bring the durable state in line with config: sync each configured
-   * queue's stored cap, adopt not-yet-keyed non-terminal jobs onto their queue
-   * key, and release non-terminal jobs from queue keys whose queue is no
-   * longer capped. Runs before {@link _reconcileConcurrency} so the rebuilt
-   * active counts reflect the adopted/released keys.
+   * enqueue. Bring queued durable state in line with config: sync each configured
+   * queue's stored cap, adopt not-yet-keyed queued jobs onto their queue key,
+   * and release queued jobs from queue keys whose queue is no longer capped.
+   * Existing handoffs retain the policy and reservation they started with, so
+   * reconciliation cannot race their completion/retry transitions. Runs before
+   * {@link _reconcileConcurrency} so any pre-existing active counts are exact.
    * @param {import("../database/drivers/base.js").default} db - Database connection.
    * @returns {Promise<void>} - Resolves when reconciled.
    */
@@ -2853,7 +2964,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
     const keyColumn = db.quoteColumn("concurrency_key")
     const capColumn = db.quoteColumn("max_concurrency")
     const queueColumn = db.quoteColumn("queue")
-    const nonTerminal = `${db.quoteColumn("status")} IN (${db.quote("queued")}, ${db.quote("handed_off")})`
+    const queued = `${db.quoteColumn("status")} = ${db.quote("queued")}`
     /** @type {Set<string>} */
     const cappedQueues = new Set()
 
@@ -2868,7 +2979,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       await this._ensureQueueConcurrencyKey(db, {concurrencyKey, maxConcurrency: cap})
       await db.query(
         `UPDATE ${jobsTable} SET ${keyColumn} = ${db.quote(concurrencyKey)}, ${capColumn} = ${Number(cap)} ` +
-        `WHERE ${queueColumn} = ${db.quote(queue)} AND ${keyColumn} IS NULL AND ${nonTerminal}`
+        `WHERE ${queueColumn} = ${db.quote(queue)} AND ${keyColumn} IS NULL AND ${queued}`
       )
     }
 
@@ -2887,7 +2998,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
 
       await db.query(
         `UPDATE ${jobsTable} SET ${keyColumn} = NULL, ${capColumn} = NULL ` +
-        `WHERE ${keyColumn} = ${db.quote(concurrencyKey)} AND ${nonTerminal}`
+        `WHERE ${keyColumn} = ${db.quote(concurrencyKey)} AND ${queued}`
       )
     }
   }

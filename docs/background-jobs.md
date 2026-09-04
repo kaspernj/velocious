@@ -78,8 +78,8 @@ The current main/worker architecture requires these adapter operations:
 - lifecycle/readiness: `ensureReady`, `health`, and `close`;
 - enqueue and stable schedules: `enqueue`, `replaceScheduled`, and
   `cancelScheduled`;
-- dequeue and timing: `nextAvailableJob`, `nextScheduledJob`, and
-  `reconcileQueueConcurrency`;
+- dequeue and timing: `nextAvailableJob`, `nextScheduledJob`,
+  `reconcileQueueConcurrency`, and `reconcileActiveConcurrency`;
 - start/handoff state: `markHandedOff`, `markReturnedToQueue`,
   `handedOffJobsForWorker`, `snapshotHandedOffJobs`, and
   `markOrphanedHandoffs`;
@@ -90,6 +90,9 @@ The current main/worker architecture requires these adapter operations:
 Methods that accept worker reports must preserve the existing lease-fencing and
 at-least-once semantics. `health()` returns `{ready: boolean}`; the mounted health
 endpoint reports `503` when an adapter explicitly reports `ready: false`.
+`reconcileActiveConcurrency()` returns checked/candidate/repaired counts plus a
+bounded repair sample. The base adapter returns an empty result for adapters
+that do not duplicate active counts outside their job rows.
 
 `background-jobs-main` calls
 `markHandedOff({jobId, handoffId, workerId})` with a caller-generated
@@ -220,7 +223,7 @@ await RefreshDiskJob.performLaterWithOptions({
 
 The method is resolved before admission/persistence and its result uses the existing durable limiter. A derived key must therefore still be paired with `maxConcurrency`. An explicit enqueue `concurrencyKey` overrides the derived key (and skips the method); explicit `queue` likewise overrides `static queue`.
 
-Limits are enforced by durable database reservations shared by every main/worker process. Saturated keys do not prevent unrelated queued jobs from being dispatched. Reservations are released when work completes, fails terminally, is requeued for retry, is cancelled, or is recovered as orphaned; startup reconciliation repairs reservation counts after an unclean scheduler stop.
+Limits are enforced by durable database reservations shared by every main/worker process. Saturated keys do not prevent unrelated queued jobs from being dispatched. Reservations are released when work completes, fails terminally, is requeued for retry, is cancelled, or is recovered as orphaned. Startup reconciliation rebuilds reservation counts after an unclean scheduler stop, and the active main rechecks them on its one-minute maintenance cadence so drift cannot keep work queued until another restart. Healthy checks use two aggregate reads and no counter writes; suspected mismatches are re-counted under their per-key locks, and actual repairs emit a structured warning with a bounded key sample before dispatch is retried.
 
 ## Queues (per-queue concurrency caps)
 
@@ -240,7 +243,7 @@ backgroundJobs: {
 Each capped queue is enforced through the same durable per-key concurrency mechanism described above: a job on the queue is given the reserved concurrency key `queue:<name>`, so `queues[name].maxConcurrent` bounds how many jobs from that queue run in flight across every main/worker process, regardless of how many processes run. A queue with no configured cap is unlimited.
 
 - The `queue:` concurrency-key prefix is reserved — an explicit `concurrencyKey` may not start with it.
-- Caps are config-driven and tunable. Adding, removing, or changing `queues[name].maxConcurrent` is reconciled against the existing backlog when the main process starts: persisted jobs adopt or release the queue key to match the current config, and durable active counts are rebuilt from handed-off jobs, so a changed cap takes effect without waiting for the queue to drain. Startup reconciliation is serialized across processes with a database advisory lock and logs its database identifier and duration. Schema/tenant checks (`db:migrate`, `db:tenants:*`) and routine store/connection initialization with an intact jobs table never adopt jobs or rebuild global concurrency counts, so repeated checks cannot issue the broad concurrency UPDATEs that deadlock against active job processes. If schema repair recreates a physically missing `background_jobs` table while the migration marker and concurrency table survive, it resets the surviving active counts against the newly empty jobs table so stale capacity cannot block future dispatch.
+- Caps are config-driven and tunable. Adding, removing, or changing `queues[name].maxConcurrent` is reconciled against queued backlog rows when the main process starts. Already handed-off jobs keep the concurrency policy and reservation recorded when they started, then release it through their normal terminal/requeue transition; this prevents a startup policy update from racing an in-flight handoff or report. New handoffs fence the concurrency key they selected, so a concurrent policy update wins cleanly and the job is selected again under its new policy. Startup reconciliation is serialized across processes with a database advisory lock and logs its database identifier and duration. The active main shares that lock for its lightweight one-minute active-count repair. Schema/tenant checks (`db:migrate`, `db:tenants:*`) and routine store/connection initialization with an intact jobs table never adopt jobs or rebuild global concurrency counts, so repeated checks cannot issue the broad concurrency UPDATEs that deadlock against active job processes. If schema repair recreates a physically missing `background_jobs` table while the migration marker and concurrency table survive, it resets the surviving active counts against the newly empty jobs table so stale capacity cannot block future dispatch.
 - Scheduled jobs (`scheduledBackgroundJobs`) honor a job class's `static queue` as well.
 - Graceful `background-jobs-main` shutdown drains scheduled enqueues that have already fired before it closes database connections. Once shutdown resolves, that scheduler can no longer add rows during a subsequent application or test lifecycle.
 
@@ -468,6 +471,11 @@ configuration.getErrorEvents().on("background-job-orphaned", ({error, context}) 
 ```
 
 The `background-job-orphaned` payload mirrors `background-job-failed`: `error` (the orphan reason as an `Error`) and `context` with `attempts`, `jobArgs`, `jobId`, `jobName`, `maxRetries`, `status`, `terminal`, `willRetry`, and `stage: "background-job-orphaned"`. `willRetry` is `true` when the reclaim returned the job to the queue for another attempt (retries remaining) and `false` when it was exhausted into a terminal `orphaned` state.
+
+An unexpected live concurrency-reconciliation failure is emitted as
+`framework-error` and mirrored to `all-error` with
+`context.stage: "background-job-concurrency-reconciliation"`. It does not
+suppress orphan processing on the same maintenance pass.
 
 ## Release-generation draining
 

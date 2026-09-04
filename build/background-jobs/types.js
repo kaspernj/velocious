@@ -52,6 +52,20 @@
  * @property {boolean} queueDerived - Whether queue configuration owns the cap.
  */
 /**
+ * @typedef {object} BackgroundJobConcurrencyRepair
+ * @property {number} activeCount - Exact handed-off job count persisted by the repair.
+ * @property {string} concurrencyKey - Durable cap identity.
+ * @property {number} previousActiveCount - Persisted count replaced by the repair.
+ */
+/**
+ * @typedef {object} BackgroundJobConcurrencyReconciliation
+ * @property {number} candidateCount - Snapshot mismatches rechecked under their counter locks.
+ * @property {number} checkedCount - Active or nonzero durable counters compared in the initial snapshot.
+ * @property {number} repairedCount - Counters whose persisted values were changed.
+ * @property {BackgroundJobConcurrencyRepair[]} repairs - Bounded deterministic sample of applied repairs.
+ * @property {number} repairsTruncatedCount - Applied repairs omitted from the sample.
+ */
+/**
  * @typedef {object} PreparedLocalBackgroundJob
  * @property {string} argsDigest - Fixed-width digest of the serialized arguments.
  * @property {string} argsJson - Serialized arguments.
