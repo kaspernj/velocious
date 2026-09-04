@@ -148,12 +148,14 @@ export default class RecordAttachmentsStore {
     /**
      * Moves every attachment row to a record's new primary-key identity.
      * @param {object} args - Options.
+     * @param {import("../../drivers/base.js").default} args.connection - Transaction-owning database connection.
      * @param {import("../index.js").default} args.model - Attachment owner after the key change.
      * @param {import("../../../utils/model-primary-key.js").ModelPrimaryKeyValue} args.nextIdentity - New owner identity.
      * @param {import("../../../utils/model-primary-key.js").ModelPrimaryKeyValue} args.previousIdentity - Persisted owner identity.
      * @returns {Promise<void>} - Resolves after ownership is migrated.
      */
-    migrateRecordIdentity({ model, nextIdentity, previousIdentity }: {
+    migrateRecordIdentity({ connection, model, nextIdentity, previousIdentity }: {
+        connection: import("../../drivers/base.js").default;
         model: import("../index.js").default;
         nextIdentity: import("../../../utils/model-primary-key.js").ModelPrimaryKeyValue;
         previousIdentity: import("../../../utils/model-primary-key.js").ModelPrimaryKeyValue;

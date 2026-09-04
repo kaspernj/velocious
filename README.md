@@ -842,7 +842,7 @@ cache adapters. It distinguishes eager/on-demand fetching,
 durable/evictable retention, and optional/required offline availability.
 Required offline assets must be durable. Backend driver configuration never
 appears in generated frontend models or API manifests.
-Attachment metadata is exposed through the built-in `VelociousAttachment` frontend model with safe fields only: `id`, `recordType`, `recordId`, `name`, `position`, `filename`, `contentType`, `byteSize`, `createdAt`, and `updatedAt`. Storage internals such as `driver`, `storageKey`, and `contentBase64` remain hidden and non-queryable. Metadata collection queries require owner filters: `resourceName`, `recordType`, `recordId`, and `name`. `VelociousAttachment.find(id)` uses the member endpoint and authorizes against configured resource aliases backed by the attachment owner type.
+Attachment metadata is exposed through the built-in `VelociousAttachment` frontend model with safe fields only: `id`, `recordType`, `recordId`, `name`, `position`, `filename`, `contentType`, `byteSize`, `createdAt`, and `updatedAt`. Storage internals such as `driver`, `storageKey`, and `contentBase64` remain hidden and non-queryable. Metadata collection queries require owner filters: `resourceName`, `recordType`, `recordId`, and `name`. Composite `recordId` values retain the complete canonical tuple without a 255-character limit, and key-changing saves rekey attachment ownership in the record transaction. `VelociousAttachment.find(id)` uses the member endpoint and authorizes against configured resource aliases backed by the attachment owner type.
 
 When your frontend app calls a backend on another host/port (or under a path prefix), configure transport once:
 

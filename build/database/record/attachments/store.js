@@ -141,7 +141,7 @@ export default class RecordAttachmentsStore {
 
     table.string("id", {null: false, primaryKey: true})
     table.string("record_type", {null: false, index: true})
-    table.string("record_id", {null: false, index: true})
+    table.text("record_id", {null: false})
     table.string("name", {null: false, index: true})
     table.integer("position", {null: false})
     table.string("filename", {null: false})
@@ -369,8 +369,41 @@ export default class RecordAttachmentsStore {
     const hasDriverColumn = columns.some((column) => column.getName() === "driver")
     const hasStorageKeyColumn = columns.some((column) => column.getName() === "storage_key")
     const contentBase64Column = columns.find((column) => column.getName() === "content_base64")
+    const recordIdColumn = columns.find((column) => column.getName() === "record_id")
     const alterTable = new TableData(ATTACHMENTS_TABLE)
     let shouldAlter = false
+
+    if (!recordIdColumn) throw new Error(`${ATTACHMENTS_TABLE}.record_id is missing`)
+
+    const recordIdMaxLength = recordIdColumn.getMaxLength()
+
+    if (typeof recordIdMaxLength === "number" && recordIdMaxLength > 0) {
+      for (const index of await recordIdColumn.getIndexes()) {
+        if (index.isPrimaryKey()) continue
+
+        const indexName = index.getName()
+
+        if (!indexName) throw new Error(`Expected a name for ${ATTACHMENTS_TABLE}.record_id index`)
+
+        for (const sql of await db.removeIndexSQLs({name: indexName, tableName: ATTACHMENTS_TABLE})) {
+          await db.query(sql)
+        }
+      }
+
+      db.clearSchemaCache()
+      const recordIdAlterTable = new TableData(ATTACHMENTS_TABLE)
+
+      recordIdAlterTable.text("record_id", {
+        isNewColumn: false,
+        null: db.getType() === "pgsql" ? undefined : false
+      })
+
+      for (const sql of await db.alterTableSQLs(recordIdAlterTable)) {
+        await db.query(sql)
+      }
+
+      db.clearSchemaCache()
+    }
 
     if (!hasDriverColumn) {
       alterTable.string("driver", {null: true})
@@ -388,6 +421,8 @@ export default class RecordAttachmentsStore {
       for (const sql of alterTableSQLs) {
         await db.query(sql)
       }
+
+      db.clearSchemaCache()
     }
 
     this._driverColumnsAvailable = true
@@ -509,30 +544,29 @@ export default class RecordAttachmentsStore {
   /**
    * Moves every attachment row to a record's new primary-key identity.
    * @param {object} args - Options.
+   * @param {import("../../drivers/base.js").default} args.connection - Transaction-owning database connection.
    * @param {import("../index.js").default} args.model - Attachment owner after the key change.
    * @param {import("../../../utils/model-primary-key.js").ModelPrimaryKeyValue} args.nextIdentity - New owner identity.
    * @param {import("../../../utils/model-primary-key.js").ModelPrimaryKeyValue} args.previousIdentity - Persisted owner identity.
    * @returns {Promise<void>} - Resolves after ownership is migrated.
    */
-  async migrateRecordIdentity({model, nextIdentity, previousIdentity}) {
+  async migrateRecordIdentity({connection, model, nextIdentity, previousIdentity}) {
     const primaryKey = model.getModelClass().primaryKey()
     const nextRecordId = modelPrimaryKeyCacheKey(primaryKey, nextIdentity)
     const previousRecordId = modelPrimaryKeyCacheKey(primaryKey, previousIdentity)
 
     if (nextRecordId === previousRecordId) return
 
-    await this._withDb(async (db) => {
-      if (!await db.tableExists(ATTACHMENTS_TABLE)) return
+    if (!await connection.tableExists(ATTACHMENTS_TABLE)) return
 
-      await db.update({
-        conditions: {
-          record_id: previousRecordId,
-          record_type: model.getModelClass().getModelName()
-        },
-        data: {record_id: nextRecordId},
-        tableName: ATTACHMENTS_TABLE
-      })
-    }, model)
+    await connection.update({
+      conditions: {
+        record_id: previousRecordId,
+        record_type: model.getModelClass().getModelName()
+      },
+      data: {record_id: nextRecordId},
+      tableName: ATTACHMENTS_TABLE
+    })
   }
 
   /**

@@ -54,7 +54,7 @@ CREATE TABLE `uuid_interactions` (`id` INTEGER PRIMARY KEY NOT NULL, `subject_id
 
 CREATE TABLE `uuid_items` (`id` UUID PRIMARY KEY NOT NULL, `title` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME);
 
-CREATE TABLE `velocious_attachments` (`id` VARCHAR(255) PRIMARY KEY NOT NULL, `record_type` VARCHAR(255) NOT NULL, `record_id` VARCHAR(255) NOT NULL, `name` VARCHAR(255) NOT NULL, `position` INTEGER NOT NULL, `filename` VARCHAR(255) NOT NULL, `content_type` VARCHAR(255), `byte_size` BIGINT NOT NULL, `driver` VARCHAR(255), `storage_key` VARCHAR(255), `content_base64` TEXT, `created_at_ms` BIGINT NOT NULL, `updated_at_ms` BIGINT NOT NULL);
+CREATE TABLE "velocious_attachments" (`id` VARCHAR(255) PRIMARY KEY NOT NULL, `record_type` VARCHAR(255) NOT NULL, `record_id` TEXT NOT NULL, `name` VARCHAR(255) NOT NULL, `position` INTEGER NOT NULL, `filename` VARCHAR(255) NOT NULL, `content_type` VARCHAR(255), `byte_size` BIGINT NOT NULL, `driver` VARCHAR(255), `storage_key` VARCHAR(255), `content_base64` TEXT, `created_at_ms` BIGINT NOT NULL, `updated_at_ms` BIGINT NOT NULL);
 
 CREATE TABLE `velocious_internal_migrations` (`key` VARCHAR(255) PRIMARY KEY NOT NULL, `scope` VARCHAR(255) NOT NULL, `version` VARCHAR(255) NOT NULL, `applied_at_ms` BIGINT NOT NULL);
 
@@ -141,8 +141,6 @@ CREATE UNIQUE INDEX `index_on_uuid_acts_as_list_items_scope_id_and_position` ON 
 CREATE INDEX `index_on_uuid_interactions_subject_id` ON `uuid_interactions` (`subject_id`);
 
 CREATE INDEX `index_on_velocious_attachments_name` ON `velocious_attachments` (`name`);
-
-CREATE INDEX `index_on_velocious_attachments_record_id` ON `velocious_attachments` (`record_id`);
 
 CREATE INDEX `index_on_velocious_attachments_record_type` ON `velocious_attachments` (`record_type`);
 

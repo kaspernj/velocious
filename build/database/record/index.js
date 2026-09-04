@@ -4706,6 +4706,7 @@ class VelociousDatabaseRecord {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async _updateRecordWithChanges() {
+    const connection = this._connection()
     const primaryKey = this.getModelClass().primaryKey()
     const persistedPrimaryKeyValue = this._persistedPrimaryKeyValue()
     const nextPrimaryKeyValue = this.id()
@@ -4726,18 +4727,19 @@ class VelociousDatabaseRecord {
 
     if (Object.keys(changes).length > 0) {
       this._normalizeDateValuesForWrite(changes)
-      const sql = this._connection().updateSql({
+      const sql = connection.updateSql({
         tableName: this._tableName(),
         data: changes,
         conditions
       })
-      await this._connection().query(sql, {logName: `${this.getModelClass().name} Update`})
+      await connection.query(sql, {logName: `${this.getModelClass().name} Update`})
 
       if (
         Object.keys(this.getModelClass().getAttachments()).length > 0
         && modelPrimaryKeyCacheKey(primaryKey, persistedPrimaryKeyValue) !== modelPrimaryKeyCacheKey(primaryKey, nextPrimaryKeyValue)
       ) {
         await recordAttachmentsStoreForModel(this).migrateRecordIdentity({
+          connection,
           model: this,
           nextIdentity: nextPrimaryKeyValue,
           previousIdentity: persistedPrimaryKeyValue
