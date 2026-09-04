@@ -2,53 +2,16 @@
 
 import {wait, waitFor} from "awaitery"
 import {describe, expect, it} from "../../src/testing/test.js"
-import Configuration from "../../src/configuration.js"
 import FrontendModelBase, {AttributeNotSelectedError, VelociousAttachment} from "../../src/frontend-models/base.js"
 import FrontendModelPreloader from "../../src/frontend-models/preloader.js"
 import WebsocketClient from "../../src/http-client/websocket-client.js"
-import {modelPrimaryKeyCacheKey} from "../../src/utils/model-primary-key.js"
 import Dummy from "../dummy/index.js"
-import backendProjects from "../dummy/src/config/backend-projects.js"
 import CommentRecord from "../dummy/src/models/comment.js"
 import ProjectRecord from "../dummy/src/models/project.js"
+import {configureNodeTransport, configureNodeTransportWithTimeZone, configureWebsocketSharedTransport, resetFrontendModelTransport} from "../helpers/frontend-model-http-transport.js"
 import runWithProcessTimezone from "../helpers/process-timezone.js"
 import TaskRecord from "../dummy/src/models/task.js"
 import UserRecord from "../dummy/src/models/user.js"
-
-/** Frontend model with a composite resource identity backed by dummy tasks. */
-class CompositeTask extends FrontendModelBase {
-  /** @returns {import("../../src/frontend-models/base.js").FrontendModelResourceConfig} - Resource config. */
-  static resourceConfig() {
-    return {
-      attributes: ["name", "projectId", "description"],
-      attachments: {descriptionFile: {type: "hasOne"}},
-      builtInCollectionCommands: ["create", "index"],
-      builtInMemberCommands: ["find", "update", "destroy"],
-      modelName: "CompositeTask",
-      primaryKey: ["name", "projectId"]
-    }
-  }
-
-  /** @returns {string} - Task name. */
-  name() { return this.readAttribute("name") }
-
-  /** @param {string} value - Task name. @returns {void} */
-  setName(value) { this.setAttribute("name", value) }
-
-  /** @returns {number} - Project id. */
-  projectId() { return this.readAttribute("projectId") }
-
-  /** @param {number} value - Project id. @returns {void} */
-  setProjectId(value) { this.setAttribute("projectId", value) }
-
-  /** @returns {string | null} - Task description. */
-  description() { return this.readAttribute("description") }
-
-  /** @param {string} value - Task description. @returns {void} */
-  setDescription(value) { this.setAttribute("description", value) }
-}
-
-FrontendModelBase.registerModel(CompositeTask)
 
 /** Frontend model used for Node HTTP integration tests against dummy backend routes. */
 class User extends FrontendModelBase {
@@ -321,41 +284,6 @@ class Project extends FrontendModelBase {
 
 FrontendModelBase.registerModel(Project)
 
-/** @returns {void} */
-function resetFrontendModelTransport() {
-  FrontendModelBase.configureTransport({
-    timeZone: undefined,
-    url: undefined,
-    websocketClient: undefined
-  })
-}
-
-/** @returns {void} */
-function configureNodeTransport() {
-  FrontendModelBase.configureTransport({
-    url: "http://127.0.0.1:3006"
-  })
-}
-
-/** @returns {void} */
-function configureNodeTransportWithTimeZone() {
-  FrontendModelBase.configureTransport({
-    timeZone: () => "Europe/Berlin",
-    url: "http://127.0.0.1:3006"
-  })
-}
-
-/**
- * @param {WebsocketClient} websocketClient - Websocket client.
- * @returns {void}
- */
-function configureWebsocketSharedTransport(websocketClient) {
-  FrontendModelBase.configureTransport({
-    shared: true,
-    websocketClient
-  })
-}
-
 /**
  * @returns {Promise<{jane: UserRecord, john: UserRecord}>}
  */
@@ -419,101 +347,6 @@ async function seedHttpAttachmentModels() {
 }
 
 describe("Frontend models - base http integration", {databaseCleaning: {transaction: false, truncate: true}}, () => {
-  it("creates, finds, updates, rekeys, and destroys a composite-identity model", async () => {
-    await Dummy.run(async () => {
-      const originalProject = await ProjectRecord.create({name: "Composite frontend original project"})
-      const replacementProject = await ProjectRecord.create({name: "Composite frontend replacement project"})
-
-      configureNodeTransport()
-
-      try {
-        const task = await CompositeTask.create({
-          description: "Before",
-          name: "Composite frontend task",
-          projectId: originalProject.id()
-        })
-        await CompositeTask.create({
-          description: "Second",
-          name: "Composite frontend task two",
-          projectId: originalProject.id()
-        })
-
-        expect(task.primaryKeyValue()).toEqual({name: "Composite frontend task", projectId: originalProject.id()})
-
-        const listedTasks = await CompositeTask
-          .where({projectId: originalProject.id()})
-          .sort(["name"])
-          .toArray()
-
-        expect(listedTasks.map((listedTask) => listedTask.name())).toEqual([
-          "Composite frontend task",
-          "Composite frontend task two"
-        ])
-
-        const foundTask = await CompositeTask.find(task.primaryKeyValue())
-
-        expect(foundTask.description()).toEqual("Before")
-        foundTask.setDescription("After")
-        await foundTask.save()
-        expect(foundTask.description()).toEqual("After")
-
-        foundTask.setName("Composite frontend renamed")
-        foundTask.setProjectId(replacementProject.id())
-        await foundTask.save()
-
-        expect(foundTask.primaryKeyValue()).toEqual({name: "Composite frontend renamed", projectId: replacementProject.id()})
-        expect((await CompositeTask.find(foundTask.primaryKeyValue())).description()).toEqual("After")
-
-        await foundTask.destroy()
-        await expect(async () => await CompositeTask.find(foundTask.primaryKeyValue())).toThrow(/not found/u)
-      } finally {
-        resetFrontendModelTransport()
-      }
-    })
-  })
-
-  it("rejects malformed composite frontend identities before transport", async () => {
-    const invalidIdentities = [
-      "Composite frontend task",
-      ["Composite frontend task", 1],
-      null,
-      {name: "Composite frontend task"},
-      {name: "Composite frontend task", projectId: 1, extra: true},
-      {name: null, projectId: 1},
-      {name: "Composite frontend task", projectId: undefined}
-    ]
-
-    for (const identity of invalidIdentities) {
-      await expect(async () => await CompositeTask.find(identity)).toThrow(/composite primary key identity/u)
-    }
-  })
-
-  it("loads composite-resource attachment metadata through the backing record identity", async () => {
-    await Dummy.run(async () => {
-      const project = await ProjectRecord.create({name: "Composite attachment project"})
-      const task = await TaskRecord.create({name: "Composite attachment task", project})
-
-      await task.getAttachmentByName("descriptionFile").attach({
-        contentBase64: Buffer.from("composite attachment").toString("base64"),
-        contentType: "text/plain",
-        filename: "composite.txt"
-      })
-      configureNodeTransport()
-
-      try {
-        const loadedTask = await CompositeTask.find({name: task.name(), projectId: project.id()})
-        const attachment = await loadedTask.getAttachmentByName("descriptionFile").first()
-
-        if (!attachment) throw new Error("Expected composite attachment metadata")
-        expect(attachment.filename()).toEqual("composite.txt")
-        expect(attachment.recordType()).toEqual("Task")
-        expect(attachment.recordId()).toEqual(modelPrimaryKeyCacheKey(TaskRecord.primaryKey(), task.id()))
-      } finally {
-        resetFrontendModelTransport()
-      }
-    })
-  })
-
   it("loads frontend models through real websocket batch requests", async () => {
     await Dummy.run(async () => {
       const websocketClient = new WebsocketClient()
@@ -751,156 +584,6 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
         offCreate()
         offUpdate()
         offDestroy()
-        resetFrontendModelTransport()
-        await websocketClient.close()
-      }
-    })
-  })
-
-  it("publishes lifecycle events for every frontend resource backed by the same model", async () => {
-    await Dummy.run(async () => {
-      const websocketClient = new WebsocketClient()
-      const project = await ProjectRecord.create({name: "Shared lifecycle project"})
-
-      configureWebsocketSharedTransport(websocketClient)
-
-      /** @type {Array<string | import("../../src/utils/model-primary-key.js").CompositeModelPrimaryKeyValue>} */
-      const taskIds = []
-      /** @type {Array<string | import("../../src/utils/model-primary-key.js").CompositeModelPrimaryKeyValue>} */
-      const compositeTaskIds = []
-      const offTaskCreate = await Task.onCreate((event) => { taskIds.push(event.id) })
-      const offCompositeTaskCreate = await CompositeTask.onCreate((event) => { compositeTaskIds.push(event.id) })
-
-      try {
-        const task = await TaskRecord.create({name: "Shared lifecycle task", project})
-
-        await waitFor(() => {
-          if (taskIds.length < 1 || compositeTaskIds.length < 1) {
-            throw new Error(`Expected both resource events but got Task=${taskIds.length}, CompositeTask=${compositeTaskIds.length}`)
-          }
-        })
-
-        expect(taskIds).toEqual([String(task.id())])
-        expect(compositeTaskIds).toEqual([{name: task.name(), projectId: project.id()}])
-      } finally {
-        offTaskCreate()
-        offCompositeTaskCreate()
-        resetFrontendModelTransport()
-        await websocketClient.close()
-      }
-    })
-  })
-
-  it("serializes unprojected lifecycle records through the subscribed resource", async () => {
-    await Dummy.run(async () => {
-      const websocketClient = new WebsocketClient()
-      const project = await ProjectRecord.create({name: "Serialized lifecycle project"})
-      const task = await TaskRecord.create({name: "Serialized lifecycle task", project})
-
-      configureWebsocketSharedTransport(websocketClient)
-
-      /** @type {CompositeTask | undefined} */
-      let lifecycleTask
-      const offUpdate = await CompositeTask.onUpdate((event) => {
-        lifecycleTask = /** @type {CompositeTask} */ (event.model)
-      })
-
-      try {
-        task.setDescription("Serialized lifecycle description")
-        await task.save()
-
-        await waitFor(() => {
-          if (!lifecycleTask) throw new Error("Expected serialized composite lifecycle update")
-        })
-        if (!lifecycleTask) throw new Error("Expected serialized composite lifecycle task")
-
-        expect(Object.keys(lifecycleTask.attributes()).sort()).toEqual(["description", "name", "projectId"])
-      } finally {
-        offUpdate()
-        resetFrontendModelTransport()
-        await websocketClient.close()
-      }
-    })
-  })
-
-  it("keeps canonical attachment ownership on unprojected lifecycle records", async () => {
-    await Dummy.run(async () => {
-      const websocketClient = new WebsocketClient()
-      const project = await ProjectRecord.create({name: "Lifecycle attachment project"})
-      const task = await TaskRecord.create({name: "Lifecycle attachment task", project})
-
-      await task.getAttachmentByName("descriptionFile").attach({
-        contentBase64: Buffer.from("lifecycle attachment").toString("base64"),
-        contentType: "text/plain",
-        filename: "lifecycle.txt"
-      })
-      configureWebsocketSharedTransport(websocketClient)
-
-      /** @type {CompositeTask | undefined} */
-      let lifecycleTask
-      const offUpdate = await CompositeTask.onUpdate((event) => {
-        lifecycleTask = /** @type {CompositeTask} */ (event.model)
-      })
-
-      try {
-        task.setDescription("Lifecycle attachment updated")
-        await task.save()
-
-        await waitFor(() => {
-          if (!lifecycleTask) throw new Error("Expected composite lifecycle update")
-        })
-        if (!lifecycleTask) throw new Error("Expected composite lifecycle task")
-
-        const attachment = await lifecycleTask.getAttachmentByName("descriptionFile").first()
-
-        if (!attachment) throw new Error("Expected lifecycle attachment metadata")
-        expect(attachment.filename()).toEqual("lifecycle.txt")
-        expect(attachment.recordType()).toEqual("Task")
-        expect(attachment.recordId()).toEqual(modelPrimaryKeyCacheKey(TaskRecord.primaryKey(), task.id()))
-      } finally {
-        offUpdate()
-        resetFrontendModelTransport()
-        await websocketClient.close()
-      }
-    })
-  })
-
-  it("routes remote composite rekeys through the previous instance identity", async () => {
-    await Dummy.run(async () => {
-      const websocketClient = new WebsocketClient()
-      const project = await ProjectRecord.create({name: "Remote rekey project"})
-      const task = await TaskRecord.create({name: "Remote rekey task", project})
-
-      configureNodeTransport()
-      const loadedTask = await CompositeTask.find({name: task.name(), projectId: project.id()})
-      configureWebsocketSharedTransport(websocketClient)
-
-      /** @type {Array<import("../../src/utils/model-primary-key.js").CompositeModelPrimaryKeyValue>} */
-      const updateIds = []
-      const offUpdate = await loadedTask.onUpdate((event) => {
-        updateIds.push(/** @type {import("../../src/utils/model-primary-key.js").CompositeModelPrimaryKeyValue} */ (event.id))
-      })
-
-      try {
-        task.setName("Remote rekey renamed")
-        await task.save()
-
-        await waitFor(() => {
-          if (updateIds.length < 1) throw new Error("Expected remote rekey update")
-        })
-        expect(updateIds[0]).toEqual({name: "Remote rekey renamed", projectId: project.id()})
-        expect(loadedTask.name()).toEqual("Remote rekey renamed")
-
-        task.setDescription("Remote rekey follow-up")
-        await task.save()
-
-        await waitFor(() => {
-          if (updateIds.length < 2) throw new Error("Expected update after remote rekey")
-        })
-        expect(updateIds[1]).toEqual({name: "Remote rekey renamed", projectId: project.id()})
-        expect(loadedTask.description()).toEqual("Remote rekey follow-up")
-      } finally {
-        offUpdate()
         resetFrontendModelTransport()
         await websocketClient.close()
       }
@@ -1523,34 +1206,6 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
         expect(descriptionAttachmentFromHandle.filename()).toEqual("description.txt")
         expect(fileAttachmentsFromHandle.map((attachment) => attachment.filename())).toEqual(["first.txt", "second.txt"])
       } finally {
-        resetFrontendModelTransport()
-      }
-    })
-  })
-
-  it("authorizes attachment metadata through an alias-only frontend resource", async () => {
-    await Dummy.run(async () => {
-      const configuration = Configuration.current()
-      const configuredBackendProjects = configuration.getBackendProjects()
-      const originalBackendProjects = configuredBackendProjects.slice()
-      const {project, task} = await seedHttpAttachmentModels()
-      const compositeTaskResource = backendProjects[0].frontendModels.CompositeTask
-
-      configuredBackendProjects.splice(0, configuredBackendProjects.length, {
-        frontendModels: {CompositeTask: compositeTaskResource},
-        path: backendProjects[0].path
-      })
-      configureNodeTransport()
-
-      try {
-        const loadedTask = await CompositeTask.find({name: task.name(), projectId: project.id()})
-        const attachment = await loadedTask.getAttachmentByName("descriptionFile").first()
-
-        if (!attachment) throw new Error("Expected alias attachment metadata")
-        expect(attachment.filename()).toEqual("description.txt")
-        expect((await VelociousAttachment.find(attachment.id())).filename()).toEqual("description.txt")
-      } finally {
-        configuredBackendProjects.splice(0, configuredBackendProjects.length, ...originalBackendProjects)
         resetFrontendModelTransport()
       }
     })

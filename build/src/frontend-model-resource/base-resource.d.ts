@@ -975,7 +975,7 @@ export default class FrontendModelBaseResource<TModelClass extends FrontendModel
      * @param {FrontendModelResourcePayloadValue} args.rawEntries - Raw nested entries from the request payload.
      * @param {{attributes: string[], nested: Record<string, ReturnType<typeof JSON.parse>>}} args.childPermit - Parsed child permit.
      * @param {FrontendModelResourceController | null | undefined} args.controller - Controller instance for child resource lookup.
-     * @returns {{ability: import("../authorization/ability.js").default | undefined, childResource: FrontendModelBaseResource, childResourceConfig: FrontendModelResolvedResourceConfiguration, childWritableAttributes: string[], destroyPermitted: boolean, entries: Array<FrontendModelResourceNestedEntry>, relationship: import("../database/record/relationships/base.js").default, targetModelClass: typeof import("../database/record/index.js").default}} Nested relationship context.
+     * @returns {{ability: import("../authorization/ability.js").default | undefined, childPrimaryKey: import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition, childResource: FrontendModelBaseResource, childResourceConfig: FrontendModelResolvedResourceConfiguration, childWritableAttributes: string[], destroyPermitted: boolean, entries: Array<FrontendModelResourceNestedEntry>, relationship: import("../database/record/relationships/base.js").default, targetModelClass: typeof import("../database/record/index.js").default}} Nested relationship context.
      */
     _nestedRelationshipContext({ parent, relationshipName, rawEntries, childPermit, controller }: {
         parent: import("../database/record/index.js").default;
@@ -988,6 +988,7 @@ export default class FrontendModelBaseResource<TModelClass extends FrontendModel
         controller: FrontendModelResourceController | null | undefined;
     }): {
         ability: import("../authorization/ability.js").default | undefined;
+        childPrimaryKey: import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition;
         childResource: FrontendModelBaseResource;
         childResourceConfig: FrontendModelResolvedResourceConfiguration;
         childWritableAttributes: string[];
@@ -1015,18 +1016,18 @@ export default class FrontendModelBaseResource<TModelClass extends FrontendModel
      * fields (`{name, file, commentsAttributes}`).
      * @param {object} args - Normalization inputs.
      * @param {{attributes: string[], nested: Record<string, ReturnType<typeof JSON.parse>>}} args.childPermit - Parsed child permit spec.
-     * @param {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration} args.childResourceConfiguration - Child resource configuration.
+     * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition} args.childPrimaryKey - Resolved child resource primary key.
      * @param {FrontendModelResourceNestedEntry} args.entry - Raw nested entry.
      * @param {string} args.relationshipName - Relationship name for error messages.
      * @param {typeof import("../database/record/index.js").default} args.targetModelClass - Child model class.
      * @returns {FrontendModelResourceNestedEntry} Normalized nested entry.
      */
-    _normalizeNestedRelationshipEntry({ childPermit, childResourceConfiguration, entry, relationshipName, targetModelClass }: {
+    _normalizeNestedRelationshipEntry({ childPermit, childPrimaryKey, entry, relationshipName, targetModelClass }: {
         childPermit: {
             attributes: string[];
             nested: Record<string, ReturnType<typeof JSON.parse>>;
         };
-        childResourceConfiguration: import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration;
+        childPrimaryKey: import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition;
         entry: FrontendModelResourceNestedEntry;
         relationshipName: string;
         targetModelClass: typeof import("../database/record/index.js").default;
@@ -1110,15 +1111,17 @@ export default class FrontendModelBaseResource<TModelClass extends FrontendModel
      * @param {object} args - Lookup inputs.
      * @param {import("../authorization/ability.js").default | undefined} args.ability - Current ability.
      * @param {"update" | "destroy"} args.action - Frontend action.
+     * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition} args.childPrimaryKey - Resolved child resource primary key.
      * @param {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration} args.childResourceConfiguration - Child resource configuration.
      * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} args.id - Child id from the payload.
      * @param {string} args.relationshipName - Parent's relationship name for error messages.
      * @param {typeof import("../database/record/index.js").default} args.targetModelClass - Child model class.
      * @returns {Promise<import("../database/record/index.js").default>} Authorized child model.
      */
-    _findNestedRecord({ ability, action, childResourceConfiguration, id, relationshipName, targetModelClass }: {
+    _findNestedRecord({ ability, action, childPrimaryKey, childResourceConfiguration, id, relationshipName, targetModelClass }: {
         ability: import("../authorization/ability.js").default | undefined;
         action: "update" | "destroy";
+        childPrimaryKey: import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition;
         childResourceConfiguration: import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration;
         id: import("../utils/model-primary-key.js").ModelPrimaryKeyValue;
         relationshipName: string;
@@ -1143,6 +1146,7 @@ export default class FrontendModelBaseResource<TModelClass extends FrontendModel
      * @param {object} args - Arguments.
      * @param {import("../authorization/ability.js").default | undefined} args.ability - Current ability.
      * @param {"update" | "destroy"} args.action - Frontend action.
+     * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition} args.childPrimaryKey - Resolved child resource primary key.
      * @param {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration} args.childResourceConfiguration - Child resource configuration.
      * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} args.id - Child id from the payload.
      * @param {import("../database/record/index.js").default} args.parent - Parent model instance.
@@ -1151,9 +1155,10 @@ export default class FrontendModelBaseResource<TModelClass extends FrontendModel
      * @param {typeof import("../database/record/index.js").default} args.targetModelClass - Child model class.
      * @returns {Promise<import("../database/record/index.js").default>} - Authorized, parent-linked child model.
      */
-    _findScopedChild({ ability, action, childResourceConfiguration, id, parent, parentLinkAttributes, relationshipName, targetModelClass }: {
+    _findScopedChild({ ability, action, childPrimaryKey, childResourceConfiguration, id, parent, parentLinkAttributes, relationshipName, targetModelClass }: {
         ability: import("../authorization/ability.js").default | undefined;
         action: "update" | "destroy";
+        childPrimaryKey: import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition;
         childResourceConfiguration: import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration;
         id: import("../utils/model-primary-key.js").ModelPrimaryKeyValue;
         parent: import("../database/record/index.js").default;
@@ -1168,14 +1173,16 @@ export default class FrontendModelBaseResource<TModelClass extends FrontendModel
      * @param {object} args - Arguments.
      * @param {import("../authorization/ability.js").default | undefined} args.ability - Current ability.
      * @param {import("../database/record/index.js").default} args.child - Child model instance just created.
+     * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition} args.childPrimaryKey - Resolved child resource primary key.
      * @param {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration} args.childResourceConfiguration - Child resource configuration.
      * @param {string} args.relationshipName - Parent's relationship name (for error messages).
      * @param {typeof import("../database/record/index.js").default} args.targetModelClass - Child model class.
      * @returns {Promise<void>}
      */
-    _authorizeCreatedChild({ ability, child, childResourceConfiguration, relationshipName, targetModelClass }: {
+    _authorizeCreatedChild({ ability, child, childPrimaryKey, childResourceConfiguration, relationshipName, targetModelClass }: {
         ability: import("../authorization/ability.js").default | undefined;
         child: import("../database/record/index.js").default;
+        childPrimaryKey: import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition;
         childResourceConfiguration: import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration;
         relationshipName: string;
         targetModelClass: typeof import("../database/record/index.js").default;

@@ -163,11 +163,17 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
       /** @type {FrontendModelWebsocketRecord} */ (model).__frontendModelWebsocketAction = "create"
     })
 
-    modelClass.beforeUpdate((model) => {
+    modelClass.beforeUpdate(async (model) => {
       const websocketModel = /** @type {FrontendModelWebsocketRecord} */ (model)
 
       websocketModel.__frontendModelWebsocketAction = "update"
-      websocketModel.__frontendModelWebsocketPreviousIds = frontendModelPreviousResourceIdentities(model)
+      websocketModel.__frontendModelWebsocketPreviousIds = await frontendModelPreviousResourceIdentities(model)
+    })
+
+    modelClass.beforeDestroy(async (model) => {
+      const websocketModel = /** @type {FrontendModelWebsocketRecord} */ (model)
+
+      websocketModel.__frontendModelWebsocketPreviousIds = await frontendModelPreviousResourceIdentities(model)
     })
 
     modelClass.afterSave((model) => {
@@ -185,9 +191,13 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
     })
 
     modelClass.afterDestroy((model) => {
+      const websocketModel = /** @type {FrontendModelWebsocketRecord} */ (model)
+      const previousIds = websocketModel.__frontendModelWebsocketPreviousIds
+
       void model.connection().afterCommit(async () => {
-        broadcastFrontendModelEvents(model, "destroy")
+        broadcastFrontendModelEvents(model, "destroy", previousIds)
       })
+      delete websocketModel.__frontendModelWebsocketPreviousIds
     })
   }
 }
@@ -195,9 +205,9 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
 /**
  * Returns every resource identity represented by the record before its pending update.
  * @param {import("../database/record/index.js").default} model - Backing model before update.
- * @returns {Map<string, import("../utils/model-primary-key.js").ModelPrimaryKeyValue>} - Previous identities by resource name.
+ * @returns {Promise<Map<string, import("../utils/model-primary-key.js").ModelPrimaryKeyValue>>} - Previous identities by resource name.
  */
-function frontendModelPreviousResourceIdentities(model) {
+async function frontendModelPreviousResourceIdentities(model) {
   const publisherResources = publisherResourcesByConfiguration.get(model._getConfiguration())?.get(model.getModelClass())
   /** @type {Map<string, import("../utils/model-primary-key.js").ModelPrimaryKeyValue>} */
   const previousIds = new Map()
@@ -208,6 +218,20 @@ function frontendModelPreviousResourceIdentities(model) {
     const previousId = frontendModelResourceIdentity({model, previous: true, primaryKey})
 
     if (previousId !== null) previousIds.set(modelName, previousId)
+  }
+
+  if (previousIds.size === publisherResources.size) return previousIds
+
+  const persistedModel = await model
+    .queryForModel(model.getModelClass())
+    .find(model._persistedPrimaryKeyValue())
+
+  for (const [modelName, {primaryKey}] of publisherResources) {
+    if (previousIds.has(modelName)) continue
+
+    const persistedId = frontendModelResourceIdentity({model: persistedModel, primaryKey})
+
+    if (persistedId !== null) previousIds.set(modelName, persistedId)
   }
 
   return previousIds
@@ -262,12 +286,15 @@ function broadcastFrontendModelEvents(model, action, previousIds) {
   if (!publisherResources) return
 
   for (const [modelName, {primaryKey}] of publisherResources) {
-    const id = frontendModelResourceIdentity({model, primaryKey})
-
-    if (id === null) continue
-
     const previousId = previousIds?.get(modelName)
-    const identityChanged = previousId !== undefined
+    const currentId = frontendModelResourceIdentity({model, primaryKey})
+    const id = currentId ?? previousId
+
+    if (id === null || id === undefined) continue
+
+    const identityChanged = action === "update"
+      && currentId !== null
+      && previousId !== undefined
       && modelPrimaryKeyCacheKey(primaryKey, previousId) !== modelPrimaryKeyCacheKey(primaryKey, id)
 
     broadcastFrontendModelEvent(configuration, modelName, {
