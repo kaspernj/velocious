@@ -222,7 +222,7 @@ describe("Beacon configuration integration", {databaseCleaning: {transaction: fa
     expect(receivingSubscription.received).toEqual([{hello: "after throw"}])
   })
 
-  it("does not settle the pending broadcast barrier until snapshotted local subscriber deliveries settle, while leaving later work unawaited", async () => {
+  it("serializes each local subscriber's deliveries without making other subscribers wait", async () => {
     const configuration = buildConfiguration()
     /** @type {Array<{body: Record<string, any>, release: (error?: Error) => void}>} */
     const gatedDeliveries = []
@@ -277,15 +277,19 @@ describe("Beacon configuration integration", {databaseCleaning: {transaction: fa
 
     for (let i = 0; i < 10; i++) await Promise.resolve()
 
-    // The second broadcast also reaches the slow in-flight subscriber again, so
-    // three deliveries gate: the snapshot's slow one and two enqueued after it.
-    expect(gatedDeliveries.length).toBe(3)
+    // The slow subscriber's second delivery stays queued behind its first,
+    // while the other slow and fast subscribers receive the second broadcast.
+    expect(gatedDeliveries.length).toBe(2)
+    expect(fastSubscription.received).toEqual([{first: true}, {after: true}])
     expect(slowAfterSnapshot.received.length).toBe(0)
 
     gatedDeliveries[0].release()
 
     await barrier
     expect(barrierSettled).toBe(true)
+    expect(gatedDeliveries.length).toBe(3)
+    expect(gatedDeliveries[1].body).toEqual({after: true})
+    expect(gatedDeliveries[2].body).toEqual({after: true})
     expect(slowAfterSnapshot.received.length).toBe(0)
 
     let secondBarrierSettled = false

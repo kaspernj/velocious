@@ -404,6 +404,13 @@ export default class VelociousConfiguration {
     this._localBroadcastDeliveries = new Set()
 
     /**
+     * Latest local broadcast delivery per subscription. Chaining subsequent
+     * deliveries preserves lifecycle event order without coupling separate
+     * subscribers to one another.
+     * @type {WeakMap<import("./http-server/websocket-channel.js").default, Promise<void>>} */
+    this._localBroadcastDeliveryTails = new WeakMap()
+
+    /**
      * Stores the websocket sessions value.
      * @type {Set<import("./http-server/client/websocket-session.js").default>} - Live websocket sessions, including paused sessions within the grace window.
      */
@@ -3277,14 +3284,16 @@ export default class VelociousConfiguration {
         broadcastParams,
         ...(meta?.eventId ? {eventId: meta.eventId} : {})
       }
+      const previousDelivery = this._localBroadcastDeliveryTails.get(subscription)
       const delivery = this.withoutCurrentConnectionContexts(() => {
-        return Promise
-          .resolve()
+        return (previousDelivery || Promise.resolve())
           .then(() => this._deliverWebsocketChannelBroadcast(subscription, body, deliveryMetadata))
           .catch((error) => {
             console.error(`broadcastToChannel: ${name} subscription ${subscription.subscriptionId} deliverBroadcast threw`, error)
           })
       })
+
+      this._localBroadcastDeliveryTails.set(subscription, delivery)
 
       // Keep the fire-and-forget delivery (never awaited at broadcast time) but
       // track it so `awaitPendingBroadcasts` can drain it before settling. Remove
@@ -3292,10 +3301,16 @@ export default class VelociousConfiguration {
       // delivery never becomes an unhandled rejection.
       this._localBroadcastDeliveries.add(delivery)
 
-      delivery.then(
-        () => { this._localBroadcastDeliveries.delete(delivery) },
-        () => { this._localBroadcastDeliveries.delete(delivery) }
-      )
+      /**
+       * Removes a settled delivery from local tracking.
+       * @returns {void}
+       */
+      const forgetDelivery = () => {
+        this._localBroadcastDeliveries.delete(delivery)
+        if (this._localBroadcastDeliveryTails.get(subscription) === delivery) this._localBroadcastDeliveryTails.delete(subscription)
+      }
+
+      delivery.then(forgetDelivery, forgetDelivery)
     }
   }
 

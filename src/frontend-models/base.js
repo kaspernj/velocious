@@ -4456,7 +4456,17 @@ export default class FrontendModelBase {
   async save() {
     const ModelClass = frontendModelClassFor(this)
     const isNew = this.isNewRecord()
+    const primaryKey = ModelClass.primaryKey()
     const previousIdentity = isNew ? null : this.persistedPrimaryKeyValue()
+    const listenerIdentityBeforeSave = isNew
+      && Array.isArray(primaryKey)
+      && primaryKey.every((attributeName) => {
+        const value = this._attributes[attributeName]
+
+        return typeof value === "string" || typeof value === "number"
+      })
+      ? this.primaryKeyValue()
+      : previousIdentity
     const commandType = isNew ? "create" : "update"
     /**
      * Payload.
@@ -4540,8 +4550,8 @@ export default class FrontendModelBase {
     this._attachmentOwner = modelData.attachmentOwner
     this.setIsNewRecord(false)
 
-    if (previousIdentity !== null) {
-      rekeyFrontendModelInstanceListeners(ModelClass, this, previousIdentity, this.primaryKeyValue())
+    if (listenerIdentityBeforeSave !== null) {
+      rekeyFrontendModelInstanceListeners(ModelClass, this, listenerIdentityBeforeSave, this.primaryKeyValue())
     }
 
     this._persistedAttributes = cloneFrontendModelAttributes(this.attributes())

@@ -199,6 +199,12 @@ export default class VelociousConfiguration {
      * @type {Set<Promise<void>>} */
     _localBroadcastDeliveries: Set<Promise<void>>;
     /**
+     * Latest local broadcast delivery per subscription. Chaining subsequent
+     * deliveries preserves lifecycle event order without coupling separate
+     * subscribers to one another.
+     * @type {WeakMap<import("./http-server/websocket-channel.js").default, Promise<void>>} */
+    _localBroadcastDeliveryTails: WeakMap<import("./http-server/websocket-channel.js").default, Promise<void>>;
+    /**
      * Stores the websocket sessions value.
      * @type {Set<import("./http-server/client/websocket-session.js").default>} - Live websocket sessions, including paused sessions within the grace window.
      */
