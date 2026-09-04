@@ -295,8 +295,15 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
         ? Buffer.from(serializedValue.value)
         : deserializeFrontendModelTransportValue(serializedValue)
       const quotedValue = value === null ? "NULL" : query.driver.quote(value)
+      const column = ModelClass.getColumnsHash()[columnName]
 
-      return `${quotedValue} AS ${query.driver.quoteColumn(columnName)}`
+      if (!column) throw new Error(`Cannot authorize a destroyed ${ModelClass.name} with unknown column ${columnName}`)
+
+      const selectedValue = query.driver.getType() == "pgsql"
+        ? `CAST(${quotedValue} AS ${column.getType()})`
+        : quotedValue
+
+      return `${selectedValue} AS ${query.driver.quoteColumn(columnName)}`
     })
 
     if (selectedColumns.length === 0) {

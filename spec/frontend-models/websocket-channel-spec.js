@@ -213,6 +213,7 @@ describe("FrontendModelWebsocketChannel", {databaseCleaning: {transaction: true}
     let appliedWhere
     const query = {
       driver: {
+        getType: () => "pgsql",
         quote: (/** @type {unknown} */ value) => `'${value}'`,
         quoteColumn: (/** @type {string} */ columnName) => `"${columnName}"`,
         quoteTable: (/** @type {string} */ tableName) => `"${tableName}"`
@@ -238,6 +239,14 @@ describe("FrontendModelWebsocketChannel", {databaseCleaning: {transaction: true}
         return attributeName === "externalId" ? "external_id" : "tenant_id"
       }
 
+      /** @returns {Record<string, {getType: () => string}>} - Backing columns by name. */
+      static getColumnsHash() {
+        return {
+          external_id: {getType: () => "uuid"},
+          tenant_id: {getType: () => "bigint"}
+        }
+      }
+
       /** @returns {string} - Backing table name. */
       static tableName() { return "records" }
     }
@@ -259,14 +268,14 @@ describe("FrontendModelWebsocketChannel", {databaseCleaning: {transaction: true}
 
     const authorized = await channel._destroyEventIsAuthorized({
       action: "destroy",
-      destroyAuthorizationRecord: {external_id: "record-1", tenant_id: "tenant-a"},
-      id: {externalId: "record-1", tenantId: "tenant-a"}
+      destroyAuthorizationRecord: {external_id: "7f0a1b2c-3d4e-4f5a-8b6c-9d0e1f2a3b4c", tenant_id: 42},
+      id: {externalId: "7f0a1b2c-3d4e-4f5a-8b6c-9d0e1f2a3b4c", tenantId: 42}
     }, /** @type {typeof import("../../src/frontend-model-controller.js").default} */ (class FrontendModelController {}))
 
     expect(authorized).toEqual(true)
-    expect(froms).toEqual(["(SELECT 'record-1' AS \"external_id\", 'tenant-a' AS \"tenant_id\") AS \"records\""])
-    expect(appliedFrom).toEqual("(SELECT 'record-1' AS \"external_id\", 'tenant-a' AS \"tenant_id\") AS \"records\"")
-    expect(appliedWhere).toEqual({records: {external_id: "record-1", tenant_id: "tenant-a"}})
+    expect(froms).toEqual(["(SELECT CAST('7f0a1b2c-3d4e-4f5a-8b6c-9d0e1f2a3b4c' AS uuid) AS \"external_id\", CAST('42' AS bigint) AS \"tenant_id\") AS \"records\""])
+    expect(appliedFrom).toEqual("(SELECT CAST('7f0a1b2c-3d4e-4f5a-8b6c-9d0e1f2a3b4c' AS uuid) AS \"external_id\", CAST('42' AS bigint) AS \"tenant_id\") AS \"records\"")
+    expect(appliedWhere).toEqual({records: {external_id: "7f0a1b2c-3d4e-4f5a-8b6c-9d0e1f2a3b4c", tenant_id: 42}})
   })
 
   it("delivers filtered identity changes so instance listeners can rekey", {databaseCleaning: {transaction: false, truncate: false}}, async () => {
