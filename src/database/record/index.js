@@ -2666,6 +2666,10 @@ class VelociousDatabaseRecord {
       await this._runLifecycleCallbacks("beforeValidation")
       await this._runValidations()
 
+      if (this.isPersisted() && Object.keys(this.getModelClass().getAttachments()).length > 0) {
+        await recordAttachmentsStoreForModel(this).prepareRecordIdentityMigration({connection: this._connection()})
+      }
+
       const saveInTransaction = async () => {
         /** @type {Record<string, ReturnType<typeof JSON.parse>> | undefined} */
         let persistedAttributesBeforeUpdate

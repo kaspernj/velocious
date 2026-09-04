@@ -62,8 +62,8 @@ class FailingAfterUpdateCompositePrimaryKeyTask extends Record {
   }
 }
 
-/** Attachment store that exposes any attempted fallback connection checkout. */
-class SeparateConnectionRejectingAttachmentStore extends RecordAttachmentsStore {
+/** Attachment store that records schema preparation and rejects fallback checkouts. */
+class SchemaPreparingAttachmentStore extends RecordAttachmentsStore {
   /** @type {Array<import("../../../src/database/drivers/base.js").default>} */
   schemaConnections = []
 
@@ -245,27 +245,35 @@ describe("Record - composite primary key", {tags: ["dummy"]}, () => {
     expect(await task.getAttachmentByName("descriptionFile").download()).not.toBeNull()
   })
 
-  it("upgrades the attachment schema on the record transaction connection before migrating ownership", async () => {
+  it("prepares attachment schema before the record transaction and keeps identity migration DML-only", async () => {
     const project = await Project.create({name: "Composite migration connection project"})
     const task = await CompositePrimaryKeyTask.create({
       name: "Composite migration connection task",
       project_id: project.id()
     })
-    const store = new SeparateConnectionRejectingAttachmentStore({
+    const store = new SchemaPreparingAttachmentStore({
       configuration: Configuration.current(),
       databaseIdentifier: CompositePrimaryKeyTask.getDatabaseIdentifier()
     })
 
     const connection = task.connection()
 
-    await store.migrateRecordIdentity({
-      connection,
-      model: task,
-      nextIdentity: {name: "Composite migration connection renamed", project_id: project.id()},
-      previousIdentity: task.id()
-    })
+    await store.prepareRecordIdentityMigration({connection})
 
     expect(store.schemaConnections).toEqual([connection])
+
+    store.schemaConnections = []
+
+    await connection.transaction(async () => {
+      await store.migrateRecordIdentity({
+        connection,
+        model: task,
+        nextIdentity: {name: "Composite migration connection renamed", project_id: project.id()},
+        previousIdentity: task.id()
+      })
+    })
+
+    expect(store.schemaConnections).toEqual([])
   })
 
   it("stores canonical composite attachment identities without a length limit", async () => {

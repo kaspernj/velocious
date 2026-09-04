@@ -164,6 +164,15 @@ export default class RecordAttachmentsStore {
         name: string;
     }): Promise<Array<Record<string, ReturnType<typeof JSON.parse>>>>;
     /**
+     * Prepares attachment schema before a record transaction can migrate ownership.
+     * @param {object} args - Options.
+     * @param {import("../../drivers/base.js").default} args.connection - Record-owning database connection.
+     * @returns {Promise<void>} - Resolves when existing attachment schema is current.
+     */
+    prepareRecordIdentityMigration({ connection }: {
+        connection: import("../../drivers/base.js").default;
+    }): Promise<void>;
+    /**
      * Moves every attachment row to a record's new primary-key identity.
      * @param {object} args - Options.
      * @param {import("../../drivers/base.js").default} args.connection - Transaction-owning database connection.

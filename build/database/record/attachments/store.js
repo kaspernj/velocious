@@ -674,6 +674,18 @@ export default class RecordAttachmentsStore {
   }
 
   /**
+   * Prepares attachment schema before a record transaction can migrate ownership.
+   * @param {object} args - Options.
+   * @param {import("../../drivers/base.js").default} args.connection - Record-owning database connection.
+   * @returns {Promise<void>} - Resolves when existing attachment schema is current.
+   */
+  async prepareRecordIdentityMigration({connection}) {
+    if (!await connection.tableExists(ATTACHMENTS_TABLE)) return
+
+    await this.ensureAttachmentStoreSchema({db: connection})
+  }
+
+  /**
    * Moves every attachment row to a record's new primary-key identity.
    * @param {object} args - Options.
    * @param {import("../../drivers/base.js").default} args.connection - Transaction-owning database connection.
@@ -690,8 +702,6 @@ export default class RecordAttachmentsStore {
     if (nextRecordId === previousRecordId) return
 
     if (!await connection.tableExists(ATTACHMENTS_TABLE)) return
-
-    await this.ensureAttachmentStoreSchema({db: connection})
 
     await connection.update({
       conditions: attachmentOwnerConditions({
