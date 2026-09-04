@@ -54,6 +54,10 @@ describe("Database query AbortSignal", () => {
       }
     }
     class TestModel {
+      static primaryKey() {
+        return "id"
+      }
+
       static orderableColumn() {
         return "id"
       }

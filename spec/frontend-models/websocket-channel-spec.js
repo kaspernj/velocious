@@ -119,7 +119,7 @@ describe("FrontendModelWebsocketChannel", {databaseCleaning: {transaction: true}
     expect(sentFrames).toEqual([])
   })
 
-  it("delivers destroy events without unfiltering create or update events", async () => {
+  it("delivers destroy events without unfiltering create or update events", {databaseCleaning: {transaction: false, truncate: false}}, async () => {
     /** @type {Array<{body?: object, type?: string}>} */
     const sentFrames = []
     const channel = new FrontendModelWebsocketChannel({
@@ -138,6 +138,7 @@ describe("FrontendModelWebsocketChannel", {databaseCleaning: {transaction: true}
     })
 
     channel._frontendModelControllerClass = async () => /** @type {typeof import("../../src/frontend-model-controller.js").default} */ (class FrontendModelController {})
+    channel._destroyEventIsAuthorized = async () => true
     channel._matchedEventFilterKeysForEventId = async () => []
 
     await channel.deliverBroadcast({
@@ -147,6 +148,7 @@ describe("FrontendModelWebsocketChannel", {databaseCleaning: {transaction: true}
     })
     await channel.deliverBroadcast({
       action: "destroy",
+      destroyAuthorizationRecord: {id: "destroyed-task"},
       id: "destroyed-task"
     })
 
@@ -156,6 +158,115 @@ describe("FrontendModelWebsocketChannel", {databaseCleaning: {transaction: true}
         id: "destroyed-task"
       }
     ])
+  })
+
+  it("does not expose unauthorized destroy identities", {databaseCleaning: {transaction: false, truncate: false}}, async () => {
+    /** @type {Array<{body?: object, type?: string}>} */
+    const sentFrames = []
+    const channel = new FrontendModelWebsocketChannel({
+      params: {model: "CompositeTask"},
+      // @ts-expect-error Minimal sendJson-only session stub for direct channel delivery.
+      session: {
+        sendJson: (/** @type {{body?: object, type?: string}} */ frame) => sentFrames.push(frame)
+      },
+      subscriptionId: "unauthorized-destroy-delivery"
+    })
+
+    channel._frontendModelControllerClass = async () => /** @type {typeof import("../../src/frontend-model-controller.js").default} */ (class FrontendModelController {})
+    channel._destroyEventIsAuthorized = async () => false
+
+    await channel.deliverBroadcast({
+      action: "destroy",
+      destroyAuthorizationRecord: {external_id: "secret", tenant_id: "tenant-b"},
+      id: {externalId: "secret", tenantId: "tenant-b"}
+    })
+
+    expect(sentFrames).toEqual([])
+  })
+
+  it("does not deliver persisted broadcasts for another frontend model", {databaseCleaning: {transaction: false, truncate: false}}, async () => {
+    /** @type {Array<{body?: object, type?: string}>} */
+    const sentFrames = []
+    const channel = new FrontendModelWebsocketChannel({
+      params: {model: "Task"},
+      // @ts-expect-error Minimal sendJson-only session stub for direct channel delivery.
+      session: {
+        sendJson: (/** @type {{body?: object, type?: string}} */ frame) => sentFrames.push(frame)
+      },
+      subscriptionId: "persisted-other-model"
+    })
+
+    channel._projectedRecordForEventId = async () => ({id: "project-1"})
+
+    await channel.deliverBroadcast({
+      action: "update",
+      id: "project-1",
+      model: "Project"
+    })
+
+    expect(sentFrames).toEqual([])
+  })
+
+  it("authorizes destroys against the captured row source and composite identity", {databaseCleaning: {transaction: false, truncate: false}}, async () => {
+    const froms = ["records"]
+    let appliedFrom
+    let appliedWhere
+    const query = {
+      driver: {
+        quote: (/** @type {unknown} */ value) => `'${value}'`,
+        quoteColumn: (/** @type {string} */ columnName) => `"${columnName}"`,
+        quoteTable: (/** @type {string} */ tableName) => `"${tableName}"`
+      },
+      first: async () => ({authorized: true}),
+      from: (/** @type {string} */ from) => {
+        appliedFrom = from
+        froms.push(from)
+        return query
+      },
+      getFroms: () => froms,
+      where: (/** @type {Record<string, unknown>} */ where) => {
+        appliedWhere = where
+        return query
+      }
+    }
+    const ModelClass = class CompositeRecord {
+      /** @returns {typeof query} - Fresh model query. */
+      static _newQuery() { return query }
+
+      /** @param {string} attributeName - Attribute name. @returns {string} - Database column. */
+      static getColumnNameForAttributeName(attributeName) {
+        return attributeName === "externalId" ? "external_id" : "tenant_id"
+      }
+
+      /** @returns {string} - Backing table name. */
+      static tableName() { return "records" }
+    }
+    const controller = {
+      ensureFrontendModelClassInitialized: async () => {},
+      frontendModelAuthorizedQuery: () => query,
+      frontendModelClass: () => ModelClass,
+      frontendModelPrimaryKey: () => ["tenantId", "externalId"]
+    }
+    const channel = new FrontendModelWebsocketChannel({
+      params: {model: "CompositeRecord"},
+      // @ts-expect-error Minimal session stub for direct authorization.
+      session: {},
+      subscriptionId: "destroy-authorization-source"
+    })
+
+    channel._frontendModelController = () => /** @type {any} */ (controller)
+    channel._withEventTenant = async (_id, callback) => await callback()
+
+    const authorized = await channel._destroyEventIsAuthorized({
+      action: "destroy",
+      destroyAuthorizationRecord: {external_id: "record-1", tenant_id: "tenant-a"},
+      id: {externalId: "record-1", tenantId: "tenant-a"}
+    }, /** @type {typeof import("../../src/frontend-model-controller.js").default} */ (class FrontendModelController {}))
+
+    expect(authorized).toEqual(true)
+    expect(froms).toEqual(["(SELECT 'record-1' AS \"external_id\", 'tenant-a' AS \"tenant_id\") AS \"records\""])
+    expect(appliedFrom).toEqual("(SELECT 'record-1' AS \"external_id\", 'tenant-a' AS \"tenant_id\") AS \"records\"")
+    expect(appliedWhere).toEqual({records: {external_id: "record-1", tenant_id: "tenant-a"}})
   })
 
   it("delivers filtered identity changes so instance listeners can rekey", {databaseCleaning: {transaction: false, truncate: false}}, async () => {
@@ -203,6 +314,36 @@ describe("FrontendModelWebsocketChannel", {databaseCleaning: {transaction: true}
           state: "closed",
           workspaceId: "alpha"
         }
+      }
+    ])
+  })
+
+  it("delivers identity-only routing when a re-keyed record is no longer authorized", {databaseCleaning: {transaction: false, truncate: false}}, async () => {
+    /** @type {Array<{body?: Record<string, ReturnType<typeof JSON.parse>>, type?: string}>} */
+    const sentFrames = []
+    const channel = new FrontendModelWebsocketChannel({
+      params: {model: "CompositeTask"},
+      // @ts-expect-error Minimal session stub for direct channel delivery.
+      session: {
+        sendJson: (/** @type {{body?: Record<string, ReturnType<typeof JSON.parse>>, type?: string}} */ frame) => sentFrames.push(frame)
+      },
+      subscriptionId: "unauthorized-identity-change"
+    })
+
+    channel._frontendModelControllerClass = async () => /** @type {typeof import("../../src/frontend-model-controller.js").default} */ (class FrontendModelController {})
+    channel._projectedRecordForEventId = async () => null
+
+    await channel.deliverBroadcast({
+      action: "update",
+      id: {name: "Renamed task", workspaceId: "beta"},
+      previousId: {name: "Original task", workspaceId: "alpha"}
+    })
+
+    expect(sentFrames.map((frame) => frame.body)).toEqual([
+      {
+        action: "update",
+        id: {name: "Renamed task", workspaceId: "beta"},
+        previousId: {name: "Original task", workspaceId: "alpha"}
       }
     ])
   })

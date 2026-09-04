@@ -31,4 +31,19 @@ export default class TestWebsocketChannel extends WebsocketChannel {
   matches(broadcastParams) {
     return broadcastParams?.channel === this.params?.subscribe
   }
+
+  /**
+   * Marks deliveries when a websocket spec needs to prove replay uses the channel gate.
+   * @param {import("../../../../src/http-server/websocket-channel.js").WebsocketJsonValue} body - Broadcast body.
+   * @param {{eventId?: string}} [meta] - Broadcast metadata.
+   * @returns {void}
+   */
+  deliverBroadcast(body, meta) {
+    if (this.params?.markDelivery && body && typeof body === "object") {
+      this.sendMessage({...body, deliveredByChannel: true}, meta)
+      return
+    }
+
+    super.deliverBroadcast(body, meta)
+  }
 }

@@ -3,6 +3,7 @@ export type FrontendModelPublisherResource = {
 };
 export type FrontendModelWebsocketRecord = import("../database/record/index.js").default & {
     __frontendModelWebsocketAction?: "create" | "update";
+    __frontendModelWebsocketDestroyAuthorizationRecord?: Record<string, ReturnType<typeof JSON.parse>>;
     __frontendModelWebsocketPreviousIds?: Map<string, import("../utils/model-primary-key.js").ModelPrimaryKeyValue>;
 };
 /** Shared channel name for all frontend-model lifecycle subscriptions. */

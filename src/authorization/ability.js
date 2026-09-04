@@ -189,9 +189,10 @@ export default class VelociousAuthorizationAbility {
    * @param {string} args.action - Requested action.
    * @param {typeof import("../database/record/index.js").default} args.modelClass - Model class.
    * @param {import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>} args.query - Query.
+   * @param {() => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>} [args.ruleQueryFactory] - Optional factory for the queries that evaluate individual conditional rules.
    * @returns {import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>} - Authorized query.
    */
-  applyToQuery({action, modelClass, query}) {
+  applyToQuery({action, modelClass, query, ruleQueryFactory}) {
     this.loadAbilitiesForModelClass(modelClass)
 
     const applicableRules = this.rulesFor({action, modelClass})
@@ -203,18 +204,18 @@ export default class VelociousAuthorizationAbility {
     }
 
     if (allowRules.some((rule) => !rule.conditions)) {
-      this.applyDenyRules({action, denyRules, modelClass, query})
+      this.applyDenyRules({action, denyRules, modelClass, query, ruleQueryFactory})
       return query
     }
 
-    const allowSqlParts = this.conditionSqlParts({action, modelClass, query, rules: allowRules})
+    const allowSqlParts = this.conditionSqlParts({action, modelClass, query, ruleQueryFactory, rules: allowRules})
 
     if (allowSqlParts.length === 0) {
       return query.where("1=0")
     }
 
     query.where(`(${allowSqlParts.join(" OR ")})`)
-    this.applyDenyRules({action, denyRules, modelClass, query})
+    this.applyDenyRules({action, denyRules, modelClass, query, ruleQueryFactory})
 
     return query
   }
@@ -240,10 +241,11 @@ export default class VelociousAuthorizationAbility {
    * @param {string} args.action - Action.
    * @param {typeof import("../database/record/index.js").default} args.modelClass - Model class.
    * @param {import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>} args.query - Base query.
+   * @param {() => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>} [args.ruleQueryFactory] - Optional conditional-rule query factory.
    * @param {AbilityRuleType[]} args.rules - Rules.
    * @returns {string[]} - SQL condition parts.
    */
-  conditionSqlParts({action, modelClass, query, rules}) {
+  conditionSqlParts({action, modelClass, query, ruleQueryFactory, rules}) {
     const primaryKey = modelClass.primaryKey()
     const primaryKeyAttributes = Array.isArray(primaryKey) ? primaryKey : [primaryKey]
     const quotedBaseTable = query.driver.quoteTable(query.getTableReferenceForJoin())
@@ -252,7 +254,7 @@ export default class VelociousAuthorizationAbility {
     for (const rule of rules) {
       if (!rule.conditions) continue
 
-      const scopedQuery = modelClass._newQuery()
+      const scopedQuery = ruleQueryFactory ? ruleQueryFactory() : modelClass._newQuery()
       const resultQuery = this.applyRuleCondition({
         action,
         conditions: rule.conditions,
@@ -294,9 +296,10 @@ export default class VelociousAuthorizationAbility {
    * @param {AbilityRuleType[]} args.denyRules - Deny rules.
    * @param {typeof import("../database/record/index.js").default} args.modelClass - Model class.
    * @param {import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>} args.query - Query.
+   * @param {() => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>} [args.ruleQueryFactory] - Optional conditional-rule query factory.
    * @returns {void} - No return value.
    */
-  applyDenyRules({action, denyRules, modelClass, query}) {
+  applyDenyRules({action, denyRules, modelClass, query, ruleQueryFactory}) {
     if (denyRules.length === 0) return
 
     if (denyRules.some((rule) => !rule.conditions)) {
@@ -304,7 +307,7 @@ export default class VelociousAuthorizationAbility {
       return
     }
 
-    const denySqlParts = this.conditionSqlParts({action, modelClass, query, rules: denyRules})
+    const denySqlParts = this.conditionSqlParts({action, modelClass, query, ruleQueryFactory, rules: denyRules})
 
     if (denySqlParts.length > 0) {
       query.where(`NOT (${denySqlParts.join(" OR ")})`)

@@ -101,6 +101,21 @@ describe("Record - composite primary key", {tags: ["dummy"]}, () => {
     expect(foundTask?.id()).toEqual({name: "Composite identity task", project_id: project.id()})
   })
 
+  it("orders first and last by every composite key component", async () => {
+    const firstProject = await Project.create({name: "Composite ordering first project"})
+    const lastProject = await Project.create({name: "Composite ordering last project"})
+    const sharedName = "Composite ordering task"
+
+    await CompositePrimaryKeyTask.create({name: sharedName, project_id: lastProject.id()})
+    await CompositePrimaryKeyTask.create({name: sharedName, project_id: firstProject.id()})
+
+    const firstTask = await CompositePrimaryKeyTask.where({name: sharedName}).first()
+    const lastTask = await CompositePrimaryKeyTask.where({name: sharedName}).last()
+
+    expect(firstTask?.id()).toEqual({name: sharedName, project_id: firstProject.id()})
+    expect(lastTask?.id()).toEqual({name: sharedName, project_id: lastProject.id()})
+  })
+
   it("reloads a create from database-generated composite key components", async () => {
     const project = await Project.create({name: "Generated composite identity project"})
     const task = await GeneratedCompositePrimaryKeyTask.create({

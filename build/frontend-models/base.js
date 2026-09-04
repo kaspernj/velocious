@@ -1692,20 +1692,21 @@ class FrontendModelEventSubscription {
       return
     }
 
+    const listener = this.instanceListeners.get(id) || (previousId === null ? undefined : this.instanceListeners.get(previousId))
+
+    if (action === "update" && listener && previousIdentity !== null) {
+      rekeyFrontendModelInstanceListeners(this.ModelClass, listener.instance, previousIdentity, identity)
+    }
+
     if (!body.record || typeof body.record !== "object") return
 
     const deserializedRecord = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (deserializeFrontendModelTransportValue(body.record))
     const freshModel = /** @type {ReturnType<typeof JSON.parse>} */ (this.ModelClass).instantiateFromResponse(deserializedRecord)
-    const listener = this.instanceListeners.get(id) || (previousId === null ? undefined : this.instanceListeners.get(previousId))
 
     if (action === "update" && listener) {
       const matchingUpdateCallbacks = Array.from(listener.updateCallbacks).filter((entry) =>
         frontendModelEventEntryMatches(entry, matchedEventFilterKeys)
       )
-
-      if (previousIdentity !== null) {
-        rekeyFrontendModelInstanceListeners(this.ModelClass, listener.instance, previousIdentity, identity)
-      }
 
       if (matchingUpdateCallbacks.length > 0) {
         // Auto-merge into the registered instance so callers reading

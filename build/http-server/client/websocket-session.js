@@ -1880,7 +1880,10 @@ export default class VelociousHttpServerClientWebsocketSession {
     for (const event of events) {
       if (subscription.isClosed()) break
 
-      subscription.sendMessage(/** @type {import("../websocket-channel.js").WebsocketJsonValue} */ (event.payload))
+      await subscription.deliverBroadcast(
+        /** @type {import("../websocket-channel.js").WebsocketJsonValue} */ (event.payload),
+        {eventId: event.id}
+      )
     }
   }
 

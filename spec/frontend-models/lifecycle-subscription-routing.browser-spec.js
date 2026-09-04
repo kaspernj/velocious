@@ -197,6 +197,44 @@ describe("Frontend model lifecycle subscription routing", () => {
     }
   })
 
+  it("re-keys instance listeners without exposing an unauthorized update record", async () => {
+    const CompositeRoutedTask = buildCompositeRoutedTaskClass()
+    const websocketClient = buildWebsocketClient()
+    const task = CompositeRoutedTask.instantiateFromResponse({name: "Composite task", state: "open", workspaceId: "alpha"})
+    /** @type {Array<string | import("../../src/utils/model-primary-key.js").CompositeModelPrimaryKeyValue>} */
+    const updateIds = []
+
+    FrontendModelBase.configureTransport({websocketClient})
+
+    try {
+      const unsubscribe = await task.onUpdate(({id}) => updateIds.push(id))
+      const subscription = websocketClient.subscriptions[0]
+
+      if (!subscription) throw new Error("Expected composite model subscription")
+
+      const previousIdentity = {name: "Composite task", workspaceId: "alpha"}
+      const rekeyedIdentity = {name: "Composite renamed", workspaceId: "alpha"}
+
+      subscription.options.onMessage({
+        action: "update",
+        id: rekeyedIdentity,
+        previousId: previousIdentity
+      })
+      subscription.options.onMessage({
+        action: "update",
+        id: rekeyedIdentity,
+        record: {...rekeyedIdentity, state: "readable again"}
+      })
+
+      expect(updateIds).toEqual([rekeyedIdentity])
+      expect(task.state()).toEqual("readable again")
+
+      unsubscribe()
+    } finally {
+      resetFrontendModelTransport()
+    }
+  })
+
   it("re-keys composite instance listeners and their unsubscribe callbacks after save", async () => {
     const CompositeRoutedTask = buildCompositeRoutedTaskClass()
     const websocketClient = buildWebsocketClient()

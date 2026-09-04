@@ -943,7 +943,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
    * @returns {Promise<InstanceType<MC> | null>} - Resolves with the first.
    */
   async first() {
-    const newQuery = this.clone().limit(1).reorder(`${this.driver.quoteTable(this.getModelClass().tableName())}.${this.driver.quoteColumn(this.getModelClass().orderableColumn())}`)
+    const newQuery = this.clone().limit(1).reorder(this._defaultIdentityOrder("ASC"))
     const results = await newQuery.toArray()
 
     return results[0] || null
@@ -954,11 +954,24 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
    * @returns {Promise<InstanceType<MC> | null>} - Resolves with the last.
    */
   async last() {
-    const primaryKey = this.getModelClass().orderableColumn()
-    const tableName = this.getModelClass().tableName()
-    const results = await this.clone().reorder(`${this.driver.quoteTable(tableName)}.${this.driver.quoteColumn(primaryKey)} DESC`).limit(1).toArray()
+    const results = await this.clone().reorder(this._defaultIdentityOrder("DESC")).limit(1).toArray()
 
     return results[0] || null
+  }
+
+  /**
+   * Builds the deterministic default order for the model identity.
+   * @param {"ASC" | "DESC"} direction - Sort direction.
+   * @returns {string} - SQL order expression.
+   */
+  _defaultIdentityOrder(direction) {
+    const ModelClass = this.getModelClass()
+    const primaryKey = ModelClass.primaryKey()
+    const orderableColumns = Array.isArray(primaryKey) ? primaryKey : [ModelClass.orderableColumn()]
+
+    return orderableColumns
+      .map((column) => `${this.driver.quoteTable(ModelClass.tableName())}.${this.driver.quoteColumn(column)} ${direction}`)
+      .join(", ")
   }
 
   /**

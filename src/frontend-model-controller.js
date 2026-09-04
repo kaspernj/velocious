@@ -1093,27 +1093,43 @@ export default class FrontendModelController extends Controller {
   /**
    * Runs frontend model ability authorized query.
    * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url"} action - Frontend action.
+   * @param {{ruleQueryFactory?: () => import("./database/query/model-class-query.js").default<typeof import("./database/record/index.js").default>}} [options] - Authorization query options.
    * @returns {import("./database/query/model-class-query.js").default<typeof import("./database/record/index.js").default>} - Authorized query for the action.
    */
-  frontendModelAbilityAuthorizedQuery(action) {
+  frontendModelAbilityAuthorizedQuery(action, {ruleQueryFactory} = {}) {
     const abilityAction = this.frontendModelAbilityAction(action)
+    const modelClass = this.frontendModelClass()
 
-    return this.frontendModelClass().accessibleFor(abilityAction, this.currentAbility())
+    if (!ruleQueryFactory) return modelClass.accessibleFor(abilityAction, this.currentAbility())
+
+    const ability = this.currentAbility()
+
+    if (!ability) {
+      throw new Error(`No ability in context for ${modelClass.name}. Configure an ability resolver on the request`)
+    }
+
+    return ability.applyToQuery({
+      action: abilityAction,
+      modelClass,
+      query: modelClass._newQuery(),
+      ruleQueryFactory
+    })
   }
 
   /**
    * Runs frontend model authorized query.
    * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url"} action - Frontend action.
+   * @param {{ruleQueryFactory?: () => import("./database/query/model-class-query.js").default<typeof import("./database/record/index.js").default>}} [options] - Authorization query options.
    * @returns {import("./database/query/model-class-query.js").default<typeof import("./database/record/index.js").default>} - Authorized query for the action.
    */
-  frontendModelAuthorizedQuery(action) {
+  frontendModelAuthorizedQuery(action, options = {}) {
     const resource = this.frontendModelResourceInstance()
 
     if (resource.authorizedQuery !== FrontendModelBaseResource.prototype.authorizedQuery) {
       return resource.authorizedQuery(action)
     }
 
-    return this.frontendModelAbilityAuthorizedQuery(action)
+    return this.frontendModelAbilityAuthorizedQuery(action, options)
   }
 
   /**

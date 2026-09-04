@@ -1,6 +1,6 @@
 // @ts-check
 
-import {waitFor} from "awaitery"
+import {wait, waitFor} from "awaitery"
 import {describe, expect, it} from "../../src/testing/test.js"
 import Configuration from "../../src/configuration.js"
 import VelociousAttachmentRecord from "../../src/database/record/attachments/attachment-record.js"
@@ -327,6 +327,59 @@ describe("Frontend models - composite primary key HTTP integration", {databaseCl
         await websocketClient.close()
       }
     })
+  })
+
+  it("authorizes composite destroy identities against the pre-delete record", async () => {
+    const previousScope = process.env.VELOCIOUS_DUMMY_FRONTEND_MODEL_SUBQUERY_SCOPE
+
+    process.env.VELOCIOUS_DUMMY_FRONTEND_MODEL_SUBQUERY_SCOPE = "composite-scope-owner"
+
+    try {
+      await Dummy.run(async () => {
+        const websocketClient = new WebsocketClient()
+        const ownedProject = await ProjectRecord.create({
+          creatingUserReference: "composite-scope-owner",
+          name: "Composite scoped owned project"
+        })
+        const foreignProject = await ProjectRecord.create({
+          creatingUserReference: "other-owner",
+          name: "Composite scoped foreign project"
+        })
+        const ownedTask = await TaskRecord.create({name: "Composite scoped owned task", project: ownedProject})
+        const foreignTask = await TaskRecord.create({name: "Composite scoped foreign task", project: foreignProject})
+
+        configureWebsocketSharedTransport(websocketClient)
+        /** @type {Array<import("../../src/utils/model-primary-key.js").CompositeModelPrimaryKeyValue>} */
+        const destroyIds = []
+        const offDestroy = await CompositeTask.onDestroy((event) => {
+          destroyIds.push(/** @type {import("../../src/utils/model-primary-key.js").CompositeModelPrimaryKeyValue} */ (event.id))
+        })
+
+        try {
+          await foreignTask.destroy()
+          await wait(100)
+
+          expect(destroyIds).toEqual([])
+
+          await ownedTask.destroy()
+
+          await waitFor(() => {
+            if (destroyIds.length < 1) throw new Error("Expected authorized composite destroy")
+          })
+          expect(destroyIds).toEqual([{name: ownedTask.name(), projectId: ownedProject.id()}])
+        } finally {
+          offDestroy()
+          resetFrontendModelTransport()
+          await websocketClient.close()
+        }
+      })
+    } finally {
+      if (previousScope === undefined) {
+        delete process.env.VELOCIOUS_DUMMY_FRONTEND_MODEL_SUBQUERY_SCOPE
+      } else {
+        process.env.VELOCIOUS_DUMMY_FRONTEND_MODEL_SUBQUERY_SCOPE = previousScope
+      }
+    }
   })
 
   it("chunks large composite authorization cohorts below database expression limits", async () => {

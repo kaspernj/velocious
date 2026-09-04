@@ -300,6 +300,12 @@ export default class VelociousDatabaseQueryModelClassQuery<MC extends typeof imp
      */
     last(): Promise<InstanceType<MC> | null>;
     /**
+     * Builds the deterministic default order for the model identity.
+     * @param {"ASC" | "DESC"} direction - Sort direction.
+     * @returns {string} - SQL order expression.
+     */
+    _defaultIdentityOrder(direction: "ASC" | "DESC"): string;
+    /**
      * Runs preload.
      * @param {import("./index.js").NestedPreloadRecord | string | Array<string | import("./index.js").NestedPreloadRecord>} data - Data payload.
      * @returns {this} - The preload.

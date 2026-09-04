@@ -288,15 +288,21 @@ export default class FrontendModelController extends Controller {
     /**
      * Runs frontend model ability authorized query.
      * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url"} action - Frontend action.
+     * @param {{ruleQueryFactory?: () => import("./database/query/model-class-query.js").default<typeof import("./database/record/index.js").default>}} [options] - Authorization query options.
      * @returns {import("./database/query/model-class-query.js").default<typeof import("./database/record/index.js").default>} - Authorized query for the action.
      */
-    frontendModelAbilityAuthorizedQuery(action: "index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url"): import("./database/query/model-class-query.js").default<typeof import("./database/record/index.js").default>;
+    frontendModelAbilityAuthorizedQuery(action: "index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url", { ruleQueryFactory }?: {
+        ruleQueryFactory?: () => import("./database/query/model-class-query.js").default<typeof import("./database/record/index.js").default>;
+    }): import("./database/query/model-class-query.js").default<typeof import("./database/record/index.js").default>;
     /**
      * Runs frontend model authorized query.
      * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url"} action - Frontend action.
+     * @param {{ruleQueryFactory?: () => import("./database/query/model-class-query.js").default<typeof import("./database/record/index.js").default>}} [options] - Authorization query options.
      * @returns {import("./database/query/model-class-query.js").default<typeof import("./database/record/index.js").default>} - Authorized query for the action.
      */
-    frontendModelAuthorizedQuery(action: "index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url"): import("./database/query/model-class-query.js").default<typeof import("./database/record/index.js").default>;
+    frontendModelAuthorizedQuery(action: "index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url", options?: {
+        ruleQueryFactory?: () => import("./database/query/model-class-query.js").default<typeof import("./database/record/index.js").default>;
+    }): import("./database/query/model-class-query.js").default<typeof import("./database/record/index.js").default>;
     /**
      * Runs frontend model primary key value.
      * @param {import("./database/record/index.js").default} model - Model instance.

@@ -1,6 +1,7 @@
 import VelociousWebsocketChannel from "../http-server/websocket-channel.js";
 export type FrontendModelLifecycleBroadcastBody = {
     action?: string;
+    destroyAuthorizationRecord?: Record<string, ReturnType<typeof JSON.parse>>;
     id?: import("../utils/model-primary-key.js").ModelPrimaryKeyValue;
     matchedEventFilterKeys?: string[];
     previousId?: import("../utils/model-primary-key.js").ModelPrimaryKeyValue;
@@ -69,6 +70,30 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
     _deliverBroadcast(body: FrontendModelLifecycleBroadcastBody, meta?: {
         eventId?: string;
     }): Promise<void>;
+    /**
+     * Checks a destroy against the subscriber's ordinary authorized query by
+     * replacing the deleted backing table with the captured pre-delete row. Values
+     * are quoted on this trusted database connection; no broadcast-provided SQL is run.
+     * @param {FrontendModelLifecycleBroadcastBody} body - Destroy broadcast body.
+     * @param {typeof import("../frontend-model-controller.js").default} FrontendModelController - Server-side frontend-model controller class.
+     * @returns {Promise<boolean>} - Whether the subscriber could read the record before deletion.
+     */
+    _destroyEventIsAuthorized(body: FrontendModelLifecycleBroadcastBody, FrontendModelController: typeof import("../frontend-model-controller.js").default): Promise<boolean>;
+    /**
+     * Builds a backing-model query whose source is the captured pre-delete row.
+     * @param {typeof import("../database/record/index.js").default} ModelClass - Backing model class.
+     * @param {Record<string, ReturnType<typeof JSON.parse>>} destroyAuthorizationRecord - Captured pre-delete record.
+     * @returns {import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>} - One-row model query.
+     */
+    _destroyAuthorizationQuery(ModelClass: typeof import("../database/record/index.js").default, destroyAuthorizationRecord: Record<string, ReturnType<typeof JSON.parse>>): import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>;
+    /**
+     * Replaces a query's backing table with a safely quoted one-row derived table.
+     * @param {import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>} query - Query to update.
+     * @param {typeof import("../database/record/index.js").default} ModelClass - Backing model class.
+     * @param {Record<string, ReturnType<typeof JSON.parse>>} destroyAuthorizationRecord - Captured pre-delete record.
+     * @returns {void}
+     */
+    _applyDestroyAuthorizationRecordToQuery(query: import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>, ModelClass: typeof import("../database/record/index.js").default, destroyAuthorizationRecord: Record<string, ReturnType<typeof JSON.parse>>): void;
     /**
      * Runs matches.
      * @param {Record<string, import("./query.js").FrontendModelTransportValue>} broadcastParams - Params from `broadcastToChannel`.

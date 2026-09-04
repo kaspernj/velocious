@@ -7,7 +7,7 @@ import {serializeFrontendModelTransportValue} from "./transport-serialization.js
 import {modelPrimaryKeyCacheKey, readModelPrimaryKeyValue} from "../utils/model-primary-key.js"
 
 /** @typedef {{primaryKey: import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition}} FrontendModelPublisherResource */
-/** @typedef {import("../database/record/index.js").default & {__frontendModelWebsocketAction?: "create" | "update", __frontendModelWebsocketPreviousIds?: Map<string, import("../utils/model-primary-key.js").ModelPrimaryKeyValue>}} FrontendModelWebsocketRecord */
+/** @typedef {import("../database/record/index.js").default & {__frontendModelWebsocketAction?: "create" | "update", __frontendModelWebsocketDestroyAuthorizationRecord?: Record<string, ReturnType<typeof JSON.parse>>, __frontendModelWebsocketPreviousIds?: Map<string, import("../utils/model-primary-key.js").ModelPrimaryKeyValue>}} FrontendModelWebsocketRecord */
 
 const modelClassesWithRegisteredHooks = new WeakSet()
 const channelClassRegisteredConfigurations = new WeakSet()
@@ -172,8 +172,14 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
 
     modelClass.beforeDestroy(async (model) => {
       const websocketModel = /** @type {FrontendModelWebsocketRecord} */ (model)
+      const persistedModel = await model
+        .queryForModel(model.getModelClass())
+        .find(model._persistedPrimaryKeyValue())
 
-      websocketModel.__frontendModelWebsocketPreviousIds = await frontendModelPreviousResourceIdentities(model)
+      if (!persistedModel) throw new Error(`Cannot capture websocket destroy authorization for missing ${model.getModelClass().name}`)
+
+      websocketModel.__frontendModelWebsocketPreviousIds = frontendModelResourceIdentities(persistedModel)
+      websocketModel.__frontendModelWebsocketDestroyAuthorizationRecord = frontendModelDestroyAuthorizationRecord(persistedModel)
     })
 
     modelClass.afterSave((model) => {
@@ -192,11 +198,13 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
 
     modelClass.afterDestroy((model) => {
       const websocketModel = /** @type {FrontendModelWebsocketRecord} */ (model)
+      const destroyAuthorizationRecord = websocketModel.__frontendModelWebsocketDestroyAuthorizationRecord
       const previousIds = websocketModel.__frontendModelWebsocketPreviousIds
 
       void model.connection().afterCommit(async () => {
-        broadcastFrontendModelEvents(model, "destroy", previousIds)
+        broadcastFrontendModelEvents(model, "destroy", previousIds, destroyAuthorizationRecord)
       })
+      delete websocketModel.__frontendModelWebsocketDestroyAuthorizationRecord
       delete websocketModel.__frontendModelWebsocketPreviousIds
     })
   }
@@ -235,6 +243,52 @@ async function frontendModelPreviousResourceIdentities(model) {
   }
 
   return previousIds
+}
+
+/**
+ * Returns every configured resource identity represented by a persisted backing record.
+ * @param {import("../database/record/index.js").default} model - Fully loaded persisted backing record.
+ * @returns {Map<string, import("../utils/model-primary-key.js").ModelPrimaryKeyValue>} - Identities by resource name.
+ */
+function frontendModelResourceIdentities(model) {
+  const publisherResources = publisherResourcesByConfiguration.get(model._getConfiguration())?.get(model.getModelClass())
+  /** @type {Map<string, import("../utils/model-primary-key.js").ModelPrimaryKeyValue>} */
+  const identities = new Map()
+
+  if (!publisherResources) return identities
+
+  for (const [modelName, {primaryKey}] of publisherResources) {
+    const id = frontendModelResourceIdentity({model, primaryKey})
+
+    if (id !== null) identities.set(modelName, id)
+  }
+
+  return identities
+}
+
+/**
+ * Serializes the persisted record for server-side destroy authorization. Binary values
+ * use a dedicated byte-array marker because the shared transport serializer otherwise
+ * leaves Buffers to the JSON implementation used by the worker or Beacon transport.
+ * @param {import("../database/record/index.js").default} model - Fully loaded persisted backing record.
+ * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Column-keyed transport values.
+ */
+function frontendModelDestroyAuthorizationRecord(model) {
+  const serializationOptions = transportSerializationOptionsForConfiguration(model._getConfiguration())
+  /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
+  const authorizationRecord = {}
+
+  for (const [columnName, value] of Object.entries(model.rawAttributes())) {
+    authorizationRecord[columnName] = value instanceof Uint8Array
+      ? {__velociousDestroyAuthorizationType: "binary", value: Array.from(value)}
+      : serializeFrontendModelTransportValue(value, serializationOptions)
+  }
+
+  if (Object.keys(authorizationRecord).length === 0) {
+    throw new Error(`Cannot capture websocket destroy authorization without attributes for ${model.getModelClass().name}`)
+  }
+
+  return authorizationRecord
 }
 
 /**
@@ -277,9 +331,10 @@ function frontendModelResourceIdentity({model, previous = false, primaryKey}) {
  * @param {import("../database/record/index.js").default} model - Backing model instance.
  * @param {"create" | "update" | "destroy"} action - Lifecycle action.
  * @param {Map<string, import("../utils/model-primary-key.js").ModelPrimaryKeyValue>} [previousIds] - Persisted identities captured before update or destroy.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} [destroyAuthorizationRecord] - Server-only pre-delete row used to authorize a destroyed record.
  * @returns {void}
  */
-function broadcastFrontendModelEvents(model, action, previousIds) {
+function broadcastFrontendModelEvents(model, action, previousIds, destroyAuthorizationRecord) {
   const configuration = model._getConfiguration()
   const publisherResources = publisherResourcesByConfiguration.get(configuration)?.get(model.getModelClass())
 
@@ -300,6 +355,7 @@ function broadcastFrontendModelEvents(model, action, previousIds) {
     broadcastFrontendModelEvent(configuration, modelName, {
       action,
       id,
+      ...(destroyAuthorizationRecord !== undefined ? {destroyAuthorizationRecord} : {}),
       ...(identityChanged ? {previousId} : {})
     })
   }
@@ -311,12 +367,13 @@ function broadcastFrontendModelEvents(model, action, previousIds) {
  * transport serializer so Date/undefined/etc. survive the JSON hop.
  * @param {import("../configuration.js").default} configuration - Configuration instance.
  * @param {string} modelName - Model class name.
- * @param {{action: "create" | "update" | "destroy", id: ReturnType<typeof JSON.parse>, previousId?: ReturnType<typeof JSON.parse>, record?: Record<string, ReturnType<typeof JSON.parse>>}} event - Lifecycle event.
+ * @param {{action: "create" | "update" | "destroy", destroyAuthorizationRecord?: Record<string, ReturnType<typeof JSON.parse>>, id: ReturnType<typeof JSON.parse>, previousId?: ReturnType<typeof JSON.parse>, record?: Record<string, ReturnType<typeof JSON.parse>>}} event - Lifecycle event.
  * @returns {void}
  */
 function broadcastFrontendModelEvent(configuration, modelName, event) {
   const body = {
     action: event.action,
+    ...(event.destroyAuthorizationRecord !== undefined ? {destroyAuthorizationRecord: event.destroyAuthorizationRecord} : {}),
     id: event.id,
     model: modelName,
     ...(event.previousId !== undefined ? {previousId: event.previousId} : {}),

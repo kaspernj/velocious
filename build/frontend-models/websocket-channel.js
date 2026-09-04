@@ -1,15 +1,16 @@
 // @ts-check
 
 import VelociousWebsocketChannel from "../http-server/websocket-channel.js"
+import {Buffer} from "node:buffer"
 import Response from "../http-server/client/response.js"
 import {frontendModelResourcesWithBuiltInsForBackendProject} from "./built-in-resources.js"
 import {frontendModelResourceClassFromDefinition} from "./resource-definition.js"
-import {serializeFrontendModelTransportValue} from "./transport-serialization.js"
+import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "./transport-serialization.js"
 import {modelPrimaryKeyConditions} from "../utils/model-primary-key.js"
 
 /**
  * Defines this typedef.
- * @typedef {{action?: string, id?: import("../utils/model-primary-key.js").ModelPrimaryKeyValue, matchedEventFilterKeys?: string[], previousId?: import("../utils/model-primary-key.js").ModelPrimaryKeyValue, record?: import("./query.js").FrontendModelTransportValue, [key: string]: import("./query.js").FrontendModelTransportValue | string[] | undefined}} FrontendModelLifecycleBroadcastBody
+ * @typedef {{action?: string, destroyAuthorizationRecord?: Record<string, ReturnType<typeof JSON.parse>>, id?: import("../utils/model-primary-key.js").ModelPrimaryKeyValue, matchedEventFilterKeys?: string[], previousId?: import("../utils/model-primary-key.js").ModelPrimaryKeyValue, record?: import("./query.js").FrontendModelTransportValue, [key: string]: import("./query.js").FrontendModelTransportValue | string[] | undefined}} FrontendModelLifecycleBroadcastBody
  */
 /**
  * Defines this typedef.
@@ -157,8 +158,23 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
       return
     }
 
+    if (typeof body.model === "string" && body.model !== this._modelName()) return
+
     if (body.action === "destroy") {
-      if (!hasEventFilters || this._hasDestroyEventDelivery() || this._hasUnfilteredEventDelivery()) this.sendMessage(body, meta)
+      if (body.id === undefined || body.id === null) return
+
+      const FrontendModelController = await this._frontendModelControllerClass()
+      const authorized = await this._destroyEventIsAuthorized(body, FrontendModelController)
+
+      if (!authorized) return
+
+      if (!hasEventFilters || this._hasDestroyEventDelivery() || this._hasUnfilteredEventDelivery()) {
+        this.sendMessage({
+          action: body.action,
+          id: body.id,
+          ...(typeof body.model === "string" ? {model: body.model} : {})
+        }, meta)
+      }
       return
     }
 
@@ -180,6 +196,15 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
     const projectedRecord = await this._projectedRecordForEventId(body.id, FrontendModelController)
 
     if (!projectedRecord) {
+      if (isIdentityTransition) {
+        this.sendMessage({
+          action: body.action,
+          id: body.id,
+          ...(hasEventFilters ? {matchedEventFilterKeys} : {}),
+          ...(typeof body.model === "string" ? {model: body.model} : {}),
+          previousId: body.previousId
+        }, meta)
+      }
       return
     }
 
@@ -205,6 +230,83 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
     }
 
     this.sendMessage(deliverBody, meta)
+  }
+
+  /**
+   * Checks a destroy against the subscriber's ordinary authorized query by
+   * replacing the deleted backing table with the captured pre-delete row. Values
+   * are quoted on this trusted database connection; no broadcast-provided SQL is run.
+   * @param {FrontendModelLifecycleBroadcastBody} body - Destroy broadcast body.
+   * @param {typeof import("../frontend-model-controller.js").default} FrontendModelController - Server-side frontend-model controller class.
+   * @returns {Promise<boolean>} - Whether the subscriber could read the record before deletion.
+   */
+  async _destroyEventIsAuthorized(body, FrontendModelController) {
+    const destroyAuthorizationRecord = body.destroyAuthorizationRecord
+    const id = body.id
+
+    if (id === undefined || id === null || !destroyAuthorizationRecord || typeof destroyAuthorizationRecord !== "object" || Array.isArray(destroyAuthorizationRecord)) return false
+
+    return await this._withEventTenant(id, async () => {
+      const controller = this._frontendModelController(FrontendModelController)
+
+      await controller.ensureFrontendModelClassInitialized()
+
+      const ModelClass = controller.frontendModelClass()
+      const primaryKey = controller.frontendModelPrimaryKey()
+      const ruleQueryFactory = () => this._destroyAuthorizationQuery(ModelClass, destroyAuthorizationRecord)
+      const query = controller.frontendModelAuthorizedQuery("find", {ruleQueryFactory})
+
+      this._applyDestroyAuthorizationRecordToQuery(query, ModelClass, destroyAuthorizationRecord)
+      query.where({
+        [ModelClass.tableName()]: frontendModelPrimaryKeyDatabaseConditions(ModelClass, primaryKey, id)
+      })
+
+      return Boolean(await query.first())
+    })
+  }
+
+  /**
+   * Builds a backing-model query whose source is the captured pre-delete row.
+   * @param {typeof import("../database/record/index.js").default} ModelClass - Backing model class.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} destroyAuthorizationRecord - Captured pre-delete record.
+   * @returns {import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>} - One-row model query.
+   */
+  _destroyAuthorizationQuery(ModelClass, destroyAuthorizationRecord) {
+    const query = ModelClass._newQuery()
+
+    this._applyDestroyAuthorizationRecordToQuery(query, ModelClass, destroyAuthorizationRecord)
+
+    return query
+  }
+
+  /**
+   * Replaces a query's backing table with a safely quoted one-row derived table.
+   * @param {import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>} query - Query to update.
+   * @param {typeof import("../database/record/index.js").default} ModelClass - Backing model class.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} destroyAuthorizationRecord - Captured pre-delete record.
+   * @returns {void}
+   */
+  _applyDestroyAuthorizationRecordToQuery(query, ModelClass, destroyAuthorizationRecord) {
+    const selectedColumns = Object.entries(destroyAuthorizationRecord).map(([columnName, serializedValue]) => {
+      const binaryMarker = serializedValue && typeof serializedValue === "object" && !Array.isArray(serializedValue)
+        && serializedValue.__velociousDestroyAuthorizationType === "binary"
+        && Array.isArray(serializedValue.value)
+      const value = binaryMarker
+        ? Buffer.from(serializedValue.value)
+        : deserializeFrontendModelTransportValue(serializedValue)
+      const quotedValue = value === null ? "NULL" : query.driver.quote(value)
+
+      return `${quotedValue} AS ${query.driver.quoteColumn(columnName)}`
+    })
+
+    if (selectedColumns.length === 0) {
+      throw new Error(`Cannot authorize a destroyed ${ModelClass.name} without captured attributes`)
+    }
+
+    const froms = query.getFroms()
+
+    froms.splice(0, froms.length)
+    query.from(`(SELECT ${selectedColumns.join(", ")}) AS ${query.driver.quoteTable(ModelClass.tableName())}`)
   }
 
   /**
