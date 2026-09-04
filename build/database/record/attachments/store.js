@@ -82,12 +82,14 @@ function storeKeyForModel(model) {
 }
 
 /**
- * Runs the recordAttachmentsStoreForModel helper.
- * @param {import("../index.js").default} model - Model instance.
- * @returns {RecordAttachmentsStore} - Store instance.
+ * Returns the shared attachment store for one configured database identity.
+ * @param {object} args - Store identity.
+ * @param {import("../../../configuration.js").default} args.configuration - Owning configuration.
+ * @param {string} args.databaseIdentifier - Logical database identifier.
+ * @param {string} args.storeKey - Physical store key.
+ * @returns {RecordAttachmentsStore} - Shared store instance.
  */
-export function recordAttachmentsStoreForModel(model) {
-  const configuration = model._getConfiguration()
+function recordAttachmentsStore({configuration, databaseIdentifier, storeKey}) {
   let storesByDatabaseIdentifier = storesByConfiguration.get(configuration)
 
   if (!storesByDatabaseIdentifier) {
@@ -95,19 +97,45 @@ export function recordAttachmentsStoreForModel(model) {
     storesByConfiguration.set(configuration, storesByDatabaseIdentifier)
   }
 
-  const key = storeKeyForModel(model)
-  let store = storesByDatabaseIdentifier.get(key)
+  let store = storesByDatabaseIdentifier.get(storeKey)
 
   if (store) return store
 
-  store = new RecordAttachmentsStore({
-    configuration,
-    databaseIdentifier: model.databaseOperation()?.databaseIdentifier() || model.getModelClass().getDatabaseIdentifier()
-  })
-
-  storesByDatabaseIdentifier.set(key, store)
+  store = new RecordAttachmentsStore({configuration, databaseIdentifier})
+  storesByDatabaseIdentifier.set(storeKey, store)
 
   return store
+}
+
+/**
+ * Returns the attachment store used before a model-level transaction starts.
+ * @param {typeof import("../index.js").default} modelClass - Attachment-owning model class.
+ * @returns {RecordAttachmentsStore} - Store instance.
+ */
+export function recordAttachmentsStoreForModelClass(modelClass) {
+  const databaseIdentifier = modelClass.getDatabaseIdentifier()
+
+  return recordAttachmentsStore({
+    configuration: modelClass._getConfiguration(),
+    databaseIdentifier,
+    storeKey: databaseIdentifier
+  })
+}
+
+/**
+ * Runs the recordAttachmentsStoreForModel helper.
+ * @param {import("../index.js").default} model - Model instance.
+ * @returns {RecordAttachmentsStore} - Store instance.
+ */
+export function recordAttachmentsStoreForModel(model) {
+  const configuration = model._getConfiguration()
+  const databaseIdentifier = model.databaseOperation()?.databaseIdentifier() || model.getModelClass().getDatabaseIdentifier()
+
+  return recordAttachmentsStore({
+    configuration,
+    databaseIdentifier,
+    storeKey: storeKeyForModel(model)
+  })
 }
 
 /**

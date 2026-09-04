@@ -62,6 +62,22 @@ class FailingAfterUpdateCompositePrimaryKeyTask extends Record {
   }
 }
 
+/** Composite-key view that records attachment preparation transaction state. */
+class TransactionPreparingCompositePrimaryKeyTask extends Record {
+  /** @type {boolean[]} */
+  static preparationTransactionStates = []
+
+  /**
+   * Records whether attachment schema preparation runs inside a transaction.
+   * @param {import("../../../src/database/drivers/base.js").default} connection - Model connection.
+   * @returns {Promise<void>} - Resolves after normal schema preparation.
+   */
+  static async _prepareAttachmentStoreSchema(connection) {
+    this.preparationTransactionStates.push(connection.insideTransaction())
+    await super._prepareAttachmentStoreSchema(connection)
+  }
+}
+
 /** Attachment store that records schema preparation and rejects fallback checkouts. */
 class SchemaPreparingAttachmentStore extends RecordAttachmentsStore {
   /** @type {Array<import("../../../src/database/drivers/base.js").default>} */
@@ -104,6 +120,9 @@ GeneratedCompositePrimaryKeyTask.setPrimaryKey(["id", "project_id"])
 FailingAfterUpdateCompositePrimaryKeyTask.setTableName("tasks")
 FailingAfterUpdateCompositePrimaryKeyTask.setPrimaryKey(["name", "project_id"])
 FailingAfterUpdateCompositePrimaryKeyTask.hasOneAttachment("descriptionFile", {driver: CompositePrimaryKeyAttachmentDriver})
+TransactionPreparingCompositePrimaryKeyTask.setTableName("tasks")
+TransactionPreparingCompositePrimaryKeyTask.setPrimaryKey(["name", "project_id"])
+TransactionPreparingCompositePrimaryKeyTask.hasOneAttachment("descriptionFile", {driver: CompositePrimaryKeyAttachmentDriver})
 
 describe("Record - composite primary key", {tags: ["dummy"]}, () => {
   it("keeps scalar primary-key behavior unchanged", async () => {
@@ -281,6 +300,17 @@ describe("Record - composite primary key", {tags: ["dummy"]}, () => {
 
     expect(store.schemaConnections).toEqual([])
     expect(store.schemaLocksHeld).toEqual([])
+  })
+
+  it("prepares attachment schema before a caller-owned transaction", {databaseCleaning: {transaction: false, truncate: false}}, async () => {
+    TransactionPreparingCompositePrimaryKeyTask.preparationTransactionStates = []
+
+    await TransactionPreparingCompositePrimaryKeyTask.transaction(async () => {
+      expect(TransactionPreparingCompositePrimaryKeyTask.connection().insideTransaction()).toBeTrue()
+      await TransactionPreparingCompositePrimaryKeyTask.transaction(async () => {})
+    })
+
+    expect(TransactionPreparingCompositePrimaryKeyTask.preparationTransactionStates).toEqual([false])
   })
 
   it("stores canonical composite attachment identities without a length limit", async () => {

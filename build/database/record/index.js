@@ -41,7 +41,7 @@ import HasManyRelationship from "./relationships/has-many.js"
 import HasOneInstanceRelationship from "./instance-relationships/has-one.js"
 import HasOneRelationship from "./relationships/has-one.js"
 import RecordAttachmentHandle from "./attachments/handle.js"
-import {recordAttachmentsStoreForModel} from "./attachments/store.js"
+import {recordAttachmentsStoreForModel, recordAttachmentsStoreForModelClass} from "./attachments/store.js"
 import * as inflection from "inflection"
 import deburrColumnName from "../../utils/deburr-column-name.js"
 import ModelClassQuery from "../query/model-class-query.js"
@@ -520,6 +520,11 @@ class VelociousDatabaseRecord {
    * Changes.
    * @type {Record<string, ReturnType<typeof JSON.parse>>} */
   _changes = {}
+
+  /**
+   * Whether primary-key reads are pinned to the stored attributes.
+   * @type {boolean} */
+  _readsPersistedPrimaryKey = false
 
   /**
    * Changes captured before a create audit is written.
@@ -2666,8 +2671,12 @@ class VelociousDatabaseRecord {
       await this._runLifecycleCallbacks("beforeValidation")
       await this._runValidations()
 
-      if (this.isPersisted() && Object.keys(this.getModelClass().getAttachments()).length > 0) {
-        await recordAttachmentsStoreForModel(this).prepareRecordIdentityMigration({connection: this._connection()})
+      if (this._databaseOperation && this.isPersisted() && Object.keys(this.getModelClass().getAttachments()).length > 0) {
+        const connection = this._connection()
+
+        if (!connection.insideTransaction()) {
+          await this.getModelClass()._prepareAttachmentStoreSchema(connection)
+        }
       }
 
       const saveInTransaction = async () => {
@@ -2925,13 +2934,28 @@ class VelociousDatabaseRecord {
   static async transaction(callback) {
     await this.ensureInitialized()
 
-    const useTransactions = this.connection().getArgs().record?.transactions
+    const connection = this.connection()
+
+    if (!connection.insideTransaction() && Object.keys(this.getAttachments()).length > 0) {
+      await this._prepareAttachmentStoreSchema(connection)
+    }
+
+    const useTransactions = connection.getArgs().record?.transactions
 
     if (useTransactions !== false) {
-      return await this.connection().transaction(callback)
+      return await connection.transaction(callback)
     } else {
       return await callback()
     }
+  }
+
+  /**
+   * Prepares this model's attachment store before opening a model transaction.
+   * @param {import("../drivers/base.js").default} connection - Model connection.
+   * @returns {Promise<void>} - Resolves when the attachment schema is current.
+   */
+  static async _prepareAttachmentStoreSchema(connection) {
+    await recordAttachmentsStoreForModelClass(this).prepareRecordIdentityMigration({connection})
   }
 
   /**
@@ -4017,10 +4041,37 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * Runs a callback while primary-key reads resolve to the persisted identity.
+   * @param {() => Promise<void>} callback - Callback that requires the stored identity.
+   * @returns {Promise<void>} - Resolves when the callback completes.
+   */
+  async _withPersistedPrimaryKey(callback) {
+    const previousReadsPersistedPrimaryKey = this._readsPersistedPrimaryKey
+
+    this._readsPersistedPrimaryKey = true
+
+    try {
+      await callback()
+    } finally {
+      this._readsPersistedPrimaryKey = previousReadsPersistedPrimaryKey
+    }
+  }
+
+  /**
    * Destroys the record in the database and all of its dependent records.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async destroy() {
+    await this._withPersistedPrimaryKey(async () => {
+      await this._destroyPersistedRecord()
+    })
+  }
+
+  /**
+   * Runs the destroy lifecycle after the persisted identity has been restored.
+   * @returns {Promise<void>} - Resolves when complete.
+   */
+  async _destroyPersistedRecord() {
     await this._runLifecycleCallbacks("beforeDestroy")
 
     for (const relationship of this.getModelClass().getRelationships()) {
@@ -4463,9 +4514,15 @@ class VelociousDatabaseRecord {
   readColumn(attributeName) {
     this.getModelClass()._assertHasBeenInitialized()
     const belongsToChanges = this._belongsToChanges()
+    const primaryKey = this.getModelClass().primaryKey()
+    const readsPersistedPrimaryKey = this._readsPersistedPrimaryKey && (
+      Array.isArray(primaryKey) ? primaryKey.includes(attributeName) : primaryKey == attributeName
+    )
     let result
 
-    if (attributeName in belongsToChanges) {
+    if (readsPersistedPrimaryKey) {
+      result = this._attributes[attributeName]
+    } else if (attributeName in belongsToChanges) {
       result = belongsToChanges[attributeName]
     } else if (attributeName in this._changes) {
       result = this._changes[attributeName]

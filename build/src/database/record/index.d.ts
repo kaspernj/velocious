@@ -141,6 +141,10 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
              * @type {Record<string, ReturnType<typeof JSON.parse>>} */
             _changes: Record<string, ReturnType<typeof JSON.parse>>;
             /**
+             * Whether primary-key reads are pinned to the stored attributes.
+             * @type {boolean} */
+            _readsPersistedPrimaryKey: boolean;
+            /**
              * Changes captured before a create audit is written.
              * @type {import("./auditing.js").AuditChanges | undefined} */
             _pendingCreateAuditChanges: import("./auditing.js").AuditChanges | undefined;
@@ -533,10 +537,21 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
              */
             _dependentRestrictProviderTenants(instanceRelationship: RestrictInstanceRelationship, TargetModelClass: typeof VelociousDatabaseRecord, identifier: string, provider: TenantDatabaseProviderType): Promise<Array<ReturnType<typeof JSON.parse>>>;
             /**
+             * Runs a callback while primary-key reads resolve to the persisted identity.
+             * @param {() => Promise<void>} callback - Callback that requires the stored identity.
+             * @returns {Promise<void>} - Resolves when the callback completes.
+             */
+            _withPersistedPrimaryKey(callback: () => Promise<void>): Promise<void>;
+            /**
              * Destroys the record in the database and all of its dependent records.
              * @returns {Promise<void>} - Resolves when complete.
              */
             destroy(): Promise<void>;
+            /**
+             * Runs the destroy lifecycle after the persisted identity has been restored.
+             * @returns {Promise<void>} - Resolves when complete.
+             */
+            _destroyPersistedRecord(): Promise<void>;
             /**
              * Emits a committed record-change event after the surrounding transaction
              * commits, so live queries re-run uniformly for local writes, pull applies, and
@@ -1708,6 +1723,12 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
          */
         transaction(callback: () => Promise<void>): Promise<ReturnType<typeof JSON.parse>>;
         /**
+         * Prepares this model's attachment store before opening a model transaction.
+         * @param {import("../drivers/base.js").default} connection - Model connection.
+         * @returns {Promise<void>} - Resolves when the attachment schema is current.
+         */
+        _prepareAttachmentStoreSchema(connection: import("../drivers/base.js").default): Promise<void>;
+        /**
          * Runs the callback while holding a named advisory lock. Calls without
          * By default calls use the caller connection. Calls with `dedicatedConnection`
          * use a spawned lock connection that is released after the callback finishes,
@@ -2184,6 +2205,10 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
      * Changes.
      * @type {Record<string, ReturnType<typeof JSON.parse>>} */
     _changes: Record<string, ReturnType<typeof JSON.parse>>;
+    /**
+     * Whether primary-key reads are pinned to the stored attributes.
+     * @type {boolean} */
+    _readsPersistedPrimaryKey: boolean;
     /**
      * Changes captured before a create audit is written.
      * @type {import("./auditing.js").AuditChanges | undefined} */
@@ -3161,6 +3186,12 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
      */
     static transaction(callback: () => Promise<void>): Promise<ReturnType<typeof JSON.parse>>;
     /**
+     * Prepares this model's attachment store before opening a model transaction.
+     * @param {import("../drivers/base.js").default} connection - Model connection.
+     * @returns {Promise<void>} - Resolves when the attachment schema is current.
+     */
+    static _prepareAttachmentStoreSchema(connection: import("../drivers/base.js").default): Promise<void>;
+    /**
      * Runs the callback while holding a named advisory lock. Calls without
      * By default calls use the caller connection. Calls with `dedicatedConnection`
      * use a spawned lock connection that is released after the callback finishes,
@@ -3647,10 +3678,21 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
      */
     _dependentRestrictProviderTenants(instanceRelationship: RestrictInstanceRelationship, TargetModelClass: typeof VelociousDatabaseRecord, identifier: string, provider: TenantDatabaseProviderType): Promise<Array<ReturnType<typeof JSON.parse>>>;
     /**
+     * Runs a callback while primary-key reads resolve to the persisted identity.
+     * @param {() => Promise<void>} callback - Callback that requires the stored identity.
+     * @returns {Promise<void>} - Resolves when the callback completes.
+     */
+    _withPersistedPrimaryKey(callback: () => Promise<void>): Promise<void>;
+    /**
      * Destroys the record in the database and all of its dependent records.
      * @returns {Promise<void>} - Resolves when complete.
      */
     destroy(): Promise<void>;
+    /**
+     * Runs the destroy lifecycle after the persisted identity has been restored.
+     * @returns {Promise<void>} - Resolves when complete.
+     */
+    _destroyPersistedRecord(): Promise<void>;
     /**
      * Emits a committed record-change event after the surrounding transaction
      * commits, so live queries re-run uniformly for local writes, pull applies, and
