@@ -720,16 +720,16 @@ export default class SynchronizedAssetCache {
 
     while (true) {
       await this.beginActiveDigest(digest)
-      let deferredCleanupRan
+      let revalidationRequired
       let uri
 
       try {
         uri = await this.cachedUriWhileActive(entry)
       } finally {
-        deferredCleanupRan = await this.finishActiveDigest(digest)
+        revalidationRequired = await this.finishActiveDigest(digest)
       }
 
-      if (!deferredCleanupRan) return uri
+      if (!revalidationRequired) return uri
     }
   }
 
@@ -771,7 +771,7 @@ export default class SynchronizedAssetCache {
    * Releases one cache operation and processes deferred deletion after the last.
    * @param {string} digest Content digest.
    * @param {Set<string>} [protectedCleanupDigests] Digests needed by the resolving caller.
-   * @returns {Promise<boolean>} Whether deferred cleanup ran after the final release.
+   * @returns {Promise<boolean>} Whether finalization requires URI revalidation.
    */
   async finishActiveDigest(digest, protectedCleanupDigests = new Set()) {
     const activeCount = this.activeDigestCounts.get(digest)
@@ -786,12 +786,12 @@ export default class SynchronizedAssetCache {
     }
 
     this.activeDigestCounts.delete(digest)
-    await this.deletePendingDigestIfUnreferenced(digest)
+    const pendingDigestDeleted = await this.deletePendingDigestIfUnreferenced(digest)
     const deferredCleanupRequired = this.cleanupRequiredAfterReleaseDigests.delete(digest)
 
     if (deferredCleanupRequired) await this.cleanup(protectedCleanupDigests)
 
-    return deferredCleanupRequired
+    return pendingDigestDeleted || deferredCleanupRequired
   }
 
   /**
@@ -832,13 +832,13 @@ export default class SynchronizedAssetCache {
   /**
    * Deletes one persisted pending digest when no descriptor or active operation owns it.
    * @param {string} digest Content digest.
-   * @returns {Promise<void>} Resolves after any required deletion.
+   * @returns {Promise<boolean>} Whether the blob was deleted.
    */
   async deletePendingDigestIfUnreferenced(digest) {
     if (!this.state) throw new Error("Cannot delete synchronized asset blobs before loading state")
-    if (!this.state.pendingDeletionDigests.includes(digest)) return
+    if (!this.state.pendingDeletionDigests.includes(digest)) return false
 
-    await this.deleteDigestIfInactive(digest, async () => {
+    return await this.deleteDigestIfInactive(digest, async () => {
       if (!this.state) throw new Error("Cannot delete synchronized asset blobs before loading state")
       if (!this.state.pendingDeletionDigests.includes(digest)) return false
 

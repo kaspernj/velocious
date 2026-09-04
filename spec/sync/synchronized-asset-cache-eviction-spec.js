@@ -236,6 +236,34 @@ describe("SynchronizedAssetCache eviction", {databaseCleaning: {transaction: fal
     expect(adapter.blobs.has(`account-1:${durableAsset.digest}`)).toEqual(true)
   })
 
+  it("rechecks a resolved URI after pending deletion during its final lookup", async () => {
+    const content = bytes([127, 128, 129])
+    const asset = descriptor({bytes: content})
+    const adapter = new PausedBlobLookupAssetCacheAdapter()
+    const cache = new SynchronizedAssetCache({
+      accountId: "account-1",
+      adapter,
+      download: async () => content,
+      maxBytes: content.byteLength
+    })
+
+    await cache.synchronize({descriptors: [asset], online: true, scopeKey: "users"})
+    const state = await cache.loadState()
+    const entry = state.assets.find((candidate) => candidate.descriptor.id === asset.id)
+
+    if (!entry) throw new Error(`Missing synchronized asset cache entry ${asset.id}`)
+
+    adapter.pauseNextBlobLookup = true
+    const cachedUriPromise = cache.cachedUri(entry)
+
+    await adapter.blobLookupStarted.promise
+    await cache.synchronize({descriptors: [], online: false, scopeKey: "users"})
+    adapter.releaseBlobLookup.resolve(undefined)
+
+    expect(await cachedUriPromise).toEqual(null)
+    expect(adapter.blobs.has(`account-1:${asset.digest}`)).toEqual(false)
+  })
+
   it("serializes overlapping cleanup passes before selecting another victim", async () => {
     class DelayedBlobLookupAssetCacheAdapter extends MemoryAssetCacheAdapter {
       /** @param {{accountId: string, digest: string}} args Blob identity. @returns {Promise<string | null>} Resolvable URI. */
