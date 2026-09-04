@@ -105,7 +105,10 @@ the claim never committed or a newer lease now owns the job. The built-in SQL
 and local adapters still generate an id when legacy direct callers omit it, but
 a custom adapter used by the main must honor a supplied id. Upgrade that adapter
 implementation together with the Velocious main; the worker wire protocol is
-unchanged.
+unchanged. If the claim changes data used for dispatch, the adapter also returns
+the exact committed row as `BackgroundJobHandoff.job`; the built-in SQL adapter
+uses this for queue-policy reconciliation. Lease-only results remain supported
+for adapters that do not change dispatch data during the claim.
 
 Main-generation recovery uses `snapshotHandedOffJobs()` before the new TCP
 listener accepts worker reconnects. A custom adapter that persists worker leases

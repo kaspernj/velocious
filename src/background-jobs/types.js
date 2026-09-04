@@ -92,6 +92,7 @@
  * @typedef {object} BackgroundJobHandoff
  * @property {string} handoffId - Unique handoff lease id.
  * @property {number} handedOffAtMs - Time handed to a worker in ms.
+ * @property {BackgroundJobRow} [job] - Exact committed job snapshot when the adapter changes dispatch data during the claim.
  */
 /**
  * @typedef {object} BackgroundJobHandoffSnapshot

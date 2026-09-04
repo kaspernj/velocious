@@ -244,6 +244,10 @@ export type BackgroundJobHandoff = {
      * - Time handed to a worker in ms.
      */
     handedOffAtMs: number;
+    /**
+     * - Exact committed job snapshot when the adapter changes dispatch data during the claim.
+     */
+    job?: BackgroundJobRow;
 };
 export type BackgroundJobHandoffSnapshot = {
     /**
@@ -725,6 +729,7 @@ export type BackgroundJobSocketMessage = BackgroundJobHelloMessage | BackgroundJ
  * @typedef {object} BackgroundJobHandoff
  * @property {string} handoffId - Unique handoff lease id.
  * @property {number} handedOffAtMs - Time handed to a worker in ms.
+ * @property {BackgroundJobRow} [job] - Exact committed job snapshot when the adapter changes dispatch data during the claim.
  */
 /**
  * @typedef {object} BackgroundJobHandoffSnapshot

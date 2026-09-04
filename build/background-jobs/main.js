@@ -2063,23 +2063,25 @@ export default class BackgroundJobsMain {
       handoffs.set(job.id, handoff.handoffId)
 
       try {
+        const dispatchedJob = handoff.job || job
+
         worker.send({
           type: "job",
           payload: {
-            id: job.id,
-            jobName: job.jobName,
-            args: job.args,
+            id: dispatchedJob.id,
+            jobName: dispatchedJob.jobName,
+            args: dispatchedJob.args,
             handoffId: handoff.handoffId,
             workerId: worker.workerId,
             handedOffAtMs: handoff.handedOffAtMs,
             options: {
-              concurrencyKey: job.concurrencyKey || undefined,
-              executionMode: job.executionMode,
-              maxConcurrency: job.maxConcurrency ?? undefined,
-              maxRetries: job.maxRetries ?? undefined,
-              queue: job.queue,
-              scheduledAtMs: job.scheduledAtMs ?? undefined,
-              ...(job.timeoutMs === null ? {} : {timeoutMs: job.timeoutMs})
+              concurrencyKey: dispatchedJob.concurrencyKey || undefined,
+              executionMode: dispatchedJob.executionMode,
+              maxConcurrency: dispatchedJob.maxConcurrency ?? undefined,
+              maxRetries: dispatchedJob.maxRetries ?? undefined,
+              queue: dispatchedJob.queue,
+              scheduledAtMs: dispatchedJob.scheduledAtMs ?? undefined,
+              ...(dispatchedJob.timeoutMs === null ? {} : {timeoutMs: dispatchedJob.timeoutMs})
             }
           }
         })

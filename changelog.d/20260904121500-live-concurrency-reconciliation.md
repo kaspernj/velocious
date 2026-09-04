@@ -1,2 +1,2 @@
-- Repair stale durable background-job concurrency counts on the active main's maintenance cadence using a fresh transaction for each locked recount, retry dispatch after capacity is recovered, fence handoffs against concurrent queue-policy changes, and apply active-owned queue policy before returned work is handed off again.
+- Repair stale durable background-job concurrency counts on the active main's maintenance cadence using a fresh transaction for each locked recount, retry dispatch after capacity is recovered, fence handoffs against concurrent queue-policy changes, and dispatch returned work with the active-owned queue policy applied by its handoff.
 - Generate `IS NULL` for null-valued update hash conditions across the SQL drivers.

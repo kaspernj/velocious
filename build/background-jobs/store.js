@@ -1025,7 +1025,16 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       }
 
       await this._recordStatusTransition(db, "queued", "handed_off")
-      return {handedOffAtMs, handoffId}
+      /** @type {import("./types.js").BackgroundJobRow} */
+      const handedOffJob = {
+        ...queuedJob,
+        handedOffAtMs,
+        handoffId,
+        status: "handed_off",
+        workerId: workerId || null
+      }
+
+      return {handedOffAtMs, handoffId, job: handedOffJob}
     })
   }
 
