@@ -68,7 +68,11 @@ transport-safe and rejects `{path: ...}`.
 table on each migrated database through the same idempotent schema owner used
 at runtime. This keeps schema DDL outside application and test transactions and
 includes the table in generated structure SQL before the first attachment is
-written.
+written. Attachment owner identities use unbounded text so the complete
+canonical tuple for a composite primary key is retained even when it exceeds
+the former 255-character scalar-id column. Owner lookups also store an indexed,
+bounded SHA-256 digest beside that canonical value; queries use the digest for
+the index and the full identity as a collision check.
 
 ## Node path input
 
@@ -169,6 +173,11 @@ the selected driver's `delete` operation when it has one; simultaneous
 finalization and cleanup failures are reported together. Once `db.insert()`
 completes, the new object is referenced and is retained even if later connection
 check-in fails.
+
+When an update changes an attachment owner's primary key, Velocious migrates
+the attachment rows on the record transaction's own connection. A later
+reload, lifecycle callback, attachment flush, or save failure therefore rolls
+both the record key and its attachment ownership back together.
 
 Current attachment schemas keep `content_base64` nullable and store `null` for
 driver-backed content. An older schema where that column is non-null preserves

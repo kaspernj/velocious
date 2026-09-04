@@ -2063,23 +2063,25 @@ export default class BackgroundJobsMain {
       handoffs.set(job.id, handoff.handoffId)
 
       try {
+        const dispatchedJob = handoff.job || job
+
         worker.send({
           type: "job",
           payload: {
-            id: job.id,
-            jobName: job.jobName,
-            args: job.args,
+            id: dispatchedJob.id,
+            jobName: dispatchedJob.jobName,
+            args: dispatchedJob.args,
             handoffId: handoff.handoffId,
             workerId: worker.workerId,
             handedOffAtMs: handoff.handedOffAtMs,
             options: {
-              concurrencyKey: job.concurrencyKey || undefined,
-              executionMode: job.executionMode,
-              maxConcurrency: job.maxConcurrency ?? undefined,
-              maxRetries: job.maxRetries ?? undefined,
-              queue: job.queue,
-              scheduledAtMs: job.scheduledAtMs ?? undefined,
-              ...(job.timeoutMs === null ? {} : {timeoutMs: job.timeoutMs})
+              concurrencyKey: dispatchedJob.concurrencyKey || undefined,
+              executionMode: dispatchedJob.executionMode,
+              maxConcurrency: dispatchedJob.maxConcurrency ?? undefined,
+              maxRetries: dispatchedJob.maxRetries ?? undefined,
+              queue: dispatchedJob.queue,
+              scheduledAtMs: dispatchedJob.scheduledAtMs ?? undefined,
+              ...(dispatchedJob.timeoutMs === null ? {} : {timeoutMs: dispatchedJob.timeoutMs})
             }
           }
         })
@@ -2351,6 +2353,29 @@ export default class BackgroundJobsMain {
       const errorEvents = this.configuration.getErrorEvents()
 
       this.logger.error(() => ["Failed to mark orphaned jobs:", normalizedError])
+      errorEvents.emit("framework-error", payload)
+      errorEvents.emit("all-error", {...payload, errorType: "framework-error"})
+    }
+
+    if (this.lifecycleState === "active") await this._reconcileActiveConcurrency()
+  }
+
+  /**
+   * Repairs durable admission counters on the active main's maintenance cadence
+   * and immediately retries dispatch when capacity was recovered.
+   * @returns {Promise<void>} - Resolves after repair and any resulting drain.
+   */
+  async _reconcileActiveConcurrency() {
+    try {
+      const result = await this.store.reconcileActiveConcurrency()
+
+      if (result.repairedCount > 0) await this._drain()
+    } catch (error) {
+      const normalizedError = error instanceof Error ? error : new Error(String(error))
+      const payload = {context: {generationId: this.generationId, stage: "background-job-concurrency-reconciliation"}, error: normalizedError}
+      const errorEvents = this.configuration.getErrorEvents()
+
+      this.logger.error(() => ["Failed to reconcile background job active-concurrency counts:", normalizedError])
       errorEvents.emit("framework-error", payload)
       errorEvents.emit("all-error", {...payload, errorType: "framework-error"})
     }

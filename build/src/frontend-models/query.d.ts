@@ -685,10 +685,10 @@ export default class FrontendModelQuery<T extends import("./base.js").FrontendMo
     pluck(...columns: (string | string[] | Record<string, ReturnType<typeof JSON.parse>> | Array<Record<string, ReturnType<typeof JSON.parse>>>)[]): Promise<Array<ReturnType<typeof JSON.parse>>>;
     /**
      * Runs find.
-     * @param {number | string} id - Record id.
+     * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} id - Record id.
      * @returns {Promise<InstanceType<T>>} - Found model.
      */
-    find(id: number | string): Promise<InstanceType<T>>;
+    find(id: import("../utils/model-primary-key.js").ModelPrimaryKeyValue): Promise<InstanceType<T>>;
     /**
      * Runs find by.
      * @param {Record<string, ReturnType<typeof JSON.parse>>} conditions - Conditions.

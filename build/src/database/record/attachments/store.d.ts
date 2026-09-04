@@ -1,5 +1,12 @@
 export type AttachmentDriverConstructor = import("../../../configuration-types.js").AttachmentDriverConstructor;
 /**
+ * Returns the attachment store used before a model-level transaction starts.
+ * @param {typeof import("../index.js").default} modelClass - Model class opening the transaction.
+ * @param {import("../../drivers/base.js").default} connection - Selected physical connection.
+ * @returns {RecordAttachmentsStore} - Store instance.
+ */
+export declare function recordAttachmentsStoreForModelClass(modelClass: typeof import("../index.js").default, connection: import("../../drivers/base.js").default): RecordAttachmentsStore;
+/**
  * Runs the recordAttachmentsStoreForModel helper.
  * @param {import("../index.js").default} model - Model instance.
  * @returns {RecordAttachmentsStore} - Store instance.
@@ -12,6 +19,9 @@ export default class RecordAttachmentsStore {
     configuration: import("../../../configuration.js").default;
     databaseIdentifier: string;
     _readyPromise: Promise<void> | null;
+    _schemaUpgradePromise: Promise<void> | null;
+    /** @type {number | undefined} */
+    _schemaReadyGeneration: number | undefined;
     _driverColumnsAvailable: boolean;
     _contentBase64Nullable: boolean;
     /**
@@ -96,6 +106,39 @@ export default class RecordAttachmentsStore {
         db: import("../../../database/drivers/base.js").default;
     }): Promise<void>;
     /**
+     * Returns the schema-cache generation for the connection's physical database.
+     * @param {import("../../../database/drivers/base.js").default} db - DB connection.
+     * @returns {number} - Current schema-cache generation.
+     */
+    _schemaCacheGeneration(db: import("../../../database/drivers/base.js").default): number;
+    /**
+     * Ensures attachment columns and indexes after schema-upgrade serialization is acquired.
+     * @param {object} args - Options.
+     * @param {import("../../../database/drivers/base.js").default} args.db - DB connection.
+     * @returns {Promise<void>} - Resolves when schema columns are ensured.
+     */
+    _ensureAttachmentStoreSchema({ db }: {
+        db: import("../../../database/drivers/base.js").default;
+    }): Promise<void>;
+    /**
+     * Backfills bounded attachment owner digests in small batches.
+     * @param {import("../../../database/drivers/base.js").default} db - Database connection.
+     * @returns {Promise<void>} - Resolves when every existing row has a digest.
+     */
+    backfillAttachmentRecordIdDigests(db: import("../../../database/drivers/base.js").default): Promise<void>;
+    /**
+     * Makes the backfilled attachment owner digest required.
+     * @param {import("../../../database/drivers/base.js").default} db - Database connection.
+     * @returns {Promise<void>} - Resolves when the digest column is non-nullable.
+     */
+    ensureAttachmentRecordIdDigestNotNull(db: import("../../../database/drivers/base.js").default): Promise<void>;
+    /**
+     * Ensures attachment owner queries retain a bounded composite index.
+     * @param {import("../../../database/drivers/base.js").default} db - Database connection.
+     * @returns {Promise<void>} - Resolves when the owner index exists.
+     */
+    ensureAttachmentOwnerIndex(db: import("../../../database/drivers/base.js").default): Promise<void>;
+    /**
      * Runs read attachment row.
      * @param {object} args - Options.
      * @param {import("../index.js").default} args.model - Model instance.
@@ -145,6 +188,30 @@ export default class RecordAttachmentsStore {
         model: import("../index.js").default;
         name: string;
     }): Promise<Array<Record<string, ReturnType<typeof JSON.parse>>>>;
+    /**
+     * Prepares attachment schema before a record transaction can migrate ownership.
+     * @param {object} args - Options.
+     * @param {import("../../drivers/base.js").default} args.connection - Record-owning database connection.
+     * @returns {Promise<void>} - Resolves when existing attachment schema is current.
+     */
+    prepareRecordIdentityMigration({ connection }: {
+        connection: import("../../drivers/base.js").default;
+    }): Promise<void>;
+    /**
+     * Moves every attachment row to a record's new primary-key identity.
+     * @param {object} args - Options.
+     * @param {import("../../drivers/base.js").default} args.connection - Transaction-owning database connection.
+     * @param {import("../index.js").default} args.model - Attachment owner after the key change.
+     * @param {import("../../../utils/model-primary-key.js").ModelPrimaryKeyValue} args.nextIdentity - New owner identity.
+     * @param {import("../../../utils/model-primary-key.js").ModelPrimaryKeyValue} args.previousIdentity - Persisted owner identity.
+     * @returns {Promise<void>} - Resolves after ownership is migrated.
+     */
+    migrateRecordIdentity({ connection, model, nextIdentity, previousIdentity }: {
+        connection: import("../../drivers/base.js").default;
+        model: import("../index.js").default;
+        nextIdentity: import("../../../utils/model-primary-key.js").ModelPrimaryKeyValue;
+        previousIdentity: import("../../../utils/model-primary-key.js").ModelPrimaryKeyValue;
+    }): Promise<void>;
     /**
      * Runs delete attachment row storage.
      * @param {object} args - Options.

@@ -2,6 +2,7 @@
 
 import {describe, expect, it} from "../../src/testing/test.js"
 import FrontendModelWebsocketChannel from "../../src/frontend-models/websocket-channel.js"
+import PgsqlColumn from "../../src/database/drivers/pgsql/column.js"
 
 describe("FrontendModelWebsocketChannel", {databaseCleaning: {transaction: true}}, () => {
   it("exposes websocket metadata separately from upgrade request headers", () => {
@@ -138,6 +139,7 @@ describe("FrontendModelWebsocketChannel", {databaseCleaning: {transaction: true}
     })
 
     channel._frontendModelControllerClass = async () => /** @type {typeof import("../../src/frontend-model-controller.js").default} */ (class FrontendModelController {})
+    channel._destroyEventIsAuthorized = async () => true
     channel._matchedEventFilterKeysForEventId = async () => []
 
     await channel.deliverBroadcast({
@@ -148,12 +150,223 @@ describe("FrontendModelWebsocketChannel", {databaseCleaning: {transaction: true}
     await channel.deliverBroadcast({
       action: "destroy",
       id: "destroyed-task"
+    }, {
+      broadcastParams: {destroyAuthorizationRecord: {id: "destroyed-task"}}
     })
 
     expect(sentFrames.map((frame) => frame.body)).toEqual([
       {
         action: "destroy",
         id: "destroyed-task"
+      }
+    ])
+  })
+
+  it("does not expose unauthorized destroy identities", async () => {
+    /** @type {Array<{body?: object, type?: string}>} */
+    const sentFrames = []
+    const channel = new FrontendModelWebsocketChannel({
+      params: {model: "CompositeTask"},
+      // @ts-expect-error Minimal sendJson-only session stub for direct channel delivery.
+      session: {
+        sendJson: (/** @type {{body?: object, type?: string}} */ frame) => sentFrames.push(frame)
+      },
+      subscriptionId: "unauthorized-destroy-delivery"
+    })
+
+    channel._frontendModelControllerClass = async () => /** @type {typeof import("../../src/frontend-model-controller.js").default} */ (class FrontendModelController {})
+    channel._destroyEventIsAuthorized = async () => false
+
+    await channel.deliverBroadcast({
+      action: "destroy",
+      id: {externalId: "secret", tenantId: "tenant-b"}
+    }, {
+      broadcastParams: {destroyAuthorizationRecord: {external_id: "secret", tenant_id: "tenant-b"}}
+    })
+
+    expect(sentFrames).toEqual([])
+  })
+
+  it("does not deliver persisted broadcasts for another frontend model", {databaseCleaning: {transaction: false, truncate: false}}, async () => {
+    /** @type {Array<{body?: object, type?: string}>} */
+    const sentFrames = []
+    const channel = new FrontendModelWebsocketChannel({
+      params: {model: "Task"},
+      // @ts-expect-error Minimal sendJson-only session stub for direct channel delivery.
+      session: {
+        sendJson: (/** @type {{body?: object, type?: string}} */ frame) => sentFrames.push(frame)
+      },
+      subscriptionId: "persisted-other-model"
+    })
+
+    channel._projectedRecordForEventId = async () => ({id: "project-1"})
+
+    await channel.deliverBroadcast({
+      action: "update",
+      id: "project-1",
+      model: "Project"
+    })
+
+    expect(sentFrames).toEqual([])
+  })
+
+  it("authorizes destroys against the captured row source and composite identity", async () => {
+    const froms = ["records"]
+    let appliedFrom
+    let appliedWhere
+    const query = {
+      driver: {
+        getType: () => "pgsql",
+        quote: (/** @type {unknown} */ value) => `'${value}'`,
+        quoteColumn: (/** @type {string} */ columnName) => `"${columnName}"`,
+        quoteTable: (/** @type {string} */ tableName) => `"${tableName}"`
+      },
+      first: async () => ({authorized: true}),
+      from: (/** @type {string} */ from) => {
+        appliedFrom = from
+        froms.push(from)
+        return query
+      },
+      getFroms: () => froms,
+      where: (/** @type {Record<string, unknown>} */ where) => {
+        appliedWhere = where
+        return query
+      }
+    }
+    const pgsqlTable = {
+      getDriver: () => query.driver
+    }
+    const ModelClass = class CompositeRecord {
+      /** @returns {typeof query} - Fresh model query. */
+      static _newQuery() { return query }
+
+      /** @param {string} attributeName - Attribute name. @returns {string} - Database column. */
+      static getColumnNameForAttributeName(attributeName) {
+        return attributeName === "externalId" ? "external_id" : "tenant_id"
+      }
+
+      /** @returns {Record<string, import("../../src/database/drivers/base-column.js").default>} - Backing columns by name. */
+      static getColumnsHash() {
+        return {
+          external_id: new PgsqlColumn(/** @type {any} */ (pgsqlTable), {column_comment: null, column_name: "external_id", data_type: "uuid"}),
+          labels: new PgsqlColumn(/** @type {any} */ (pgsqlTable), {column_comment: null, column_name: "labels", data_type: "ARRAY", udt_name: "_text", udt_schema: "pg_catalog"}),
+          priority: new PgsqlColumn(/** @type {any} */ (pgsqlTable), {column_comment: null, column_name: "priority", data_type: "integer", domain_name: "task_priority", domain_schema: "public"}),
+          status: new PgsqlColumn(/** @type {any} */ (pgsqlTable), {column_comment: null, column_name: "status", data_type: "USER-DEFINED", udt_name: "task_status", udt_schema: "public"}),
+          tenant_id: new PgsqlColumn(/** @type {any} */ (pgsqlTable), {column_comment: null, column_name: "tenant_id", data_type: "bigint"})
+        }
+      }
+
+      /** @returns {string} - Backing table name. */
+      static tableName() { return "records" }
+    }
+    const controller = {
+      ensureFrontendModelClassInitialized: async () => {},
+      frontendModelAuthorizedQuery: () => query,
+      frontendModelClass: () => ModelClass,
+      frontendModelPrimaryKey: () => ["tenantId", "externalId"]
+    }
+    const channel = new FrontendModelWebsocketChannel({
+      params: {model: "CompositeRecord"},
+      // @ts-expect-error Minimal session stub for direct authorization.
+      session: {},
+      subscriptionId: "destroy-authorization-source"
+    })
+
+    channel._frontendModelController = () => /** @type {any} */ (controller)
+    channel._withEventTenant = async (_id, callback) => await callback()
+
+    const authorized = await channel._destroyEventIsAuthorized({
+      action: "destroy",
+      id: {externalId: "7f0a1b2c-3d4e-4f5a-8b6c-9d0e1f2a3b4c", tenantId: 42}
+    }, /** @type {typeof import("../../src/frontend-model-controller.js").default} */ (class FrontendModelController {}), {
+      external_id: "7f0a1b2c-3d4e-4f5a-8b6c-9d0e1f2a3b4c",
+      labels: ["urgent"],
+      priority: 3,
+      status: "open",
+      tenant_id: 42
+    })
+
+    expect(authorized).toEqual(true)
+    expect(froms).toEqual(["(SELECT CAST('7f0a1b2c-3d4e-4f5a-8b6c-9d0e1f2a3b4c' AS uuid) AS \"external_id\", CAST(ARRAY['urgent'] AS \"pg_catalog\".\"_text\") AS \"labels\", CAST('3' AS \"public\".\"task_priority\") AS \"priority\", CAST('open' AS \"public\".\"task_status\") AS \"status\", CAST('42' AS bigint) AS \"tenant_id\") AS \"records\""])
+    expect(appliedFrom).toEqual("(SELECT CAST('7f0a1b2c-3d4e-4f5a-8b6c-9d0e1f2a3b4c' AS uuid) AS \"external_id\", CAST(ARRAY['urgent'] AS \"pg_catalog\".\"_text\") AS \"labels\", CAST('3' AS \"public\".\"task_priority\") AS \"priority\", CAST('open' AS \"public\".\"task_status\") AS \"status\", CAST('42' AS bigint) AS \"tenant_id\") AS \"records\"")
+    expect(appliedWhere).toEqual({records: {external_id: "7f0a1b2c-3d4e-4f5a-8b6c-9d0e1f2a3b4c", tenant_id: 42}})
+  })
+
+  it("delivers filtered identity changes so instance listeners can rekey", {databaseCleaning: {transaction: false, truncate: false}}, async () => {
+    /** @type {Array<{body?: Record<string, ReturnType<typeof JSON.parse>>, type?: string}>} */
+    const sentFrames = []
+    const channel = new FrontendModelWebsocketChannel({
+      params: {
+        eventFilters: [
+          {key: "open", where: {state: "open"}}
+        ],
+        model: "CompositeTask"
+      },
+      // @ts-expect-error Minimal session stub for direct channel delivery.
+      session: {
+        configuration: {
+          getEnvironmentHandler: () => ({getTimeZone: () => "UTC"})
+        },
+        sendJson: (/** @type {{body?: Record<string, ReturnType<typeof JSON.parse>>, type?: string}} */ frame) => sentFrames.push(frame)
+      },
+      subscriptionId: "filtered-identity-change"
+    })
+
+    channel._frontendModelControllerClass = async () => /** @type {typeof import("../../src/frontend-model-controller.js").default} */ (class FrontendModelController {})
+    channel._matchedEventFilterKeysForEventId = async () => []
+    channel._projectedRecordForEventId = async () => ({
+      name: "Renamed task",
+      state: "closed",
+      workspaceId: "alpha"
+    })
+
+    await channel.deliverBroadcast({
+      action: "update",
+      id: {name: "Renamed task", workspaceId: "alpha"},
+      previousId: {name: "Original task", workspaceId: "alpha"}
+    })
+
+    expect(sentFrames.map((frame) => frame.body)).toEqual([
+      {
+        action: "update",
+        id: {name: "Renamed task", workspaceId: "alpha"},
+        matchedEventFilterKeys: [],
+        previousId: {name: "Original task", workspaceId: "alpha"},
+        record: {
+          name: "Renamed task",
+          state: "closed",
+          workspaceId: "alpha"
+        }
+      }
+    ])
+  })
+
+  it("delivers identity-only routing when a re-keyed record is no longer authorized", {databaseCleaning: {transaction: false, truncate: false}}, async () => {
+    /** @type {Array<{body?: Record<string, ReturnType<typeof JSON.parse>>, type?: string}>} */
+    const sentFrames = []
+    const channel = new FrontendModelWebsocketChannel({
+      params: {model: "CompositeTask"},
+      // @ts-expect-error Minimal session stub for direct channel delivery.
+      session: {
+        sendJson: (/** @type {{body?: Record<string, ReturnType<typeof JSON.parse>>, type?: string}} */ frame) => sentFrames.push(frame)
+      },
+      subscriptionId: "unauthorized-identity-change"
+    })
+
+    channel._frontendModelControllerClass = async () => /** @type {typeof import("../../src/frontend-model-controller.js").default} */ (class FrontendModelController {})
+    channel._projectedRecordForEventId = async () => null
+
+    await channel.deliverBroadcast({
+      action: "update",
+      id: {name: "Renamed task", workspaceId: "beta"},
+      previousId: {name: "Original task", workspaceId: "alpha"}
+    })
+
+    expect(sentFrames.map((frame) => frame.body)).toEqual([
+      {
+        action: "update",
+        id: {name: "Renamed task", workspaceId: "beta"},
+        previousId: {name: "Original task", workspaceId: "alpha"}
       }
     ])
   })
@@ -180,6 +393,7 @@ describe("FrontendModelWebsocketChannel", {databaseCleaning: {transaction: true}
           activeCheckoutName = null
         }
       },
+      getEnvironmentHandler: () => ({getTimeZone: () => "UTC"}),
       resolveTenant: async () => {
         if (!activeCheckoutName) {
           throw new Error("Tenant resolution did not run inside a checkout")
@@ -205,8 +419,8 @@ describe("FrontendModelWebsocketChannel", {databaseCleaning: {transaction: true}
     })
 
     channel._frontendModelControllerClass = async () => /** @type {typeof import("../../src/frontend-model-controller.js").default} */ (class FrontendModelController {})
-    channel._eventIsAccessible = async (id) => {
-      return await channel._withEventTenant(id, async () => true)
+    channel._projectedRecordForEventId = async (id) => {
+      return await channel._withEventTenant(id, async () => ({id: "task-1", name: "Task 1"}))
     }
 
     await channel.deliverBroadcast({
@@ -239,6 +453,7 @@ describe("FrontendModelWebsocketChannel", {databaseCleaning: {transaction: true}
       rulesFor: () => [{effect: "allow"}]
     }
     const configuration = {
+      getBackendProjects: () => [],
       getModelClasses: () => ({Task: class Task {}}),
       resolveAbility: async (/** @type {{params: Record<string, unknown>}} */ {params}) => {
         resolveAbilityParams.push(params)

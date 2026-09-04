@@ -2,11 +2,11 @@ export type FrontendModelClass = import("./base.js").FrontendModelClass;
 export type FrontendModelInstance = InstanceType<FrontendModelClass>;
 export type FrontendModelClassEventName = "create" | "update" | "destroy";
 export type FrontendModelCreateUpdateEventPayload = {
-    id: string;
+    id: string | import("../utils/model-primary-key.js").CompositeModelPrimaryKeyValue;
     model: FrontendModelInstance;
 };
 export type FrontendModelDestroyEventPayload = {
-    id: string;
+    id: string | import("../utils/model-primary-key.js").CompositeModelPrimaryKeyValue;
 };
 export type FrontendModelClassEventPayload = FrontendModelCreateUpdateEventPayload | FrontendModelDestroyEventPayload;
 export type FrontendModelClassEventCallback = (payload: FrontendModelClassEventPayload) => void;

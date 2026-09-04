@@ -20,6 +20,18 @@ describe("Record - hasPrimaryKey", () => {
     expect(CustomPkRecord.primaryKey()).toEqual("uuid")
   })
 
+  it("rejects empty composite primary-key declarations", async () => {
+    class EmptyCompositePkRecord extends Record {}
+
+    await expect(() => EmptyCompositePkRecord.setPrimaryKey([])).toThrow(/at least one column/u)
+  })
+
+  it("rejects duplicate composite primary-key columns", async () => {
+    class DuplicateCompositePkRecord extends Record {}
+
+    await expect(() => DuplicateCompositePkRecord.setPrimaryKey(["tenant_id", "tenant_id"])).toThrow(/duplicate column: tenant_id/u)
+  })
+
   it("returns false when the primary key is explicitly null (composite-key tables)", () => {
     class NoPkRecord extends Record {}
 

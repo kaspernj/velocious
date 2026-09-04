@@ -15,6 +15,7 @@ import JoinTracker from "./join-tracker.js"
 import RecordNotFoundError from "../record/record-not-found-error.js"
 import {normalizeRansackGroup, parseRansackSort} from "../../utils/ransack.js"
 import {isModelScopeDescriptor} from "../../utils/model-scope.js"
+import {modelPrimaryKeyConditions, scalarModelPrimaryKey} from "../../utils/model-primary-key.js"
 import WhereCombinator from "./where-combinator.js"
 import WhereModelClassHash from "./where-model-class-hash.js"
 import WhereNot from "./where-not.js"
@@ -323,7 +324,8 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     // setPrimaryKey([...]) on legacy tables — has no column COUNT can reference (an array primary key
     // cannot be quoted as a single COUNT(column), and primaryKey() falls back to "id" for the no-pk
     // case, so hasPrimaryKey() detects that one).
-    const hasSingleColumnPrimaryKey = this.getModelClass().hasPrimaryKey() && !Array.isArray(this.getModelClass().primaryKey())
+    const primaryKey = this.getModelClass().primaryKey()
+    const hasSingleColumnPrimaryKey = this.getModelClass().hasPrimaryKey() && !Array.isArray(primaryKey)
 
     // Pagination, or an ungrouped query on a model with no single primary-key column, counts via the
     // subquery form. It references no primary-key column and preserves DISTINCT over joins — which a
@@ -340,7 +342,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
     const distinctPrefix = this._distinct ? "DISTINCT " : ""
     const countExpression = hasSingleColumnPrimaryKey
-      ? `${this.driver.quoteTable(this.getModelClass().tableName())}.${this.driver.quoteColumn(this.getModelClass().primaryKey())}`
+      ? `${this.driver.quoteTable(this.getModelClass().tableName())}.${this.driver.quoteColumn(/** @type {string} */ (primaryKey))}`
       : "*"
     let sql = `COUNT(${distinctPrefix}${countExpression})`
 
@@ -807,7 +809,8 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     if (joinsSql.length > 0) {
       // Use a subquery for cross-driver compatibility (SQLite
       // doesn't support UPDATE ... JOIN).
-      const pk = driver.quoteColumn(this.getModelClass().primaryKey())
+      const primaryKey = scalarModelPrimaryKey(this.getModelClass().primaryKey(), `${this.getModelClass().name}.updateAll() with joins`)
+      const pk = driver.quoteColumn(primaryKey)
       const qt = driver.quoteTable(tableName)
 
       sql = `UPDATE ${qt} SET ${setCols} WHERE ${pk} IN (SELECT ${qt}.${pk} FROM ${qt}${joinsSql}${whereSql})`
@@ -820,7 +823,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
   /**
    * Runs find.
-   * @param {number|string} recordId - Record id.
+   * @param {import("../../utils/model-primary-key.js").ModelPrimaryKeyValue} recordId - Record id.
    * @returns {Promise<InstanceType<MC>>} - Resolves with the find.
    */
   async find(recordId) {
@@ -829,7 +832,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
      * @type {{[key: string]: number | string}} */
     const conditions = {}
 
-    conditions[this.getModelClass().primaryKey()] = recordId
+    Object.assign(conditions, modelPrimaryKeyConditions(this.getModelClass().primaryKey(), recordId))
 
     const newQuery = /** @type {VelociousDatabaseQueryModelClassQuery<MC>} */ (this.clone())
 
@@ -838,7 +841,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     const record = (await newQuery.first())
 
     if (!record) {
-      throw new RecordNotFoundError(`Couldn't find ${this.getModelClass().name} with '${this.getModelClass().primaryKey()}'=${recordId}`)
+      throw new RecordNotFoundError(`Couldn't find ${this.getModelClass().name} with '${this.getModelClass().primaryKey()}'=${JSON.stringify(recordId)}`)
     }
 
     return record
@@ -940,7 +943,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
    * @returns {Promise<InstanceType<MC> | null>} - Resolves with the first.
    */
   async first() {
-    const newQuery = this.clone().limit(1).reorder(`${this.driver.quoteTable(this.getModelClass().tableName())}.${this.driver.quoteColumn(this.getModelClass().orderableColumn())}`)
+    const newQuery = this.clone().limit(1).reorder(this._defaultIdentityOrder("ASC"))
     const results = await newQuery.toArray()
 
     return results[0] || null
@@ -951,11 +954,24 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
    * @returns {Promise<InstanceType<MC> | null>} - Resolves with the last.
    */
   async last() {
-    const primaryKey = this.getModelClass().primaryKey()
-    const tableName = this.getModelClass().tableName()
-    const results = await this.clone().reorder(`${this.driver.quoteTable(tableName)}.${this.driver.quoteColumn(primaryKey)} DESC`).limit(1).toArray()
+    const results = await this.clone().reorder(this._defaultIdentityOrder("DESC")).limit(1).toArray()
 
     return results[0] || null
+  }
+
+  /**
+   * Builds the deterministic default order for the model identity.
+   * @param {"ASC" | "DESC"} direction - Sort direction.
+   * @returns {string} - SQL order expression.
+   */
+  _defaultIdentityOrder(direction) {
+    const ModelClass = this.getModelClass()
+    const primaryKey = ModelClass.primaryKey()
+    const orderableColumns = Array.isArray(primaryKey) ? primaryKey : [ModelClass.orderableColumn()]
+
+    return orderableColumns
+      .map((column) => `${this.driver.quoteTable(ModelClass.tableName())}.${this.driver.quoteColumn(column)} ${direction}`)
+      .join(", ")
   }
 
   /**

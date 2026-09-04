@@ -20,9 +20,7 @@ export default class VelociousDatabaseConnectionDriversMssqlSqlUpdate extends Up
     for (let columnName in this.conditions) {
       if (count > 0) sql += " AND "
 
-      sql += this.getOptions().quoteColumnName(columnName)
-      sql += " = "
-      sql += this.formatValue(this.conditions[columnName])
+      sql += this.formatCondition(columnName, this.conditions[columnName])
       count++
     }
 

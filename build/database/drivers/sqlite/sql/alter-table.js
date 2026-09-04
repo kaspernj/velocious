@@ -110,7 +110,17 @@ export default class VelociousDatabaseConnectionDriversSqliteSqlAlterTable exten
         if (alterColumn.getDefault() === undefined) alterColumn.setDefault(currentColumn.getDefault())
         if (!alterColumn.getIndex()) alterColumn.setIndex(currentColumn.getIndex())
         if (!alterColumn.getForeignKey()) alterColumn.setForeignKey(currentColumn.getForeignKey())
-        if (alterColumn.getMaxLength() === undefined) alterColumn.setMaxLength(currentColumn.getMaxLength())
+        const alterColumnType = alterColumn.getType()
+
+        if (
+          alterColumn.getMaxLength() === undefined
+          && (
+            alterColumnType === undefined
+            || (alterColumnType !== "text" && alterColumnType === currentColumn.getType())
+          )
+        ) {
+          alterColumn.setMaxLength(currentColumn.getMaxLength())
+        }
         alterColumn.setPrimaryKey(alterColumn.getPrimaryKey() || currentColumn.getPrimaryKey())
         if (!alterColumn.getType()) alterColumn.setType(currentColumn.getType())
 

@@ -14,7 +14,7 @@ export default class TaskFrontendModelAbilityResource extends BaseResource {
       this.can("read", (query) => query.distinct(true))
     } else if (applySubqueryScope) {
       this.can(["create", "destroy", "read", "update"], (query) => {
-        query.where(`tasks.project_id IN (SELECT projects.id FROM projects WHERE projects.creating_user_reference = ${query.driver.quote(applySubqueryScope)})`)
+        return Task.where(`tasks.project_id IN (SELECT projects.id FROM projects WHERE projects.creating_user_reference = ${query.driver.quote(applySubqueryScope)})`)
       })
     } else {
       this.can(["create", "destroy", "read", "update"])

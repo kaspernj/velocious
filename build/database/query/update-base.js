@@ -35,6 +35,20 @@ export default class VelociousDatabaseQueryUpdateBase {
     return this.getOptions().quote(value)
   }
 
+  /**
+   * Formats one hash condition with SQL null semantics.
+   * @param {string} columnName - Column name.
+   * @param {ReturnType<typeof JSON.parse>} value - Condition value.
+   * @returns {string} - SQL condition.
+   */
+  formatCondition(columnName, value) {
+    const column = this.getOptions().quoteColumnName(columnName)
+
+    if (value === null) return `${column} IS NULL`
+
+    return `${column} = ${this.formatValue(value)}`
+  }
+
   toSql() {
     throw new Error("'toSql' wasn't implemented")
   }

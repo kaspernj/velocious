@@ -1,5 +1,7 @@
 // @ts-check
 
+import {scalarModelPrimaryKey} from "../../utils/model-primary-key.js"
+
 /**
  * WithCountEntry type.
  * @typedef {object} WithCountEntry
@@ -109,7 +111,7 @@ function entryFromName(name) {
 export async function runWithCount({models, modelClass, entries}) {
   if (models.length === 0 || entries.length === 0) return
 
-  const primaryKey = modelClass.primaryKey()
+  const primaryKey = scalarModelPrimaryKey(modelClass.primaryKey(), `withCount for ${modelClass.name}`)
   const parentIds = models.map((model) => /** @type {string | number} */ (model.readColumn(primaryKey)))
   const sourceModel = models[0]
   const queryGroups = new Map()

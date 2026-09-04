@@ -79,6 +79,7 @@ throw VelociousError.safe("Task placement was rejected.", {
 - `findOrInitializeBy(conditions)` returns existing model or a new unsaved model.
 - `findOrCreateBy(conditions, callback)` returns existing model or creates a new model.
 - Date condition values are normalized through JSON serialization to align request and local matching semantics.
+- Resources may declare `primaryKey: ["tenantId", "externalId"]`; their generated frontend models use exact identity objects for `find`, online `save`/`update`, `destroy`, attachments, and lifecycle events. See [composite primary keys](composite-primary-keys.md) for the identity contract and scalar-only boundaries.
 
 ## Association counts
 - `query.withCount("tasks")` attaches a per-row has-many count to each loaded record, read via `record.readCount("tasksCount")`. Accepts a relationship name, an array of names, or an object form with custom attribute names and per-association `where` filters. Polymorphic has-many is supported. See [with-count.md](with-count.md) for full usage and semantics.
@@ -202,7 +203,7 @@ const unsubscribe = await BuildGroup.onDestroy(onBuildGroupDestroyed, {
   import {VelociousAttachment} from "velocious/build/src/frontend-models/base.js"
 
   const attachments = await VelociousAttachment
-    .where({recordType: "Task", recordId: String(task.id()), name: "files"})
+    .where({resourceName: "Task", recordType: "Task", recordId: String(task.id()), name: "files"})
     .order([["position", "asc"]])
     .toArray()
 
@@ -210,7 +211,9 @@ const unsubscribe = await BuildGroup.onDestroy(onBuildGroupDestroyed, {
   const allFiles = await task.files().toArray()
   ```
 
-  `VelociousAttachment` exposes safe metadata fields: `id`, `recordType`, `recordId`, `name`, `position`, `filename`, `contentType`, `byteSize`, `createdAt`, and `updatedAt`. Storage internals such as `driver`, `storageKey`, and `contentBase64` are not exposed or queryable through frontend models. Attachment metadata reads require owner scope (`recordType`, `recordId`, and `name`) and authorize through the owning record's frontend-model resource. Binary content and storage URLs still use `download()` and `url()`.
+  `VelociousAttachment` exposes safe metadata fields: `id`, `recordType`, `recordId`, `name`, `position`, `filename`, `contentType`, `byteSize`, `createdAt`, and `updatedAt`. Storage internals such as `driver`, `storageKey`, and `contentBase64` are not exposed or queryable through frontend models. Attachment metadata collection reads require owner scope (`resourceName`, `recordType`, `recordId`, and `name`) and authorize through that frontend-model resource. `VelociousAttachment.find(id)` authorizes against every configured resource alias backed by the attachment owner type and declaring the attachment. Binary content and storage URLs still use `download()` and `url()`.
+
+  Attachment handles on server-loaded records and lifecycle callback models carry the canonical backing-record owner internally. This keeps `first()` and `toArray()` aligned with attachment storage when a frontend resource uses a different name or primary key from its backing model.
 
 ## Condition validation rules
 - Reject `undefined` condition values.

@@ -3,7 +3,7 @@
 * Concurrent multi threadded web server
 * Database framework with familiar MVC concepts
 * Database models with migrations and validations
-* Database models that work almost the same in frontend and backend
+* Database models that work almost the same in frontend and backend, including online CRUD for [composite primary keys](docs/composite-primary-keys.md)
 * Connection-scoped advisory locks with automatic cleanup before pooled connections are reused or closed (see [docs/advisory-locks.md](docs/advisory-locks.md))
 * Built-in record auditing for model lifecycle changes (see [docs/auditing.md](docs/auditing.md))
 * Declarative state machines for models, with typed event methods generated into the base model (see [docs/state-machine.md](docs/state-machine.md))
@@ -851,7 +851,7 @@ attempts each shared digest only once per reconciliation. On-demand resolution
 rechecks the backing blob after cleanup and returns `null` instead of a stale
 local URI when concurrent eviction removed it. Cleanup deferred by an active
 cached resolution runs again after that digest's final guard releases.
-Attachment metadata is exposed through the built-in `VelociousAttachment` frontend model with safe fields only: `id`, `recordType`, `recordId`, `name`, `position`, `filename`, `contentType`, `byteSize`, `createdAt`, and `updatedAt`. Storage internals such as `driver`, `storageKey`, and `contentBase64` remain hidden and non-queryable. Direct metadata queries require owner filters: `recordType`, `recordId`, and `name`.
+Attachment metadata is exposed through the built-in `VelociousAttachment` frontend model with safe fields only: `id`, `recordType`, `recordId`, `name`, `position`, `filename`, `contentType`, `byteSize`, `createdAt`, and `updatedAt`. Storage internals such as `driver`, `storageKey`, and `contentBase64` remain hidden and non-queryable. Metadata collection queries require owner filters: `resourceName`, `recordType`, `recordId`, and `name`. Composite `recordId` values retain the complete canonical tuple without a 255-character limit, and key-changing saves rekey attachment ownership in the record transaction. `VelociousAttachment.find(id)` uses the member endpoint and authorizes against configured resource aliases backed by the attachment owner type.
 
 When your frontend app calls a backend on another host/port (or under a path prefix), configure transport once:
 
@@ -2801,7 +2801,7 @@ backgroundJobs: {
 }
 ```
 
-A job with no queue runs on `"default"`; a queue with no cap is unlimited. Caps are enforced through the durable per-key concurrency mechanism (the reserved `queue:<name>` key) and hold regardless of how many worker processes run. Changing a cap and rebuilding durable active counts happen only when `background-jobs-main` starts (serialized across processes with a database advisory lock and logged with database identifier/duration); `db:migrate`, `db:tenants:*`, and routine store/application initialization with an intact jobs table never adopt queued jobs or rebuild global concurrency counts. If schema repair must recreate a missing `background_jobs` table while the migration marker and concurrency table survive, it resets the now-orphaned active counts against that newly empty table. Scheduled jobs honor a job's `static queue` too.
+A job with no queue runs on `"default"`; a queue with no cap is unlimited. Caps are enforced through the durable per-key concurrency mechanism (the reserved `queue:<name>` key) and hold regardless of how many worker processes run. Queue-policy changes are adopted by queued backlog rows when `background-jobs-main` starts; already handed-off jobs drain under their original policy. If they return, reschedule, or retry, the reporting generation releases the original reservation without changing shared policy, and the active generation applies its current queue policy immediately before the next handoff and sends that committed policy to the worker; explicit concurrency remains unchanged. Handoff persistence is fenced against concurrent policy changes. Startup also rebuilds durable active counts under a database advisory lock. The active main then checks those counts every minute, performs no counter writes while they are exact, repairs only locked mismatches, logs a bounded structured repair summary, and immediately retries dispatch so stale capacity cannot require a restart. `db:migrate`, `db:tenants:*`, and routine store/application initialization with an intact jobs table never adopt queued jobs or rebuild global concurrency counts. If schema repair must recreate a missing `background_jobs` table while the migration marker and concurrency table survive, it resets the now-orphaned active counts against that newly empty table. Scheduled jobs honor a job's `static queue` too.
 
 Set `priority` (default `0`) to dispatch a queue ahead of lower-priority ones regardless of enqueue order, so a small time-critical queue is never starved by a flood of low-priority work sharing a worker pool. Unlike Sidekiq's strict queue ordering, priority composes with the caps: a higher-priority queue already at its `maxConcurrent` is skipped and dispatch falls through to the next eligible job. See [docs/background-jobs.md](docs/background-jobs.md#queues-per-queue-concurrency-caps).
 

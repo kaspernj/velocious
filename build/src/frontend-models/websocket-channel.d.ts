@@ -1,11 +1,13 @@
 import VelociousWebsocketChannel from "../http-server/websocket-channel.js";
 export type FrontendModelLifecycleBroadcastBody = {
     action?: string;
-    id?: string | number;
+    id?: import("../utils/model-primary-key.js").ModelPrimaryKeyValue;
     matchedEventFilterKeys?: string[];
+    previousId?: import("../utils/model-primary-key.js").ModelPrimaryKeyValue;
     record?: import("./query.js").FrontendModelTransportValue;
     [key: string]: import("./query.js").FrontendModelTransportValue | string[] | undefined;
 };
+export type DestroyAuthorizationRecord = Record<string, import("./query.js").FrontendModelTransportValue>;
 export type FrontendModelWebsocketUpgradeRequest = {
     headers?: () => Record<string, string | string[] | undefined>;
     remoteAddress?: () => string | undefined;
@@ -23,15 +25,11 @@ export type FrontendModelWebsocketSyntheticRequest = {
  * Per-session channel subscription for frontend-model lifecycle events.
  * Replaces the legacy `FrontendModelWebsocketChannel` (Phase 3).
  *
- * Auth model: subscribe-time only. `canSubscribe` resolves the caller's
- * ability once, checks that at least one `allow` rule exists for
- * `read` on the requested model class, and then delivers future
- * lifecycle broadcasts for that model without re-authorizing per event.
- * This matches the explicit design decision in Phase 3 to trade
- * per-record visibility guarantees for massively cheaper broadcast fan-out.
- * Subscriber-provided event filters can still narrow which create/update
- * events are delivered, but they are matching predicates rather than
- * per-record authorization checks.
+ * `canSubscribe` resolves the caller's ability once and requires a read rule
+ * for the requested model class. Create/update delivery then reloads each
+ * record through that ability and serializes it through the subscribed
+ * frontend resource. Subscriber-provided event filters can further narrow
+ * those authorized events.
  *
  * Wire: subscribe with `subscribeChannel("frontend-models", {params: {model: ModelName}})`.
  * Backend publishes `{action, id, record}` via
@@ -49,23 +47,57 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
      */
     canSubscribe(): Promise<boolean>;
     /**
-     * Runs deliver broadcast.
-     * @param {FrontendModelLifecycleBroadcastBody} body - Broadcast body.
-     * @param {{eventId?: string}} [meta] - Optional event metadata.
-     * @returns {Promise<void>} Resolves after delivery.
+     * Resolves a subscription name through frontend resources before falling back to a backing model name.
+     * @param {string} modelName - Frontend resource name.
+     * @returns {typeof import("../database/record/index.js").default | undefined} - Backing model class.
      */
-    deliverBroadcast(body: FrontendModelLifecycleBroadcastBody, meta?: {
-        eventId?: string;
-    }): Promise<void>;
+    _modelClass(modelName: string): typeof import("../database/record/index.js").default | undefined;
     /**
      * Runs deliver broadcast.
      * @param {FrontendModelLifecycleBroadcastBody} body - Broadcast body.
-     * @param {{eventId?: string}} [meta] - Optional event metadata.
+     * @param {import("../http-server/websocket-channel.js").WebsocketBroadcastMetadata} [meta] - Optional server-side broadcast metadata.
      * @returns {Promise<void>} Resolves after delivery.
      */
-    _deliverBroadcast(body: FrontendModelLifecycleBroadcastBody, meta?: {
-        eventId?: string;
-    }): Promise<void>;
+    deliverBroadcast(body: FrontendModelLifecycleBroadcastBody, meta?: import("../http-server/websocket-channel.js").WebsocketBroadcastMetadata): Promise<void>;
+    /**
+     * Runs deliver broadcast.
+     * @param {FrontendModelLifecycleBroadcastBody} body - Broadcast body.
+     * @param {import("../http-server/websocket-channel.js").WebsocketBroadcastMetadata} [meta] - Optional server-side broadcast metadata.
+     * @returns {Promise<void>} Resolves after delivery.
+     */
+    _deliverBroadcast(body: FrontendModelLifecycleBroadcastBody, meta?: import("../http-server/websocket-channel.js").WebsocketBroadcastMetadata): Promise<void>;
+    /**
+     * Requires a resync for relevant destroy events because their authorization
+     * snapshots are intentionally excluded from the persisted replay payload.
+     * @param {import("../http-server/websocket-channel.js").WebsocketJsonValue} body - Persisted broadcast payload.
+     * @returns {boolean} - Whether replay cannot safely authorize this event.
+     */
+    _requiresReplayGap(body: import("../http-server/websocket-channel.js").WebsocketJsonValue): boolean;
+    /**
+     * Checks a destroy against the subscriber's ordinary authorized query by
+     * replacing the deleted backing table with the captured pre-delete row. Values
+     * are quoted on this trusted database connection; no broadcast-provided SQL is run.
+     * @param {FrontendModelLifecycleBroadcastBody} body - Destroy broadcast body.
+     * @param {typeof import("../frontend-model-controller.js").default} FrontendModelController - Server-side frontend-model controller class.
+     * @param {import("./query.js").FrontendModelTransportValue | undefined} destroyAuthorizationRecord - Server-only pre-delete record from live broadcast metadata.
+     * @returns {Promise<boolean>} - Whether the subscriber could read the record before deletion.
+     */
+    _destroyEventIsAuthorized(body: FrontendModelLifecycleBroadcastBody, FrontendModelController: typeof import("../frontend-model-controller.js").default, destroyAuthorizationRecord: import("./query.js").FrontendModelTransportValue | undefined): Promise<boolean>;
+    /**
+     * Builds a backing-model query whose source is the captured pre-delete row.
+     * @param {typeof import("../database/record/index.js").default} ModelClass - Backing model class.
+     * @param {DestroyAuthorizationRecord} destroyAuthorizationRecord - Captured pre-delete record.
+     * @returns {import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>} - One-row model query.
+     */
+    _destroyAuthorizationQuery(ModelClass: typeof import("../database/record/index.js").default, destroyAuthorizationRecord: DestroyAuthorizationRecord): import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>;
+    /**
+     * Replaces a query's backing table with a safely quoted one-row derived table.
+     * @param {import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>} query - Query to update.
+     * @param {typeof import("../database/record/index.js").default} ModelClass - Backing model class.
+     * @param {DestroyAuthorizationRecord} destroyAuthorizationRecord - Captured pre-delete record.
+     * @returns {void}
+     */
+    _applyDestroyAuthorizationRecordToQuery(query: import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>, ModelClass: typeof import("../database/record/index.js").default, destroyAuthorizationRecord: DestroyAuthorizationRecord): void;
     /**
      * Runs matches.
      * @param {Record<string, import("./query.js").FrontendModelTransportValue>} broadcastParams - Params from `broadcastToChannel`.
@@ -82,11 +114,6 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
      * @returns {string | null} - Requested frontend-model name or null.
      */
     _modelName(): string | null;
-    /**
-     * Runs has projection params.
-     * @returns {boolean} - Whether this subscription requested per-event record projection.
-     */
-    _hasProjectionParams(): boolean;
     /**
      * Runs has event filter params.
      * @returns {boolean} - Whether this subscription requested event query filters.
@@ -121,10 +148,10 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
     _frontendModelController(FrontendModelController: typeof import("../frontend-model-controller.js").default, params?: Record<string, ReturnType<typeof JSON.parse>>): import("../frontend-model-controller.js").default;
     /**
      * Resolves tenant for event.
-     * @param {string | number} id - Event record id.
+     * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} id - Event record id.
      * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolved tenant.
      */
-    _resolveEventTenant(id: string | number): Promise<ReturnType<typeof JSON.parse>>;
+    _resolveEventTenant(id: import("../utils/model-primary-key.js").ModelPrimaryKeyValue): Promise<ReturnType<typeof JSON.parse>>;
     /**
      * Resolves the subscriber's tenant for the broadcast record and runs `callback` inside that tenant
      * context. Broadcast delivery runs in whatever ambient tenant context the publisher left behind. For
@@ -135,46 +162,38 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
      * the subscriber's own tenant/ability scope. When no tenant resolves (non-multitenant configs), the
      * callback runs directly so the ambient context is preserved.
      * @template T
-     * @param {string | number} id - Event record id.
+     * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} id - Event record id.
      * @param {() => Promise<T>} callback - Authorized-query callback.
      * @returns {Promise<T>} - Callback result.
      */
-    _withEventTenant<T>(id: string | number, callback: () => Promise<T>): Promise<T>;
-    /**
-     * Whether the broadcast record is within the subscriber's authenticated ability scope. Used to gate
-     * unfiltered/unprojected create/update delivery so a scoped token never receives a record it cannot read.
-     * @param {string | number} id - Event record id.
-     * @param {typeof import("../frontend-model-controller.js").default} FrontendModelController - Server-side frontend-model controller class.
-     * @returns {Promise<boolean>} True when the record is readable by this subscription.
-     */
-    _eventIsAccessible(id: string | number, FrontendModelController: typeof import("../frontend-model-controller.js").default): Promise<boolean>;
+    _withEventTenant<T>(id: import("../utils/model-primary-key.js").ModelPrimaryKeyValue, callback: () => Promise<T>): Promise<T>;
     /**
      * Runs matched event filter keys for event id.
-     * @param {string | number} id - Event record id.
+     * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} id - Event record id.
      * @param {typeof import("../frontend-model-controller.js").default} FrontendModelController - Server-side frontend-model controller class.
      * @returns {Promise<string[]>} - Event filter keys matched by the record.
      */
-    _matchedEventFilterKeysForEventId(id: string | number, FrontendModelController: typeof import("../frontend-model-controller.js").default): Promise<string[]>;
+    _matchedEventFilterKeysForEventId(id: import("../utils/model-primary-key.js").ModelPrimaryKeyValue, FrontendModelController: typeof import("../frontend-model-controller.js").default): Promise<string[]>;
     /**
      * Runs event matches filter.
      * @param {object} args - Filter args.
      * @param {typeof import("../frontend-model-controller.js").default} args.FrontendModelController - Server-side frontend-model controller class.
      * @param {import("./query.js").FrontendModelEventFilterPayloadEntry} args.eventFilter - Event filter payload.
-     * @param {string | number} args.id - Event record id.
+     * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} args.id - Event record id.
      * @returns {Promise<boolean>} Whether the record matches the filter.
      */
     _eventMatchesFilter({ FrontendModelController, eventFilter, id }: {
         FrontendModelController: typeof import("../frontend-model-controller.js").default;
         eventFilter: import("./query.js").FrontendModelEventFilterPayloadEntry;
-        id: string | number;
+        id: import("../utils/model-primary-key.js").ModelPrimaryKeyValue;
     }): Promise<boolean>;
     /**
      * Runs projected record for event id.
-     * @param {string | number} id - Event record id.
+     * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} id - Event record id.
      * @param {typeof import("../frontend-model-controller.js").default} FrontendModelController - Server-side frontend-model controller class.
      * @returns {Promise<Record<string, import("./query.js").FrontendModelTransportValue> | null>} - Serialized projected record.
      */
-    _projectedRecordForEventId(id: string | number, FrontendModelController: typeof import("../frontend-model-controller.js").default): Promise<Record<string, import("./query.js").FrontendModelTransportValue> | null>;
+    _projectedRecordForEventId(id: import("../utils/model-primary-key.js").ModelPrimaryKeyValue, FrontendModelController: typeof import("../frontend-model-controller.js").default): Promise<Record<string, import("./query.js").FrontendModelTransportValue> | null>;
     /**
      * Minimal Request-like stub used only for ability resolution. Avoids
      * importing `WebsocketRequest` here because its `node:querystring`

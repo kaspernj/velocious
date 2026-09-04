@@ -4,6 +4,18 @@ import {describe, expect, it} from "../../../src/testing/test.js"
 import Task from "../../dummy/src/models/task.js"
 import UuidItem from "../../dummy/src/models/uuid-item.js"
 
+/** Composite key view of tasks used to verify explicit identity inserts. */
+class CompositeIdentityTask extends Task {
+  /**
+   * Skips reload behavior outside this insert-routing unit's scope.
+   * @returns {Promise<void>} - Resolves immediately.
+   */
+  async _applyInsertResult() { return undefined }
+}
+
+CompositeIdentityTask.setTableName("tasks")
+CompositeIdentityTask.setPrimaryKey(["id", "project_id"])
+
 /**
  * Builds a fake connection that records every query and marks explicit
  * primary-key inserts, delegating SQL generation to the real driver.
@@ -51,6 +63,18 @@ describe("Database - record - explicit primary key insert", {tags: ["dummy"]}, (
   it("uses the explicit primary-key insert for an auto-increment primary key", async () => {
     const {connection, queries} = buildIdentityInsertConnection({insertedRow: {id: 123456}})
     const task = new Task({id: 123456, name: "Explicit identity key"})
+
+    task.__connection = /** @type {import("../../../src/database/drivers/base.js").default} */ (/** @type {ReturnType<typeof JSON.parse>} */ (connection))
+
+    await task._createNewRecord()
+
+    expect(queries).toHaveLength(1)
+    expect(queries[0]).toMatch(/^EXPLICIT tasks: INSERT INTO/u)
+  })
+
+  it("uses the explicit primary-key insert for an auto-increment composite-key component", async () => {
+    const {connection, queries} = buildIdentityInsertConnection({insertedRow: {id: 123456, project_id: 987654}})
+    const task = new CompositeIdentityTask({id: 123456, name: "Explicit composite identity key", project_id: 987654})
 
     task.__connection = /** @type {import("../../../src/database/drivers/base.js").default} */ (/** @type {ReturnType<typeof JSON.parse>} */ (connection))
 

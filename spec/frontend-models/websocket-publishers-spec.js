@@ -5,10 +5,52 @@ import {ensureFrontendModelWebsocketPublishersRegistered} from "../../src/fronte
 import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
 import FrontendModelBaseResource from "../../src/frontend-model-resource/base-resource.js"
 import AuthorizationBaseResource from "../../src/authorization/base-resource.js"
+import Record from "../../src/database/record/index.js"
 import Task from "../dummy/src/models/task.js"
 import User from "../dummy/src/models/user.js"
 
 describe("Frontend models - websocket publishers", {databaseCleaning: {transaction: true}}, () => {
+  it("keeps destroy authorization records out of the persisted broadcast body", async () => {
+    class TestRecord extends Record {}
+
+    class TestRecordResource extends FrontendModelBaseResource {
+      static ModelClass = TestRecord
+    }
+
+    /** @type {Array<{body: Record<string, ReturnType<typeof JSON.parse>>, broadcastParams: Record<string, ReturnType<typeof JSON.parse>>, channel: string}>} */
+    const broadcasts = []
+    const configuration = {
+      broadcastToChannel: (/** @type {string} */ channel, /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ broadcastParams, /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ body) => {
+        broadcasts.push({body, broadcastParams, channel})
+      },
+      getAbilityResources: () => [TestRecordResource],
+      getBackendProjects: () => [],
+      registerWebsocketChannel: () => {}
+    }
+    const destroyAuthorizationRecord = {id: "task-1", secret: "do-not-persist"}
+    const model = {
+      __frontendModelWebsocketDestroyAuthorizationRecord: destroyAuthorizationRecord,
+      __frontendModelWebsocketPreviousIds: new Map([["TestRecord", "task-1"]]),
+      _getConfiguration: () => configuration,
+      attributes: () => ({id: "task-1"}),
+      changes: () => ({}),
+      connection: () => ({afterCommit: (/** @type {() => void} */ callback) => callback()}),
+      getModelClass: () => TestRecord
+    }
+
+    await ensureFrontendModelWebsocketPublishersRegistered(/** @type {any} */ (configuration))
+    const afterDestroy = TestRecord.getLifecycleCallbacksMap().afterDestroy?.[0]
+
+    if (!afterDestroy || typeof afterDestroy === "string") throw new Error("Expected frontend-model afterDestroy publisher")
+    await afterDestroy(/** @type {any} */ (model))
+
+    expect(broadcasts).toEqual([{
+      body: {action: "destroy", id: "task-1", model: "TestRecord"},
+      broadcastParams: {destroyAuthorizationRecord, model: "TestRecord"},
+      channel: "frontend-models"
+    }])
+  })
+
   it("auto-discovers frontend model resources from explicit ability resources when no frontend model config exists", async () => {
     class TestTaskResource extends FrontendModelBaseResource {
       static ModelClass = Task

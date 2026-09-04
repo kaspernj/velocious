@@ -1,5 +1,19 @@
 import FrontendModelBaseResource from "./base-resource.js";
 import VelociousAttachment from "../database/record/attachments/attachment-record.js";
+export type AttachmentOwnerScope = {
+    name: string;
+    recordId: string;
+    recordType: string;
+    resourceName: string | null;
+};
+export type AttachmentOwnerResource = {
+    backendProject: import("../configuration-types.js").BackendProjectConfiguration;
+    modelName: string;
+    resourceClass: import("../configuration-types.js").FrontendModelResourceClassType;
+    resourceConfiguration: import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration;
+};
+/** @typedef {{name: string, recordId: string, recordType: string, resourceName: string | null}} AttachmentOwnerScope */
+/** @typedef {{backendProject: import("../configuration-types.js").BackendProjectConfiguration, modelName: string, resourceClass: import("../configuration-types.js").FrontendModelResourceClassType, resourceConfiguration: import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration}} AttachmentOwnerResource */
 /**
  * Framework-owned frontend resource exposing safe attachment metadata while
  * delegating read authorization to the attached owner record.
@@ -27,6 +41,11 @@ export default class VelociousAttachmentResource extends FrontendModelBaseResour
      */
     beforeAction(action: "index" | "find" | "create" | "update" | "destroy" | "attach" | "download" | "url"): Promise<void>;
     /**
+     * Loads attachment metadata after removing the authorization-only resource name from database filters.
+     * @returns {Promise<VelociousAttachment[]>} - Attachment metadata rows.
+     */
+    records(): Promise<VelociousAttachment[]>;
+    /**
      * Runs find.
      * @param {"find" | "update" | "destroy" | "attach" | "download" | "url"} action - Action.
      * @param {string | number} id - Attachment id.
@@ -47,13 +66,14 @@ export default class VelociousAttachmentResource extends FrontendModelBaseResour
     updatedAtAttribute(model: VelociousAttachment): Date;
     /**
      * Returns a validated owner scope from frontend-model where params.
-     * @returns {{name: string, recordId: string, recordType: string}} - Attachment owner scope.
+     * @returns {AttachmentOwnerScope} - Attachment owner scope.
      */
-    requiredOwnerScopeFromParams(): {
-        name: string;
-        recordId: string;
-        recordType: string;
-    };
+    requiredOwnerScopeFromParams(): AttachmentOwnerScope;
+    /**
+     * Returns the required attachment metadata where object.
+     * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Attachment where filters.
+     */
+    requiredWhereFromParams(): Record<string, ReturnType<typeof JSON.parse>>;
     /**
      * Reads one required string-like where value.
      * @param {object} args - Args.
@@ -68,29 +88,32 @@ export default class VelociousAttachmentResource extends FrontendModelBaseResour
     /**
      * Builds owner scope from a stored attachment row.
      * @param {VelociousAttachment} attachment - Attachment row.
-     * @returns {{name: string, recordId: string, recordType: string}} - Owner scope.
+     * @returns {AttachmentOwnerScope} - Owner scope.
      */
-    ownerScopeFromAttachment(attachment: VelociousAttachment): {
-        name: string;
-        recordId: string;
-        recordType: string;
-    };
+    ownerScopeFromAttachment(attachment: VelociousAttachment): AttachmentOwnerScope;
     /**
      * Checks whether the current ability can read the attachment owner.
-     * @param {{name: string, recordId: string, recordType: string}} ownerScope - Owner scope.
+     * @param {AttachmentOwnerScope} ownerScope - Owner scope.
      * @returns {Promise<boolean>} - Whether owner is readable.
      */
-    attachmentOwnerAuthorized(ownerScope: {
-        name: string;
-        recordId: string;
-        recordType: string;
-    }): Promise<boolean>;
+    attachmentOwnerAuthorized(ownerScope: AttachmentOwnerScope): Promise<boolean>;
+    /**
+     * Resolves the explicit owner resource for scoped queries or every matching alias for member lookups.
+     * @param {object} args - Options object.
+     * @param {import("../frontend-model-controller.js").default} args.controller - Frontend-model controller.
+     * @param {AttachmentOwnerScope} args.ownerScope - Owner scope.
+     * @returns {AttachmentOwnerResource[]} - Matching owner resources.
+     */
+    attachmentOwnerResources({ controller, ownerScope }: {
+        controller: import("../frontend-model-controller.js").default;
+        ownerScope: AttachmentOwnerScope;
+    }): AttachmentOwnerResource[];
     /**
      * Finds the frontend-model resource that owns an attachment scope.
      * @param {object} args - Options object.
      * @param {import("../frontend-model-controller.js").default} args.controller - Frontend-model controller.
-     * @param {{name: string, recordId: string, recordType: string}} args.ownerScope - Owner scope.
-     * @returns {{backendProject: import("../configuration-types.js").BackendProjectConfiguration, modelName: string, resourceClass: import("../configuration-types.js").FrontendModelResourceClassType, resourceConfiguration: import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration} | null} - Owner resource configuration.
+     * @param {{name: string, recordId: string, recordType: string, resourceName: string}} args.ownerScope - Owner scope.
+     * @returns {AttachmentOwnerResource | null} - Owner resource configuration.
      */
     attachmentOwnerResource({ controller, ownerScope }: {
         controller: import("../frontend-model-controller.js").default;
@@ -98,12 +121,8 @@ export default class VelociousAttachmentResource extends FrontendModelBaseResour
             name: string;
             recordId: string;
             recordType: string;
+            resourceName: string;
         };
-    }): {
-        backendProject: import("../configuration-types.js").BackendProjectConfiguration;
-        modelName: string;
-        resourceClass: import("../configuration-types.js").FrontendModelResourceClassType;
-        resourceConfiguration: import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration;
-    } | null;
+    }): AttachmentOwnerResource | null;
 }
 //# sourceMappingURL=velocious-attachment-resource.d.ts.map
