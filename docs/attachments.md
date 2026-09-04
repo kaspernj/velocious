@@ -46,6 +46,10 @@ their credentials remain backend-only. This policy is the contract for client
 asset-cache adapters; binary content still travels through the attachment
 download endpoint rather than normal record sync payloads.
 
+The platform-neutral descriptor, verification, retry, deduplication, account
+isolation, and eviction lifecycle is documented in
+[Synchronized asset cache](synchronized-assets.md).
+
 Backend records and frontend model classes expose this metadata through the
 common static `attachmentDefinitions()` contract. This lets the same resource
 configuration code work in backend and frontend/local shared-resource wrappers.
