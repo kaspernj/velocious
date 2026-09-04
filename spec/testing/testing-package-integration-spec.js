@@ -31,11 +31,12 @@ describe("@velocious/testing integration", {databaseCleaning: {transaction: fals
     expect(facadeWaitForEvent).toEqual(packageWaitForEvent)
   })
 
-  it("uses the exact package version as a runtime dependency", async () => {
+  it("uses the exact package version as a peer and development dependency", async () => {
     const packageJson = JSON.parse(await fs.readFile(path.join(repositoryDirectory, "package.json"), "utf8"))
 
-    expect(packageJson.dependencies["@velocious/testing"]).toEqual("0.0.1")
-    expect(packageJson.devDependencies["@velocious/testing"]).toEqual(undefined)
+    expect(packageJson.dependencies["@velocious/testing"]).toEqual(undefined)
+    expect(packageJson.peerDependencies["@velocious/testing"]).toEqual("0.0.9")
+    expect(packageJson.devDependencies["@velocious/testing"]).toEqual("0.0.9")
   })
 
   it("discovers facade and direct-package declarations in both import orders", async () => {
@@ -43,7 +44,7 @@ describe("@velocious/testing integration", {databaseCleaning: {transaction: fals
       const output = await runTestingPackageIdentityProbe(["facade-package-order", importOrder])
 
       expect(output).toEqual(
-        `protocol=${defaultTestContext.protocolMajor}/${defaultTestContext.schemaVersion}|facade=true|package=true`
+        `protocol=${defaultTestContext.protocolMajor}/${defaultTestContext.schemaVersion}|sharedDsl=true|facade=true|package=true`
       )
     }
   })
@@ -72,12 +73,17 @@ describe("@velocious/testing integration", {databaseCleaning: {transaction: fals
       expect(output).toEqual(
         `same=true|visible=true|protocol=${defaultTestContext.protocolMajor}/${defaultTestContext.schemaVersion}`
       )
+      expect(await runTestingPackageIdentityProbe([
+        "compatible-runtime-copies",
+        pathToFileURL(path.join(firstCopy, "build", "index.js")).href,
+        pathToFileURL(path.join(secondCopy, "build", "index.js")).href
+      ])).toEqual("same=true|matcher=true|first=passed|plain=0|row=1:2:2|deadline=failed:true|events=true")
     } finally {
       await fs.rm(fixtureDirectory, {force: true, recursive: true})
     }
   })
 
-  it("rejects incompatible schema copies in both import orders", async () => {
+  it("rejects schema-1 package copies in both import orders", async () => {
     const installedPackagePath = import.meta.resolve("@velocious/testing")
     const currentProtocol = defaultTestContext.protocolMajor
     const currentSchema = defaultTestContext.schemaVersion
@@ -87,14 +93,31 @@ describe("@velocious/testing integration", {databaseCleaning: {transaction: fals
       "package-first",
       installedPackagePath
     ])).toEqual(
-      `Incompatible @velocious/testing default context: found protocol ${currentProtocol}/schema ${currentSchema}, expected protocol 1/schema 2`
+      `Incompatible @velocious/testing default context: found protocol ${currentProtocol}/schema ${currentSchema}, expected protocol 1/schema 1`
     )
     expect(await runTestingPackageIdentityProbe([
       "incompatible-copies",
       "fixture-first",
       installedPackagePath
     ])).toEqual(
-      `Incompatible @velocious/testing default context: found protocol 1/schema 2, expected protocol ${currentProtocol}/schema ${currentSchema}`
+      `Incompatible @velocious/testing default context: found protocol 1/schema 1, expected protocol ${currentProtocol}/schema ${currentSchema}`
+    )
+  })
+
+  it("runs package state and table declarations with Velocious callback arguments", async () => {
+    const output = JSON.parse(await runTestingPackageIdentityProbe(["runner-behavior"]))
+
+    expect(output).toEqual({
+      calls: ["row:1:2:table", "row:3:4:table", "plain:1:plain"],
+      failed: 0,
+      successful: 3,
+      total: 7
+    })
+  })
+
+  it("rejects duplicate names shared by facade and direct declarations", async () => {
+    expect(await runTestingPackageIdentityProbe(["duplicate-mixed-declarations"])).toEqual(
+      "Duplicate test description: same name"
     )
   })
 
@@ -134,7 +157,8 @@ describe("@velocious/testing integration", {databaseCleaning: {transaction: fals
       const importedTest = importedSuite?.tests["is visible to the Velocious runner"]
       const nestedTest = importedSuite?.subs["nested suite"]?.tests["inherits nested options"]
 
-      expect(testRunner.getTestsCount()).toEqual(originalTestCount + 2)
+      expect(originalTestCount).toBeGreaterThan(0)
+      expect(testRunner.getTestsCount()).toEqual(2)
       expect(importedTest?.filePath).toEqual(fixturePath)
       expect(importedTest?.args).toEqual({
         databaseCleaning: {transaction: true},
@@ -155,13 +179,12 @@ describe("@velocious/testing integration", {databaseCleaning: {transaction: fals
         type: "request"
       })
     } finally {
-      delete tests.subs[suiteName]
       defaultTestContext.reset()
       await fs.rm(fixtureDirectory, {recursive: true})
     }
   })
 
-  it("bundles the package root import for browsers without Node built-ins or raw import.meta", async () => {
+  it("bundles package root and runner imports without Node built-ins or raw import.meta", async () => {
     const result = await build({
       bundle: true,
       format: "esm",
@@ -169,7 +192,7 @@ describe("@velocious/testing integration", {databaseCleaning: {transaction: fals
       metafile: true,
       platform: "browser",
       stdin: {
-        contents: 'import {waitForEvent} from "@velocious/testing"; globalThis.waitForEvent = waitForEvent',
+        contents: 'import {waitForEvent} from "@velocious/testing"; import {TestRunner} from "@velocious/testing/runner"; globalThis.testing = {TestRunner, waitForEvent}',
         loader: "js",
         resolveDir: repositoryDirectory,
         sourcefile: "testing-package-browser-bundle-entry.js"

@@ -5,7 +5,7 @@ import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 import TestRunner from "../../src/testing/test-runner.js"
 
-describe("TestRunner beforeAll/afterAll", () => {
+describe("TestRunner beforeAll/afterAll", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("does not hold a database lease around the whole suite", async () => {
     const environmentHandler = new EnvironmentHandlerNode()
 
@@ -41,7 +41,7 @@ describe("TestRunner beforeAll/afterAll", () => {
 
     class LeaseInspectingTestRunner extends TestRunner {
       /** @returns {Promise<void>} Resolves after checking suite-level connection ownership. */
-      async runTests() {
+      async runPackageTests() {
         expect(configuration.activeLeaseScopes).toBe(0)
       }
     }
@@ -284,17 +284,18 @@ describe("TestRunner beforeAll/afterAll", () => {
       }
     }
 
-    await expect(async () => {
-      await testRunner.runTests({
-        afterEaches: [],
-        beforeEaches: [],
-        tests,
-        descriptions: [],
-        indentLevel: 0
-      })
-    }).toThrowError("boom")
+    await testRunner.runTests({
+      afterEaches: [],
+      beforeEaches: [],
+      tests,
+      descriptions: [],
+      indentLevel: 0
+    })
 
     expect(afterAllRuns).toBe(1)
+    expect(testRunner.getExecutedTestsCount()).toBe(1)
+    expect(testRunner.getFailedTests()).toBe(1)
+    expect(testRunner.getFailedTestDetails()[0].error.message).toBe("boom")
   })
 
   it("runs active afterAll hooks once when interrupted", async () => {
@@ -368,38 +369,41 @@ describe("TestRunner beforeAll/afterAll", () => {
     const testRunner = new TestRunner({configuration, testFiles: []})
     const order = []
 
-    testRunner._activeAfterAllScopes = [
-      {
-        afterAllsRun: false,
-        tests: {
-          args: {},
-          afterAlls: [{callback: async () => {
-            order.push("outer teardown")
-            throw new Error("expected outer teardown failure")
-          }}],
-          afterEaches: [],
-          beforeAlls: [],
-          beforeEaches: [],
-          subs: {},
-          tests: {}
-        }
-      },
-      {
-        afterAllsRun: false,
-        tests: {
+    let innerStarted
+    const innerStartedPromise = new Promise((resolve) => { innerStarted = resolve })
+    let releaseInner
+    const innerBlocker = new Promise((resolve) => { releaseInner = resolve })
+    const tests = {
+      args: {},
+      afterAlls: [{callback: async () => {
+        order.push("outer teardown")
+        throw new Error("expected outer teardown failure")
+      }}],
+      afterEaches: [],
+      beforeAlls: [],
+      beforeEaches: [],
+      subs: {
+        inner: {
           args: {},
           afterAlls: [{callback: async () => {
             order.push("inner teardown")
             throw new Error("expected inner teardown failure")
           }}],
           afterEaches: [],
-          beforeAlls: [],
+          beforeAlls: [{callback: async () => {
+            innerStarted()
+            await innerBlocker
+          }}],
           beforeEaches: [],
           subs: {},
-          tests: {}
+          tests: {test: {args: {}, function: async () => {}}}
         }
-      }
-    ]
+      },
+      tests: {}
+    }
+    const runPromise = testRunner.runTests({afterEaches: [], beforeEaches: [], tests, descriptions: [], indentLevel: 0})
+
+    await innerStartedPromise
     let caughtError
 
     try {
@@ -407,15 +411,22 @@ describe("TestRunner beforeAll/afterAll", () => {
     } catch (error) {
       caughtError = error
     }
+    releaseInner()
+    let runError
+    try {
+      await runPromise
+    } catch (error) {
+      runError = error
+    }
 
     expect(caughtError).toBeInstanceOf(AggregateError)
+    expect(runError).toBeInstanceOf(AggregateError)
     expect(caughtError.cause.message).toEqual("expected inner teardown failure")
     expect(caughtError.errors.map((error) => error.message)).toEqual([
       "expected inner teardown failure",
       "expected outer teardown failure"
     ])
     expect(order).toEqual(["inner teardown", "outer teardown"])
-    expect(testRunner._activeAfterAllScopes).toEqual([])
   })
 
   it("preserves a child scope failure when the parent afterAll also fails", async () => {

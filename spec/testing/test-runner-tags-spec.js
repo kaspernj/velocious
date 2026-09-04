@@ -25,7 +25,7 @@ function buildTestRunner(options = {}) {
   return new TestRunner({configuration, testFiles: [], ...options})
 }
 
-describe("TestRunner tags", {databaseCleaning: {transaction: true}}, () => {
+describe("TestRunner tags", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("skips tests with excluded tags", async () => {
     const testRunner = buildTestRunner({excludeTags: ["slow"]})
     const counts = {fast: 0, slow: 0, untagged: 0}
@@ -102,10 +102,10 @@ describe("TestRunner tags", {databaseCleaning: {transaction: true}}, () => {
       indentLevel: 0
     })
 
-    expect(counts.fast).toBe(1)
+    expect(counts.fast).toBe(0)
     expect(counts.slow).toBe(0)
     expect(counts.focused).toBe(1)
-    expect(testRunner.getSuccessfulTests()).toBe(2)
+    expect(testRunner.getSuccessfulTests()).toBe(1)
   })
 
   it("excludes tagged tests even when focused", async () => {
@@ -140,8 +140,8 @@ describe("TestRunner tags", {databaseCleaning: {transaction: true}}, () => {
     })
 
     expect(counts.focused).toBe(0)
-    expect(counts.fast).toBe(1)
-    expect(testRunner.getSuccessfulTests()).toBe(1)
+    expect(counts.fast).toBe(0)
+    expect(testRunner.getSuccessfulTests()).toBe(0)
   })
 
   it("skips browser-only tests outside the browser runner", async () => {

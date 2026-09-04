@@ -9,29 +9,11 @@ export default class VelociousSuiteHookExecutor {
         testRunner: import("./test-runner.js").default;
     });
     /**
-     * Runs suite setup hooks in declaration order.
-     * @param {object} args - Hook execution arguments.
-     * @param {import("./test-runner.js").BeforeAfterAllCallbackObjectType[]} args.hooks - Profiled setup hooks.
-     * @returns {Promise<void>} - Resolves after every setup hook completes.
+     * Supplies the framework configuration while package traversal owns ordering,
+     * timeout enforcement, aggregation, and active-scope cleanup.
+     * @param {import("@velocious/testing/runner").SuiteHookExecutorInput} input - Package hook input.
+     * @returns {Promise<void>} - Resolves after the hook completes.
      */
-    runBeforeAlls({ hooks, ...restArgs }: {
-        hooks: import("./test-runner.js").BeforeAfterAllCallbackObjectType[];
-    }): Promise<void>;
-    /**
-     * Runs every suite teardown hook in reverse declaration order.
-     * @param {object} args - Hook execution arguments.
-     * @param {import("./test-runner.js").BeforeAfterAllCallbackObjectType[]} args.hooks - Profiled teardown hooks.
-     * @returns {Promise<void>} - Resolves after every teardown hook settles.
-     */
-    runAfterAlls({ hooks, ...restArgs }: {
-        hooks: import("./test-runner.js").BeforeAfterAllCallbackObjectType[];
-    }): Promise<void>;
-    /**
-     * Runs one suite hook with its Velocious profiler attribution.
-     * @param {import("./test-runner.js").BeforeAfterAllCallbackObjectType} hook - Hook registration.
-     * @param {"beforeAll" | "afterAll"} phase - Profiler phase.
-     * @returns {Promise<void>} - Resolves when the hook completes.
-     */
-    runHook(hook: import("./test-runner.js").BeforeAfterAllCallbackObjectType, phase: "beforeAll" | "afterAll"): Promise<void>;
+    execute({ context, defaultExecute, fullName, hook, phase, suite, timeoutMs, ...restArgs }: import("@velocious/testing/runner").SuiteHookExecutorInput): Promise<void>;
 }
 //# sourceMappingURL=velocious-suite-hook-executor.d.ts.map

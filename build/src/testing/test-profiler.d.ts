@@ -257,8 +257,8 @@ export default class TestProfiler {
         file: string;
         line: number | undefined;
     }>;
-    /** @type {WeakMap<import("./test-runner.js").TestsArgument, string>} */
-    _scopeIds: WeakMap<import("./test-runner.js").TestsArgument, string>;
+    /** @type {WeakMap<import("./test-runner.js").TestsArgument | import("@velocious/testing/runner").SuiteDeclaration, string>} */
+    _scopeIds: WeakMap<import("./test-runner.js").TestsArgument | import("@velocious/testing/runner").SuiteDeclaration, string>;
     /** @type {Set<string>} */
     _customActivityNames: Set<string>;
     _database: ProfileDatabaseAggregate;
@@ -394,7 +394,7 @@ export default class TestProfiler {
     setSelection(selection: Record<string, ReturnType<typeof JSON.parse>>): void;
     /**
      * Registers and returns a deterministic scope identifier.
-     * @param {import("./test-runner.js").TestsArgument} scope - Scope object.
+     * @param {import("./test-runner.js").TestsArgument | import("@velocious/testing/runner").SuiteDeclaration} scope - Scope object.
      * @param {object} args - Scope metadata.
      * @param {string[]} args.descriptions - Scope description path.
      * @param {string | undefined} args.filePath - Scope source path.
@@ -402,7 +402,7 @@ export default class TestProfiler {
      * @param {string | undefined} [args.parentId] - Parent scope identifier.
      * @returns {string} - Opaque scope identifier.
      */
-    scopeId(scope: import("./test-runner.js").TestsArgument, { descriptions, filePath, line, parentId }: {
+    scopeId(scope: import("./test-runner.js").TestsArgument | import("@velocious/testing/runner").SuiteDeclaration, { descriptions, filePath, line, parentId }: {
         descriptions: string[];
         filePath: string | undefined;
         line?: number | undefined;

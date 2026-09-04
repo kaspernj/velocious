@@ -1,11 +1,27 @@
 // @ts-check
 
-import path from "path"
-import {fileURLToPath} from "url"
-import {defaultTestContext, waitForEvent} from "@velocious/testing"
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  configureTests,
+  defaultTestContext,
+  describe,
+  fdescribe,
+  fit,
+  it,
+  test,
+  waitForEvent,
+  xdescribe,
+  xit,
+  xtest
+} from "@velocious/testing"
 import EventEmitter from "../utils/event-emitter.js"
 import Expect from "./expect.js"
 import {arrayContaining, objectContaining} from "./expect-utils.js"
+
+/** @typedef {(typeof defaultTestContext.registry.suites)[number]} PackageSuiteDeclaration */
 
 /**
  * VelociousTestConfig type.
@@ -15,256 +31,6 @@ import {arrayContaining, objectContaining} from "./expect-utils.js"
  * @property {number} defaultTimeoutSeconds - Default timeout in seconds.
  * @property {number} failedConsoleOutputMaxLines - Maximum failed console lines to print inline.
  */
-/**
- * Tests.
- * @type {import("./test-runner.js").TestsArgument} */
-const tests = {
-  /**
-   * Narrows the runtime value to the documented type.
-   * @type {import("./test-runner.js").AfterBeforeEachCallbackObjectType[]} */
-  afterEaches: [],
-  /**
-   * Narrows the runtime value to the documented type.
-   * @type {import("./test-runner.js").BeforeAfterAllCallbackObjectType[]} */
-  afterAlls: [],
-  args: {databaseCleaning: {transaction: true}},
-
-  /**
-   * Narrows the runtime value to the documented type.
-   * @type {import("./test-runner.js").BeforeAfterAllCallbackObjectType[]} */
-  beforeAlls: [],
-  /**
-   * Narrows the runtime value to the documented type.
-   * @type {import("./test-runner.js").AfterBeforeEachCallbackObjectType[]} */
-  beforeEaches: [],
-  filePath: undefined,
-  line: undefined,
-  subs: {},
-  tests: {}
-}
-
-const testEvents = new EventEmitter()
-
-let currentPath = [tests]
-
-/**
- * Runs capture location.
- * @returns {{filePath?: string, line?: number}} - Location.
- */
-function captureLocation() {
-  const error = new Error()
-  const stack = typeof error.stack === "string" ? error.stack.split("\n") : []
-
-  for (const line of stack) {
-    const trimmed = line.trim()
-
-    if (!trimmed.includes("at")) continue
-    if (trimmed.includes("/src/testing/test.js")) continue
-    if (trimmed.includes("/@velocious/testing/")) continue
-
-    const match = trimmed.match(/(?:\(|\s)(file:\/\/.*?|\/.*?):(\d+):(\d+)\)?$/)
-
-    if (!match) continue
-
-    const rawPath = match[1]
-    const lineNumber = Number(match[2])
-    const filePath = rawPath.startsWith("file://")
-      ? fileURLToPath(rawPath)
-      : rawPath
-
-    return {
-      filePath: path.resolve(filePath),
-      line: Number.isFinite(lineNumber) ? lineNumber : undefined
-    }
-  }
-
-  return {}
-}
-
-defaultTestContext.setDeclarationLocator(captureLocation)
-
-/**
- * Runs normalize tags.
- * @param {string[] | string | undefined} tags - Tags.
- * @returns {string[]} - Normalized tags.
- */
-function normalizeTags(tags) {
-  if (!tags) return []
-
-  const values = []
-  const rawTags = Array.isArray(tags) ? tags : [tags]
-
-  for (const rawTag of rawTags) {
-    if (rawTag === undefined || rawTag === null) continue
-
-    const parts = String(rawTag).split(",")
-
-    for (const part of parts) {
-      const trimmed = part.trim()
-
-      if (trimmed) values.push(trimmed)
-    }
-  }
-
-  return Array.from(new Set(values))
-}
-
-/**
- * Test config.
- * @type {VelociousTestConfig} */
-const testConfig = {
-  consoleOutput: "failure",
-  failedConsoleOutputMaxLines: 200,
-  excludeTags: [],
-  defaultTimeoutSeconds: 60
-}
-
-/**
- * Runs configure tests.
- * @param {object} args - Options.
- * @param {"failure" | "live"} [args.consoleOutput] - Console output mode.
- * @param {string[] | string} [args.excludeTags] - Tags to exclude.
- * @param {number} [args.defaultTimeoutSeconds] - Default timeout in seconds.
- * @param {number} [args.failedConsoleOutputMaxLines] - Maximum failed console lines to print inline.
- * @returns {void}
- */
-function configureTests({consoleOutput, excludeTags, defaultTimeoutSeconds, failedConsoleOutputMaxLines} = {}) {
-  if (excludeTags !== undefined) {
-    testConfig.excludeTags = normalizeTags(excludeTags)
-  }
-
-  if (consoleOutput !== undefined) {
-    if (consoleOutput !== "failure" && consoleOutput !== "live") {
-      throw new Error(`Invalid consoleOutput config: ${consoleOutput}`)
-    }
-
-    testConfig.consoleOutput = consoleOutput
-  }
-
-  if (typeof defaultTimeoutSeconds === "number") {
-    testConfig.defaultTimeoutSeconds = defaultTimeoutSeconds
-  }
-
-  if (typeof failedConsoleOutputMaxLines === "number") {
-    testConfig.failedConsoleOutputMaxLines = failedConsoleOutputMaxLines
-  }
-}
-
-/**
- * Runs merge test args.
- * @param {Record<string, ReturnType<typeof JSON.parse>>} baseArgs - Base args.
- * @param {Record<string, ReturnType<typeof JSON.parse>>} extraArgs - Extra args.
- * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Merged args.
- */
-function mergeTestArgs(baseArgs, extraArgs) {
-  const merged = Object.assign({}, baseArgs, extraArgs)
-  const mergedTags = [...normalizeTags(baseArgs?.tags), ...normalizeTags(extraArgs?.tags)]
-
-  if (mergedTags.length > 0) {
-    merged.tags = Array.from(new Set(mergedTags))
-  } else if ("tags" in merged) {
-    delete merged.tags
-  }
-
-  return merged
-}
-
-/**
- * Runs before each.
- * @param {import("./test-runner.js").AfterBeforeEachCallbackType} callback - Callback function.
- * @returns {void} - No return value.
- */
-function beforeEach(callback) {
-  const currentTest = currentPath[currentPath.length - 1]
-
-  currentTest.beforeEaches.push({callback})
-}
-
-/**
- * Runs before all.
- * @param {import("./test-runner.js").BeforeAfterAllCallbackType} callback - Callback function.
- * @returns {void} - No return value.
- */
-function beforeAll(callback) {
-  const currentTest = currentPath[currentPath.length - 1]
-
-  currentTest.beforeAlls.push({callback})
-}
-
-/**
- * Runs after each.
- * @param {import("./test-runner.js").AfterBeforeEachCallbackType} callback - Callback function.
- * @returns {void} - No return value.
- */
-function afterEach(callback) {
-  const currentTest = currentPath[currentPath.length - 1]
-
-  currentTest.afterEaches.push({callback})
-}
-
-/**
- * Runs after all.
- * @param {import("./test-runner.js").BeforeAfterAllCallbackType} callback - Callback function.
- * @returns {void} - No return value.
- */
-function afterAll(callback) {
-  const currentTest = currentPath[currentPath.length - 1]
-
-  currentTest.afterAlls.push({callback})
-}
-
-/**
- * Runs describe.
- * @param {string} description - Description.
- * @param {object|(() => (void|Promise<void>))} arg1 - Arg1.
- * @param {undefined|(() => (void|Promise<void>))} [arg2] - Arg2.
- * @returns {Promise<void>} - Resolves when complete.
- */
-async function describe(description, arg1, arg2) {
-  /**
-   * Defines testArgs.
-   * @type {Record<string, ReturnType<typeof JSON.parse>>} */
-  let testArgs, testFunction
-
-  if (typeof arg2 == "function") {
-    testFunction = arg2
-    testArgs = arg1
-  } else if (typeof arg1 == "function") {
-    testFunction = arg1
-    testArgs = {}
-  } else {
-    throw new Error(`Invalid arguments for describe: ${arg1}, ${arg2}`)
-  }
-
-  const currentTest = currentPath[currentPath.length - 1]
-  const newTestArgs = mergeTestArgs(currentTest.args, testArgs)
-
-  if (description in currentTest.subs) {
-    throw new Error(`Duplicate test description: ${description}`)
-  }
-
-  const location = captureLocation()
-  const newTestData = {
-    afterEaches: [],
-    afterAlls: [],
-    args: newTestArgs,
-    beforeAlls: [],
-    beforeEaches: [],
-    filePath: location.filePath,
-    line: location.line,
-    subs: {},
-    tests: {}
-  }
-
-  currentTest.subs[description] = newTestData
-  currentPath.push(newTestData)
-
-  try {
-    await testFunction()
-  } finally {
-    currentPath.pop()
-  }
-}
 
 /**
  * Runs expect.
@@ -278,79 +44,145 @@ function expect(arg) {
 expect.objectContaining = objectContaining
 expect.arrayContaining = arrayContaining
 
+/** Velocious-owned awaited compatibility events. */
+const testEvents = new EventEmitter()
+
 /**
- * Runs it.
- * @param {string} description - Description.
- * @param {object|(() => (void|Promise<void>))} arg1 - Arg1.
- * @param {undefined|(() => (void|Promise<void>))} [arg2] - Arg2.
- * @returns {void} - No return value.
+ * Detaches and freezes declaration metadata exposed by the compatibility view.
+ * @param {ReturnType<typeof JSON.parse>} value - Package declaration value.
+ * @returns {ReturnType<typeof JSON.parse>} - Immutable detached value.
  */
-function it(description, arg1, arg2) {
-  const currentTest = currentPath[currentPath.length - 1]
-  /**
-   * Defines testArgs.
-   * @type {Record<string, ReturnType<typeof JSON.parse>>} */
-  let testArgs
+function readOnlySnapshot(value) {
+  if (Array.isArray(value)) return Object.freeze(value.map((entry) => readOnlySnapshot(entry)))
+  if (value === null || typeof value !== "object") return value
 
-  /**
-   * Defines testFunction.
-   * @type {() => (void|Promise<void>)} */
-  let testFunction
+  /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
+  const projectedValue = {}
 
-  if (typeof arg1 == "function") {
-    testFunction = /** @type {() => (void|Promise<void>)} */ (arg1)
-    testArgs = {}
-  } else if (typeof arg2 == "function") {
-    testFunction = /** @type {() => (void|Promise<void>)} */ (arg2)
-    testArgs = arg1
-  } else {
-    throw new Error(`Invalid arguments for it: ${description}, ${arg1}`)
-  }
+  for (const [key, entry] of Object.entries(value)) projectedValue[key] = readOnlySnapshot(entry)
 
-  const newTestArgs = mergeTestArgs(currentTest.args, testArgs)
-
-  const location = captureLocation()
-
-  currentTest.tests[description] = {
-    args: newTestArgs,
-    function: testFunction,
-    filePath: location.filePath,
-    line: location.line
-  }
+  return Object.freeze(projectedValue)
 }
 
 /**
- * Runs fit.
- * @param {string} description - Description.
- * @param {object|(() => (void|Promise<void>))} arg1 - Arg1.
- * @param {undefined|(() => (void|Promise<void>))} [arg2] - Arg2.
- * @returns {void} - No return value.
+ * Backward-compatible view of the package configuration.
+ * @type {VelociousTestConfig}
  */
-function fit(description, arg1, arg2) {
-  /**
-   * Defines testArgs.
-   * @type {Record<string, ReturnType<typeof JSON.parse>>} */
-  let testArgs
-
-  /**
-   * Defines testFunction.
-   * @type {() => (void|Promise<void>)} */
-  let testFunction
-
-  if (typeof arg1 == "function") {
-    testFunction = /** @type {() => (void|Promise<void>)} */ (arg1)
-    testArgs = {focus: true}
-  } else if (typeof arg2 == "function") {
-    testFunction = /** @type {() => (void|Promise<void>)} */ (arg2)
-    testArgs = Object.assign({focus: true}, arg1)
-  } else {
-    throw new Error(`Invalid arguments for it: ${description}, ${arg1}`)
-  }
-
-  return it(description, testArgs, testFunction)
+const testConfig = {
+  get consoleOutput() { return defaultTestContext.config.consoleOutput },
+  set consoleOutput(value) { defaultTestContext.configureTests({consoleOutput: value}) },
+  get excludeTags() { return defaultTestContext.config.excludeTags },
+  set excludeTags(value) { defaultTestContext.configureTests({excludeTags: value}) },
+  get defaultTimeoutSeconds() { return defaultTestContext.config.defaultTimeoutMs / 1000 },
+  set defaultTimeoutSeconds(value) { defaultTestContext.configureTests({defaultTimeoutSeconds: value}) },
+  get failedConsoleOutputMaxLines() { return defaultTestContext.config.failedConsoleOutputMaxLines },
+  set failedConsoleOutputMaxLines(value) { defaultTestContext.configureTests({failedConsoleOutputMaxLines: value}) }
 }
 
-// Make the methods global so they can be used in test files
+/**
+ * Projects one package suite into the deprecated legacy inspection shape.
+ * The returned objects are snapshots and never participate in execution.
+ * @param {PackageSuiteDeclaration} suite - Package declaration.
+ * @returns {import("./test-runner.js").TestsArgument} - Read-only compatibility snapshot.
+ */
+function projectSuite(suite) {
+  /** @type {Record<string, import("./test-runner.js").TestData>} */
+  const projectedTests = {}
+  /** @type {Record<string, import("./test-runner.js").TestsArgument>} */
+  const projectedSuites = {}
+
+  for (const declaration of suite.tests) {
+    const mutableArgs = {...declaration.options}
+
+    if (mutableArgs.retry === undefined && typeof mutableArgs.retries === "number") mutableArgs.retry = mutableArgs.retries
+    if (mutableArgs.timeoutSeconds === undefined && typeof mutableArgs.timeoutMs === "number") mutableArgs.timeoutSeconds = mutableArgs.timeoutMs / 1000
+    projectedTests[declaration.name] = Object.freeze({
+      args: readOnlySnapshot(mutableArgs),
+      filePath: declaration.location.filePath,
+      function: declaration.callback,
+      line: declaration.location.line
+    })
+  }
+
+  for (const child of suite.suites) projectedSuites[child.name] = projectSuite(child)
+
+  const projection = {
+    afterAlls: Object.freeze(suite.hooks.afterAll.map((hook) => Object.freeze({callback: hook.callback}))),
+    afterEaches: Object.freeze(suite.hooks.afterEach.map((hook) => Object.freeze({callback: hook.callback}))),
+    args: readOnlySnapshot(suite.options),
+    beforeAlls: Object.freeze(suite.hooks.beforeAll.map((hook) => Object.freeze({callback: hook.callback}))),
+    beforeEaches: Object.freeze(suite.hooks.beforeEach.map((hook) => Object.freeze({callback: hook.callback}))),
+    filePath: suite.location.filePath,
+    line: suite.location.line,
+    subs: Object.freeze(projectedSuites),
+    tests: Object.freeze(projectedTests)
+  }
+
+  // Narrows the immutable snapshot to the historical inspection contract.
+  return /** @type {import("./test-runner.js").TestsArgument} */ (Object.freeze(projection))
+}
+
+/**
+ * Deprecated read-only declaration projection. Package declarations in
+ * defaultTestContext are the sole execution source.
+ */
+/** @type {import("./test-runner.js").BeforeAfterAllCallbackObjectType[]} */
+const emptyAfterAlls = []
+/** @type {import("./test-runner.js").AfterBeforeEachCallbackObjectType[]} */
+const emptyAfterEaches = []
+/** @type {import("./test-runner.js").BeforeAfterAllCallbackObjectType[]} */
+const emptyBeforeAlls = []
+/** @type {import("./test-runner.js").AfterBeforeEachCallbackObjectType[]} */
+const emptyBeforeEaches = []
+const defaultTestArguments = {databaseCleaning: {transaction: true}}
+
+Object.freeze(emptyAfterAlls)
+Object.freeze(emptyAfterEaches)
+Object.freeze(emptyBeforeAlls)
+Object.freeze(emptyBeforeEaches)
+Object.freeze(defaultTestArguments.databaseCleaning)
+Object.freeze(defaultTestArguments)
+
+const testsProjection = {
+  get afterAlls() { return emptyAfterAlls },
+  get afterEaches() { return emptyAfterEaches },
+  get args() { return defaultTestArguments },
+  get beforeAlls() { return emptyBeforeAlls },
+  get beforeEaches() { return emptyBeforeEaches },
+  get filePath() { return undefined },
+  get line() { return undefined },
+  get subs() {
+    /** @type {Record<string, import("./test-runner.js").TestsArgument>} */
+    const projectedSuites = {}
+
+    for (const suite of defaultTestContext.registry.suites) {
+      if (suite.name === "") {
+        for (const childSuite of suite.suites) projectedSuites[childSuite.name] = projectSuite(childSuite)
+      } else {
+        projectedSuites[suite.name] = projectSuite(suite)
+      }
+    }
+
+    return Object.freeze(projectedSuites)
+  },
+  get tests() {
+    /** @type {Record<string, import("./test-runner.js").TestData>} */
+    const projectedTests = {}
+
+    for (const suite of defaultTestContext.registry.suites) {
+      if (suite.name !== "") continue
+
+      Object.assign(projectedTests, projectSuite(suite).tests)
+    }
+
+    return Object.freeze(projectedTests)
+  }
+}
+/** @type {import("./test-runner.js").TestsArgument} */
+const tests = testsProjection
+Object.freeze(tests)
+
+// Make the compatibility facade global so existing test files remain source-compatible.
 Object.assign(globalThis, {
   afterAll,
   afterEach,
@@ -359,9 +191,35 @@ Object.assign(globalThis, {
   configureTests,
   describe,
   expect,
+  fdescribe,
   fit,
   it,
-  testEvents
+  test,
+  testEvents,
+  xdescribe,
+  xit,
+  xtest
 })
 
-export {afterAll, afterEach, beforeAll, beforeEach, configureTests, describe, expect, fit, it, arrayContaining, objectContaining, testConfig, testEvents, tests, waitForEvent}
+export {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  configureTests,
+  describe,
+  expect,
+  fdescribe,
+  fit,
+  it,
+  test,
+  xdescribe,
+  xit,
+  xtest,
+  arrayContaining,
+  objectContaining,
+  testConfig,
+  testEvents,
+  tests,
+  waitForEvent
+}

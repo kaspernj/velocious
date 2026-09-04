@@ -1,51 +1,36 @@
 // @ts-check
 
+import {createTestContext} from "@velocious/testing"
 import VelociousSuiteHookExecutor from "../../src/testing/velocious-suite-hook-executor.js"
 import { describe, expect, it } from "../../src/testing/test.js"
 import { buildTestingRunner } from "../helpers/testing-runner-parity.js"
 
 describe("VelociousSuiteHookExecutor", {databaseCleaning: {transaction: false, truncate: false}}, () => {
-  it("passes only configuration to setup and runs all teardown in reverse order", async () => {
-    const testRunner = buildTestingRunner()
+  it("passes only configuration through the package hook callback", async () => {
+    const context = createTestContext()
+    const testRunner = buildTestingRunner({context})
     const executor = new VelociousSuiteHookExecutor({testRunner})
-    const order = []
-    const hookArguments = []
-    const firstCleanupError = new Error("first cleanup failed")
-    const secondCleanupError = new Error("second cleanup failed")
-    const beforeAlls = [{callback: async (args) => {
-      order.push("setup")
-      hookArguments.push(args)
-    }}]
-    const afterAlls = [
-      {callback: async (args) => {
-        order.push("first cleanup")
-        hookArguments.push(args)
-        throw firstCleanupError
-      }},
-      {callback: async (args) => {
-        order.push("second cleanup")
-        hookArguments.push(args)
-        throw secondCleanupError
-      }}
-    ]
+    let hookArguments
 
-    await executor.runBeforeAlls({hooks: beforeAlls})
-    let cleanupError
+    context.describe("suite", () => {
+      context.beforeAll((args) => { hookArguments = args })
+      context.it("test", () => {})
+    })
+    testRunner.analyzeDeclarations()
+    const suite = context.registry.suites[0]
+    const hook = suite.hooks.beforeAll[0]
 
-    try {
-      await executor.runAfterAlls({hooks: afterAlls})
-    } catch (error) {
-      cleanupError = error
-    }
+    await executor.execute({
+      context,
+      defaultExecute: async (args = []) => await hook.callback(...args),
+      fullName: "suite",
+      hook,
+      phase: "beforeAll",
+      suite,
+      timeoutMs: 1000
+    })
 
-    expect(order).toEqual(["setup", "second cleanup", "first cleanup"])
-    expect(hookArguments.map((args) => Object.keys(args))).toEqual([
-      ["configuration"],
-      ["configuration"],
-      ["configuration"]
-    ])
-    expect(hookArguments.every((args) => args.configuration === testRunner.getConfiguration())).toBeTrue()
-    expect(cleanupError).toBeInstanceOf(AggregateError)
-    expect(cleanupError.errors).toEqual([secondCleanupError, firstCleanupError])
+    expect(Object.keys(hookArguments)).toEqual(["configuration"])
+    expect(hookArguments.configuration).toBe(testRunner.getConfiguration())
   })
 })

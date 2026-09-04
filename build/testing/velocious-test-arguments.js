@@ -4,6 +4,7 @@ import restArgsError from "../utils/rest-args-error.js"
 
 /** @typedef {import("./test-runner.js").TestArgs} TestArgs */
 /** @typedef {import("./test-runner.js").TestData} TestData */
+/** @typedef {import("@velocious/testing/runner").TestDeclaration} PackageTestDeclaration */
 
 export default class VelociousTestArguments {
   /**
@@ -17,25 +18,33 @@ export default class VelociousTestArguments {
   }
 
   /**
-   * Builds the stable framework-owned argument object for one selected test.
-   * @param {TestData} testData - Selected test registration.
-   * @returns {Promise<TestArgs>} - Attempt-shared callback arguments.
+   * Resolves stable Velocious arguments after package-owned table arguments.
+   * @param {object} input - Package resolver input.
+   * @param {PackageTestDeclaration} input.test - Selected declaration.
+   * @returns {Promise<ReturnType<typeof JSON.parse>[]>} - Callback arguments.
    */
-  async build(testData) {
-    const testArgs = this.copy(testData)
+  async resolve({test}) {
+    const compatibility = await this.testRunner.testCompatibility(test)
 
-    await this.inject(testArgs)
-
-    return testArgs
+    return [...test.rowArguments, compatibility.testArgs]
   }
 
   /**
    * Copies declaration metadata before selection can inspect it.
-   * @param {TestData} testData - Test registration.
+   * @param {PackageTestDeclaration} testData - Test registration.
    * @returns {TestArgs} - Independent test arguments.
    */
   copy(testData) {
-    return /** @type {TestArgs} */ (Object.assign({}, testData.args))
+    const testArgs = /** @type {TestArgs} */ (Object.assign({}, testData.options))
+
+    if (testArgs.retry === undefined && typeof testData.options.retries === "number") {
+      testArgs.retry = testData.options.retries
+    }
+    if (testArgs.timeoutSeconds === undefined && typeof testData.options.timeoutMs === "number") {
+      testArgs.timeoutSeconds = testData.options.timeoutMs / 1000
+    }
+
+    return testArgs
   }
 
   /**
