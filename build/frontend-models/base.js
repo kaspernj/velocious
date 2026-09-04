@@ -1705,6 +1705,10 @@ class FrontendModelEventSubscription {
     const freshModel = /** @type {ReturnType<typeof JSON.parse>} */ (this.ModelClass).instantiateFromResponse(deserializedRecord)
 
     if (action === "update" && listener) {
+      const instanceAny = /** @type {ReturnType<typeof JSON.parse>} */ (listener.instance)
+
+      instanceAny._attachmentOwner = freshModel._attachmentOwner
+
       const matchingUpdateCallbacks = Array.from(listener.updateCallbacks).filter((entry) =>
         frontendModelEventEntryMatches(entry, matchedEventFilterKeys)
       )
@@ -1712,10 +1716,7 @@ class FrontendModelEventSubscription {
       if (matchingUpdateCallbacks.length > 0) {
         // Auto-merge into the registered instance so callers reading
         // through the same handle see fresh attributes.
-        const instanceAny = /** @type {ReturnType<typeof JSON.parse>} */ (listener.instance)
-
         instanceAny.assignAttributes(freshModel.attributes())
-        instanceAny._attachmentOwner = freshModel._attachmentOwner
         instanceAny._persistedAttributes = cloneFrontendModelAttributes(listener.instance.attributes())
 
         for (const entry of matchingUpdateCallbacks) {

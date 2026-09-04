@@ -1,5 +1,6 @@
 // @ts-check
 
+import {createHash} from "node:crypto"
 import Configuration from "../../../src/configuration.js"
 import Project from "../../dummy/src/models/project.js"
 import Record from "../../../src/database/record/index.js"
@@ -252,9 +253,23 @@ describe("Record - composite primary key", {tags: ["dummy"]}, () => {
 
     const attachmentTable = await CompositePrimaryKeyTask.connection().getTableByNameOrFail("velocious_attachments")
     const recordIdColumn = await attachmentTable.getColumnByNameOrFail("record_id")
+    const recordIdDigestColumn = await attachmentTable.getColumnByNameOrFail("record_id_digest")
     const recordIdMaxLength = recordIdColumn.getMaxLength()
+    const recordIdDigestMaxLength = recordIdDigestColumn.getMaxLength()
+    const ownerIndex = (await attachmentTable.getIndexes()).find((index) =>
+      index.getColumnNames().join(",") === "record_type,record_id_digest"
+    )
+    const attachmentRows = await CompositePrimaryKeyTask.connection()
+      .newQuery()
+      .from("velocious_attachments")
+      .where({record_id: canonicalIdentity, record_type: "CompositePrimaryKeyTask"})
+      .results()
 
     expect(typeof recordIdMaxLength === "number" && recordIdMaxLength > 0).toBeFalse()
+    expect(recordIdDigestMaxLength).toEqual(64)
+    expect(recordIdDigestColumn.getNull()).toBeFalse()
+    expect(ownerIndex?.getColumnNames()).toEqual(["record_type", "record_id_digest"])
+    expect(attachmentRows[0]?.record_id_digest).toEqual(createHash("sha256").update(canonicalIdentity).digest("hex"))
 
     const attachment = await task.getAttachmentByName("descriptionFile").download()
 

@@ -102,6 +102,7 @@ function buildCompositeRoutedTaskClass({beforeUpdateResponse} = {}) {
     static resourceConfig() {
       return {
         attributes: ["name", "workspaceId", "state"],
+        attachments: {descriptionFile: {type: "hasOne"}},
         commands: ["update"],
         primaryKey: ["name", "workspaceId"]
       }
@@ -166,7 +167,12 @@ describe("Frontend model lifecycle subscription routing", () => {
   it("re-keys a destroy-only instance listener after a remote update", async () => {
     const CompositeRoutedTask = buildCompositeRoutedTaskClass()
     const websocketClient = buildWebsocketClient()
-    const task = CompositeRoutedTask.instantiateFromResponse({name: "Composite task", state: "open", workspaceId: "alpha"})
+    const task = CompositeRoutedTask.instantiateFromResponse({
+      __attachmentOwner: {recordId: "previous-owner", recordType: "Task", resourceName: "CompositeTask"},
+      name: "Composite task",
+      state: "open",
+      workspaceId: "alpha"
+    })
     /** @type {Array<string | import("../../src/utils/model-primary-key.js").CompositeModelPrimaryKeyValue>} */
     const destroyIds = []
 
@@ -185,7 +191,20 @@ describe("Frontend model lifecycle subscription routing", () => {
         action: "update",
         id: rekeyedIdentity,
         previousId: previousIdentity,
-        record: {...rekeyedIdentity, state: "closed"}
+        record: {
+          __attachmentOwner: {recordId: "rekeyed-owner", recordType: "Task", resourceName: "CompositeTask"},
+          ...rekeyedIdentity,
+          state: "closed"
+        }
+      })
+
+      expect(task.getAttachmentByName("descriptionFile").query().wherePayload()).toEqual({
+        where: {
+          name: "descriptionFile",
+          recordId: "rekeyed-owner",
+          recordType: "Task",
+          resourceName: "CompositeTask"
+        }
       })
       subscription.options.onMessage({action: "destroy", id: rekeyedIdentity})
 

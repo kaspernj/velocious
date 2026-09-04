@@ -17,6 +17,12 @@ import VelociousError from "../velocious-error.js"
  */
 
 /**
+ * Options for building an authorized frontend-model resource query.
+ * @typedef {object} FrontendModelResourceAuthorizedQueryOptions
+ * @property {() => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>} [ruleQueryFactory] - Query factory used when authorization must target a captured record snapshot.
+ */
+
+/**
  * Frontend-model controller methods used by resources.
  * @typedef {import("../controller.js").default & {
  *   currentAbility: () => import("../authorization/ability.js").default | undefined,
@@ -24,8 +30,8 @@ import VelociousError from "../velocious-error.js"
  *   applyFrontendModelSearch: (args: {query: import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>, search: FrontendModelResourceSearch}) => void,
  *   applyFrontendModelSort: (args: {query: import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>, sort: FrontendModelResourceSort}) => void,
  *   frontendModelAbilityAction: (action: FrontendModelResourceAction) => string,
- *   frontendModelAbilityAuthorizedQuery: (action: FrontendModelResourceAction) => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>,
- *   frontendModelAuthorizedQuery: (action: FrontendModelResourceAction) => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>,
+ *   frontendModelAbilityAuthorizedQuery: (action: FrontendModelResourceAction, options?: FrontendModelResourceAuthorizedQueryOptions) => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>,
+ *   frontendModelAuthorizedQuery: (action: FrontendModelResourceAction, options?: FrontendModelResourceAuthorizedQueryOptions) => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>,
  *   frontendModelIndexQuery: (options?: FrontendModelResourceIndexQueryOptions & {resource?: Pick<FrontendModelBaseResource<FrontendModelResourceModelClass>, "applyFrontendModelIndexPagination" | "applyFrontendModelIndexSearch" | "applyFrontendModelIndexSort">}) => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>,
  *   frontendModelParams: () => import("../configuration-types.js").VelociousParams,
  *   frontendModelPreload: () => import("../database/query/index.js").NestedPreloadRecord | null,
@@ -891,11 +897,12 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   /**
    * Runs authorized query.
    * @param {FrontendModelResourceAction} action - Ability action.
+   * @param {FrontendModelResourceAuthorizedQueryOptions} [options] - Authorization query options.
    * @returns {import("../database/query/model-class-query.js").default<TDatabaseModelClass>} - Authorized query.
    */
-  authorizedQuery(action) {
+  authorizedQuery(action, options) {
     // Narrows the controller query to this resource's model class.
-    return /** @type {import("../database/query/model-class-query.js").default<TDatabaseModelClass>} */ (this.typedControllerInstance().frontendModelAbilityAuthorizedQuery(action))
+    return /** @type {import("../database/query/model-class-query.js").default<TDatabaseModelClass>} */ (this.typedControllerInstance().frontendModelAbilityAuthorizedQuery(action, options))
   }
 
   /**

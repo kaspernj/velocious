@@ -54,7 +54,7 @@ CREATE TABLE `uuid_interactions` (`id` INTEGER PRIMARY KEY NOT NULL, `subject_id
 
 CREATE TABLE `uuid_items` (`id` UUID PRIMARY KEY NOT NULL, `title` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME);
 
-CREATE TABLE "velocious_attachments" (`id` VARCHAR(255) PRIMARY KEY NOT NULL, `record_type` VARCHAR(255) NOT NULL, `record_id` TEXT NOT NULL, `name` VARCHAR(255) NOT NULL, `position` INTEGER NOT NULL, `filename` VARCHAR(255) NOT NULL, `content_type` VARCHAR(255), `byte_size` BIGINT NOT NULL, `driver` VARCHAR(255), `storage_key` VARCHAR(255), `content_base64` TEXT, `created_at_ms` BIGINT NOT NULL, `updated_at_ms` BIGINT NOT NULL);
+CREATE TABLE "velocious_attachments" (`id` VARCHAR(255) PRIMARY KEY NOT NULL, `record_type` VARCHAR(255) NOT NULL, `record_id` TEXT NOT NULL, `name` VARCHAR(255) NOT NULL, `position` INTEGER NOT NULL, `filename` VARCHAR(255) NOT NULL, `content_type` VARCHAR(255), `byte_size` BIGINT NOT NULL, `driver` VARCHAR(255), `storage_key` VARCHAR(255), `content_base64` TEXT, `created_at_ms` BIGINT NOT NULL, `updated_at_ms` BIGINT NOT NULL, `record_id_digest` VARCHAR(64) NOT NULL);
 
 CREATE TABLE `velocious_internal_migrations` (`key` VARCHAR(255) PRIMARY KEY NOT NULL, `scope` VARCHAR(255) NOT NULL, `version` VARCHAR(255) NOT NULL, `applied_at_ms` BIGINT NOT NULL);
 
@@ -149,6 +149,8 @@ CREATE INDEX `index_on_velocious_sync_scopes_resource_type` ON `velocious_sync_s
 CREATE INDEX `index_on_velocious_sync_scopes_scope_digest` ON `velocious_sync_scopes` (`scope_digest`);
 
 CREATE INDEX `index_on_velocious_sync_scopes_state` ON `velocious_sync_scopes` (`state`);
+
+CREATE INDEX `index_velocious_attachments_on_record_type_and_record_id_digest` ON `velocious_attachments` (`record_type`, `record_id_digest`);
 INSERT INTO schema_migrations (version) VALUES ('20230728075328');
 INSERT INTO schema_migrations (version) VALUES ('20230728075329');
 INSERT INTO schema_migrations (version) VALUES ('20250605133926');

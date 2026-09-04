@@ -101,6 +101,16 @@ class CompositeTaskFrontendResource extends FrontendModelBaseResource {
 
   static primaryKey = ["name", "projectId"]
 
+  /**
+   * Preserves custom resource query behavior while forwarding framework query options.
+   * @param {import("../../../../src/frontend-model-resource/base-resource.js").FrontendModelResourceAction} action - Frontend-model action.
+   * @param {import("../../../../src/frontend-model-resource/base-resource.js").FrontendModelResourceAuthorizedQueryOptions} [options] - Authorization query options.
+   * @returns {import("../../../../src/database/query/model-class-query.js").default<typeof Task>} - Authorized task query.
+   */
+  authorizedQuery(action, options) {
+    return super.authorizedQuery(action, options)
+  }
+
   /** @returns {Array<string>} - Permit spec for composite task writes. */
   permittedParams() {
     return ["name", "projectId", "description", "descriptionFile"]

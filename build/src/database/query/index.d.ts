@@ -257,11 +257,11 @@ export default class VelociousDatabaseQuery {
      * Runs execute query.
      * @param {object} [args] - Options object.
      * @param {string} [args.logName] - Query log name.
-     * @returns {Promise<Array<object>>} Array of results from the database
+     * @returns {Promise<import("../drivers/base.js").QueryResultType>} Array of results from the database
      */
     _executeQuery({ logName }?: {
         logName?: string;
-    }): Promise<Array<object>>;
+    }): Promise<import("../drivers/base.js").QueryResultType>;
     /**
      * Sets the signal used to cancel database execution for this query and its clones.
      * @param {AbortSignal | undefined} signal - Cancellation signal, or undefined to clear it.
@@ -270,9 +270,9 @@ export default class VelociousDatabaseQuery {
     signal(signal: AbortSignal | undefined): this;
     /**
      * Runs results.
-     * @returns {Promise<Array<object>>} Array of results from the database
+     * @returns {Promise<import("../drivers/base.js").QueryResultType>} Array of results from the database
      */
-    results(): Promise<Array<object>>;
+    results(): Promise<import("../drivers/base.js").QueryResultType>;
     /**
      * Runs query log name.
      * @param {string} operation - Query operation.

@@ -1,7 +1,9 @@
 // @ts-check
 
+import {createHash} from "node:crypto"
 import UUID from "pure-uuid"
 import TableData from "../../table-data/index.js"
+import TableIndex from "../../table-data/table-index.js"
 import {modelPrimaryKeyCacheKey} from "../../../utils/model-primary-key.js"
 import normalizeRecordAttachmentInput from "./normalize-input.js"
 
@@ -9,6 +11,9 @@ import normalizeRecordAttachmentInput from "./normalize-input.js"
  * AttachmentDriverConstructor type.
  * @typedef {import("../../../configuration-types.js").AttachmentDriverConstructor} AttachmentDriverConstructor */
 const ATTACHMENTS_TABLE = "velocious_attachments"
+const ATTACHMENT_OWNER_INDEX_NAME = "index_velocious_attachments_on_record_type_and_record_id_digest"
+const ATTACHMENT_RECORD_ID_DIGEST_LENGTH = 64
+const ATTACHMENT_RECORD_ID_DIGEST_MIGRATION_BATCH_SIZE = 100
 
 /**
  * Stores by configuration.
@@ -30,6 +35,36 @@ function generateUUID() {
  */
 function attachmentRecordId(model) {
   return modelPrimaryKeyCacheKey(model.getModelClass().primaryKey(), model.id())
+}
+
+/**
+ * Returns a bounded digest for indexed attachment owner lookups.
+ * @param {string} recordId - Canonical attachment owner identity.
+ * @returns {string} - SHA-256 digest.
+ */
+function attachmentRecordIdDigest(recordId) {
+  return createHash("sha256").update(recordId).digest("hex")
+}
+
+/**
+ * Builds collision-safe attachment owner lookup conditions.
+ * @param {object} args - Owner lookup values.
+ * @param {string} [args.name] - Optional attachment name.
+ * @param {string} args.recordId - Canonical owner identity.
+ * @param {string} args.recordType - Owner model name.
+ * @returns {Record<string, string>} - Indexed digest and canonical identity conditions.
+ */
+function attachmentOwnerConditions({name, recordId, recordType}) {
+  /** @type {Record<string, string>} */
+  const conditions = {
+    record_id: recordId,
+    record_id_digest: attachmentRecordIdDigest(recordId),
+    record_type: recordType
+  }
+
+  if (name !== undefined) conditions.name = name
+
+  return conditions
 }
 
 /**
@@ -142,6 +177,7 @@ export default class RecordAttachmentsStore {
     table.string("id", {null: false, primaryKey: true})
     table.string("record_type", {null: false, index: true})
     table.text("record_id", {null: false})
+    table.string("record_id_digest", {maxLength: ATTACHMENT_RECORD_ID_DIGEST_LENGTH, null: false})
     table.string("name", {null: false, index: true})
     table.integer("position", {null: false})
     table.string("filename", {null: false})
@@ -152,6 +188,7 @@ export default class RecordAttachmentsStore {
     table.text("content_base64", {null: true})
     table.bigint("created_at_ms", {null: false})
     table.bigint("updated_at_ms", {null: false})
+    table.addIndex(new TableIndex(["record_type", "record_id_digest"], {name: ATTACHMENT_OWNER_INDEX_NAME}))
 
     await db.createTable(table)
     this._driverColumnsAvailable = true
@@ -280,7 +317,7 @@ export default class RecordAttachmentsStore {
           const existingRows = await db
             .newQuery()
             .from(ATTACHMENTS_TABLE)
-            .where({name, record_id: recordId, record_type: recordType})
+            .where(attachmentOwnerConditions({name, recordId, recordType}))
             .results()
 
           for (const existingRow of existingRows) {
@@ -288,7 +325,7 @@ export default class RecordAttachmentsStore {
           }
 
           await db.delete({
-            conditions: {name, record_id: recordId, record_type: recordType},
+            conditions: attachmentOwnerConditions({name, recordId, recordType}),
             tableName: ATTACHMENTS_TABLE
           })
         }
@@ -307,6 +344,7 @@ export default class RecordAttachmentsStore {
           name,
           position,
           record_id: recordId,
+          record_id_digest: attachmentRecordIdDigest(recordId),
           record_type: recordType,
           updated_at_ms: now
         }
@@ -370,6 +408,7 @@ export default class RecordAttachmentsStore {
     const hasStorageKeyColumn = columns.some((column) => column.getName() === "storage_key")
     const contentBase64Column = columns.find((column) => column.getName() === "content_base64")
     const recordIdColumn = columns.find((column) => column.getName() === "record_id")
+    const recordIdDigestColumn = columns.find((column) => column.getName() === "record_id_digest")
     const alterTable = new TableData(ATTACHMENTS_TABLE)
     let shouldAlter = false
 
@@ -415,6 +454,11 @@ export default class RecordAttachmentsStore {
       shouldAlter = true
     }
 
+    if (!recordIdDigestColumn) {
+      alterTable.string("record_id_digest", {maxLength: ATTACHMENT_RECORD_ID_DIGEST_LENGTH, null: true})
+      shouldAlter = true
+    }
+
     if (shouldAlter) {
       const alterTableSQLs = await db.alterTableSQLs(alterTable)
 
@@ -425,8 +469,96 @@ export default class RecordAttachmentsStore {
       db.clearSchemaCache()
     }
 
+    if (!recordIdDigestColumn || recordIdDigestColumn.getNull()) {
+      await this.backfillAttachmentRecordIdDigests(db)
+      await this.ensureAttachmentRecordIdDigestNotNull(db)
+    }
+
+    await this.ensureAttachmentOwnerIndex(db)
+
     this._driverColumnsAvailable = true
     this._contentBase64Nullable = contentBase64Column ? contentBase64Column.getNull() : true
+  }
+
+  /**
+   * Backfills bounded attachment owner digests in small batches.
+   * @param {import("../../../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<void>} - Resolves when every existing row has a digest.
+   */
+  async backfillAttachmentRecordIdDigests(db) {
+    while (true) {
+      const rows = await db
+        .newQuery()
+        .from(ATTACHMENTS_TABLE)
+        .where({record_id_digest: null})
+        .limit(ATTACHMENT_RECORD_ID_DIGEST_MIGRATION_BATCH_SIZE)
+        .results()
+
+      for (const row of rows) {
+        if (typeof row.id !== "string" || typeof row.record_id !== "string") {
+          throw new Error(`Expected canonical attachment identity strings while backfilling ${ATTACHMENTS_TABLE}`)
+        }
+
+        await db.update({
+          conditions: {id: row.id},
+          data: {record_id_digest: attachmentRecordIdDigest(row.record_id)},
+          tableName: ATTACHMENTS_TABLE
+        })
+      }
+
+      if (rows.length < ATTACHMENT_RECORD_ID_DIGEST_MIGRATION_BATCH_SIZE) return
+    }
+  }
+
+  /**
+   * Makes the backfilled attachment owner digest required.
+   * @param {import("../../../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<void>} - Resolves when the digest column is non-nullable.
+   */
+  async ensureAttachmentRecordIdDigestNotNull(db) {
+    db.clearSchemaCache()
+    const table = await db.getTableByNameOrFail(ATTACHMENTS_TABLE)
+    const recordIdDigestColumn = await table.getColumnByNameOrFail("record_id_digest")
+
+    if (!recordIdDigestColumn.getNull()) return
+
+    const alterTable = new TableData(ATTACHMENTS_TABLE)
+
+    alterTable.string("record_id_digest", {
+      isNewColumn: false,
+      maxLength: ATTACHMENT_RECORD_ID_DIGEST_LENGTH,
+      null: false
+    })
+
+    for (const sql of await db.alterTableSQLs(alterTable)) await db.query(sql)
+
+    db.clearSchemaCache()
+  }
+
+  /**
+   * Ensures attachment owner queries retain a bounded composite index.
+   * @param {import("../../../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<void>} - Resolves when the owner index exists.
+   */
+  async ensureAttachmentOwnerIndex(db) {
+    const table = await db.getTableByNameOrFail(ATTACHMENTS_TABLE)
+    const indexes = await table.getIndexes()
+    const ownerIndex = indexes.find((index) => {
+      const columnNames = index.getColumnNames()
+
+      return columnNames.length === 2 && columnNames[0] === "record_type" && columnNames[1] === "record_id_digest"
+    })
+
+    if (ownerIndex) return
+
+    for (const sql of await db.createIndexSQLs({
+      columns: ["record_type", "record_id_digest"],
+      ifNotExists: true,
+      name: ATTACHMENT_OWNER_INDEX_NAME,
+      tableName: ATTACHMENTS_TABLE
+    })) await db.query(sql)
+
+    db.clearSchemaCache()
   }
 
   /**
@@ -502,7 +634,7 @@ export default class RecordAttachmentsStore {
       let query = db
         .newQuery()
         .from(ATTACHMENTS_TABLE)
-        .where({name, record_id: recordId, record_type: recordType})
+        .where(attachmentOwnerConditions({name, recordId, recordType}))
         .order("position ASC")
         .order("created_at_ms DESC")
         .limit(1)
@@ -533,7 +665,7 @@ export default class RecordAttachmentsStore {
       const query = db
         .newQuery()
         .from(ATTACHMENTS_TABLE)
-        .where({name, record_id: recordId, record_type: recordType})
+        .where(attachmentOwnerConditions({name, recordId, recordType}))
         .order("position ASC")
         .order("created_at_ms ASC")
 
@@ -560,11 +692,14 @@ export default class RecordAttachmentsStore {
     if (!await connection.tableExists(ATTACHMENTS_TABLE)) return
 
     await connection.update({
-      conditions: {
-        record_id: previousRecordId,
-        record_type: model.getModelClass().getModelName()
+      conditions: attachmentOwnerConditions({
+        recordId: previousRecordId,
+        recordType: model.getModelClass().getModelName()
+      }),
+      data: {
+        record_id: nextRecordId,
+        record_id_digest: attachmentRecordIdDigest(nextRecordId)
       },
-      data: {record_id: nextRecordId},
       tableName: ATTACHMENTS_TABLE
     })
   }
@@ -613,7 +748,7 @@ export default class RecordAttachmentsStore {
       const rows = await db
         .newQuery()
         .from(ATTACHMENTS_TABLE)
-        .where({name, record_id: recordId, record_type: recordType})
+        .where(attachmentOwnerConditions({name, recordId, recordType}))
         .results()
 
       // Refuse to purge when any row's driver cannot delete its backing storage:
@@ -803,7 +938,7 @@ export default class RecordAttachmentsStore {
     const query = db
       .newQuery()
       .from(ATTACHMENTS_TABLE)
-      .where({name, record_id: recordId, record_type: recordType})
+      .where(attachmentOwnerConditions({name, recordId, recordType}))
       .order("position DESC")
       .limit(1)
     const rows = await query.results()

@@ -1,5 +1,10 @@
 # Frontend Model Resources
 
+Custom `authorizedQuery(action, options)` overrides that build on the default
+ability query must pass `options` to `super.authorizedQuery(action, options)`.
+Velocious uses these options to evaluate destroy lifecycle authorization against
+the captured pre-delete record instead of the already-deleted backing row.
+
 ## Resource recipe requirement
 Frontend model usage should require explicit backend resource recipes.
 

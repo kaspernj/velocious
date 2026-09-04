@@ -96,6 +96,24 @@ export default class RecordAttachmentsStore {
         db: import("../../../database/drivers/base.js").default;
     }): Promise<void>;
     /**
+     * Backfills bounded attachment owner digests in small batches.
+     * @param {import("../../../database/drivers/base.js").default} db - Database connection.
+     * @returns {Promise<void>} - Resolves when every existing row has a digest.
+     */
+    backfillAttachmentRecordIdDigests(db: import("../../../database/drivers/base.js").default): Promise<void>;
+    /**
+     * Makes the backfilled attachment owner digest required.
+     * @param {import("../../../database/drivers/base.js").default} db - Database connection.
+     * @returns {Promise<void>} - Resolves when the digest column is non-nullable.
+     */
+    ensureAttachmentRecordIdDigestNotNull(db: import("../../../database/drivers/base.js").default): Promise<void>;
+    /**
+     * Ensures attachment owner queries retain a bounded composite index.
+     * @param {import("../../../database/drivers/base.js").default} db - Database connection.
+     * @returns {Promise<void>} - Resolves when the owner index exists.
+     */
+    ensureAttachmentOwnerIndex(db: import("../../../database/drivers/base.js").default): Promise<void>;
+    /**
      * Runs read attachment row.
      * @param {object} args - Options.
      * @param {import("../index.js").default} args.model - Model instance.

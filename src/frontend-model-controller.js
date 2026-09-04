@@ -1126,7 +1126,7 @@ export default class FrontendModelController extends Controller {
     const resource = this.frontendModelResourceInstance()
 
     if (resource.authorizedQuery !== FrontendModelBaseResource.prototype.authorizedQuery) {
-      return resource.authorizedQuery(action)
+      return resource.authorizedQuery(action, options)
     }
 
     return this.frontendModelAbilityAuthorizedQuery(action, options)

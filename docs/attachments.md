@@ -66,7 +66,9 @@ at runtime. This keeps schema DDL outside application and test transactions and
 includes the table in generated structure SQL before the first attachment is
 written. Attachment owner identities use unbounded text so the complete
 canonical tuple for a composite primary key is retained even when it exceeds
-the former 255-character scalar-id column.
+the former 255-character scalar-id column. Owner lookups also store an indexed,
+bounded SHA-256 digest beside that canonical value; queries use the digest for
+the index and the full identity as a collision check.
 
 ## Node path input
 

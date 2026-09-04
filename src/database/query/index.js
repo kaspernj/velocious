@@ -481,7 +481,7 @@ export default class VelociousDatabaseQuery {
    * Runs execute query.
    * @param {object} [args] - Options object.
    * @param {string} [args.logName] - Query log name.
-   * @returns {Promise<Array<object>>} Array of results from the database
+   * @returns {Promise<import("../drivers/base.js").QueryResultType>} Array of results from the database
    */
   async _executeQuery({logName = this.queryLogName("Load")} = {}) {
     const sql = this.toSql()
@@ -503,7 +503,7 @@ export default class VelociousDatabaseQuery {
 
   /**
    * Runs results.
-   * @returns {Promise<Array<object>>} Array of results from the database
+   * @returns {Promise<import("../drivers/base.js").QueryResultType>} Array of results from the database
    */
   async results() {
     return await this._executeQuery()
