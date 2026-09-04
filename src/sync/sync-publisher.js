@@ -2,6 +2,7 @@
 
 import Configuration from "../configuration.js"
 import Logger from "../logger.js"
+import {scalarModelPrimaryKeyValue} from "../utils/model-primary-key.js"
 import restArgsError from "../utils/rest-args-error.js"
 
 import {declaredSyncScopeAttributes} from "./sync-scope-attributes.js"
@@ -190,7 +191,7 @@ export default class SyncPublisher {
       if (isPublishingSuppressed(record)) return
 
       const data = await resourceConfig.serialize(record)
-      const resourceId = String(record.id())
+      const resourceId = String(scalarModelPrimaryKeyValue(record.id(), `Sync publishing for ${resourceConfig.resourceType}`))
       const syncType = operation === "destroy" ? "delete" : "update"
       const scopeValues = await this.publishedScopeValues({record, resourceConfig})
       /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
@@ -259,7 +260,7 @@ export default class SyncPublisher {
       } else if (scopePlanEntry.recordAttribute) {
         rawValue = record.readAttribute(scopePlanEntry.recordAttribute)
       } else {
-        rawValue = record.id()
+        rawValue = scalarModelPrimaryKeyValue(record.id(), `Sync scope publishing for ${resourceConfig.resourceType}`)
       }
 
       const value = rawValue === undefined || rawValue === null ? null : String(rawValue)

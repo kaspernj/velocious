@@ -3,6 +3,7 @@
 import {optionalBoolean, optionalInteger} from "typanic"
 
 import recordChanges from "../database/record-changes.js"
+import {scalarModelPrimaryKeyValue} from "../utils/model-primary-key.js"
 import {applySyncReplayResultToLocalMutationLog} from "./conflict-strategy.js"
 
 /** @typedef {import("./sync-api-client-types.js").SyncChangeApplyResult} SyncChangeApplyResult */
@@ -35,7 +36,7 @@ export default class SyncApiClient {
    * @returns {Promise<import("./local-mutation-log.js").LocalMutationLogRecord>} Appended intent.
    */
   static async queueConflictTrackedSync({baseVersion, conflictTracking, data, operation, resource, resourceType, syncType}) {
-    const resourceId = String(resource.id())
+    const resourceId = String(scalarModelPrimaryKeyValue(resource.id(), `Conflict-tracked sync for ${resourceType}`))
     const records = await conflictTracking.mutationLog.records()
     const predecessor = records
       .filter((record) => record.mutation.model === resourceType && record.mutation.payload?.resourceId === resourceId)
@@ -675,7 +676,7 @@ export default class SyncApiClient {
    * @returns {Promise<ReturnType<typeof JSON.parse>>} Local sync row.
    */
   static async queueLocalSync(args) {
-    const resourceRecordId = args.resource.id()
+    const resourceRecordId = scalarModelPrimaryKeyValue(args.resource.id(), "Local sync queueing")
     const modelClass = args.resource.constructor
 
     if (typeof modelClass.getModelName !== "function") {

@@ -203,7 +203,7 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
             channelType: "test",
             subscriptionId: "s1",
             lastEventId: firstEvent.eventId,
-            params: {subscribe: "news", token: "allow"}
+            params: {markDelivery: true, subscribe: "news", token: "allow"}
           }))
 
           const replayedMessages = await replayedMessagesPromise
@@ -219,6 +219,7 @@ describe("HttpServer - websocket", {databaseCleaning: {transaction: false, trunc
 
           expect(appMessages.some((m) => m.type === "channel-subscribed")).toBe(true)
           expect(replayedEvent).toBeDefined()
+          expect(replayedEvent.body.deliveredByChannel).toEqual(true)
         } finally {
           secondSocket.close()
         }

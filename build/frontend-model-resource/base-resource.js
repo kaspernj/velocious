@@ -3,16 +3,23 @@
 import AuthorizationBaseResource from "../authorization/base-resource.js"
 import * as inflection from "inflection"
 import isPlainObject from "../utils/plain-object.js"
+import {modelPrimaryKeyConditions, readModelPrimaryKeyValue, scalarModelPrimaryKeyValue} from "../utils/model-primary-key.js"
 import VelociousError from "../velocious-error.js"
 
 /**
  * Backend or frontend model class bound to a frontend-model resource.
- * @typedef {import("../authorization/base-resource.js").AuthorizationResourceModelClass & {attachmentDefinitions: () => Record<string, import("../configuration-types.js").FrontendModelAttachmentConfiguration>, primaryKey: () => string}} FrontendModelResourceModelClass
+ * @typedef {import("../authorization/base-resource.js").AuthorizationResourceModelClass & {attachmentDefinitions: () => Record<string, import("../configuration-types.js").FrontendModelAttachmentConfiguration>, primaryKey: () => import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition}} FrontendModelResourceModelClass
  */
 
 /**
  * Built-in frontend-model resource action.
  * @typedef {"index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url"} FrontendModelResourceAction
+ */
+
+/**
+ * Options for building an authorized frontend-model resource query.
+ * @typedef {object} FrontendModelResourceAuthorizedQueryOptions
+ * @property {() => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>} [ruleQueryFactory] - Query factory used when authorization must target a captured record snapshot.
  */
 
 /**
@@ -23,8 +30,8 @@ import VelociousError from "../velocious-error.js"
  *   applyFrontendModelSearch: (args: {query: import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>, search: FrontendModelResourceSearch}) => void,
  *   applyFrontendModelSort: (args: {query: import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>, sort: FrontendModelResourceSort}) => void,
  *   frontendModelAbilityAction: (action: FrontendModelResourceAction) => string,
- *   frontendModelAbilityAuthorizedQuery: (action: FrontendModelResourceAction) => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>,
- *   frontendModelAuthorizedQuery: (action: FrontendModelResourceAction) => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>,
+ *   frontendModelAbilityAuthorizedQuery: (action: FrontendModelResourceAction, options?: FrontendModelResourceAuthorizedQueryOptions) => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>,
+ *   frontendModelAuthorizedQuery: (action: FrontendModelResourceAction, options?: FrontendModelResourceAuthorizedQueryOptions) => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>,
  *   frontendModelIndexQuery: (options?: FrontendModelResourceIndexQueryOptions & {resource?: Pick<FrontendModelBaseResource<FrontendModelResourceModelClass>, "applyFrontendModelIndexPagination" | "applyFrontendModelIndexSearch" | "applyFrontendModelIndexSort">}) => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>,
  *   frontendModelParams: () => import("../configuration-types.js").VelociousParams,
  *   frontendModelPreload: () => import("../database/query/index.js").NestedPreloadRecord | null,
@@ -175,7 +182,7 @@ import VelociousError from "../velocious-error.js"
 
 /**
  * Normalized nested attributes entry.
- * @typedef {FrontendModelResourceAttributePayload & {id?: string | number, _destroy?: boolean, attributes?: FrontendModelResourceAttributePayload, attachments?: FrontendModelResourceAttributePayload, nestedAttributes?: FrontendModelResourceAttributePayload}} FrontendModelResourceNestedEntry
+ * @typedef {FrontendModelResourceAttributePayload & {id?: import("../utils/model-primary-key.js").ModelPrimaryKeyValue, _destroy?: boolean, attributes?: FrontendModelResourceAttributePayload, attachments?: FrontendModelResourceAttributePayload, nestedAttributes?: FrontendModelResourceAttributePayload}} FrontendModelResourceNestedEntry
  */
 
 /**
@@ -217,7 +224,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   static relationships = undefined
   /** @type {string | undefined} */
   static modelName = undefined
-  /** @type {string | undefined} */
+  /** @type {string | string[] | undefined} */
   static primaryKey = undefined
   /** @type {import("../configuration-types.js").FrontendModelResourceServerConfiguration | undefined} */
   static server = undefined
@@ -468,12 +475,29 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     if (collectionCommands) config.collectionCommands = /** @type {string[]} */ (collectionCommands)
     if (memberCommands) config.memberCommands = /** @type {string[]} */ (memberCommands)
     if (modelName) config.modelName = /** @type {string} */ (modelName)
-    if (primaryKey) config.primaryKey = /** @type {string} */ (primaryKey)
+    if (primaryKey) config.primaryKey = /** @type {string | string[]} */ (primaryKey)
     if (relationships) config.relationships = /** @type {string[]} */ (relationships)
     if (server) config.server = /** @type {import("../configuration-types.js").FrontendModelResourceServerConfiguration} */ (server)
     if (sync !== undefined) config.sync = /** @type {import("../configuration-types.js").FrontendModelResourceSyncConfiguration | boolean} */ (sync)
 
     return config
+  }
+
+  /**
+   * Resolves the client-facing resource primary key from explicit resource config or the backing model.
+   * @param {import("../configuration-types.js").FrontendModelResourceConfiguration | import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration} resourceConfiguration - Resource configuration.
+   * @returns {import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition} - Client-facing primary key.
+   */
+  static resolvedPrimaryKey(resourceConfiguration) {
+    if (resourceConfiguration.primaryKey) return resourceConfiguration.primaryKey
+    if (!this.ModelClass) return "id"
+
+    const modelClass = /** @type {typeof import("../database/record/index.js").default} */ (this.modelClass())
+    const modelPrimaryKey = modelClass.primaryKey()
+
+    return Array.isArray(modelPrimaryKey)
+      ? modelPrimaryKey.map((columnName) => modelClass.resolveAttributeName(columnName) || columnName)
+      : modelClass.resolveAttributeName(modelPrimaryKey) || modelPrimaryKey
   }
 
   /**
@@ -671,12 +695,11 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    */
   async findSyncRecord({ability = this.ability, forDelete = false, mutation}) {
     const ModelClass = this.databaseModelClass()
-    const primaryKey = ModelClass.primaryKey()
     const query = ability
       ? ModelClass.accessibleFor(this.syncAbilityAction(forDelete ? "destroy" : "update"), ability)
       : ModelClass.where({})
 
-    return await query.findBy({[primaryKey]: mutation.resourceId})
+    return await query.findBy(modelPrimaryKeyConditions(this.primaryKey(), mutation.resourceId))
   }
 
   /**
@@ -863,18 +886,23 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
   /**
    * Runs primary key.
-   * @returns {string} - Primary key.
+   * @returns {import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition} - Primary key.
    */
-  primaryKey() { return this.modelClass().primaryKey() }
+  primaryKey() {
+    const ResourceClass = /** @type {typeof FrontendModelBaseResource} */ (this.constructor)
+
+    return ResourceClass.resolvedPrimaryKey(this.resourceConfiguration())
+  }
 
   /**
    * Runs authorized query.
    * @param {FrontendModelResourceAction} action - Ability action.
+   * @param {FrontendModelResourceAuthorizedQueryOptions} [options] - Authorization query options.
    * @returns {import("../database/query/model-class-query.js").default<TDatabaseModelClass>} - Authorized query.
    */
-  authorizedQuery(action) {
+  authorizedQuery(action, options) {
     // Narrows the controller query to this resource's model class.
-    return /** @type {import("../database/query/model-class-query.js").default<TDatabaseModelClass>} */ (this.typedControllerInstance().frontendModelAbilityAuthorizedQuery(action))
+    return /** @type {import("../database/query/model-class-query.js").default<TDatabaseModelClass>} */ (this.typedControllerInstance().frontendModelAbilityAuthorizedQuery(action, options))
   }
 
   /**
@@ -988,7 +1016,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   /**
    * Runs find.
    * @param {"find" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url"} action - Action.
-   * @param {string | number} id - Record id.
+   * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} id - Record id.
    * @returns {Promise<import("../database/record/index.js").default | null>} - Located model.
    */
   async find(action, id) {
@@ -999,7 +1027,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
       query = query.preload(preload)
     }
 
-    return await query.findBy({[this.primaryKey()]: id})
+    return await query.findBy(modelPrimaryKeyConditions(this.primaryKey(), id))
   }
 
   /**
@@ -1282,7 +1310,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @param {FrontendModelResourcePayloadValue} args.rawEntries - Raw nested entries from the request payload.
    * @param {{attributes: string[], nested: Record<string, ReturnType<typeof JSON.parse>>}} args.childPermit - Parsed child permit.
    * @param {FrontendModelResourceController | null | undefined} args.controller - Controller instance for child resource lookup.
-   * @returns {{ability: import("../authorization/ability.js").default | undefined, childResource: FrontendModelBaseResource, childResourceConfig: FrontendModelResolvedResourceConfiguration, childWritableAttributes: string[], destroyPermitted: boolean, entries: Array<FrontendModelResourceNestedEntry>, relationship: import("../database/record/relationships/base.js").default, targetModelClass: typeof import("../database/record/index.js").default}} Nested relationship context.
+   * @returns {{ability: import("../authorization/ability.js").default | undefined, childPrimaryKey: import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition, childResource: FrontendModelBaseResource, childResourceConfig: FrontendModelResolvedResourceConfiguration, childWritableAttributes: string[], destroyPermitted: boolean, entries: Array<FrontendModelResourceNestedEntry>, relationship: import("../database/record/relationships/base.js").default, targetModelClass: typeof import("../database/record/index.js").default}} Nested relationship context.
    */
   _nestedRelationshipContext({parent, relationshipName, rawEntries, childPermit, controller}) {
     if (!controller) {
@@ -1334,9 +1362,10 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
       params: controller.frontendModelParams(),
       resourceConfiguration: childResourceConfig.resourceConfiguration
     })
+    const childPrimaryKey = childResource.primaryKey()
     const childWritableAttributes = childPermit.attributes.filter((name) => name !== "_destroy")
     const entries = rawNormalizedEntries
-      .map((entry) => this._normalizeNestedRelationshipEntry({childPermit, entry, relationshipName, targetModelClass}))
+      .map((entry) => this._normalizeNestedRelationshipEntry({childPermit, childPrimaryKey, entry, relationshipName, targetModelClass}))
       .filter((entry) => {
         if (typeof modelAcceptance.rejectIf !== "function") return true
 
@@ -1345,6 +1374,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
     return {
       ability: controller.currentAbility() || this.ability,
+      childPrimaryKey,
       childResource,
       childResourceConfig,
       childWritableAttributes,
@@ -1400,12 +1430,13 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * fields (`{name, file, commentsAttributes}`).
    * @param {object} args - Normalization inputs.
    * @param {{attributes: string[], nested: Record<string, ReturnType<typeof JSON.parse>>}} args.childPermit - Parsed child permit spec.
+   * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition} args.childPrimaryKey - Resolved child resource primary key.
    * @param {FrontendModelResourceNestedEntry} args.entry - Raw nested entry.
    * @param {string} args.relationshipName - Relationship name for error messages.
    * @param {typeof import("../database/record/index.js").default} args.targetModelClass - Child model class.
    * @returns {FrontendModelResourceNestedEntry} Normalized nested entry.
    */
-  _normalizeNestedRelationshipEntry({childPermit, entry, relationshipName, targetModelClass}) {
+  _normalizeNestedRelationshipEntry({childPermit, childPrimaryKey, entry, relationshipName, targetModelClass}) {
     /** @type {FrontendModelResourceAttributePayload} */
     const attributes = {}
     /** @type {FrontendModelResourceAttributePayload} */
@@ -1418,11 +1449,16 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
 
     for (const [attributeName, value] of Object.entries(entry)) {
       if (attributeName === "id") {
-        if (typeof value !== "string" && typeof value !== "number") {
-          throw new Error(`nestedAttributes['${relationshipName}'] entry id must be a string or number.`)
-        }
+        if (Array.isArray(childPrimaryKey)) {
+          modelPrimaryKeyConditions(childPrimaryKey, value)
+          normalized.id = /** @type {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} */ (value)
+        } else {
+          if (typeof value !== "string" && typeof value !== "number") {
+            throw new Error(`nestedAttributes['${relationshipName}'] entry id must be a string or number.`)
+          }
 
-        normalized.id = value
+          normalized.id = value
+        }
         continue
       }
 
@@ -1520,6 +1556,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
           const existing = await this._findNestedRecord({
             ability: context.ability,
             action: "destroy",
+            childPrimaryKey: context.childPrimaryKey,
             childResourceConfiguration: context.childResourceConfig.resourceConfiguration,
             id,
             relationshipName,
@@ -1536,6 +1573,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
           ? await this._findNestedRecord({
             ability: context.ability,
             action: "update",
+            childPrimaryKey: context.childPrimaryKey,
             childResourceConfiguration: context.childResourceConfig.resourceConfiguration,
             id,
             relationshipName,
@@ -1555,6 +1593,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
           await this._authorizeCreatedChild({
             ability: context.ability,
             child,
+            childPrimaryKey: context.childPrimaryKey,
             childResourceConfiguration: context.childResourceConfig.resourceConfiguration,
             relationshipName,
             targetModelClass: context.targetModelClass
@@ -1565,7 +1604,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
           await context.childResource._applyNestedAttributes(child, entry.nestedAttributes, controller, childPermit)
         }
 
-        parent.setAttribute(foreignKey, child.id())
+        parent.setAttribute(foreignKey, scalarModelPrimaryKeyValue(child.id(), `Nested belongs-to write for ${child.getModelClass().name}`))
       }
     }
   }
@@ -1645,6 +1684,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
         const existing = await this._findScopedChild({
           ability: context.ability,
           action: "destroy",
+          childPrimaryKey: context.childPrimaryKey,
           childResourceConfiguration: context.childResourceConfig.resourceConfiguration,
           id,
           parent,
@@ -1666,6 +1706,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
         const existing = await this._findScopedChild({
           ability: context.ability,
           action: "update",
+          childPrimaryKey: context.childPrimaryKey,
           childResourceConfiguration: context.childResourceConfig.resourceConfiguration,
           id,
           parent,
@@ -1702,6 +1743,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
         await this._authorizeCreatedChild({
           ability: context.ability,
           child,
+          childPrimaryKey: context.childPrimaryKey,
           childResourceConfiguration: context.childResourceConfig.resourceConfiguration,
           relationshipName,
           targetModelClass: context.targetModelClass
@@ -1760,7 +1802,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   _parentLinkAttributesForNestedChild({parent, relationship, targetModelClass}) {
     const foreignKey = this._foreignKeyAttributeForModel(relationship, targetModelClass)
     /** @type {Record<string, string | number>} */
-    const attributes = {[foreignKey]: /** @type {string | number} */ (parent.id())}
+    const attributes = {[foreignKey]: scalarModelPrimaryKeyValue(parent.id(), `Nested child write for ${parent.getModelClass().name}`)}
 
     if (relationship.getPolymorphic()) {
       const typeAttribute = this._polymorphicTypeAttributeForModel(relationship, targetModelClass)
@@ -1788,18 +1830,18 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @param {object} args - Lookup inputs.
    * @param {import("../authorization/ability.js").default | undefined} args.ability - Current ability.
    * @param {"update" | "destroy"} args.action - Frontend action.
+   * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition} args.childPrimaryKey - Resolved child resource primary key.
    * @param {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration} args.childResourceConfiguration - Child resource configuration.
-   * @param {string | number} args.id - Child id from the payload.
+   * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} args.id - Child id from the payload.
    * @param {string} args.relationshipName - Parent's relationship name for error messages.
    * @param {typeof import("../database/record/index.js").default} args.targetModelClass - Child model class.
    * @returns {Promise<import("../database/record/index.js").default>} Authorized child model.
    */
-  async _findNestedRecord({ability, action, childResourceConfiguration, id, relationshipName, targetModelClass}) {
-    const primaryKey = targetModelClass.primaryKey()
+  async _findNestedRecord({ability, action, childPrimaryKey, childResourceConfiguration, id, relationshipName, targetModelClass}) {
     const query = ability
       ? targetModelClass.accessibleFor(this._resolveChildAbilityAction(childResourceConfiguration, action), ability)
       : targetModelClass.where({})
-    const existing = await query.findBy({[primaryKey]: id})
+    const existing = await query.findBy(modelPrimaryKeyConditions(childPrimaryKey, id))
 
     if (!existing) {
       throw new Error(`Cannot ${action} nested ${relationshipName}[id=${id}]: record not found or not authorized.`)
@@ -1842,17 +1884,25 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @param {object} args - Arguments.
    * @param {import("../authorization/ability.js").default | undefined} args.ability - Current ability.
    * @param {"update" | "destroy"} args.action - Frontend action.
+   * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition} args.childPrimaryKey - Resolved child resource primary key.
    * @param {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration} args.childResourceConfiguration - Child resource configuration.
-   * @param {string | number} args.id - Child id from the payload.
+   * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} args.id - Child id from the payload.
    * @param {import("../database/record/index.js").default} args.parent - Parent model instance.
    * @param {Record<string, string | number>} args.parentLinkAttributes - Attributes that scope the child to the parent.
    * @param {string} args.relationshipName - Parent's relationship name (for error messages).
    * @param {typeof import("../database/record/index.js").default} args.targetModelClass - Child model class.
    * @returns {Promise<import("../database/record/index.js").default>} - Authorized, parent-linked child model.
    */
-  async _findScopedChild({ability, action, childResourceConfiguration, id, parent, parentLinkAttributes, relationshipName, targetModelClass}) {
-    const primaryKey = targetModelClass.primaryKey()
-    const lookup = {[primaryKey]: id, ...parentLinkAttributes}
+  async _findScopedChild({ability, action, childPrimaryKey, childResourceConfiguration, id, parent, parentLinkAttributes, relationshipName, targetModelClass}) {
+    const identityConditions = modelPrimaryKeyConditions(childPrimaryKey, id)
+
+    for (const [attributeName, parentValue] of Object.entries(parentLinkAttributes)) {
+      if (Object.prototype.hasOwnProperty.call(identityConditions, attributeName) && identityConditions[attributeName] !== parentValue) {
+        throw new Error(`Cannot ${action} nested ${relationshipName}[id=${id}]: identity field '${attributeName}' does not match parent ${parent.getModelClass().name}[id=${parent.id()}].`)
+      }
+    }
+
+    const lookup = {...identityConditions, ...parentLinkAttributes}
     const query = ability
       ? targetModelClass.accessibleFor(this._resolveChildAbilityAction(childResourceConfiguration, action), ability)
       : targetModelClass.where({})
@@ -1873,22 +1923,22 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @param {object} args - Arguments.
    * @param {import("../authorization/ability.js").default | undefined} args.ability - Current ability.
    * @param {import("../database/record/index.js").default} args.child - Child model instance just created.
+   * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition} args.childPrimaryKey - Resolved child resource primary key.
    * @param {import("../configuration-types.js").NormalizedFrontendModelResourceConfiguration} args.childResourceConfiguration - Child resource configuration.
    * @param {string} args.relationshipName - Parent's relationship name (for error messages).
    * @param {typeof import("../database/record/index.js").default} args.targetModelClass - Child model class.
    * @returns {Promise<void>}
    */
-  async _authorizeCreatedChild({ability, child, childResourceConfiguration, relationshipName, targetModelClass}) {
+  async _authorizeCreatedChild({ability, child, childPrimaryKey, childResourceConfiguration, relationshipName, targetModelClass}) {
     if (!ability) return
 
     const abilityAction = this._resolveChildAbilityAction(childResourceConfiguration, "create")
-    const primaryKey = targetModelClass.primaryKey()
-    const authorizedIds = await targetModelClass
+    const identity = readModelPrimaryKeyValue(childPrimaryKey, (attributeName) => child.readAttribute(attributeName))
+    const authorizedChild = await targetModelClass
       .accessibleFor(abilityAction, ability)
-      .where({[primaryKey]: child.readAttribute(primaryKey)})
-      .pluck(primaryKey)
+      .findBy(modelPrimaryKeyConditions(childPrimaryKey, identity))
 
-    if (authorizedIds.length === 0) {
+    if (!authorizedChild) {
       throw new Error(`Nested create on ${relationshipName}[${targetModelClass.name}] not authorized.`)
     }
   }

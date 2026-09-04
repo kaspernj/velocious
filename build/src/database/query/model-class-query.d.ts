@@ -241,10 +241,10 @@ export default class VelociousDatabaseQueryModelClassQuery<MC extends typeof imp
     updateAll(data: Record<string, ReturnType<typeof JSON.parse>>): Promise<void>;
     /**
      * Runs find.
-     * @param {number|string} recordId - Record id.
+     * @param {import("../../utils/model-primary-key.js").ModelPrimaryKeyValue} recordId - Record id.
      * @returns {Promise<InstanceType<MC>>} - Resolves with the find.
      */
-    find(recordId: number | string): Promise<InstanceType<MC>>;
+    find(recordId: import("../../utils/model-primary-key.js").ModelPrimaryKeyValue): Promise<InstanceType<MC>>;
     /**
      * Runs find by.
      * @param {{[key: string]: string | number}} conditions - Conditions hash keyed by attribute name.
@@ -299,6 +299,12 @@ export default class VelociousDatabaseQueryModelClassQuery<MC extends typeof imp
      * @returns {Promise<InstanceType<MC> | null>} - Resolves with the last.
      */
     last(): Promise<InstanceType<MC> | null>;
+    /**
+     * Builds the deterministic default order for the model identity.
+     * @param {"ASC" | "DESC"} direction - Sort direction.
+     * @returns {string} - SQL order expression.
+     */
+    _defaultIdentityOrder(direction: "ASC" | "DESC"): string;
     /**
      * Runs preload.
      * @param {import("./index.js").NestedPreloadRecord | string | Array<string | import("./index.js").NestedPreloadRecord>} data - Data payload.

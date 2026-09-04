@@ -1,13 +1,20 @@
 // @ts-check
 
+import {createHash} from "node:crypto"
 import UUID from "pure-uuid"
 import TableData from "../../table-data/index.js"
+import TableIndex from "../../table-data/table-index.js"
+import {modelPrimaryKeyCacheKey} from "../../../utils/model-primary-key.js"
 import normalizeRecordAttachmentInput from "./normalize-input.js"
 
 /**
  * AttachmentDriverConstructor type.
  * @typedef {import("../../../configuration-types.js").AttachmentDriverConstructor} AttachmentDriverConstructor */
 const ATTACHMENTS_TABLE = "velocious_attachments"
+const ATTACHMENT_OWNER_INDEX_NAME = "index_velocious_attachments_on_record_type_and_record_id_digest"
+const ATTACHMENT_RECORD_ID_DIGEST_LENGTH = 64
+const ATTACHMENT_RECORD_ID_DIGEST_MIGRATION_BATCH_SIZE = 100
+const ATTACHMENT_SCHEMA_LOCK_NAME = "velocious-attachments-schema"
 
 /**
  * Stores by configuration.
@@ -20,6 +27,45 @@ const storesByConfiguration = new WeakMap()
  */
 function generateUUID() {
   return new UUID(4).format()
+}
+
+/**
+ * Returns the canonical stored owner identity for a model attachment.
+ * @param {import("../index.js").default} model - Attachment owner.
+ * @returns {string} - Canonical owner identity.
+ */
+function attachmentRecordId(model) {
+  return modelPrimaryKeyCacheKey(model.getModelClass().primaryKey(), model.id())
+}
+
+/**
+ * Returns a bounded digest for indexed attachment owner lookups.
+ * @param {string} recordId - Canonical attachment owner identity.
+ * @returns {string} - SHA-256 digest.
+ */
+function attachmentRecordIdDigest(recordId) {
+  return createHash("sha256").update(recordId).digest("hex")
+}
+
+/**
+ * Builds collision-safe attachment owner lookup conditions.
+ * @param {object} args - Owner lookup values.
+ * @param {string} [args.name] - Optional attachment name.
+ * @param {string} args.recordId - Canonical owner identity.
+ * @param {string} args.recordType - Owner model name.
+ * @returns {Record<string, string>} - Indexed digest and canonical identity conditions.
+ */
+function attachmentOwnerConditions({name, recordId, recordType}) {
+  /** @type {Record<string, string>} */
+  const conditions = {
+    record_id: recordId,
+    record_id_digest: attachmentRecordIdDigest(recordId),
+    record_type: recordType
+  }
+
+  if (name !== undefined) conditions.name = name
+
+  return conditions
 }
 
 /**
@@ -36,12 +82,30 @@ function storeKeyForModel(model) {
 }
 
 /**
- * Runs the recordAttachmentsStoreForModel helper.
- * @param {import("../index.js").default} model - Model instance.
- * @returns {RecordAttachmentsStore} - Store instance.
+ * Returns the physical store key for an already-selected model connection.
+ * @param {typeof import("../index.js").default} modelClass - Model class.
+ * @param {import("../../drivers/base.js").default} connection - Selected physical connection.
+ * @returns {string} - Physical store key.
  */
-export function recordAttachmentsStoreForModel(model) {
-  const configuration = model._getConfiguration()
+function storeKeyForModelClass(modelClass, connection) {
+  const databaseIdentifier = modelClass.getDatabaseIdentifier()
+  const reuseKey = modelClass
+    ._getConfiguration()
+    .getDatabasePool(databaseIdentifier)
+    .getConnectionConfigurationReuseKey(connection)
+
+  return `${databaseIdentifier}:${reuseKey}`
+}
+
+/**
+ * Returns the shared attachment store for one configured database identity.
+ * @param {object} args - Store identity.
+ * @param {import("../../../configuration.js").default} args.configuration - Owning configuration.
+ * @param {string} args.databaseIdentifier - Logical database identifier.
+ * @param {string} args.storeKey - Physical store key.
+ * @returns {RecordAttachmentsStore} - Shared store instance.
+ */
+function recordAttachmentsStore({configuration, databaseIdentifier, storeKey}) {
   let storesByDatabaseIdentifier = storesByConfiguration.get(configuration)
 
   if (!storesByDatabaseIdentifier) {
@@ -49,19 +113,46 @@ export function recordAttachmentsStoreForModel(model) {
     storesByConfiguration.set(configuration, storesByDatabaseIdentifier)
   }
 
-  const key = storeKeyForModel(model)
-  let store = storesByDatabaseIdentifier.get(key)
+  let store = storesByDatabaseIdentifier.get(storeKey)
 
   if (store) return store
 
-  store = new RecordAttachmentsStore({
-    configuration,
-    databaseIdentifier: model.databaseOperation()?.databaseIdentifier() || model.getModelClass().getDatabaseIdentifier()
-  })
-
-  storesByDatabaseIdentifier.set(key, store)
+  store = new RecordAttachmentsStore({configuration, databaseIdentifier})
+  storesByDatabaseIdentifier.set(storeKey, store)
 
   return store
+}
+
+/**
+ * Returns the attachment store used before a model-level transaction starts.
+ * @param {typeof import("../index.js").default} modelClass - Model class opening the transaction.
+ * @param {import("../../drivers/base.js").default} connection - Selected physical connection.
+ * @returns {RecordAttachmentsStore} - Store instance.
+ */
+export function recordAttachmentsStoreForModelClass(modelClass, connection) {
+  const databaseIdentifier = modelClass.getDatabaseIdentifier()
+
+  return recordAttachmentsStore({
+    configuration: modelClass._getConfiguration(),
+    databaseIdentifier,
+    storeKey: storeKeyForModelClass(modelClass, connection)
+  })
+}
+
+/**
+ * Runs the recordAttachmentsStoreForModel helper.
+ * @param {import("../index.js").default} model - Model instance.
+ * @returns {RecordAttachmentsStore} - Store instance.
+ */
+export function recordAttachmentsStoreForModel(model) {
+  const configuration = model._getConfiguration()
+  const databaseIdentifier = model.databaseOperation()?.databaseIdentifier() || model.getModelClass().getDatabaseIdentifier()
+
+  return recordAttachmentsStore({
+    configuration,
+    databaseIdentifier,
+    storeKey: storeKeyForModel(model)
+  })
 }
 
 /**
@@ -78,6 +169,9 @@ export default class RecordAttachmentsStore {
     this.configuration = configuration
     this.databaseIdentifier = databaseIdentifier
     this._readyPromise = null
+    this._schemaUpgradePromise = null
+    /** @type {number | undefined} */
+    this._schemaReadyGeneration = undefined
     this._driverColumnsAvailable = false
     this._contentBase64Nullable = true
     /**
@@ -120,8 +214,6 @@ export default class RecordAttachmentsStore {
    * @returns {Promise<void>} - Resolves when schema is ready.
    */
   async ensureSchema(db) {
-    db.clearSchemaCache()
-
     if (await db.tableExists(ATTACHMENTS_TABLE)) {
       await this.ensureAttachmentStoreSchema({db})
       return
@@ -131,7 +223,8 @@ export default class RecordAttachmentsStore {
 
     table.string("id", {null: false, primaryKey: true})
     table.string("record_type", {null: false, index: true})
-    table.string("record_id", {null: false, index: true})
+    table.text("record_id", {null: false})
+    table.string("record_id_digest", {maxLength: ATTACHMENT_RECORD_ID_DIGEST_LENGTH, null: false})
     table.string("name", {null: false, index: true})
     table.integer("position", {null: false})
     table.string("filename", {null: false})
@@ -142,10 +235,12 @@ export default class RecordAttachmentsStore {
     table.text("content_base64", {null: true})
     table.bigint("created_at_ms", {null: false})
     table.bigint("updated_at_ms", {null: false})
+    table.addIndex(new TableIndex(["record_type", "record_id_digest"], {name: ATTACHMENT_OWNER_INDEX_NAME}))
 
     await db.createTable(table)
     this._driverColumnsAvailable = true
     this._contentBase64Nullable = true
+    this._schemaReadyGeneration = this._schemaCacheGeneration(db)
   }
 
   /**
@@ -198,7 +293,7 @@ export default class RecordAttachmentsStore {
         if (persistenceFailed) {
           throw new AggregateError(
             [persistenceError, closeError],
-            `Attachment persistence and path-source close both failed for ${model.getModelClass().getModelName()}#${String(model.id())} (${name})`,
+            `Attachment persistence and path-source close both failed for ${model.getModelClass().getModelName()}#${attachmentRecordId(model)} (${name})`,
             {cause: closeError}
           )
         }
@@ -242,7 +337,7 @@ export default class RecordAttachmentsStore {
     const attachmentDriverName = this._attachmentDriverNameFor({model, name})
     const now = Date.now()
     const recordType = model.getModelClass().getModelName()
-    const recordId = String(model.id())
+    const recordId = attachmentRecordId(model)
     const attachmentId = generateUUID()
     /**
      * Written storage key.
@@ -270,7 +365,7 @@ export default class RecordAttachmentsStore {
           const existingRows = await db
             .newQuery()
             .from(ATTACHMENTS_TABLE)
-            .where({name, record_id: recordId, record_type: recordType})
+            .where(attachmentOwnerConditions({name, recordId, recordType}))
             .results()
 
           for (const existingRow of existingRows) {
@@ -278,7 +373,7 @@ export default class RecordAttachmentsStore {
           }
 
           await db.delete({
-            conditions: {name, record_id: recordId, record_type: recordType},
+            conditions: attachmentOwnerConditions({name, recordId, recordType}),
             tableName: ATTACHMENTS_TABLE
           })
         }
@@ -297,6 +392,7 @@ export default class RecordAttachmentsStore {
           name,
           position,
           record_id: recordId,
+          record_id_digest: attachmentRecordIdDigest(recordId),
           record_type: recordType,
           updated_at_ms: now
         }
@@ -354,13 +450,91 @@ export default class RecordAttachmentsStore {
    * @returns {Promise<void>} - Resolves when schema columns are ensured.
    */
   async ensureAttachmentStoreSchema({db}) {
+    if (this._schemaReadyGeneration === this._schemaCacheGeneration(db)) return
+    if (this._schemaUpgradePromise) return await this._schemaUpgradePromise
+
+    this._schemaUpgradePromise = (async () => {
+      const acquired = await db.acquireAdvisoryLock(ATTACHMENT_SCHEMA_LOCK_NAME)
+
+      if (!acquired) throw new Error(`Failed to acquire attachment schema lock ${ATTACHMENT_SCHEMA_LOCK_NAME}`)
+
+      try {
+        if (!await db.tableExists(ATTACHMENTS_TABLE)) return
+
+        await this._ensureAttachmentStoreSchema({db})
+      } finally {
+        await db.releaseAdvisoryLock(ATTACHMENT_SCHEMA_LOCK_NAME)
+      }
+    })()
+
+    try {
+      await this._schemaUpgradePromise
+      this._schemaReadyGeneration = this._schemaCacheGeneration(db)
+    } finally {
+      this._schemaUpgradePromise = null
+    }
+  }
+
+  /**
+   * Returns the schema-cache generation for the connection's physical database.
+   * @param {import("../../../database/drivers/base.js").default} db - DB connection.
+   * @returns {number} - Current schema-cache generation.
+   */
+  _schemaCacheGeneration(db) {
+    const pool = this.configuration.getDatabasePool(this.databaseIdentifier)
+    const reuseKey = pool.getConnectionConfigurationReuseKey(db)
+
+    return this.configuration.schemaCacheGenerationForReuseKey(reuseKey)
+  }
+
+  /**
+   * Ensures attachment columns and indexes after schema-upgrade serialization is acquired.
+   * @param {object} args - Options.
+   * @param {import("../../../database/drivers/base.js").default} args.db - DB connection.
+   * @returns {Promise<void>} - Resolves when schema columns are ensured.
+   */
+  async _ensureAttachmentStoreSchema({db}) {
     const table = await db.getTableByNameOrFail(ATTACHMENTS_TABLE)
     const columns = await table.getColumns()
     const hasDriverColumn = columns.some((column) => column.getName() === "driver")
     const hasStorageKeyColumn = columns.some((column) => column.getName() === "storage_key")
     const contentBase64Column = columns.find((column) => column.getName() === "content_base64")
+    const recordIdColumn = columns.find((column) => column.getName() === "record_id")
+    const recordIdDigestColumn = columns.find((column) => column.getName() === "record_id_digest")
     const alterTable = new TableData(ATTACHMENTS_TABLE)
     let shouldAlter = false
+
+    if (!recordIdColumn) throw new Error(`${ATTACHMENTS_TABLE}.record_id is missing`)
+
+    const recordIdMaxLength = recordIdColumn.getMaxLength()
+
+    if (typeof recordIdMaxLength === "number" && recordIdMaxLength > 0) {
+      for (const index of await recordIdColumn.getIndexes()) {
+        if (index.isPrimaryKey()) continue
+
+        const indexName = index.getName()
+
+        if (!indexName) throw new Error(`Expected a name for ${ATTACHMENTS_TABLE}.record_id index`)
+
+        for (const sql of await db.removeIndexSQLs({name: indexName, tableName: ATTACHMENTS_TABLE})) {
+          await db.query(sql)
+        }
+      }
+
+      db.clearSchemaCache()
+      const recordIdAlterTable = new TableData(ATTACHMENTS_TABLE)
+
+      recordIdAlterTable.text("record_id", {
+        isNewColumn: false,
+        null: db.getType() === "pgsql" ? undefined : false
+      })
+
+      for (const sql of await db.alterTableSQLs(recordIdAlterTable)) {
+        await db.query(sql)
+      }
+
+      db.clearSchemaCache()
+    }
 
     if (!hasDriverColumn) {
       alterTable.string("driver", {null: true})
@@ -372,16 +546,111 @@ export default class RecordAttachmentsStore {
       shouldAlter = true
     }
 
+    if (!recordIdDigestColumn) {
+      alterTable.string("record_id_digest", {maxLength: ATTACHMENT_RECORD_ID_DIGEST_LENGTH, null: true})
+      shouldAlter = true
+    }
+
     if (shouldAlter) {
       const alterTableSQLs = await db.alterTableSQLs(alterTable)
 
       for (const sql of alterTableSQLs) {
         await db.query(sql)
       }
+
+      db.clearSchemaCache()
     }
+
+    if (!recordIdDigestColumn || recordIdDigestColumn.getNull()) {
+      await this.backfillAttachmentRecordIdDigests(db)
+      await this.ensureAttachmentRecordIdDigestNotNull(db)
+    }
+
+    await this.ensureAttachmentOwnerIndex(db)
 
     this._driverColumnsAvailable = true
     this._contentBase64Nullable = contentBase64Column ? contentBase64Column.getNull() : true
+  }
+
+  /**
+   * Backfills bounded attachment owner digests in small batches.
+   * @param {import("../../../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<void>} - Resolves when every existing row has a digest.
+   */
+  async backfillAttachmentRecordIdDigests(db) {
+    while (true) {
+      const rows = await db
+        .newQuery()
+        .from(ATTACHMENTS_TABLE)
+        .where({record_id_digest: null})
+        .limit(ATTACHMENT_RECORD_ID_DIGEST_MIGRATION_BATCH_SIZE)
+        .results()
+
+      for (const row of rows) {
+        if (typeof row.id !== "string" || typeof row.record_id !== "string") {
+          throw new Error(`Expected canonical attachment identity strings while backfilling ${ATTACHMENTS_TABLE}`)
+        }
+
+        await db.update({
+          conditions: {id: row.id},
+          data: {record_id_digest: attachmentRecordIdDigest(row.record_id)},
+          tableName: ATTACHMENTS_TABLE
+        })
+      }
+
+      if (rows.length < ATTACHMENT_RECORD_ID_DIGEST_MIGRATION_BATCH_SIZE) return
+    }
+  }
+
+  /**
+   * Makes the backfilled attachment owner digest required.
+   * @param {import("../../../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<void>} - Resolves when the digest column is non-nullable.
+   */
+  async ensureAttachmentRecordIdDigestNotNull(db) {
+    db.clearSchemaCache()
+    const table = await db.getTableByNameOrFail(ATTACHMENTS_TABLE)
+    const recordIdDigestColumn = await table.getColumnByNameOrFail("record_id_digest")
+
+    if (!recordIdDigestColumn.getNull()) return
+
+    const alterTable = new TableData(ATTACHMENTS_TABLE)
+
+    alterTable.string("record_id_digest", {
+      isNewColumn: false,
+      maxLength: ATTACHMENT_RECORD_ID_DIGEST_LENGTH,
+      null: false
+    })
+
+    for (const sql of await db.alterTableSQLs(alterTable)) await db.query(sql)
+
+    db.clearSchemaCache()
+  }
+
+  /**
+   * Ensures attachment owner queries retain a bounded composite index.
+   * @param {import("../../../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<void>} - Resolves when the owner index exists.
+   */
+  async ensureAttachmentOwnerIndex(db) {
+    const table = await db.getTableByNameOrFail(ATTACHMENTS_TABLE)
+    const indexes = await table.getIndexes()
+    const ownerIndex = indexes.find((index) => {
+      const columnNames = index.getColumnNames()
+
+      return columnNames.length === 2 && columnNames[0] === "record_type" && columnNames[1] === "record_id_digest"
+    })
+
+    if (ownerIndex) return
+
+    for (const sql of await db.createIndexSQLs({
+      columns: ["record_type", "record_id_digest"],
+      ifNotExists: true,
+      name: ATTACHMENT_OWNER_INDEX_NAME,
+      tableName: ATTACHMENTS_TABLE
+    })) await db.query(sql)
+
+    db.clearSchemaCache()
   }
 
   /**
@@ -453,11 +722,11 @@ export default class RecordAttachmentsStore {
 
     return await this._withDb(async (db) => {
       const recordType = model.getModelClass().getModelName()
-      const recordId = String(model.id())
+      const recordId = attachmentRecordId(model)
       let query = db
         .newQuery()
         .from(ATTACHMENTS_TABLE)
-        .where({name, record_id: recordId, record_type: recordType})
+        .where(attachmentOwnerConditions({name, recordId, recordType}))
         .order("position ASC")
         .order("created_at_ms DESC")
         .limit(1)
@@ -484,16 +753,57 @@ export default class RecordAttachmentsStore {
 
     return await this._withDb(async (db) => {
       const recordType = model.getModelClass().getModelName()
-      const recordId = String(model.id())
+      const recordId = attachmentRecordId(model)
       const query = db
         .newQuery()
         .from(ATTACHMENTS_TABLE)
-        .where({name, record_id: recordId, record_type: recordType})
+        .where(attachmentOwnerConditions({name, recordId, recordType}))
         .order("position ASC")
         .order("created_at_ms ASC")
 
       return await query.results()
     }, model)
+  }
+
+  /**
+   * Prepares attachment schema before a record transaction can migrate ownership.
+   * @param {object} args - Options.
+   * @param {import("../../drivers/base.js").default} args.connection - Record-owning database connection.
+   * @returns {Promise<void>} - Resolves when existing attachment schema is current.
+   */
+  async prepareRecordIdentityMigration({connection}) {
+    await this.ensureAttachmentStoreSchema({db: connection})
+  }
+
+  /**
+   * Moves every attachment row to a record's new primary-key identity.
+   * @param {object} args - Options.
+   * @param {import("../../drivers/base.js").default} args.connection - Transaction-owning database connection.
+   * @param {import("../index.js").default} args.model - Attachment owner after the key change.
+   * @param {import("../../../utils/model-primary-key.js").ModelPrimaryKeyValue} args.nextIdentity - New owner identity.
+   * @param {import("../../../utils/model-primary-key.js").ModelPrimaryKeyValue} args.previousIdentity - Persisted owner identity.
+   * @returns {Promise<void>} - Resolves after ownership is migrated.
+   */
+  async migrateRecordIdentity({connection, model, nextIdentity, previousIdentity}) {
+    const primaryKey = model.getModelClass().primaryKey()
+    const nextRecordId = modelPrimaryKeyCacheKey(primaryKey, nextIdentity)
+    const previousRecordId = modelPrimaryKeyCacheKey(primaryKey, previousIdentity)
+
+    if (nextRecordId === previousRecordId) return
+
+    if (!await connection.tableExists(ATTACHMENTS_TABLE)) return
+
+    await connection.update({
+      conditions: attachmentOwnerConditions({
+        recordId: previousRecordId,
+        recordType: model.getModelClass().getModelName()
+      }),
+      data: {
+        record_id: nextRecordId,
+        record_id_digest: attachmentRecordIdDigest(nextRecordId)
+      },
+      tableName: ATTACHMENTS_TABLE
+    })
   }
 
   /**
@@ -535,12 +845,12 @@ export default class RecordAttachmentsStore {
 
     return await this._withDb(async (db) => {
       const recordType = model.getModelClass().getModelName()
-      const recordId = String(model.id())
+      const recordId = attachmentRecordId(model)
       /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */
       const rows = await db
         .newQuery()
         .from(ATTACHMENTS_TABLE)
-        .where({name, record_id: recordId, record_type: recordType})
+        .where(attachmentOwnerConditions({name, recordId, recordType}))
         .results()
 
       // Refuse to purge when any row's driver cannot delete its backing storage:
@@ -730,7 +1040,7 @@ export default class RecordAttachmentsStore {
     const query = db
       .newQuery()
       .from(ATTACHMENTS_TABLE)
-      .where({name, record_id: recordId, record_type: recordType})
+      .where(attachmentOwnerConditions({name, recordId, recordType}))
       .order("position DESC")
       .limit(1)
     const rows = await query.results()

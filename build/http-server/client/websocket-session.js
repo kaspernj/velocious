@@ -1880,7 +1880,19 @@ export default class VelociousHttpServerClientWebsocketSession {
     for (const event of events) {
       if (subscription.isClosed()) break
 
-      subscription.sendMessage(/** @type {import("../websocket-channel.js").WebsocketJsonValue} */ (event.payload))
+      if (await subscription._requiresReplayGap(event.payload)) {
+        this.sendJson({
+          type: "channel-replay-gap",
+          subscriptionId: subscription.subscriptionId,
+          lastEventId
+        })
+        return
+      }
+
+      await subscription.deliverBroadcast(
+        /** @type {import("../websocket-channel.js").WebsocketJsonValue} */ (event.payload),
+        {eventId: event.id}
+      )
     }
   }
 

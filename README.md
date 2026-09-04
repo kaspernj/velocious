@@ -3,7 +3,7 @@
 * Concurrent multi threadded web server
 * Database framework with familiar MVC concepts
 * Database models with migrations and validations
-* Database models that work almost the same in frontend and backend
+* Database models that work almost the same in frontend and backend, including online CRUD for [composite primary keys](docs/composite-primary-keys.md)
 * Connection-scoped advisory locks with automatic cleanup before pooled connections are reused or closed (see [docs/advisory-locks.md](docs/advisory-locks.md))
 * Built-in record auditing for model lifecycle changes (see [docs/auditing.md](docs/auditing.md))
 * Declarative state machines for models, with typed event methods generated into the base model (see [docs/state-machine.md](docs/state-machine.md))
@@ -851,7 +851,7 @@ attempts each shared digest only once per reconciliation. On-demand resolution
 rechecks the backing blob after cleanup and returns `null` instead of a stale
 local URI when concurrent eviction removed it. Cleanup deferred by an active
 cached resolution runs again after that digest's final guard releases.
-Attachment metadata is exposed through the built-in `VelociousAttachment` frontend model with safe fields only: `id`, `recordType`, `recordId`, `name`, `position`, `filename`, `contentType`, `byteSize`, `createdAt`, and `updatedAt`. Storage internals such as `driver`, `storageKey`, and `contentBase64` remain hidden and non-queryable. Direct metadata queries require owner filters: `recordType`, `recordId`, and `name`.
+Attachment metadata is exposed through the built-in `VelociousAttachment` frontend model with safe fields only: `id`, `recordType`, `recordId`, `name`, `position`, `filename`, `contentType`, `byteSize`, `createdAt`, and `updatedAt`. Storage internals such as `driver`, `storageKey`, and `contentBase64` remain hidden and non-queryable. Metadata collection queries require owner filters: `resourceName`, `recordType`, `recordId`, and `name`. Composite `recordId` values retain the complete canonical tuple without a 255-character limit, and key-changing saves rekey attachment ownership in the record transaction. `VelociousAttachment.find(id)` uses the member endpoint and authorizes against configured resource aliases backed by the attachment owner type.
 
 When your frontend app calls a backend on another host/port (or under a path prefix), configure transport once:
 

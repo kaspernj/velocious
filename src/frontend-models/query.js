@@ -4,6 +4,7 @@ import {resolveFrontendModelClass} from "./model-registry.js"
 import {normalizeRansackGroup, parseRansackSort} from "../utils/ransack.js"
 import {isModelScopeDescriptor} from "../utils/model-scope.js"
 import isPlainObject from "../utils/plain-object.js"
+import {modelPrimaryKeyConditions} from "../utils/model-primary-key.js"
 
 /**
  * FrontendModelSearch type.
@@ -1333,7 +1334,11 @@ export default class FrontendModelQuery {
 
     return {
       ...selectMap,
-      [rootModelName]: Array.from(new Set([rootPrimaryKey, ...existingRootAttributes, ...requiredAttributes]))
+      [rootModelName]: Array.from(new Set([
+        ...(Array.isArray(rootPrimaryKey) ? rootPrimaryKey : [rootPrimaryKey]),
+        ...existingRootAttributes,
+        ...requiredAttributes
+      ]))
     }
   }
 
@@ -1936,7 +1941,9 @@ export default class FrontendModelQuery {
     const query = this.clone()
 
     if (query._sort.length < 1) {
-      query.sort([[this.modelClass.primaryKey(), "asc"]])
+      const primaryKey = this.modelClass.primaryKey()
+
+      query.sort((Array.isArray(primaryKey) ? primaryKey : [primaryKey]).map((column) => [column, "asc"]))
     }
 
     query.limit(1)
@@ -1963,7 +1970,9 @@ export default class FrontendModelQuery {
     const query = this.clone()
 
     if (query._sort.length < 1) {
-      query.sort([[this.modelClass.primaryKey(), "desc"]])
+      const primaryKey = this.modelClass.primaryKey()
+
+      query.sort((Array.isArray(primaryKey) ? primaryKey : [primaryKey]).map((column) => [column, "desc"]))
     } else {
       query._sort = query._sort.map((sortEntry) => ({
         ...sortEntry,
@@ -2017,15 +2026,15 @@ export default class FrontendModelQuery {
 
   /**
    * Runs find.
-   * @param {number | string} id - Record id.
+   * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} id - Record id.
    * @returns {Promise<InstanceType<T>>} - Found model.
    */
   async find(id) {
     const pk = this.modelClass.primaryKey()
-    const model = await this.findBy({[pk]: id})
+    const model = await this.findBy(modelPrimaryKeyConditions(pk, id))
 
     if (!model) {
-      throw new Error(`${this.modelClass.getModelName()} not found with ${pk}=${id}`)
+      throw new Error(`${this.modelClass.getModelName()} not found with ${pk}=${JSON.stringify(id)}`)
     }
 
     return model

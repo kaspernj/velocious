@@ -8,6 +8,10 @@
  * WebsocketParams type.
  * @typedef {Record<string, WebsocketJsonValue>} WebsocketParams
  */
+/**
+ * Server-side metadata accompanying a matched broadcast.
+ * @typedef {{broadcastParams?: WebsocketParams, eventId?: string}} WebsocketBroadcastMetadata
+ */
 
 /**
  * Base class for app-defined 1:N pub/sub channels.
@@ -91,6 +95,15 @@ export default class VelociousWebsocketChannel {
   matches(..._broadcastArgs) { return true }
 
   /**
+   * Whether replaying a persisted broadcast would require a client resync.
+   * Subclasses override this when replay storage deliberately omits metadata
+   * required to deliver an event safely.
+   * @param {WebsocketJsonValue} _body - Persisted broadcast payload.
+   * @returns {boolean | Promise<boolean>} - Whether the session must report a replay gap.
+   */
+  _requiresReplayGap(_body) { return false }
+
+  /**
    * Returns sanitized diagnostics for debug snapshots.
    * Subclasses can override to expose non-sensitive routing details.
    * @returns {Record<string, ReturnType<typeof JSON.parse>>} Debug-safe subscription details.
@@ -102,7 +115,7 @@ export default class VelociousWebsocketChannel {
    * override when the outbound body must be tailored to subscription
    * params before sending.
    * @param {WebsocketJsonValue} body - Broadcast payload offered to this subscription.
-   * @param {{eventId?: string}} [meta] - Optional event metadata.
+   * @param {WebsocketBroadcastMetadata} [meta] - Optional server-side broadcast metadata.
    * @returns {void | Promise<void>} - Completes after broadcast delivery.
    */
   deliverBroadcast(body, meta) {
@@ -114,7 +127,7 @@ export default class VelociousWebsocketChannel {
    * When `meta.eventId` is provided, the client receives it so it
    * can track its checkpoint for `lastEventId` replay on reconnect.
    * @param {WebsocketJsonValue} body - Channel payload to send to the subscribed client.
-   * @param {{eventId?: string}} [meta] - Optional event metadata.
+   * @param {WebsocketBroadcastMetadata} [meta] - Optional server-side broadcast metadata.
    * @returns {void}
    */
   sendMessage(body, meta) {

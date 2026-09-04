@@ -1,6 +1,7 @@
 // @ts-check
 
 import {isPlainObject} from "is-plain-object"
+import {scalarModelPrimaryKey} from "../../utils/model-primary-key.js"
 
 /**
  * QueryDataEntry type.
@@ -188,7 +189,7 @@ function resolveTargetModelClass(rootModelClass, chain) {
 export async function runQueryData({rootModelClass, rootModels, entries}) {
   if (rootModels.length === 0 || entries.length === 0) return
 
-  const primaryKey = rootModelClass.primaryKey()
+  const primaryKey = scalarModelPrimaryKey(rootModelClass.primaryKey(), `queryData for ${rootModelClass.name}`)
   const rootIds = rootModels.map((model) => /** @type {string | number} */ (model.readColumn(primaryKey)))
   const sourceModel = rootModels[0]
   const preparedEntries = entries.map((entry, entryIndex) => prepareEntry({

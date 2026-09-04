@@ -142,12 +142,14 @@ export default class VelociousAuthorizationAbility {
      * @param {string} args.action - Requested action.
      * @param {typeof import("../database/record/index.js").default} args.modelClass - Model class.
      * @param {import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>} args.query - Query.
+     * @param {() => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>} [args.ruleQueryFactory] - Optional factory for the queries that evaluate individual conditional rules.
      * @returns {import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>} - Authorized query.
      */
-    applyToQuery({ action, modelClass, query }: {
+    applyToQuery({ action, modelClass, query, ruleQueryFactory }: {
         action: string;
         modelClass: typeof import("../database/record/index.js").default;
         query: import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>;
+        ruleQueryFactory?: () => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>;
     }): import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>;
     /**
      * Runs rules for.
@@ -166,13 +168,15 @@ export default class VelociousAuthorizationAbility {
      * @param {string} args.action - Action.
      * @param {typeof import("../database/record/index.js").default} args.modelClass - Model class.
      * @param {import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>} args.query - Base query.
+     * @param {() => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>} [args.ruleQueryFactory] - Optional conditional-rule query factory.
      * @param {AbilityRuleType[]} args.rules - Rules.
      * @returns {string[]} - SQL condition parts.
      */
-    conditionSqlParts({ action, modelClass, query, rules }: {
+    conditionSqlParts({ action, modelClass, query, ruleQueryFactory, rules }: {
         action: string;
         modelClass: typeof import("../database/record/index.js").default;
         query: import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>;
+        ruleQueryFactory?: () => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>;
         rules: AbilityRuleType[];
     }): string[];
     /**
@@ -182,13 +186,15 @@ export default class VelociousAuthorizationAbility {
      * @param {AbilityRuleType[]} args.denyRules - Deny rules.
      * @param {typeof import("../database/record/index.js").default} args.modelClass - Model class.
      * @param {import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>} args.query - Query.
+     * @param {() => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>} [args.ruleQueryFactory] - Optional conditional-rule query factory.
      * @returns {void} - No return value.
      */
-    applyDenyRules({ action, denyRules, modelClass, query }: {
+    applyDenyRules({ action, denyRules, modelClass, query, ruleQueryFactory }: {
         action: string;
         denyRules: AbilityRuleType[];
         modelClass: typeof import("../database/record/index.js").default;
         query: import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>;
+        ruleQueryFactory?: () => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>;
     }): void;
     /**
      * Runs apply rule condition.

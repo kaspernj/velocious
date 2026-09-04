@@ -8,6 +8,26 @@ import Project from "../dummy/src/models/project.js"
 import Task from "../dummy/src/models/task.js"
 
 describe("FrontendModelBaseResource", {databaseCleaning: {transaction: true}}, () => {
+  it("normalizes implicit composite primary keys to frontend attribute names", {databaseCleaning: {transaction: false, truncate: false}}, () => {
+    class LegacyCompositeRecord extends DatabaseRecord {
+      /** @returns {string[]} - Database-column primary key. */
+      static primaryKey() { return ["tenant_id", "external_id"] }
+
+      /** @param {string} name - Attribute or column name. @returns {string | null} - Frontend attribute name. */
+      static resolveAttributeName(name) {
+        return {external_id: "externalId", tenant_id: "tenantId"}[name] || null
+      }
+    }
+
+    class LegacyCompositeResource extends FrontendModelBaseResource {
+      static ModelClass = LegacyCompositeRecord
+    }
+
+    const resource = new LegacyCompositeResource({modelName: "LegacyCompositeRecord", params: {}})
+
+    expect(resource.primaryKey()).toEqual(["tenantId", "externalId"])
+  })
+
   it("falls back to shared resource static config when environment resource omits it", () => {
     class SharedProjectResource extends FrontendModelBaseResource {
       static attributes = ["id", "name"]

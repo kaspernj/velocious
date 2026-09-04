@@ -4,6 +4,7 @@ import Configuration from "../configuration.js"
 import {isBooleanColumnType} from "../database/column-types.js"
 import Logger from "../logger.js"
 import {captureRemoteRequestContext, mergeRemoteRequestContext} from "../remote-request-context.js"
+import {scalarModelPrimaryKey} from "../utils/model-primary-key.js"
 import restArgsError from "../utils/rest-args-error.js"
 import VelociousWebsocketClient from "../http-client/websocket-client.js"
 
@@ -1243,7 +1244,7 @@ function derivedSyncAttributes({modelClass, resourceType}) {
   const localOnlyAttributes = []
 
   if (modelClass.hasPrimaryKey()) {
-    const primaryKeyColumn = modelClass.primaryKey()
+    const primaryKeyColumn = scalarModelPrimaryKey(modelClass.primaryKey(), `Derived sync attributes for ${resourceType}`)
 
     localOnlyAttributes.push(columnNameToAttributeName[primaryKeyColumn] || primaryKeyColumn)
   }

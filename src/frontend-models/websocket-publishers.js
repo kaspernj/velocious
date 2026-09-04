@@ -4,9 +4,16 @@ import AuthorizationBaseResource from "../authorization/base-resource.js"
 import {frontendModelResourcesWithBuiltInsForBackendProject} from "./built-in-resources.js"
 import {frontendModelResourceDefinitionIsClass} from "./resource-definition.js"
 import {serializeFrontendModelTransportValue} from "./transport-serialization.js"
+import {modelPrimaryKeyCacheKey, readModelPrimaryKeyValue} from "../utils/model-primary-key.js"
+
+/** @typedef {{primaryKey: import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition}} FrontendModelPublisherResource */
+/** @typedef {Record<string, import("./query.js").FrontendModelTransportValue>} FrontendModelDestroyAuthorizationRecord */
+/** @typedef {import("../database/record/index.js").default & {__frontendModelWebsocketAction?: "create" | "update", __frontendModelWebsocketDestroyAuthorizationRecord?: FrontendModelDestroyAuthorizationRecord, __frontendModelWebsocketPreviousIds?: Map<string, import("../utils/model-primary-key.js").ModelPrimaryKeyValue>}} FrontendModelWebsocketRecord */
 
 const modelClassesWithRegisteredHooks = new WeakSet()
 const channelClassRegisteredConfigurations = new WeakSet()
+/** @type {WeakMap<import("../configuration.js").default, WeakMap<typeof import("../database/record/index.js").default, Map<string, FrontendModelPublisherResource>>>} */
+const publisherResourcesByConfiguration = new WeakMap()
 
 /** Shared channel name for all frontend-model lifecycle subscriptions. */
 export const FRONTEND_MODELS_CHANNEL_NAME = "frontend-models"
@@ -60,7 +67,7 @@ function frontendModelResourcesFromAbilityResourcesList(abilityResources) {
       // throw `requires a static ModelClass` during ability-resource discovery.
       if (!resourceClass.ModelClass) continue
 
-      const modelName = resourceClass.modelClass().getModelName()
+      const modelName = resourceClass.resourceConfig().modelName || resourceClass.modelClass().getModelName()
 
       resources[modelName] = resourceClass
     } else if (resourceClass.prototype instanceof AuthorizationBaseResource) {
@@ -113,14 +120,36 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
     configuration.registerWebsocketChannel(FRONTEND_MODELS_CHANNEL_NAME, FrontendModelWebsocketChannel)
   }
 
-  for (const resourceClass of Object.values(allFrontendModels)) {
+  for (const [modelName, resourceClass] of Object.entries(allFrontendModels)) {
     // An abstract base resource (no static ModelClass — e.g. an app's shared
     // `BaseResource` that other resources extend) backs no model, so there is
     // nothing to publish realtime events for. Skip it instead of throwing.
     if (!resourceClass.ModelClass) continue
 
     const modelClass = resourceClass.modelClass()
-    const modelName = modelClass.getModelName()
+    const resourceConfiguration = resourceClass.resourceConfig()
+    const configuredPrimaryKey = resourceConfiguration.primaryKey
+    const modelPrimaryKey = modelClass.primaryKey()
+    const primaryKey = configuredPrimaryKey || (Array.isArray(modelPrimaryKey)
+      ? modelPrimaryKey.map((columnName) => modelClass.resolveAttributeName(columnName) || columnName)
+      : modelClass.resolveAttributeName(modelPrimaryKey) || modelPrimaryKey)
+    let publisherResourcesByModelClass = publisherResourcesByConfiguration.get(configuration)
+
+    if (!publisherResourcesByModelClass) {
+      publisherResourcesByModelClass = new WeakMap()
+      publisherResourcesByConfiguration.set(configuration, publisherResourcesByModelClass)
+    }
+
+    let publisherResources = publisherResourcesByModelClass.get(modelClass)
+
+    if (!publisherResources) {
+      publisherResources = new Map()
+      publisherResourcesByModelClass.set(modelClass, publisherResources)
+    }
+
+    publisherResources.set(modelName, {
+      primaryKey
+    })
 
     // Register lifecycle hooks once per model class, not per configuration. A model class belongs to a
     // single backend project/config in production, so per-config registration only differs in tests where
@@ -132,36 +161,203 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
     modelClassesWithRegisteredHooks.add(modelClass)
 
     modelClass.beforeCreate((model) => {
-      /** @type {import("../database/record/index.js").default & {__frontendModelWebsocketAction?: "create" | "update"}} */ (model).__frontendModelWebsocketAction = "create"
+      /** @type {FrontendModelWebsocketRecord} */ (model).__frontendModelWebsocketAction = "create"
     })
 
-    modelClass.beforeUpdate((model) => {
-      /** @type {import("../database/record/index.js").default & {__frontendModelWebsocketAction?: "create" | "update"}} */ (model).__frontendModelWebsocketAction = "update"
+    modelClass.beforeUpdate(async (model) => {
+      const websocketModel = /** @type {FrontendModelWebsocketRecord} */ (model)
+
+      websocketModel.__frontendModelWebsocketAction = "update"
+      websocketModel.__frontendModelWebsocketPreviousIds = await frontendModelPreviousResourceIdentities(model)
+    })
+
+    modelClass.beforeDestroy(async (model) => {
+      const websocketModel = /** @type {FrontendModelWebsocketRecord} */ (model)
+      const persistedModel = await model
+        .queryForModel(model.getModelClass())
+        .find(model._persistedPrimaryKeyValue())
+
+      if (!persistedModel) throw new Error(`Cannot capture websocket destroy authorization for missing ${model.getModelClass().name}`)
+
+      websocketModel.__frontendModelWebsocketPreviousIds = frontendModelResourceIdentities(persistedModel)
+      websocketModel.__frontendModelWebsocketDestroyAuthorizationRecord = frontendModelDestroyAuthorizationRecord(persistedModel)
     })
 
     modelClass.afterSave((model) => {
-      const modelWithWebsocketAction = /** @type {import("../database/record/index.js").default & {__frontendModelWebsocketAction?: "create" | "update"}} */ (model)
+      const modelWithWebsocketAction = /** @type {FrontendModelWebsocketRecord} */ (model)
       const action = modelWithWebsocketAction.__frontendModelWebsocketAction
 
       if (action !== "create" && action !== "update") return
+      const previousIds = modelWithWebsocketAction.__frontendModelWebsocketPreviousIds
 
       void model.connection().afterCommit(async () => {
-        broadcastFrontendModelEvent(model._getConfiguration(), modelName, {
-          action,
-          id: model.id(),
-          record: model.attributes()
-        })
+        broadcastFrontendModelEvents(model, action, previousIds)
       })
       delete modelWithWebsocketAction.__frontendModelWebsocketAction
+      delete modelWithWebsocketAction.__frontendModelWebsocketPreviousIds
     })
 
     modelClass.afterDestroy((model) => {
+      const websocketModel = /** @type {FrontendModelWebsocketRecord} */ (model)
+      const destroyAuthorizationRecord = websocketModel.__frontendModelWebsocketDestroyAuthorizationRecord
+      const previousIds = websocketModel.__frontendModelWebsocketPreviousIds
+
       void model.connection().afterCommit(async () => {
-        broadcastFrontendModelEvent(model._getConfiguration(), modelName, {
-          action: "destroy",
-          id: model.id()
-        })
+        broadcastFrontendModelEvents(model, "destroy", previousIds, destroyAuthorizationRecord)
       })
+      delete websocketModel.__frontendModelWebsocketDestroyAuthorizationRecord
+      delete websocketModel.__frontendModelWebsocketPreviousIds
+    })
+  }
+}
+
+/**
+ * Returns every resource identity represented by the record before its pending changes or destruction.
+ * @param {import("../database/record/index.js").default} model - Backing model before update or destroy.
+ * @returns {Promise<Map<string, import("../utils/model-primary-key.js").ModelPrimaryKeyValue>>} - Previous identities by resource name.
+ */
+async function frontendModelPreviousResourceIdentities(model) {
+  const publisherResources = publisherResourcesByConfiguration.get(model._getConfiguration())?.get(model.getModelClass())
+  /** @type {Map<string, import("../utils/model-primary-key.js").ModelPrimaryKeyValue>} */
+  const previousIds = new Map()
+
+  if (!publisherResources) return previousIds
+
+  for (const [modelName, {primaryKey}] of publisherResources) {
+    const previousId = frontendModelResourceIdentity({model, previous: true, primaryKey})
+
+    if (previousId !== null) previousIds.set(modelName, previousId)
+  }
+
+  if (previousIds.size === publisherResources.size) return previousIds
+
+  const persistedModel = await model
+    .queryForModel(model.getModelClass())
+    .find(model._persistedPrimaryKeyValue())
+
+  for (const [modelName, {primaryKey}] of publisherResources) {
+    if (previousIds.has(modelName)) continue
+
+    const persistedId = frontendModelResourceIdentity({model: persistedModel, primaryKey})
+
+    if (persistedId !== null) previousIds.set(modelName, persistedId)
+  }
+
+  return previousIds
+}
+
+/**
+ * Returns every configured resource identity represented by a persisted backing record.
+ * @param {import("../database/record/index.js").default} model - Fully loaded persisted backing record.
+ * @returns {Map<string, import("../utils/model-primary-key.js").ModelPrimaryKeyValue>} - Identities by resource name.
+ */
+function frontendModelResourceIdentities(model) {
+  const publisherResources = publisherResourcesByConfiguration.get(model._getConfiguration())?.get(model.getModelClass())
+  /** @type {Map<string, import("../utils/model-primary-key.js").ModelPrimaryKeyValue>} */
+  const identities = new Map()
+
+  if (!publisherResources) return identities
+
+  for (const [modelName, {primaryKey}] of publisherResources) {
+    const id = frontendModelResourceIdentity({model, primaryKey})
+
+    if (id !== null) identities.set(modelName, id)
+  }
+
+  return identities
+}
+
+/**
+ * Serializes the persisted record for server-side destroy authorization. Binary values
+ * use a dedicated byte-array marker because the shared transport serializer otherwise
+ * leaves Buffers to the JSON implementation used by the worker or Beacon transport.
+ * @param {import("../database/record/index.js").default} model - Fully loaded persisted backing record.
+ * @returns {FrontendModelDestroyAuthorizationRecord} - Column-keyed transport values.
+ */
+function frontendModelDestroyAuthorizationRecord(model) {
+  const serializationOptions = transportSerializationOptionsForConfiguration(model._getConfiguration())
+  /** @type {FrontendModelDestroyAuthorizationRecord} */
+  const authorizationRecord = {}
+
+  for (const [columnName, value] of Object.entries(model.rawAttributes())) {
+    authorizationRecord[columnName] = value instanceof Uint8Array
+      ? {__velociousDestroyAuthorizationType: "binary", value: Array.from(value)}
+      : serializeFrontendModelTransportValue(value, serializationOptions)
+  }
+
+  if (Object.keys(authorizationRecord).length === 0) {
+    throw new Error(`Cannot capture websocket destroy authorization without attributes for ${model.getModelClass().name}`)
+  }
+
+  return authorizationRecord
+}
+
+/**
+ * Reads a resource identity only when every identity attribute was loaded on the backing record.
+ * @param {object} args - Identity arguments.
+ * @param {import("../database/record/index.js").default} args.model - Backing model.
+ * @param {boolean} [args.previous] - Read values from before pending changes.
+ * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition} args.primaryKey - Resource identity definition.
+ * @returns {import("../utils/model-primary-key.js").ModelPrimaryKeyValue | null} - Complete identity or null when unavailable.
+ */
+function frontendModelResourceIdentity({model, previous = false, primaryKey}) {
+  const attributes = model.attributes()
+  const changes = model.changes()
+  /** @type {Record<string, import("../utils/model-primary-key.js").ModelPrimaryKeyScalar>} */
+  const identityAttributes = {}
+  const primaryKeyAttributes = Array.isArray(primaryKey) ? primaryKey : [primaryKey]
+
+  for (const attributeName of primaryKeyAttributes) {
+    const columnName = model.getModelClass().getColumnNameForAttributeName(attributeName)
+    let value
+
+    if (previous && Object.hasOwn(changes, columnName)) {
+      value = changes[columnName][0]
+    } else {
+      if (!Object.hasOwn(attributes, attributeName)) return null
+
+      value = attributes[attributeName]
+    }
+
+    if (typeof value !== "string" && typeof value !== "number") return null
+
+    identityAttributes[attributeName] = value
+  }
+
+  return readModelPrimaryKeyValue(primaryKey, (attributeName) => identityAttributes[attributeName])
+}
+
+/**
+ * Fans one backing-record lifecycle event out through every configured frontend-resource identity.
+ * @param {import("../database/record/index.js").default} model - Backing model instance.
+ * @param {"create" | "update" | "destroy"} action - Lifecycle action.
+ * @param {Map<string, import("../utils/model-primary-key.js").ModelPrimaryKeyValue>} [previousIds] - Persisted identities captured before update or destroy.
+ * @param {FrontendModelDestroyAuthorizationRecord} [destroyAuthorizationRecord] - Server-only pre-delete row used to authorize a destroyed record.
+ * @returns {void}
+ */
+function broadcastFrontendModelEvents(model, action, previousIds, destroyAuthorizationRecord) {
+  const configuration = model._getConfiguration()
+  const publisherResources = publisherResourcesByConfiguration.get(configuration)?.get(model.getModelClass())
+
+  if (!publisherResources) return
+
+  for (const [modelName, {primaryKey}] of publisherResources) {
+    const previousId = previousIds?.get(modelName)
+    const currentId = frontendModelResourceIdentity({model, primaryKey})
+    const id = action === "destroy" ? previousId : currentId ?? previousId
+
+    if (id === null || id === undefined) continue
+
+    const identityChanged = action === "update"
+      && currentId !== null
+      && previousId !== undefined
+      && modelPrimaryKeyCacheKey(primaryKey, previousId) !== modelPrimaryKeyCacheKey(primaryKey, id)
+
+    broadcastFrontendModelEvent(configuration, modelName, {
+      action,
+      id,
+      ...(destroyAuthorizationRecord !== undefined ? {destroyAuthorizationRecord} : {}),
+      ...(identityChanged ? {previousId} : {})
     })
   }
 }
@@ -172,7 +368,7 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
  * transport serializer so Date/undefined/etc. survive the JSON hop.
  * @param {import("../configuration.js").default} configuration - Configuration instance.
  * @param {string} modelName - Model class name.
- * @param {{action: "create" | "update" | "destroy", id: ReturnType<typeof JSON.parse>, record?: Record<string, ReturnType<typeof JSON.parse>>}} event - Lifecycle event.
+ * @param {{action: "create" | "update" | "destroy", destroyAuthorizationRecord?: FrontendModelDestroyAuthorizationRecord, id: import("../utils/model-primary-key.js").ModelPrimaryKeyValue, previousId?: import("../utils/model-primary-key.js").ModelPrimaryKeyValue, record?: Record<string, import("./query.js").FrontendModelTransportValue>}} event - Lifecycle event.
  * @returns {void}
  */
 function broadcastFrontendModelEvent(configuration, modelName, event) {
@@ -180,8 +376,12 @@ function broadcastFrontendModelEvent(configuration, modelName, event) {
     action: event.action,
     id: event.id,
     model: modelName,
+    ...(event.previousId !== undefined ? {previousId: event.previousId} : {}),
     ...(event.record ? {record: serializeFrontendModelTransportValue(event.record, transportSerializationOptionsForConfiguration(configuration))} : {})
   }
 
-  configuration.broadcastToChannel(FRONTEND_MODELS_CHANNEL_NAME, {model: modelName}, body)
+  configuration.broadcastToChannel(FRONTEND_MODELS_CHANNEL_NAME, {
+    ...(event.destroyAuthorizationRecord !== undefined ? {destroyAuthorizationRecord: event.destroyAuthorizationRecord} : {}),
+    model: modelName
+  }, body)
 }

@@ -17,6 +17,8 @@ import {captureFrontendModelRemoteRequestContext, mergeFrontendModelRemoteReques
 import {bufferOutgoingEvent, clearBufferedOutgoingEvents, drainBufferedOutgoingEvents} from "./outgoing-event-buffer.js"
 import {defineModelScope} from "../utils/model-scope.js"
 import isPlainObject from "../utils/plain-object.js"
+import {forcedNonBlankString} from "typanic"
+import {modelPrimaryKeyCacheKey, modelPrimaryKeyConditions, readModelPrimaryKeyValue, scalarModelPrimaryKey, scalarModelPrimaryKeyValue} from "../utils/model-primary-key.js"
 import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQueryData, setPayloadAssociationCount, setPayloadComputedAbility, setPayloadQueryData} from "../record-payload-values.js"
 
 /**
@@ -30,11 +32,11 @@ import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQuer
  */
 /**
  * Defines this typedef.
- * @typedef {{callback: (payload: {id: string, model: FrontendModelBase}) => void, eventFilterKey: string | null, eventFilterPayload: import("./query.js").FrontendModelEventFilterPayload | null, projectionPayload: import("./query.js").FrontendModelProjectionPayload}} FrontendModelModelEventCallbackEntry
+ * @typedef {{callback: (payload: {id: string | import("../utils/model-primary-key.js").CompositeModelPrimaryKeyValue, model: FrontendModelBase}) => void, eventFilterKey: string | null, eventFilterPayload: import("./query.js").FrontendModelEventFilterPayload | null, projectionPayload: import("./query.js").FrontendModelProjectionPayload}} FrontendModelModelEventCallbackEntry
  */
 /**
  * Defines this typedef.
- * @typedef {{callback: (payload: {id: string}) => void}} FrontendModelDestroyEventCallbackEntry
+ * @typedef {{callback: (payload: {id: string | import("../utils/model-primary-key.js").CompositeModelPrimaryKeyValue}) => void}} FrontendModelDestroyEventCallbackEntry
  */
 /**
  * FrontendModelCommandType type.
@@ -90,7 +92,7 @@ import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQuer
  */
 /**
  * Defines this typedef.
- * @typedef {{attributes?: Array<string | FrontendModelAttributeDefinition> | Record<string, FrontendModelAttributeDefinition>, builtInCollectionCommands?: string[], builtInMemberCommands?: string[], collectionCommands?: string[], commands?: string[], memberCommands?: string[], attachments?: Record<string, FrontendModelAttachmentDefinition>, modelName?: string, nestedAttributes?: Record<string, {allowDestroy?: boolean, limit?: number}>, primaryKey?: string, relationships?: string[], sync?: FrontendModelSyncConfig}} FrontendModelResourceConfig
+ * @typedef {{attributes?: Array<string | FrontendModelAttributeDefinition> | Record<string, FrontendModelAttributeDefinition>, builtInCollectionCommands?: string[], builtInMemberCommands?: string[], collectionCommands?: string[], commands?: string[], memberCommands?: string[], attachments?: Record<string, FrontendModelAttachmentDefinition>, modelName?: string, nestedAttributes?: Record<string, {allowDestroy?: boolean, limit?: number}>, primaryKey?: string | string[], relationships?: string[], sync?: FrontendModelSyncConfig}} FrontendModelResourceConfig
  */
 /**
  * Frontend model constructor type.
@@ -158,6 +160,7 @@ const SELECTED_ATTRIBUTES_KEY = "__selectedAttributes"
 const ASSOCIATION_COUNTS_KEY = "__associationCounts"
 const QUERY_DATA_KEY = "__queryData"
 const ABILITIES_KEY = "__abilities"
+const ATTACHMENT_OWNER_KEY = "__attachmentOwner"
 /**
  * Pending shared frontend model requests.
  * @type {Array<{commandName?: string, commandType: FrontendModelRequestCommandType, customPath?: string, modelClass: FrontendModelClass, payload: Record<string, ReturnType<typeof JSON.parse>>, requestContext: import("../remote-request-context.js").RemoteRequestContext, requestId: string, resolve: (response: Record<string, ReturnType<typeof JSON.parse>>) => void, reject: (error: ReturnType<typeof JSON.parse>) => void, resourcePath?: string | null}>} */
@@ -775,6 +778,19 @@ function frontendModelAttachmentCommandPayload(attachment, attachmentId) {
 }
 
 /**
+ * Returns the canonical backing owner used by attachment metadata storage.
+ * @param {FrontendModelBase} model - Frontend attachment owner.
+ * @returns {{recordId: string, recordType: string, resourceName: string}} - Canonical attachment owner and originating resource.
+ */
+function frontendModelAttachmentOwner(model) {
+  if (!model._attachmentOwner) {
+    throw new Error(`Missing attachment owner metadata on ${frontendModelClassFor(model).name}`)
+  }
+
+  return model._attachmentOwner
+}
+
+/**
  * Runs frontend attachment value is bytes.
  * @param {ReturnType<typeof JSON.parse>} value - Candidate value.
  * @returns {boolean} - Whether value looks like byte data.
@@ -1179,13 +1195,14 @@ export class FrontendModelAttachmentHandle {
    * @returns {import("./query.js").default<typeof VelociousAttachment>} - Attachment metadata query.
    */
   query() {
-    const ModelClass = frontendModelClassFor(this.model)
+    const attachmentOwner = frontendModelAttachmentOwner(this.model)
 
     return VelociousAttachment
       .where({
         name: this.attachmentName,
-        recordId: String(this.model.primaryKeyValue()),
-        recordType: ModelClass.getModelName()
+        recordId: attachmentOwner.recordId,
+        recordType: attachmentOwner.recordType,
+        resourceName: attachmentOwner.resourceName
       })
       .order([["position", "asc"]])
   }
@@ -1241,7 +1258,7 @@ export class FrontendModelAttachmentHandle {
     const commandUrl = frontendModelCommandUrl(resourcePath, commandName)
     const params = new URLSearchParams({
       attachmentName: this.attachmentName,
-      id: String(this.model.primaryKeyValue())
+      id: modelPrimaryKeyCacheKey(ModelClass.primaryKey(), this.model.primaryKeyValue())
     })
 
     return `${commandUrl}?${params.toString()}`
@@ -1644,7 +1661,20 @@ class FrontendModelEventSubscription {
     if (action !== "create" && action !== "update" && action !== "destroy") return
     if (rawId === undefined || rawId === null) return
 
-    const id = String(rawId)
+    const primaryKey = this.ModelClass.primaryKey()
+    const identity = Array.isArray(primaryKey)
+      ? modelPrimaryKeyConditions(primaryKey, rawId)
+      : String(rawId)
+    const id = modelPrimaryKeyCacheKey(primaryKey, identity)
+    const rawPreviousId = body.previousId
+    const previousIdentity = rawPreviousId === undefined || rawPreviousId === null
+      ? null
+      : Array.isArray(primaryKey)
+        ? modelPrimaryKeyConditions(primaryKey, rawPreviousId)
+        : String(rawPreviousId)
+    const previousId = previousIdentity === null
+      ? null
+      : modelPrimaryKeyCacheKey(primaryKey, previousIdentity)
     const matchedEventFilterKeys = frontendModelMatchedEventFilterKeys(body)
 
     if (action === "destroy") {
@@ -1652,23 +1682,33 @@ class FrontendModelEventSubscription {
 
       if (listener) {
         for (const entry of listener.destroyCallbacks) {
-          try { entry.callback({id}) } catch (error) { console.error(error) }
+          try { entry.callback({id: identity}) } catch (error) { console.error(error) }
         }
-        this.instanceListeners.delete(id)
+        deleteFrontendModelInstanceListener(this, listener)
       }
       for (const entry of this.classDestroyCallbacks) {
-        try { entry.callback({id}) } catch (error) { console.error(error) }
+        try { entry.callback({id: identity}) } catch (error) { console.error(error) }
       }
       return
+    }
+
+    const listener = this.instanceListeners.get(id) || (previousId === null ? undefined : this.instanceListeners.get(previousId))
+
+    if (action === "update" && listener && previousIdentity !== null) {
+      applyFrontendModelPersistedIdentity(this.ModelClass, listener.instance, identity)
+      rekeyFrontendModelInstanceListeners(this.ModelClass, listener.instance, previousIdentity, identity)
     }
 
     if (!body.record || typeof body.record !== "object") return
 
     const deserializedRecord = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (deserializeFrontendModelTransportValue(body.record))
     const freshModel = /** @type {ReturnType<typeof JSON.parse>} */ (this.ModelClass).instantiateFromResponse(deserializedRecord)
-    const listener = this.instanceListeners.get(id)
 
     if (action === "update" && listener) {
+      const instanceAny = /** @type {ReturnType<typeof JSON.parse>} */ (listener.instance)
+
+      instanceAny._attachmentOwner = freshModel._attachmentOwner
+
       const matchingUpdateCallbacks = Array.from(listener.updateCallbacks).filter((entry) =>
         frontendModelEventEntryMatches(entry, matchedEventFilterKeys)
       )
@@ -1676,13 +1716,11 @@ class FrontendModelEventSubscription {
       if (matchingUpdateCallbacks.length > 0) {
         // Auto-merge into the registered instance so callers reading
         // through the same handle see fresh attributes.
-        const instanceAny = /** @type {ReturnType<typeof JSON.parse>} */ (listener.instance)
-
         instanceAny.assignAttributes(freshModel.attributes())
         instanceAny._persistedAttributes = cloneFrontendModelAttributes(listener.instance.attributes())
 
         for (const entry of matchingUpdateCallbacks) {
-          try { entry.callback({id, model: listener.instance}) } catch (error) { console.error(error) }
+          try { entry.callback({id: identity, model: listener.instance}) } catch (error) { console.error(error) }
         }
       }
     }
@@ -1692,7 +1730,7 @@ class FrontendModelEventSubscription {
     for (const entry of classCallbacks) {
       if (!frontendModelEventEntryMatches(entry, matchedEventFilterKeys)) continue
 
-      try { entry.callback({id, model: freshModel}) } catch (error) { console.error(error) }
+      try { entry.callback({id: identity, model: freshModel}) } catch (error) { console.error(error) }
     }
   }
 
@@ -1811,24 +1849,128 @@ function ensureFrontendModelInstanceListener(sub, id, instance) {
 }
 
 /**
- * Removes one instance callback entry and tears down an empty listener/subscription bucket.
+ * Removes every identity key pointing at an instance listener.
  * @param {FrontendModelEventSubscription} sub - Event subscription bucket.
- * @param {string} id - Model id.
- * @param {(listener: {instance: FrontendModelBase, updateCallbacks: Set<FrontendModelModelEventCallbackEntry>, destroyCallbacks: Set<FrontendModelDestroyEventCallbackEntry>}) => void} removeEntry - Callback entry removal.
+ * @param {ReturnType<typeof ensureFrontendModelInstanceListener>} listener - Instance listener bucket.
  * @returns {void}
  */
-function removeFrontendModelInstanceListenerEntry(sub, id, removeEntry) {
-  const current = sub.instanceListeners.get(id)
+function deleteFrontendModelInstanceListener(sub, listener) {
+  for (const [id, current] of sub.instanceListeners) {
+    if (current === listener) sub.instanceListeners.delete(id)
+  }
+}
 
-  if (!current) return
+/**
+ * Removes one instance callback entry and tears down an empty listener/subscription bucket.
+ * @param {FrontendModelEventSubscription} sub - Event subscription bucket.
+ * @param {(listener: ReturnType<typeof ensureFrontendModelInstanceListener>) => boolean} removeEntry - Callback entry removal.
+ * @returns {void}
+ */
+function removeFrontendModelInstanceListenerEntry(sub, removeEntry) {
+  for (const current of sub.instanceListeners.values()) {
+    if (!removeEntry(current)) continue
 
-  removeEntry(current)
-
-  if (current.updateCallbacks.size === 0 && current.destroyCallbacks.size === 0) {
-    sub.instanceListeners.delete(id)
+    if (current.updateCallbacks.size === 0 && current.destroyCallbacks.size === 0) {
+      deleteFrontendModelInstanceListener(sub, current)
+    }
+    break
   }
 
   sub.maybeTeardown()
+}
+
+/**
+ * Temporarily registers an instance listener under its pending identity while retaining its persisted identity.
+ * @param {FrontendModelClass} ModelClass - Frontend model class.
+ * @param {FrontendModelBase} instance - Instance being re-keyed.
+ * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} previousIdentity - Persisted identity.
+ * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} nextIdentity - Pending identity sent to the server.
+ * @returns {() => void} - Callback that removes the temporary aliases.
+ */
+function aliasFrontendModelInstanceListeners(ModelClass, instance, previousIdentity, nextIdentity) {
+  const primaryKey = ModelClass.primaryKey()
+  const previousId = modelPrimaryKeyCacheKey(primaryKey, previousIdentity)
+  const nextId = modelPrimaryKeyCacheKey(primaryKey, nextIdentity)
+  /** @type {Array<{listener: ReturnType<typeof ensureFrontendModelInstanceListener>, sub: FrontendModelEventSubscription}>} */
+  const aliases = []
+
+  if (previousId === nextId) return () => {}
+
+  const subscriptions = frontendModelEventSubscriptions.get(ModelClass)
+
+  if (!subscriptions) return () => {}
+
+  for (const sub of subscriptions.values()) {
+    const listener = sub.instanceListeners.get(previousId)
+
+    if (!listener || listener.instance !== instance || sub.instanceListeners.has(nextId)) continue
+
+    sub.instanceListeners.set(nextId, listener)
+    aliases.push({listener, sub})
+  }
+
+  return () => {
+    for (const {listener, sub} of aliases) {
+      if (sub.instanceListeners.get(previousId) === listener && sub.instanceListeners.get(nextId) === listener) {
+        sub.instanceListeners.delete(nextId)
+      }
+    }
+  }
+}
+
+/**
+ * Applies a remotely persisted identity to a listener instance without merging an unavailable record payload.
+ * @param {FrontendModelClass} ModelClass - Frontend model class.
+ * @param {FrontendModelBase} instance - Listener instance receiving the identity.
+ * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} identity - Persisted identity.
+ * @returns {void}
+ */
+function applyFrontendModelPersistedIdentity(ModelClass, instance, identity) {
+  const identityAttributes = modelPrimaryKeyConditions(ModelClass.primaryKey(), identity)
+
+  instance.assignAttributes(identityAttributes)
+
+  for (const attributeName of Object.keys(identityAttributes)) {
+    instance.markAttributeUnchanged(attributeName)
+  }
+}
+
+/**
+ * Moves callbacks registered on an instance to its newly persisted identity.
+ * @param {FrontendModelClass} ModelClass - Frontend model class.
+ * @param {FrontendModelBase} instance - Re-keyed instance.
+ * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} previousIdentity - Previous persisted identity.
+ * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} nextIdentity - New persisted identity.
+ * @returns {void}
+ */
+function rekeyFrontendModelInstanceListeners(ModelClass, instance, previousIdentity, nextIdentity) {
+  const primaryKey = ModelClass.primaryKey()
+  const previousId = modelPrimaryKeyCacheKey(primaryKey, previousIdentity)
+  const nextId = modelPrimaryKeyCacheKey(primaryKey, nextIdentity)
+
+  if (previousId === nextId) return
+
+  const subscriptions = frontendModelEventSubscriptions.get(ModelClass)
+
+  if (!subscriptions) return
+
+  for (const sub of subscriptions.values()) {
+    const listener = sub.instanceListeners.get(previousId)
+
+    if (!listener || listener.instance !== instance) continue
+
+    const nextListener = sub.instanceListeners.get(nextId)
+
+    sub.instanceListeners.delete(previousId)
+
+    if (nextListener) {
+      nextListener.instance = instance
+      for (const entry of listener.updateCallbacks) nextListener.updateCallbacks.add(entry)
+      for (const entry of listener.destroyCallbacks) nextListener.destroyCallbacks.add(entry)
+    } else {
+      sub.instanceListeners.set(nextId, listener)
+    }
+  }
 }
 
 /**
@@ -2333,6 +2475,11 @@ export default class FrontendModelBase {
    * @type {Array<FrontendModelBase> | undefined} - Shared reference to sibling records loaded in the same batch. Used by auto-batch-preload.
    */
   _loadCohort
+  /**
+   * Canonical backing-record attachment owner returned by the server.
+   * @type {{recordId: string, recordType: string, resourceName: string} | null}
+   */
+  _attachmentOwner
 
   /**
    * Runs constructor.
@@ -2350,6 +2497,7 @@ export default class FrontendModelBase {
     this._isNewRecord = true
     this._markedForDestruction = false
     this._persistedAttributes = {}
+    this._attachmentOwner = null
     if (attributes) this.assignAttributes(attributes)
   }
 
@@ -2724,6 +2872,9 @@ export default class FrontendModelBase {
     if (batch.length === 0) return false
 
     const primaryKey = ModelClass.primaryKey()
+
+    if (Array.isArray(primaryKey)) return false
+
     const batchIds = batch.map((sibling) => sibling.primaryKeyValue())
     const reloadedBatch = await ModelClass
       .preload([relationshipName])
@@ -2736,11 +2887,11 @@ export default class FrontendModelBase {
     const reloadedById = new Map()
 
     for (const reloaded of reloadedBatch) {
-      reloadedById.set(String(reloaded.primaryKeyValue()), reloaded)
+      reloadedById.set(modelPrimaryKeyCacheKey(primaryKey, reloaded.primaryKeyValue()), reloaded)
     }
 
     for (const sibling of batch) {
-      const key = String(sibling.primaryKeyValue())
+      const key = modelPrimaryKeyCacheKey(primaryKey, sibling.primaryKeyValue())
       const reloaded = reloadedById.get(key)
 
       if (!reloaded) continue
@@ -2809,7 +2960,7 @@ export default class FrontendModelBase {
   /**
    * Runs primary key.
    * @this {FrontendModelClass}
-   * @returns {string} - Primary key name.
+   * @returns {import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition} - Primary key name.
    */
   static primaryKey() {
     return this.resourceConfig().primaryKey || "id"
@@ -2817,17 +2968,49 @@ export default class FrontendModelBase {
 
   /**
    * Runs primary key value.
-   * @returns {number | string} - Primary key value.
+   * @returns {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} - Primary key value.
    */
   primaryKeyValue() {
     const ModelClass = frontendModelClassFor(this)
-    const value = this.readAttribute(ModelClass.primaryKey())
+    const primaryKey = ModelClass.primaryKey()
 
-    if (value === undefined || value === null) {
-      throw new Error(`Missing primary key '${ModelClass.primaryKey()}' on ${ModelClass.name}`)
-    }
+    return readModelPrimaryKeyValue(primaryKey, (attributeName) => {
+      const value = this.readAttribute(attributeName)
 
-    return value
+      if (value === undefined || value === null) {
+        throw new Error(`Missing primary key '${attributeName}' on ${ModelClass.name}`)
+      }
+
+      return value
+    })
+  }
+
+  /**
+   * Returns the scalar identity required by scalar-only frontend features.
+   * @param {string} operation - Operation requiring a scalar identity.
+   * @returns {import("../utils/model-primary-key.js").ModelPrimaryKeyScalar} - Scalar primary-key value.
+   */
+  scalarPrimaryKeyValue(operation) {
+    return scalarModelPrimaryKeyValue(this.primaryKeyValue(), operation)
+  }
+
+  /**
+   * Returns the identity represented by the last persisted frontend attributes.
+   * @returns {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} - Persisted primary-key value.
+   */
+  persistedPrimaryKeyValue() {
+    const ModelClass = frontendModelClassFor(this)
+    const primaryKey = ModelClass.primaryKey()
+
+    return readModelPrimaryKeyValue(primaryKey, (attributeName) => {
+      const value = this._persistedAttributes[attributeName]
+
+      if (value === undefined || value === null) {
+        throw new Error(`Missing persisted primary key '${attributeName}' on ${ModelClass.name}`)
+      }
+
+      return value
+    })
   }
 
   /**
@@ -3435,7 +3618,7 @@ export default class FrontendModelBase {
    * Runs model data from response.
    * @this {FrontendModelClass}
    * @param {object} response - Response payload.
-   * @returns {{abilities: Record<string, boolean>, attributes: Record<string, FrontendModelAttributeValue>, associationCounts: Record<string, number>, queryData: Record<string, FrontendModelAttributeValue>, preloadedRelationships: Record<string, FrontendModelAttributeValue>, selectedAttributes: Set<string>}} - Attributes, preloaded relationships, association counts, queryData, abilities, and the selected-attributes set.
+   * @returns {{abilities: Record<string, boolean>, attachmentOwner: {recordId: string, recordType: string, resourceName: string} | null, attributes: Record<string, FrontendModelAttributeValue>, associationCounts: Record<string, number>, queryData: Record<string, FrontendModelAttributeValue>, preloadedRelationships: Record<string, FrontendModelAttributeValue>, selectedAttributes: Set<string>}} - Attributes, attachment owner, preloaded relationships, association counts, queryData, abilities, and selected attributes.
    */
   static modelDataFromResponse(response) {
     if (!response || typeof response !== "object") {
@@ -3476,7 +3659,24 @@ export default class FrontendModelBase {
     const selectedAttributesFromPayload = Array.isArray(attributes[SELECTED_ATTRIBUTES_KEY])
       ? new Set(/** @type {string[]} */ (attributes[SELECTED_ATTRIBUTES_KEY]).filter((attributeName) => typeof attributeName === "string"))
       : null
+    const attachmentOwnerPayload = attributes[ATTACHMENT_OWNER_KEY]
+    let attachmentOwner = null
 
+    if (attachmentOwnerPayload !== undefined) {
+      if (!isPlainObject(attachmentOwnerPayload)) {
+        throw new TypeError(`Expected ${ATTACHMENT_OWNER_KEY} to be an object`)
+      }
+
+      const attachmentOwnerObject = /** @type {{recordId?: unknown, recordType?: unknown, resourceName?: unknown}} */ (attachmentOwnerPayload)
+
+      attachmentOwner = {
+        recordId: forcedNonBlankString(attachmentOwnerObject.recordId, `${ATTACHMENT_OWNER_KEY}.recordId`),
+        recordType: forcedNonBlankString(attachmentOwnerObject.recordType, `${ATTACHMENT_OWNER_KEY}.recordType`),
+        resourceName: forcedNonBlankString(attachmentOwnerObject.resourceName, `${ATTACHMENT_OWNER_KEY}.resourceName`)
+      }
+    }
+
+    delete attributes[ATTACHMENT_OWNER_KEY]
     delete attributes[PRELOADED_RELATIONSHIPS_KEY]
     delete attributes[SELECTED_ATTRIBUTES_KEY]
     delete attributes[ASSOCIATION_COUNTS_KEY]
@@ -3485,7 +3685,7 @@ export default class FrontendModelBase {
 
     const selectedAttributes = selectedAttributesFromPayload || new Set(Object.keys(attributes))
 
-    return {abilities, attributes, associationCounts, queryData, preloadedRelationships, selectedAttributes}
+    return {abilities, attachmentOwner, attributes, associationCounts, queryData, preloadedRelationships, selectedAttributes}
   }
 
   /**
@@ -3578,10 +3778,12 @@ export default class FrontendModelBase {
     const associationCounts = modelData.associationCounts
     const queryData = modelData.queryData
     const abilities = modelData.abilities
+    const attachmentOwner = modelData.attachmentOwner
     const selectedAttributes = modelData.selectedAttributes
     const receiver = /** @type {unknown} */ (this)
     const ModelClass = /** @type {new (attributes?: Record<string, FrontendModelAttributeValue>) => InstanceType<T>} */ (receiver)
     const model = new ModelClass(attributes)
+    model._attachmentOwner = attachmentOwner
     model._selectedAttributes = selectedAttributes ? new Set(selectedAttributes) : null
 
     this.applyPreloadedRelationships(model, preloadedRelationships)
@@ -3608,7 +3810,7 @@ export default class FrontendModelBase {
    * Runs find.
    * @template {FrontendModelClass} T
    * @this {T}
-   * @param {number | string} id - Record identifier.
+   * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} id - Record identifier.
    * @returns {Promise<InstanceType<T>>} - Resolved model.
    */
   static async find(id) {
@@ -3750,7 +3952,7 @@ export default class FrontendModelBase {
    * without re-checking per-record visibility. Query options can still
    * narrow which events reach this callback.
    * @this {FrontendModelClass}
-   * @param {(payload: {id: string, model: FrontendModelBase}) => void} callback - Event callback.
+   * @param {(payload: {id: string | import("../utils/model-primary-key.js").CompositeModelPrimaryKeyValue, model: FrontendModelBase}) => void} callback - Event callback.
    * @param {import("./query.js").FrontendModelEventOptions} [options] - Event query or record projection options.
    * @returns {Promise<() => void>} - Unsubscribe callback.
    */
@@ -3765,7 +3967,7 @@ export default class FrontendModelBase {
   /**
    * Class-level hook fired when any record of this model is updated.
    * @this {FrontendModelClass}
-   * @param {(payload: {id: string, model: FrontendModelBase}) => void} callback - Event callback.
+   * @param {(payload: {id: string | import("../utils/model-primary-key.js").CompositeModelPrimaryKeyValue, model: FrontendModelBase}) => void} callback - Event callback.
    * @param {import("./query.js").FrontendModelEventOptions} [options] - Event query or record projection options.
    * @returns {Promise<() => void>} - Unsubscribe callback.
    */
@@ -3780,7 +3982,7 @@ export default class FrontendModelBase {
   /**
    * Class-level hook fired when any record of this model is destroyed.
    * @this {FrontendModelClass}
-   * @param {(payload: {id: string}) => void} callback - Event callback.
+   * @param {(payload: {id: string | import("../utils/model-primary-key.js").CompositeModelPrimaryKeyValue}) => void} callback - Event callback.
    * @param {import("./query.js").FrontendModelEventOptions} [options] - Accepted for API symmetry; destroy events carry ids only.
    * @returns {Promise<() => void>} - Unsubscribe callback.
    */
@@ -3799,16 +4001,16 @@ export default class FrontendModelBase {
    * instance's attributes are auto-merged with the broadcast payload
    * before the callback runs, so callers can read fresh values via
    * `this.someAttr()` without re-fetching.
-   * @param {(payload: {id: string, model: FrontendModelBase}) => void} callback - Event callback.
+   * @param {(payload: {id: string | import("../utils/model-primary-key.js").CompositeModelPrimaryKeyValue, model: FrontendModelBase}) => void} callback - Event callback.
    * @param {import("./query.js").FrontendModelEventOptions} [options] - Event query or record projection options.
    * @returns {Promise<() => void>} - Unsubscribe callback.
    */
   async onUpdate(callback, options = {}) {
-    const self = /** @type {ReturnType<typeof JSON.parse>} */ (this)
     const ModelClass = frontendModelClassFor(this)
     const {requestContext, ...eventOptionsPayload} = frontendModelEventOptionsPayload(ModelClass, options)
     const sub = ensureFrontendModelEventSubscription(ModelClass, frontendModelEventRequestContext(requestContext))
-    const id = String(self.id())
+    const identity = this.isNewRecord() ? this.primaryKeyValue() : this.persistedPrimaryKeyValue()
+    const id = modelPrimaryKeyCacheKey(ModelClass.primaryKey(), identity)
     const entry = {callback, ...eventOptionsPayload}
     const listener = ensureFrontendModelInstanceListener(sub, id, this)
 
@@ -3817,30 +4019,30 @@ export default class FrontendModelBase {
     try {
       await sub.ensureSubscribed()
     } catch (error) {
-      removeFrontendModelInstanceListenerEntry(sub, id, (current) => current.updateCallbacks.delete(entry))
+      removeFrontendModelInstanceListenerEntry(sub, (current) => current.updateCallbacks.delete(entry))
       throw error
     }
 
     return () => {
-      removeFrontendModelInstanceListenerEntry(sub, id, (current) => current.updateCallbacks.delete(entry))
+      removeFrontendModelInstanceListenerEntry(sub, (current) => current.updateCallbacks.delete(entry))
     }
   }
 
   /**
    * Instance-level hook fired when THIS record is destroyed.
-   * @param {(payload: {id: string}) => void} callback - Event callback.
+   * @param {(payload: {id: string | import("../utils/model-primary-key.js").CompositeModelPrimaryKeyValue}) => void} callback - Event callback.
    * @param {import("./query.js").FrontendModelEventOptions} [options] - Accepted for API symmetry; destroy events carry ids only.
    * @returns {Promise<() => void>} - Unsubscribe callback.
    */
   async onDestroy(callback, options = {}) {
-    const self = /** @type {ReturnType<typeof JSON.parse>} */ (this)
     const ModelClass = frontendModelClassFor(this)
 
     assertNoDestroyEventFilter(ModelClass, options)
 
     const {requestContext} = frontendModelEventOptionsPayload(ModelClass, options)
     const sub = ensureFrontendModelEventSubscription(ModelClass, frontendModelEventRequestContext(requestContext))
-    const id = String(self.id())
+    const identity = this.isNewRecord() ? this.primaryKeyValue() : this.persistedPrimaryKeyValue()
+    const id = modelPrimaryKeyCacheKey(ModelClass.primaryKey(), identity)
     const entry = {callback}
     const listener = ensureFrontendModelInstanceListener(sub, id, this)
 
@@ -3849,12 +4051,12 @@ export default class FrontendModelBase {
     try {
       await sub.ensureSubscribed()
     } catch (error) {
-      removeFrontendModelInstanceListenerEntry(sub, id, (current) => current.destroyCallbacks.delete(entry))
+      removeFrontendModelInstanceListenerEntry(sub, (current) => current.destroyCallbacks.delete(entry))
       throw error
     }
 
     return () => {
-      removeFrontendModelInstanceListenerEntry(sub, id, (current) => current.destroyCallbacks.delete(entry))
+      removeFrontendModelInstanceListenerEntry(sub, (current) => current.destroyCallbacks.delete(entry))
     }
   }
 
@@ -4256,6 +4458,17 @@ export default class FrontendModelBase {
   async save() {
     const ModelClass = frontendModelClassFor(this)
     const isNew = this.isNewRecord()
+    const primaryKey = ModelClass.primaryKey()
+    const previousIdentity = isNew ? null : this.persistedPrimaryKeyValue()
+    const listenerIdentityBeforeSave = isNew
+      && Array.isArray(primaryKey)
+      && primaryKey.every((attributeName) => {
+        const value = this._attributes[attributeName]
+
+        return typeof value === "string" || typeof value === "number"
+      })
+      ? this.primaryKeyValue()
+      : previousIdentity
     const commandType = isNew ? "create" : "update"
     /**
      * Payload.
@@ -4265,7 +4478,7 @@ export default class FrontendModelBase {
     }
 
     if (!isNew) {
-      payload.id = this.primaryKeyValue()
+      payload.id = this.persistedPrimaryKeyValue()
     }
 
     const nestedAttributes = await this._buildNestedAttributesPayload()
@@ -4285,7 +4498,7 @@ export default class FrontendModelBase {
       let clientMutationId
 
       if (isNew) {
-        const primaryKey = ModelClass.primaryKey()
+        const primaryKey = scalarModelPrimaryKey(ModelClass.primaryKey(), `Offline create for ${ModelClass.name}`)
         const currentPrimaryKey = this.readAttribute(primaryKey)
 
         if (currentPrimaryKey === undefined || currentPrimaryKey === null) {
@@ -4296,7 +4509,9 @@ export default class FrontendModelBase {
           offlineAttributes[primaryKey] = clientMutationId
         }
       } else {
-        offlineAttributes[ModelClass.primaryKey()] = payload.id
+        const primaryKey = scalarModelPrimaryKey(ModelClass.primaryKey(), `Offline update for ${ModelClass.name}`)
+
+        offlineAttributes[primaryKey] = payload.id
       }
 
       if (payload.nestedAttributes !== undefined || payload.attachments !== undefined) {
@@ -4317,10 +4532,30 @@ export default class FrontendModelBase {
       return this
     }
 
-    const response = await ModelClass.executeCommand(commandType, payload)
+    const removeTemporaryListenerAliases = previousIdentity === null
+      ? () => {}
+      : aliasFrontendModelInstanceListeners(ModelClass, this, previousIdentity, this.primaryKeyValue())
+    let response
 
-    this.assignAttributes(ModelClass.attributesFromResponse(response))
+    try {
+      response = await ModelClass.executeCommand(commandType, payload)
+    } catch (error) {
+      removeTemporaryListenerAliases()
+      throw error
+    }
+
+    removeTemporaryListenerAliases()
+
+    const modelData = ModelClass.modelDataFromResponse(response)
+
+    this.assignAttributes(modelData.attributes)
+    this._attachmentOwner = modelData.attachmentOwner
     this.setIsNewRecord(false)
+
+    if (listenerIdentityBeforeSave !== null) {
+      rekeyFrontendModelInstanceListeners(ModelClass, this, listenerIdentityBeforeSave, this.primaryKeyValue())
+    }
+
     this._persistedAttributes = cloneFrontendModelAttributes(this.attributes())
     this._pendingNestedAttributes = {}
     this._clearPendingAttachments()
@@ -4369,11 +4604,13 @@ export default class FrontendModelBase {
    */
   async destroy() {
     const ModelClass = frontendModelClassFor(this)
-    const id = this.primaryKeyValue()
+    const id = this.isNewRecord() ? this.primaryKeyValue() : this.persistedPrimaryKeyValue()
 
     if (shouldQueueFrontendModelOperationOffline(ModelClass, "destroy")) {
+      const primaryKey = scalarModelPrimaryKey(ModelClass.primaryKey(), `Offline destroy for ${ModelClass.name}`)
+
       await queueFrontendModelMutationOffline({
-        attributes: {[ModelClass.primaryKey()]: id},
+        attributes: {[primaryKey]: id},
         ModelClass,
         operation: "destroy"
       })
@@ -4486,7 +4723,7 @@ export default class FrontendModelBase {
   async _nestedAttributesEntryForParentSave() {
     if (this.markedForDestruction()) {
       if (this.isNewRecord()) return null
-      return {id: this.primaryKeyValue(), _destroy: true}
+      return {id: this.persistedPrimaryKeyValue(), _destroy: true}
     }
 
     const nestedAttributes = await this._buildNestedAttributesPayload()
@@ -4513,7 +4750,7 @@ export default class FrontendModelBase {
     /**
      * Entry.
      * @type {Record<string, ReturnType<typeof JSON.parse>>} */
-    const entry = {id: this.primaryKeyValue()}
+    const entry = {id: this.persistedPrimaryKeyValue()}
 
     if (this.isChanged()) entry.attributes = this._changedAttributesForSave()
     if (hasAttachments) entry.attachments = attachments
@@ -4913,6 +5150,17 @@ export class VelociousAttachment extends FrontendModelBase {
       modelName: "VelociousAttachment",
       primaryKey: "id"
     }
+  }
+
+  /**
+   * Finds attachment metadata by its public id through the member authorization path.
+   * @template {FrontendModelClass} T
+   * @this {T}
+   * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} id - Attachment id.
+   * @returns {Promise<InstanceType<T>>} - Resolved attachment metadata.
+   */
+  static async find(id) {
+    return this.instantiateFromResponse(await this.executeCommand("find", {id}))
   }
 
   /**

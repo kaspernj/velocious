@@ -1,5 +1,7 @@
 // @ts-check
 
+import {scalarModelPrimaryKey, scalarModelPrimaryKeyValue} from "../../utils/model-primary-key.js"
+
 /** @file Registers gap-less positional list callbacks on a model class. */
 
 /**
@@ -7,6 +9,24 @@
  * @type {symbol} - Guard flag set on the model instance during shift operations to prevent re-entrant lifecycle hooks.
  */
 const ACTS_AS_LIST_SHIFTING = Symbol("actsAsListShifting")
+
+/**
+ * Returns the scalar primary-key column required by acts-as-list SQL.
+ * @param {typeof import("./index.js").default} modelClass - List model class.
+ * @returns {string} - Scalar primary-key column.
+ */
+function actsAsListPrimaryKey(modelClass) {
+  return scalarModelPrimaryKey(modelClass.primaryKey(), `actsAsList for ${modelClass.name}`)
+}
+
+/**
+ * Returns the scalar record id required by acts-as-list SQL.
+ * @param {import("./index.js").default} record - List record.
+ * @returns {string | number} - Scalar record id.
+ */
+function actsAsListRecordId(record) {
+  return scalarModelPrimaryKeyValue(record.id(), `actsAsList for ${record.getModelClass().name}`)
+}
 
 /**
  * Runs set shifting flag.
@@ -111,7 +131,7 @@ export default function registerActsAsListCallbacks(modelClass, positionColumn, 
       await moveOutOfWay({record, positionColumn, scope, scopeValue: oldScopeValue})
       setShiftingFlag(record, false)
       await shiftPositionsDown({record, positionColumn, scope, scopeValue: oldScopeValue, fromPosition: oldPosition + 1})
-      await shiftPositionsUp({record, positionColumn, scope, scopeValue: newScopeValue, fromPosition: newPosition, excludeRecordId: record.id()})
+      await shiftPositionsUp({record, positionColumn, scope, scopeValue: newScopeValue, fromPosition: newPosition, excludeRecordId: actsAsListRecordId(record)})
       await placeMovedRecord({record, positionColumn, scope, scopeValue: newScopeValue, position: newPosition})
       return
     }
@@ -180,15 +200,17 @@ async function placeMovedRecord({record, positionColumn, scope, scopeValue, posi
   const preservedChanges = {...record._changes}
   const scopeColumnSql = connection.quoteColumn(scopeCol)
   const positionColumnSql = connection.quoteColumn(posCol)
-  const primaryKeySql = connection.quoteColumn(modelClass.primaryKey())
+  const primaryKey = actsAsListPrimaryKey(modelClass)
+  const primaryKeySql = connection.quoteColumn(primaryKey)
+  const recordId = actsAsListRecordId(record)
 
   delete preservedChanges[scopeCol]
   delete preservedChanges[posCol]
 
   await connection.query(
-    `UPDATE ${tableSql} SET ${scopeColumnSql} = ${connection.quote(scopeValue)}, ${positionColumnSql} = ${connection.quote(position)} WHERE ${primaryKeySql} = ${connection.quote(record.id())}`
+    `UPDATE ${tableSql} SET ${scopeColumnSql} = ${connection.quote(scopeValue)}, ${positionColumnSql} = ${connection.quote(position)} WHERE ${primaryKeySql} = ${connection.quote(recordId)}`
   )
-  await record._reloadWithId(record.id())
+  await record._reloadWithId(recordId)
   record._changes = preservedChanges
   clearBelongsToChangeForScope(record)
 }
@@ -234,21 +256,22 @@ async function shiftPositionsUp({record, positionColumn, scope, fromPosition, to
   const positionColumnName = modelClass.getColumnNameForAttributeName(positionColumn)
   const positionColumnSql = connection.quoteColumn(positionColumnName)
   const scopeColumnSql = connection.quoteColumn(scopeColumnName)
-  const primaryKeySql = connection.quoteColumn(modelClass.primaryKey())
+  const primaryKey = actsAsListPrimaryKey(modelClass)
+  const primaryKeySql = connection.quoteColumn(primaryKey)
   const tableSql = connection.quoteTable(tableName)
   const quotedScope = connection.quote(resolvedScopeValue)
 
   // Load rows in descending order so we bump the highest first
   let query = record
     .queryForModel(modelClass)
-    .select(modelClass.primaryKey())
+    .select(primaryKey)
     .select(positionColumn)
     .where({[scopeColumnName]: resolvedScopeValue})
     .where(`${positionColumnSql} >= ${connection.quote(fromPosition)}`)
     .where(`${positionColumnSql} > 0`)
     .order(`${positionColumnSql} DESC`)
 
-  const recordIdToExclude = excludeRecordId || (record.isPersisted() ? record.id() : null)
+  const recordIdToExclude = excludeRecordId || (record.isPersisted() ? actsAsListRecordId(record) : null)
 
   if (recordIdToExclude != null) {
     query = query.where(`${primaryKeySql} != ${connection.quote(recordIdToExclude)}`)
@@ -300,19 +323,20 @@ async function shiftPositionsDown({record, positionColumn, scope, fromPosition, 
   const positionColumnName = modelClass.getColumnNameForAttributeName(positionColumn)
   const positionColumnSql = connection.quoteColumn(positionColumnName)
   const scopeColumnSql = connection.quoteColumn(scopeColumnName)
-  const primaryKeySql = connection.quoteColumn(modelClass.primaryKey())
+  const primaryKey = actsAsListPrimaryKey(modelClass)
+  const primaryKeySql = connection.quoteColumn(primaryKey)
   const tableSql = connection.quoteTable(tableName)
   const quotedScope = connection.quote(resolvedScopeValue)
 
   // Load rows in ascending order so we shift the lowest gap first
   let query = record
     .queryForModel(modelClass)
-    .select(modelClass.primaryKey())
+    .select(primaryKey)
     .select(positionColumn)
     .where({[scopeColumnName]: resolvedScopeValue})
     .where(`${positionColumnSql} >= ${connection.quote(fromPosition)}`)
     .where(`${positionColumnSql} > 0`)
-    .where(`${primaryKeySql} != ${connection.quote(record.id())}`)
+    .where(`${primaryKeySql} != ${connection.quote(actsAsListRecordId(record))}`)
     .order({column: positionColumnName, direction: "ASC"})
 
   if (toPosition != null) {
@@ -399,7 +423,7 @@ function resolveScopeValue(record, scope) {
     const loaded = instanceRelationship.loaded()
 
     if (loaded && !Array.isArray(loaded) && typeof loaded.id === "function") {
-      return loaded.id()
+      return scalarModelPrimaryKeyValue(loaded.id(), `actsAsList scope relationship for ${modelClass.name}`)
     }
   }
 
@@ -427,13 +451,13 @@ async function moveOutOfWay({record, positionColumn, scope, scopeValue}) {
   const positionColumnSql = connection.quoteColumn(modelClass.getColumnNameForAttributeName(positionColumn))
   const scopeColumnSql = connection.quoteColumn(modelClass.getColumnNameForAttributeName(scope))
   const tableSql = connection.quoteTable(tableName)
-  const pkSql = connection.quoteColumn(modelClass.primaryKey())
+  const pkSql = connection.quoteColumn(actsAsListPrimaryKey(modelClass))
 
   setShiftingFlag(record, true)
 
   try {
     await connection.query(
-      `UPDATE ${tableSql} SET ${positionColumnSql} = -${positionColumnSql} WHERE ${scopeColumnSql} = ${connection.quote(resolvedScopeValue)} AND ${pkSql} = ${connection.quote(record.id())}`
+      `UPDATE ${tableSql} SET ${positionColumnSql} = -${positionColumnSql} WHERE ${scopeColumnSql} = ${connection.quote(resolvedScopeValue)} AND ${pkSql} = ${connection.quote(actsAsListRecordId(record))}`
     )
   } finally {
     // Don't clear the flag here — the caller will do that after shifts

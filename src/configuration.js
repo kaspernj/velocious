@@ -229,6 +229,9 @@ export default class VelociousConfiguration {
    * @type {Set<import("./database/drivers/base.js").default>} */
   _advisoryLockConnections = new Set()
 
+  /** @type {Map<string, number>} */
+  _schemaCacheGenerationsByReuseKey = new Map()
+
   /**
    * Runs current.
    * @returns {VelociousConfiguration} - The current.
@@ -402,6 +405,13 @@ export default class VelociousConfiguration {
      * Settled deliveries are removed by the tracking-level cleanup.
      * @type {Set<Promise<void>>} */
     this._localBroadcastDeliveries = new Set()
+
+    /**
+     * Latest local broadcast delivery per subscription. Chaining subsequent
+     * deliveries preserves lifecycle event order without coupling separate
+     * subscribers to one another.
+     * @type {WeakMap<import("./http-server/websocket-channel.js").default, Promise<void>>} */
+    this._localBroadcastDeliveryTails = new WeakMap()
 
     /**
      * Stores the websocket sessions value.
@@ -1137,11 +1147,25 @@ export default class VelociousConfiguration {
    * @returns {void} - No return value.
    */
   clearSchemaCachesForReuseKey(reuseKey) {
+    this._schemaCacheGenerationsByReuseKey.set(
+      reuseKey,
+      this.schemaCacheGenerationForReuseKey(reuseKey) + 1
+    )
+
     for (const pool of Object.values(this.databasePools)) {
       if (pool.getConfigurationReuseKey() === reuseKey) {
         pool.clearSchemaCache()
       }
     }
+  }
+
+  /**
+   * Returns the current schema-cache generation for one physical database.
+   * @param {string} reuseKey - Connection reuse key identifying the shared database.
+   * @returns {number} - Current schema-cache generation.
+   */
+  schemaCacheGenerationForReuseKey(reuseKey) {
+    return this._schemaCacheGenerationsByReuseKey.get(reuseKey) || 0
   }
 
   /**
@@ -3249,7 +3273,7 @@ export default class VelociousConfiguration {
    * @param {string} name - Channel name.
    * @param {Record<string, ReturnType<typeof JSON.parse>>} broadcastParams - Params passed to each subscription's `matches()`.
    * @param {ReturnType<typeof JSON.parse>} body - Message body delivered via `sendMessage()`.
-   * @param {{eventId?: string}} [meta] - Optional event metadata for replay tracking.
+   * @param {import("./http-server/websocket-channel.js").WebsocketBroadcastMetadata} [meta] - Optional event metadata for replay tracking.
    * @returns {void}
    */
   _broadcastToChannelLocal(name, broadcastParams, body, meta) {
@@ -3273,14 +3297,20 @@ export default class VelociousConfiguration {
 
       if (!matches) continue
 
+      const deliveryMetadata = {
+        broadcastParams,
+        ...(meta?.eventId ? {eventId: meta.eventId} : {})
+      }
+      const previousDelivery = this._localBroadcastDeliveryTails.get(subscription)
       const delivery = this.withoutCurrentConnectionContexts(() => {
-        return Promise
-          .resolve()
-          .then(() => this._deliverWebsocketChannelBroadcast(subscription, body, {eventId: meta?.eventId}))
+        return (previousDelivery || Promise.resolve())
+          .then(() => this._deliverWebsocketChannelBroadcast(subscription, body, deliveryMetadata))
           .catch((error) => {
             console.error(`broadcastToChannel: ${name} subscription ${subscription.subscriptionId} deliverBroadcast threw`, error)
           })
       })
+
+      this._localBroadcastDeliveryTails.set(subscription, delivery)
 
       // Keep the fire-and-forget delivery (never awaited at broadcast time) but
       // track it so `awaitPendingBroadcasts` can drain it before settling. Remove
@@ -3288,10 +3318,16 @@ export default class VelociousConfiguration {
       // delivery never becomes an unhandled rejection.
       this._localBroadcastDeliveries.add(delivery)
 
-      delivery.then(
-        () => { this._localBroadcastDeliveries.delete(delivery) },
-        () => { this._localBroadcastDeliveries.delete(delivery) }
-      )
+      /**
+       * Removes a settled delivery from local tracking.
+       * @returns {void}
+       */
+      const forgetDelivery = () => {
+        this._localBroadcastDeliveries.delete(delivery)
+        if (this._localBroadcastDeliveryTails.get(subscription) === delivery) this._localBroadcastDeliveryTails.delete(subscription)
+      }
+
+      delivery.then(forgetDelivery, forgetDelivery)
     }
   }
 
@@ -3314,7 +3350,7 @@ export default class VelociousConfiguration {
    * Runs deliver websocket channel broadcast.
    * @param {import("./http-server/websocket-channel.js").default} subscription - Channel subscription.
    * @param {import("./http-server/websocket-channel.js").WebsocketJsonValue} body - Broadcast body.
-   * @param {{eventId?: string}} meta - Broadcast metadata.
+   * @param {import("./http-server/websocket-channel.js").WebsocketBroadcastMetadata} meta - Broadcast metadata.
    * @returns {void | Promise<void>} Broadcast delivery result.
    */
   _deliverWebsocketChannelBroadcast(subscription, body, meta) {

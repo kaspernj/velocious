@@ -199,6 +199,12 @@ export default class VelociousConfiguration {
      * @type {Set<Promise<void>>} */
     _localBroadcastDeliveries: Set<Promise<void>>;
     /**
+     * Latest local broadcast delivery per subscription. Chaining subsequent
+     * deliveries preserves lifecycle event order without coupling separate
+     * subscribers to one another.
+     * @type {WeakMap<import("./http-server/websocket-channel.js").default, Promise<void>>} */
+    _localBroadcastDeliveryTails: WeakMap<import("./http-server/websocket-channel.js").default, Promise<void>>;
+    /**
      * Stores the websocket sessions value.
      * @type {Set<import("./http-server/client/websocket-session.js").default>} - Live websocket sessions, including paused sessions within the grace window.
      */
@@ -274,6 +280,8 @@ export default class VelociousConfiguration {
      * lets a shutdown close them and release the lock instead of orphaning it.
      * @type {Set<import("./database/drivers/base.js").default>} */
     _advisoryLockConnections: Set<import("./database/drivers/base.js").default>;
+    /** @type {Map<string, number>} */
+    _schemaCacheGenerationsByReuseKey: Map<string, number>;
     /**
      * Runs current.
      * @returns {VelociousConfiguration} - The current.
@@ -503,6 +511,12 @@ export default class VelociousConfiguration {
      * @returns {void} - No return value.
      */
     clearSchemaCachesForReuseKey(reuseKey: string): void;
+    /**
+     * Returns the current schema-cache generation for one physical database.
+     * @param {string} reuseKey - Connection reuse key identifying the shared database.
+     * @returns {number} - Current schema-cache generation.
+     */
+    schemaCacheGenerationForReuseKey(reuseKey: string): number;
     /**
      * Invalidates record metadata owned by one closed/deleted physical tenant
      * database while preserving every other tenant generation.
@@ -1380,12 +1394,10 @@ export default class VelociousConfiguration {
      * @param {string} name - Channel name.
      * @param {Record<string, ReturnType<typeof JSON.parse>>} broadcastParams - Params passed to each subscription's `matches()`.
      * @param {ReturnType<typeof JSON.parse>} body - Message body delivered via `sendMessage()`.
-     * @param {{eventId?: string}} [meta] - Optional event metadata for replay tracking.
+     * @param {import("./http-server/websocket-channel.js").WebsocketBroadcastMetadata} [meta] - Optional event metadata for replay tracking.
      * @returns {void}
      */
-    _broadcastToChannelLocal(name: string, broadcastParams: Record<string, ReturnType<typeof JSON.parse>>, body: ReturnType<typeof JSON.parse>, meta?: {
-        eventId?: string;
-    }): void;
+    _broadcastToChannelLocal(name: string, broadcastParams: Record<string, ReturnType<typeof JSON.parse>>, body: ReturnType<typeof JSON.parse>, meta?: import("./http-server/websocket-channel.js").WebsocketBroadcastMetadata): void;
     /**
      * Awaits a snapshot of the in-flight local (per-process) websocket channel
      * broadcast deliveries. Called from `awaitPendingBroadcasts` after the host
@@ -1400,12 +1412,10 @@ export default class VelociousConfiguration {
      * Runs deliver websocket channel broadcast.
      * @param {import("./http-server/websocket-channel.js").default} subscription - Channel subscription.
      * @param {import("./http-server/websocket-channel.js").WebsocketJsonValue} body - Broadcast body.
-     * @param {{eventId?: string}} meta - Broadcast metadata.
+     * @param {import("./http-server/websocket-channel.js").WebsocketBroadcastMetadata} meta - Broadcast metadata.
      * @returns {void | Promise<void>} Broadcast delivery result.
      */
-    _deliverWebsocketChannelBroadcast(subscription: import("./http-server/websocket-channel.js").default, body: import("./http-server/websocket-channel.js").WebsocketJsonValue, meta: {
-        eventId?: string;
-    }): void | Promise<void>;
+    _deliverWebsocketChannelBroadcast(subscription: import("./http-server/websocket-channel.js").default, body: import("./http-server/websocket-channel.js").WebsocketJsonValue, meta: import("./http-server/websocket-channel.js").WebsocketBroadcastMetadata): void | Promise<void>;
     /**
      * Runs get websocket message handler resolver.
      * @returns {import("./configuration-types.js").WebsocketMessageHandlerResolverType | undefined} - The websocket message handler resolver.

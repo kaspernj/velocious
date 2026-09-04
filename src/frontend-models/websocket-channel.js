@@ -1,12 +1,19 @@
 // @ts-check
 
 import VelociousWebsocketChannel from "../http-server/websocket-channel.js"
+import {Buffer} from "node:buffer"
 import Response from "../http-server/client/response.js"
-import {serializeFrontendModelTransportValue} from "./transport-serialization.js"
+import {frontendModelResourcesWithBuiltInsForBackendProject} from "./built-in-resources.js"
+import {frontendModelResourceClassFromDefinition} from "./resource-definition.js"
+import {deserializeFrontendModelTransportValue, serializeFrontendModelTransportValue} from "./transport-serialization.js"
+import {modelPrimaryKeyConditions} from "../utils/model-primary-key.js"
 
 /**
  * Defines this typedef.
- * @typedef {{action?: string, id?: string | number, matchedEventFilterKeys?: string[], record?: import("./query.js").FrontendModelTransportValue, [key: string]: import("./query.js").FrontendModelTransportValue | string[] | undefined}} FrontendModelLifecycleBroadcastBody
+ * @typedef {{action?: string, id?: import("../utils/model-primary-key.js").ModelPrimaryKeyValue, matchedEventFilterKeys?: string[], previousId?: import("../utils/model-primary-key.js").ModelPrimaryKeyValue, record?: import("./query.js").FrontendModelTransportValue, [key: string]: import("./query.js").FrontendModelTransportValue | string[] | undefined}} FrontendModelLifecycleBroadcastBody
+ */
+/**
+ * @typedef {Record<string, import("./query.js").FrontendModelTransportValue>} DestroyAuthorizationRecord
  */
 /**
  * Defines this typedef.
@@ -23,6 +30,69 @@ const EVENT_FILTER_KEYS = new Set(["joins", "key", "searches", "where"])
 const FRONTEND_MODELS_CHANNEL_NAME = "frontend-models"
 
 /**
+ * Checks whether a server-side broadcast value is a destroy-authorization record.
+ * @param {import("./query.js").FrontendModelTransportValue | undefined} value - Candidate value.
+ * @returns {value is DestroyAuthorizationRecord} - Whether the value is a column-keyed record.
+ */
+function isDestroyAuthorizationRecord(value) {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value))
+}
+
+/**
+ * Checks whether a captured value is a serialized binary-column marker.
+ * @param {import("./query.js").FrontendModelTransportValue} value - Captured column value.
+ * @returns {value is {__velociousDestroyAuthorizationType: "binary", value: number[]}} - Whether the value contains serialized bytes.
+ */
+function isDestroyAuthorizationBinary(value) {
+  return Boolean(
+    value
+    && typeof value === "object"
+    && !Array.isArray(value)
+    && "__velociousDestroyAuthorizationType" in value
+    && value.__velociousDestroyAuthorizationType === "binary"
+    && "value" in value
+    && Array.isArray(value.value)
+    && value.value.every((byte) => typeof byte === "number")
+  )
+}
+
+/**
+ * Builds a PostgreSQL array expression whose elements are quoted by the active driver.
+ * @param {import("../database/drivers/base.js").default} driver - Active PostgreSQL driver.
+ * @param {import("./query.js").FrontendModelTransportValue[]} values - Captured array values.
+ * @returns {string} - PostgreSQL array expression.
+ */
+function pgsqlArrayValueSql(driver, values) {
+  const elements = values.map((value) => {
+    if (Array.isArray(value)) return pgsqlArrayValueSql(driver, value)
+    if (value === null) return "NULL"
+
+    return driver.quote(value)
+  })
+
+  return `ARRAY[${elements.join(", ")}]`
+}
+
+/**
+ * Resolves frontend resource identity attributes to backing database columns.
+ * @param {typeof import("../database/record/index.js").default} ModelClass - Backing model class.
+ * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition} primaryKey - Frontend resource identity definition.
+ * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} id - Frontend resource identity.
+ * @returns {Record<string, import("../utils/model-primary-key.js").ModelPrimaryKeyScalar>} - Backing column conditions.
+ */
+function frontendModelPrimaryKeyDatabaseConditions(ModelClass, primaryKey, id) {
+  const resourceConditions = modelPrimaryKeyConditions(primaryKey, id)
+  /** @type {Record<string, import("../utils/model-primary-key.js").ModelPrimaryKeyScalar>} */
+  const databaseConditions = {}
+
+  for (const [attributeName, value] of Object.entries(resourceConditions)) {
+    databaseConditions[ModelClass.getColumnNameForAttributeName(attributeName)] = value
+  }
+
+  return databaseConditions
+}
+
+/**
  * Runs transport serialization options for a configuration.
  * @param {import("../configuration.js").default} configuration - Configuration instance.
  * @returns {import("./transport-serialization.js").FrontendModelTransportSerializationOptions} - Serialization options.
@@ -37,15 +107,11 @@ function transportSerializationOptionsForConfiguration(configuration) {
  * Per-session channel subscription for frontend-model lifecycle events.
  * Replaces the legacy `FrontendModelWebsocketChannel` (Phase 3).
  *
- * Auth model: subscribe-time only. `canSubscribe` resolves the caller's
- * ability once, checks that at least one `allow` rule exists for
- * `read` on the requested model class, and then delivers future
- * lifecycle broadcasts for that model without re-authorizing per event.
- * This matches the explicit design decision in Phase 3 to trade
- * per-record visibility guarantees for massively cheaper broadcast fan-out.
- * Subscriber-provided event filters can still narrow which create/update
- * events are delivered, but they are matching predicates rather than
- * per-record authorization checks.
+ * `canSubscribe` resolves the caller's ability once and requires a read rule
+ * for the requested model class. Create/update delivery then reloads each
+ * record through that ability and serializes it through the subscribed
+ * frontend resource. Subscriber-provided event filters can further narrow
+ * those authorized events.
  *
  * Wire: subscribe with `subscribeChannel("frontend-models", {params: {model: ModelName}})`.
  * Backend publishes `{action, id, record}` via
@@ -69,8 +135,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
     this._eventFilters()
 
     const configuration = this.session.configuration
-    const modelClasses = configuration.getModelClasses()
-    const ModelClass = modelClasses[modelName]
+    const ModelClass = this._modelClass(modelName)
 
     if (!ModelClass) return false
 
@@ -99,9 +164,27 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
   }
 
   /**
+   * Resolves a subscription name through frontend resources before falling back to a backing model name.
+   * @param {string} modelName - Frontend resource name.
+   * @returns {typeof import("../database/record/index.js").default | undefined} - Backing model class.
+   */
+  _modelClass(modelName) {
+    const configuration = this.session.configuration
+
+    for (const backendProject of configuration.getBackendProjects()) {
+      const resourceDefinition = frontendModelResourcesWithBuiltInsForBackendProject(backendProject)[modelName]
+      const resourceClass = resourceDefinition ? frontendModelResourceClassFromDefinition(resourceDefinition) : null
+
+      if (resourceClass?.ModelClass) return resourceClass.modelClass()
+    }
+
+    return configuration.getModelClasses()[modelName]
+  }
+
+  /**
    * Runs deliver broadcast.
    * @param {FrontendModelLifecycleBroadcastBody} body - Broadcast body.
-   * @param {{eventId?: string}} [meta] - Optional event metadata.
+   * @param {import("../http-server/websocket-channel.js").WebsocketBroadcastMetadata} [meta] - Optional server-side broadcast metadata.
    * @returns {Promise<void>} Resolves after delivery.
    */
   async deliverBroadcast(body, meta) {
@@ -111,33 +194,38 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
   /**
    * Runs deliver broadcast.
    * @param {FrontendModelLifecycleBroadcastBody} body - Broadcast body.
-   * @param {{eventId?: string}} [meta] - Optional event metadata.
+   * @param {import("../http-server/websocket-channel.js").WebsocketBroadcastMetadata} [meta] - Optional server-side broadcast metadata.
    * @returns {Promise<void>} Resolves after delivery.
    */
   async _deliverBroadcast(body, meta) {
     const hasEventFilters = this._hasEventFilterParams()
-
-    if (!this._hasProjectionParams() && !hasEventFilters) {
-      // Even unfiltered subscriptions must respect the subscriber's ability. A create/update carries
-      // the record, so only deliver it when the record is within the authenticated ability's scope.
-      // Destroys (and bodies without a usable id) carry no record, so pass them through unchanged.
-      if (body && typeof body === "object" && (body.action === "create" || body.action === "update") && body.id !== undefined && body.id !== null) {
-        const FrontendModelController = await this._frontendModelControllerClass()
-
-        if (!await this._eventIsAccessible(body.id, FrontendModelController)) return
-      }
-
-      this.sendMessage(body, meta)
-      return
-    }
 
     if (!body || typeof body !== "object") {
       if (!hasEventFilters || this._hasUnfilteredEventDelivery()) this.sendMessage(body, meta)
       return
     }
 
+    if (typeof body.model === "string" && body.model !== this._modelName()) return
+
     if (body.action === "destroy") {
-      if (!hasEventFilters || this._hasDestroyEventDelivery() || this._hasUnfilteredEventDelivery()) this.sendMessage(body, meta)
+      if (body.id === undefined || body.id === null) return
+
+      const FrontendModelController = await this._frontendModelControllerClass()
+      const authorized = await this._destroyEventIsAuthorized(
+        body,
+        FrontendModelController,
+        meta?.broadcastParams?.destroyAuthorizationRecord
+      )
+
+      if (!authorized) return
+
+      if (!hasEventFilters || this._hasDestroyEventDelivery() || this._hasUnfilteredEventDelivery()) {
+        this.sendMessage({
+          action: body.action,
+          id: body.id,
+          ...(typeof body.model === "string" ? {model: body.model} : {})
+        }, meta)
+      }
       return
     }
 
@@ -147,34 +235,42 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
     }
 
     const FrontendModelController = await this._frontendModelControllerClass()
-    const matchedEventFilterKeys = await this._matchedEventFilterKeysForEventId(body.id, FrontendModelController)
+    const matchedEventFilterKeys = hasEventFilters
+      ? await this._matchedEventFilterKeysForEventId(body.id, FrontendModelController)
+      : []
+    const isIdentityTransition = body.action === "update" && body.previousId !== undefined && body.previousId !== null
 
-    if (hasEventFilters && matchedEventFilterKeys.length === 0 && !this._hasUnfilteredEventDelivery()) {
+    if (hasEventFilters && matchedEventFilterKeys.length === 0 && !this._hasUnfilteredEventDelivery() && !isIdentityTransition) {
       return
+    }
+
+    const projectedRecord = await this._projectedRecordForEventId(body.id, FrontendModelController)
+
+    if (!projectedRecord) {
+      if (isIdentityTransition) {
+        this.sendMessage({
+          action: body.action,
+          id: body.id,
+          ...(hasEventFilters ? {matchedEventFilterKeys} : {}),
+          ...(typeof body.model === "string" ? {model: body.model} : {}),
+          previousId: body.previousId
+        }, meta)
+      }
+      return
+    }
+
+    const configuration = this.session.configuration
+
+    if (!configuration) {
+      throw new Error("Frontend model websocket channel has no configuration for transport serialization")
     }
 
     /**
      * Deliver body.
      * @type {FrontendModelLifecycleBroadcastBody} */
-    let deliverBody = body
-
-    if (this._hasProjectionParams()) {
-      const projectedRecord = await this._projectedRecordForEventId(body.id, FrontendModelController)
-
-      if (!projectedRecord) {
-        return
-      }
-
-      const configuration = this.session.configuration
-
-      if (!configuration) {
-        throw new Error("Frontend model websocket channel has no configuration for transport serialization")
-      }
-
-      deliverBody = {
-        ...deliverBody,
-        record: /** @type {import("./query.js").FrontendModelTransportValue} */ (serializeFrontendModelTransportValue(projectedRecord, transportSerializationOptionsForConfiguration(configuration)))
-      }
+    let deliverBody = {
+      ...body,
+      record: /** @type {import("./query.js").FrontendModelTransportValue} */ (serializeFrontendModelTransportValue(projectedRecord, transportSerializationOptionsForConfiguration(configuration)))
     }
 
     if (hasEventFilters) {
@@ -185,6 +281,103 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
     }
 
     this.sendMessage(deliverBody, meta)
+  }
+
+  /**
+   * Requires a resync for relevant destroy events because their authorization
+   * snapshots are intentionally excluded from the persisted replay payload.
+   * @param {import("../http-server/websocket-channel.js").WebsocketJsonValue} body - Persisted broadcast payload.
+   * @returns {boolean} - Whether replay cannot safely authorize this event.
+   */
+  _requiresReplayGap(body) {
+    if (!body || typeof body !== "object" || Array.isArray(body)) return false
+    if (!("action" in body) || body.action !== "destroy") return false
+    if (!("id" in body) || body.id === undefined || body.id === null) return false
+
+    return !("model" in body) || typeof body.model !== "string" || body.model === this._modelName()
+  }
+
+  /**
+   * Checks a destroy against the subscriber's ordinary authorized query by
+   * replacing the deleted backing table with the captured pre-delete row. Values
+   * are quoted on this trusted database connection; no broadcast-provided SQL is run.
+   * @param {FrontendModelLifecycleBroadcastBody} body - Destroy broadcast body.
+   * @param {typeof import("../frontend-model-controller.js").default} FrontendModelController - Server-side frontend-model controller class.
+   * @param {import("./query.js").FrontendModelTransportValue | undefined} destroyAuthorizationRecord - Server-only pre-delete record from live broadcast metadata.
+   * @returns {Promise<boolean>} - Whether the subscriber could read the record before deletion.
+   */
+  async _destroyEventIsAuthorized(body, FrontendModelController, destroyAuthorizationRecord) {
+    const id = body.id
+
+    if (id === undefined || id === null || !isDestroyAuthorizationRecord(destroyAuthorizationRecord)) return false
+
+    return await this._withEventTenant(id, async () => {
+      const controller = this._frontendModelController(FrontendModelController)
+
+      await controller.ensureFrontendModelClassInitialized()
+
+      const ModelClass = controller.frontendModelClass()
+      const primaryKey = controller.frontendModelPrimaryKey()
+      const ruleQueryFactory = () => this._destroyAuthorizationQuery(ModelClass, destroyAuthorizationRecord)
+      const query = controller.frontendModelAuthorizedQuery("find", {ruleQueryFactory})
+
+      this._applyDestroyAuthorizationRecordToQuery(query, ModelClass, destroyAuthorizationRecord)
+      query.where({
+        [ModelClass.tableName()]: frontendModelPrimaryKeyDatabaseConditions(ModelClass, primaryKey, id)
+      })
+
+      return Boolean(await query.first())
+    })
+  }
+
+  /**
+   * Builds a backing-model query whose source is the captured pre-delete row.
+   * @param {typeof import("../database/record/index.js").default} ModelClass - Backing model class.
+   * @param {DestroyAuthorizationRecord} destroyAuthorizationRecord - Captured pre-delete record.
+   * @returns {import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>} - One-row model query.
+   */
+  _destroyAuthorizationQuery(ModelClass, destroyAuthorizationRecord) {
+    const query = ModelClass._newQuery()
+
+    this._applyDestroyAuthorizationRecordToQuery(query, ModelClass, destroyAuthorizationRecord)
+
+    return query
+  }
+
+  /**
+   * Replaces a query's backing table with a safely quoted one-row derived table.
+   * @param {import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>} query - Query to update.
+   * @param {typeof import("../database/record/index.js").default} ModelClass - Backing model class.
+   * @param {DestroyAuthorizationRecord} destroyAuthorizationRecord - Captured pre-delete record.
+   * @returns {void}
+   */
+  _applyDestroyAuthorizationRecordToQuery(query, ModelClass, destroyAuthorizationRecord) {
+    const selectedColumns = Object.entries(destroyAuthorizationRecord).map(([columnName, serializedValue]) => {
+      const value = isDestroyAuthorizationBinary(serializedValue)
+        ? Buffer.from(serializedValue.value)
+        : deserializeFrontendModelTransportValue(serializedValue)
+      const column = ModelClass.getColumnsHash()[columnName]
+
+      if (!column) throw new Error(`Cannot authorize a destroyed ${ModelClass.name} with unknown column ${columnName}`)
+      const quotedValue = query.driver.getType() == "pgsql" && column.getType() === "ARRAY" && Array.isArray(value)
+        ? pgsqlArrayValueSql(query.driver, value)
+        : value === null ? "NULL" : query.driver.quote(value)
+
+      const selectedValue = query.driver.getType() == "pgsql"
+        ? `CAST(${quotedValue} AS ${column.getDatabaseType()})`
+        : quotedValue
+
+      return `${selectedValue} AS ${query.driver.quoteColumn(columnName)}`
+    })
+
+    if (selectedColumns.length === 0) {
+      throw new Error(`Cannot authorize a destroyed ${ModelClass.name} without captured attributes`)
+    }
+
+    const froms = query.getFroms()
+
+    froms.splice(0, froms.length)
+    query.from(`(SELECT ${selectedColumns.join(", ")}) AS ${query.driver.quoteTable(ModelClass.tableName())}`)
   }
 
   /**
@@ -225,19 +418,6 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
     return typeof this.params?.model === "string" && this.params.model.length > 0
       ? this.params.model
       : null
-  }
-
-  /**
-   * Runs has projection params.
-   * @returns {boolean} - Whether this subscription requested per-event record projection.
-   */
-  _hasProjectionParams() {
-    return this.params.select !== undefined
-      || this.params.selectsExtra !== undefined
-      || this.params.preload !== undefined
-      || this.params.withCount !== undefined
-      || this.params.abilities !== undefined
-      || this.params.queryData !== undefined
   }
 
   /**
@@ -359,7 +539,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
 
   /**
    * Resolves tenant for event.
-   * @param {string | number} id - Event record id.
+   * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} id - Event record id.
    * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolved tenant.
    */
   async _resolveEventTenant(id) {
@@ -390,7 +570,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
    * the subscriber's own tenant/ability scope. When no tenant resolves (non-multitenant configs), the
    * callback runs directly so the ambient context is preserved.
    * @template T
-   * @param {string | number} id - Event record id.
+   * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} id - Event record id.
    * @param {() => Promise<T>} callback - Authorized-query callback.
    * @returns {Promise<T>} - Callback result.
    */
@@ -413,29 +593,8 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
   }
 
   /**
-   * Whether the broadcast record is within the subscriber's authenticated ability scope. Used to gate
-   * unfiltered/unprojected create/update delivery so a scoped token never receives a record it cannot read.
-   * @param {string | number} id - Event record id.
-   * @param {typeof import("../frontend-model-controller.js").default} FrontendModelController - Server-side frontend-model controller class.
-   * @returns {Promise<boolean>} True when the record is readable by this subscription.
-   */
-  async _eventIsAccessible(id, FrontendModelController) {
-    return await this._withEventTenant(id, async () => {
-      const controller = this._frontendModelController(FrontendModelController)
-
-      await controller.ensureFrontendModelClassInitialized()
-
-      const ModelClass = controller.frontendModelClass()
-      const primaryKey = ModelClass.primaryKey()
-      const query = controller.frontendModelAuthorizedQuery("find").where({[ModelClass.tableName()]: {[primaryKey]: id}})
-
-      return Boolean(await query.first())
-    })
-  }
-
-  /**
    * Runs matched event filter keys for event id.
-   * @param {string | number} id - Event record id.
+   * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} id - Event record id.
    * @param {typeof import("../frontend-model-controller.js").default} FrontendModelController - Server-side frontend-model controller class.
    * @returns {Promise<string[]>} - Event filter keys matched by the record.
    */
@@ -463,7 +622,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
    * @param {object} args - Filter args.
    * @param {typeof import("../frontend-model-controller.js").default} args.FrontendModelController - Server-side frontend-model controller class.
    * @param {import("./query.js").FrontendModelEventFilterPayloadEntry} args.eventFilter - Event filter payload.
-   * @param {string | number} args.id - Event record id.
+   * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} args.id - Event record id.
    * @returns {Promise<boolean>} Whether the record matches the filter.
    */
   async _eventMatchesFilter({FrontendModelController, eventFilter, id}) {
@@ -477,12 +636,14 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
       await controller.ensureFrontendModelClassInitialized()
 
       const ModelClass = controller.frontendModelClass()
-      const primaryKey = ModelClass.primaryKey()
+      const primaryKey = controller.frontendModelPrimaryKey()
       const where = controller.frontendModelWhere()
       const joins = controller.frontendModelJoins()
       // Start from the subscriber's authorized scope so a filter can only ever match records the
       // subscription's ability permits to read.
-      let query = controller.frontendModelAuthorizedQuery("find").where({[ModelClass.tableName()]: {[primaryKey]: id}})
+      let query = controller.frontendModelAuthorizedQuery("find").where({
+        [ModelClass.tableName()]: frontendModelPrimaryKeyDatabaseConditions(ModelClass, primaryKey, id)
+      })
 
       if (where) controller.applyFrontendModelWhere({query, where})
       if (joins) controller.applyFrontendModelJoins({joins, query})
@@ -497,7 +658,7 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
 
   /**
    * Runs projected record for event id.
-   * @param {string | number} id - Event record id.
+   * @param {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} id - Event record id.
    * @param {typeof import("../frontend-model-controller.js").default} FrontendModelController - Server-side frontend-model controller class.
    * @returns {Promise<Record<string, import("./query.js").FrontendModelTransportValue> | null>} - Serialized projected record.
    */
@@ -508,10 +669,12 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
       await controller.ensureFrontendModelClassInitialized()
 
       const ModelClass = controller.frontendModelClass()
-      const primaryKey = ModelClass.primaryKey()
+      const primaryKey = controller.frontendModelPrimaryKey()
       // Reload through the subscriber's authorized scope so projected records are only ever sent for
       // rows the subscription's ability permits to read.
-      let query = controller.frontendModelAuthorizedQuery("find").where({[ModelClass.tableName()]: {[primaryKey]: id}})
+      let query = controller.frontendModelAuthorizedQuery("find").where({
+        [ModelClass.tableName()]: frontendModelPrimaryKeyDatabaseConditions(ModelClass, primaryKey, id)
+      })
       const preload = controller.frontendModelPreload()
 
       if (preload) query = query.preload(preload)

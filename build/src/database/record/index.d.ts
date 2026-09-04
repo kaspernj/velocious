@@ -128,7 +128,7 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
         modelClass: typeof VelociousDatabaseRecord;
         tenant: Record<string, unknown> | null | undefined;
     }) => string | undefined) | undefined;
-    static _primaryKey: string | undefined;
+    static _primaryKey: string | string[] | null | undefined;
     static _tableName: string | undefined;
     static _translationClass: {
         new (changes?: Record<string, any>): {
@@ -140,6 +140,10 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
              * Changes.
              * @type {Record<string, ReturnType<typeof JSON.parse>>} */
             _changes: Record<string, ReturnType<typeof JSON.parse>>;
+            /**
+             * Whether primary-key reads are pinned to the stored attributes.
+             * @type {boolean} */
+            _readsPersistedPrimaryKey: boolean;
             /**
              * Changes captured before a create audit is written.
              * @type {import("./auditing.js").AuditChanges | undefined} */
@@ -533,10 +537,21 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
              */
             _dependentRestrictProviderTenants(instanceRelationship: RestrictInstanceRelationship, TargetModelClass: typeof VelociousDatabaseRecord, identifier: string, provider: TenantDatabaseProviderType): Promise<Array<ReturnType<typeof JSON.parse>>>;
             /**
+             * Runs a callback while primary-key reads resolve to the persisted identity.
+             * @param {() => Promise<void>} callback - Callback that requires the stored identity.
+             * @returns {Promise<void>} - Resolves when the callback completes.
+             */
+            _withPersistedPrimaryKey(callback: () => Promise<void>): Promise<void>;
+            /**
              * Destroys the record in the database and all of its dependent records.
              * @returns {Promise<void>} - Resolves when complete.
              */
             destroy(): Promise<void>;
+            /**
+             * Runs the destroy lifecycle after the persisted identity has been restored.
+             * @returns {Promise<void>} - Resolves when complete.
+             */
+            _destroyPersistedRecord(): Promise<void>;
             /**
              * Emits a committed record-change event after the surrounding transaction
              * commits, so live queries re-run uniformly for local writes, pull applies, and
@@ -754,14 +769,14 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
             _markLoadedRelationshipsPreloadedAfterCreate(): void;
             /**
              * Applies the database insert response to this record.
-             * @param {{connection: import("../drivers/base.js").default, data: Record<string, string | number | boolean | Date | null | undefined>, insertResult: Array<Record<string, string | number | boolean | Date | null | undefined>> | null | undefined, primaryKey: string}} options - Pinned insert connection, inserted data, connection result, and primary key column name.
+             * @param {{connection: import("../drivers/base.js").default, data: Record<string, string | number | boolean | Date | null | undefined>, insertResult: Array<Record<string, string | number | boolean | Date | null | undefined>> | null | undefined, primaryKey: string | string[]}} options - Pinned insert connection, inserted data, connection result, and primary key column name.
              * @returns {Promise<void>} - Resolves when complete.
              */
             _applyInsertResult({ connection, data, insertResult, primaryKey }: {
                 connection: import("../drivers/base.js").default;
                 data: Record<string, string | number | boolean | Date | null | undefined>;
                 insertResult: Array<Record<string, string | number | boolean | Date | null | undefined>> | null | undefined;
-                primaryKey: string;
+                primaryKey: string | string[];
             }): Promise<void>;
             /**
              * Sets timestamp defaults for a new record insert.
@@ -782,9 +797,14 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
             _updateRecordWithChanges(): Promise<void>;
             /**
              * Runs id.
-             * @returns {number|string} - The id.
+             * @returns {import("../../utils/model-primary-key.js").ModelPrimaryKeyValue} - The id.
              */
-            id(): number | string;
+            id(): import("../../utils/model-primary-key.js").ModelPrimaryKeyValue;
+            /**
+             * Returns the identity represented by the last persisted database attributes.
+             * @returns {import("../../utils/model-primary-key.js").ModelPrimaryKeyValue} - Persisted identity.
+             */
+            _persistedPrimaryKeyValue(): import("../../utils/model-primary-key.js").ModelPrimaryKeyValue;
             /**
              * Runs is persisted.
              * @returns {boolean} - Whether persisted.
@@ -804,10 +824,10 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
             /**
              * Runs reload with id.
              * @template {typeof VelociousDatabaseRecord} MC
-             * @param {string | number} id - Record identifier.
+             * @param {import("../../utils/model-primary-key.js").ModelPrimaryKeyValue} id - Record identifier.
              * @returns {Promise<void>} - Resolves when complete.
              */
-            _reloadWithId<MC extends typeof VelociousDatabaseRecord>(id: string | number): Promise<void>;
+            _reloadWithId<MC extends typeof VelociousDatabaseRecord>(id: import("../../utils/model-primary-key.js").ModelPrimaryKeyValue): Promise<void>;
             /**
              * Runs reload.
              * @returns {Promise<void>} - Resolves when complete.
@@ -1644,11 +1664,11 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
         nextPrimaryKey(): Promise<number>;
         /**
          * Runs set primary key.
-         * @param {string} primaryKey - Primary key.
+         * @param {string | string[] | null} primaryKey - Primary key.
          * @returns {void} - No return value.
          */
-        setPrimaryKey(primaryKey: string): void;
-        _primaryKey: string | undefined;
+        setPrimaryKey(primaryKey: string | string[] | null): void;
+        _primaryKey: string | string[] | null | undefined;
         /**
          * Returns this class's own attribute-cast map, creating it on the class itself
          * (never inherited from a parent) so subclasses don't share the same object.
@@ -1674,9 +1694,9 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
         getAttributeCast(attributeName: string): string | undefined;
         /**
          * Runs primary key.
-         * @returns {string} - The primary key.
+         * @returns {string | string[]} - The primary key.
          */
-        primaryKey(): string;
+        primaryKey(): string | string[];
         /**
          * Whether the model has a single primary key column. `setPrimaryKey(null)` (e.g. composite-key
          * legacy tables) declares no single primary key; `primaryKey()` still falls back to "id" for the
@@ -1702,6 +1722,12 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
          * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the transaction.
          */
         transaction(callback: () => Promise<void>): Promise<ReturnType<typeof JSON.parse>>;
+        /**
+         * Prepares this model's attachment store before opening a model transaction.
+         * @param {import("../drivers/base.js").default} connection - Model connection.
+         * @returns {Promise<void>} - Resolves when the attachment schema is current.
+         */
+        _prepareAttachmentStoreSchema(connection: import("../drivers/base.js").default): Promise<void>;
         /**
          * Runs the callback while holding a named advisory lock. Calls without
          * By default calls use the caller connection. Calls with `dedicatedConnection`
@@ -1891,10 +1917,10 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
          * Runs find.
          * @template {typeof VelociousDatabaseRecord} MC
          * @this {MC}
-         * @param {number|string} recordId - Record id.
+         * @param {import("../../utils/model-primary-key.js").ModelPrimaryKeyValue} recordId - Record id.
          * @returns {Promise<InstanceType<MC>>} - Resolves with the find.
          */
-        find<MC extends typeof VelociousDatabaseRecord>(this: MC, recordId: number | string): Promise<InstanceType<MC>>;
+        find<MC extends typeof VelociousDatabaseRecord>(this: MC, recordId: import("../../utils/model-primary-key.js").ModelPrimaryKeyValue): Promise<InstanceType<MC>>;
         /**
          * Runs find by.
          * @template {typeof VelociousDatabaseRecord} MC
@@ -2179,6 +2205,10 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
      * Changes.
      * @type {Record<string, ReturnType<typeof JSON.parse>>} */
     _changes: Record<string, ReturnType<typeof JSON.parse>>;
+    /**
+     * Whether primary-key reads are pinned to the stored attributes.
+     * @type {boolean} */
+    _readsPersistedPrimaryKey: boolean;
     /**
      * Changes captured before a create audit is written.
      * @type {import("./auditing.js").AuditChanges | undefined} */
@@ -3071,10 +3101,10 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
     static nextPrimaryKey(): Promise<number>;
     /**
      * Runs set primary key.
-     * @param {string} primaryKey - Primary key.
+     * @param {string | string[] | null} primaryKey - Primary key.
      * @returns {void} - No return value.
      */
-    static setPrimaryKey(primaryKey: string): void;
+    static setPrimaryKey(primaryKey: string | string[] | null): void;
     /**
      * Returns this class's own attribute-cast map, creating it on the class itself
      * (never inherited from a parent) so subclasses don't share the same object.
@@ -3100,9 +3130,9 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
     static getAttributeCast(attributeName: string): string | undefined;
     /**
      * Runs primary key.
-     * @returns {string} - The primary key.
+     * @returns {string | string[]} - The primary key.
      */
-    static primaryKey(): string;
+    static primaryKey(): string | string[];
     /**
      * Whether the model has a single primary key column. `setPrimaryKey(null)` (e.g. composite-key
      * legacy tables) declares no single primary key; `primaryKey()` still falls back to "id" for the
@@ -3155,6 +3185,12 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
      * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the transaction.
      */
     static transaction(callback: () => Promise<void>): Promise<ReturnType<typeof JSON.parse>>;
+    /**
+     * Prepares this model's attachment store before opening a model transaction.
+     * @param {import("../drivers/base.js").default} connection - Model connection.
+     * @returns {Promise<void>} - Resolves when the attachment schema is current.
+     */
+    static _prepareAttachmentStoreSchema(connection: import("../drivers/base.js").default): Promise<void>;
     /**
      * Runs the callback while holding a named advisory lock. Calls without
      * By default calls use the caller connection. Calls with `dedicatedConnection`
@@ -3370,10 +3406,10 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
      * Runs find.
      * @template {typeof VelociousDatabaseRecord} MC
      * @this {MC}
-     * @param {number|string} recordId - Record id.
+     * @param {import("../../utils/model-primary-key.js").ModelPrimaryKeyValue} recordId - Record id.
      * @returns {Promise<InstanceType<MC>>} - Resolves with the find.
      */
-    static find<MC extends typeof VelociousDatabaseRecord>(this: MC, recordId: number | string): Promise<InstanceType<MC>>;
+    static find<MC extends typeof VelociousDatabaseRecord>(this: MC, recordId: import("../../utils/model-primary-key.js").ModelPrimaryKeyValue): Promise<InstanceType<MC>>;
     /**
      * Runs find by.
      * @template {typeof VelociousDatabaseRecord} MC
@@ -3642,10 +3678,21 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
      */
     _dependentRestrictProviderTenants(instanceRelationship: RestrictInstanceRelationship, TargetModelClass: typeof VelociousDatabaseRecord, identifier: string, provider: TenantDatabaseProviderType): Promise<Array<ReturnType<typeof JSON.parse>>>;
     /**
+     * Runs a callback while primary-key reads resolve to the persisted identity.
+     * @param {() => Promise<void>} callback - Callback that requires the stored identity.
+     * @returns {Promise<void>} - Resolves when the callback completes.
+     */
+    _withPersistedPrimaryKey(callback: () => Promise<void>): Promise<void>;
+    /**
      * Destroys the record in the database and all of its dependent records.
      * @returns {Promise<void>} - Resolves when complete.
      */
     destroy(): Promise<void>;
+    /**
+     * Runs the destroy lifecycle after the persisted identity has been restored.
+     * @returns {Promise<void>} - Resolves when complete.
+     */
+    _destroyPersistedRecord(): Promise<void>;
     /**
      * Emits a committed record-change event after the surrounding transaction
      * commits, so live queries re-run uniformly for local writes, pull applies, and
@@ -3863,14 +3910,14 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
     _markLoadedRelationshipsPreloadedAfterCreate(): void;
     /**
      * Applies the database insert response to this record.
-     * @param {{connection: import("../drivers/base.js").default, data: Record<string, string | number | boolean | Date | null | undefined>, insertResult: Array<Record<string, string | number | boolean | Date | null | undefined>> | null | undefined, primaryKey: string}} options - Pinned insert connection, inserted data, connection result, and primary key column name.
+     * @param {{connection: import("../drivers/base.js").default, data: Record<string, string | number | boolean | Date | null | undefined>, insertResult: Array<Record<string, string | number | boolean | Date | null | undefined>> | null | undefined, primaryKey: string | string[]}} options - Pinned insert connection, inserted data, connection result, and primary key column name.
      * @returns {Promise<void>} - Resolves when complete.
      */
     _applyInsertResult({ connection, data, insertResult, primaryKey }: {
         connection: import("../drivers/base.js").default;
         data: Record<string, string | number | boolean | Date | null | undefined>;
         insertResult: Array<Record<string, string | number | boolean | Date | null | undefined>> | null | undefined;
-        primaryKey: string;
+        primaryKey: string | string[];
     }): Promise<void>;
     /**
      * Sets timestamp defaults for a new record insert.
@@ -3891,9 +3938,14 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
     _updateRecordWithChanges(): Promise<void>;
     /**
      * Runs id.
-     * @returns {number|string} - The id.
+     * @returns {import("../../utils/model-primary-key.js").ModelPrimaryKeyValue} - The id.
      */
-    id(): number | string;
+    id(): import("../../utils/model-primary-key.js").ModelPrimaryKeyValue;
+    /**
+     * Returns the identity represented by the last persisted database attributes.
+     * @returns {import("../../utils/model-primary-key.js").ModelPrimaryKeyValue} - Persisted identity.
+     */
+    _persistedPrimaryKeyValue(): import("../../utils/model-primary-key.js").ModelPrimaryKeyValue;
     /**
      * Runs is persisted.
      * @returns {boolean} - Whether persisted.
@@ -3913,10 +3965,10 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
     /**
      * Runs reload with id.
      * @template {typeof VelociousDatabaseRecord} MC
-     * @param {string | number} id - Record identifier.
+     * @param {import("../../utils/model-primary-key.js").ModelPrimaryKeyValue} id - Record identifier.
      * @returns {Promise<void>} - Resolves when complete.
      */
-    _reloadWithId<MC extends typeof VelociousDatabaseRecord>(id: string | number): Promise<void>;
+    _reloadWithId<MC extends typeof VelociousDatabaseRecord>(id: import("../../utils/model-primary-key.js").ModelPrimaryKeyValue): Promise<void>;
     /**
      * Runs reload.
      * @returns {Promise<void>} - Resolves when complete.
