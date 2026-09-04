@@ -5,6 +5,43 @@ import SynchronizedAssetCache from "../../src/sync/assets/cache.js"
 import { bytes, descriptor, MemoryAssetCacheAdapter, PausedBlobLookupAssetCacheAdapter, PausedDeleteAssetCacheAdapter, PausedWriteAssetCacheAdapter } from "../helpers/synchronized-asset-cache.js"
 
 describe("SynchronizedAssetCache eviction", {databaseCleaning: {transaction: false, truncate: false}}, () => {
+  it("enforces the byte budget incrementally during eager synchronization", async () => {
+    class PeakBytesAssetCacheAdapter extends MemoryAssetCacheAdapter {
+      constructor() {
+        super()
+        this.maximumStoredBytes = 0
+      }
+
+      /** @param {{accountId: string, bytes: Uint8Array, contentType: string | null, digest: string}} args Blob write. @returns {Promise<string>} Resolvable URI. */
+      async writeBlob(args) {
+        const uri = await super.writeBlob(args)
+        const storedBytes = [...this.blobs.values()].reduce((total, blob) => total + blob.byteLength, 0)
+
+        this.maximumStoredBytes = Math.max(this.maximumStoredBytes, storedBytes)
+
+        return uri
+      }
+    }
+
+    const contents = [bytes([90, 91, 92]), bytes([93, 94, 95]), bytes([96, 97, 98]), bytes([99, 100, 101])]
+    const assets = contents.map((content, index) => descriptor({bytes: content, id: `asset-${index}`}))
+    const contentsById = new Map(assets.map((asset, index) => [asset.id, contents[index]]))
+    const adapter = new PeakBytesAssetCacheAdapter()
+    const cache = new SynchronizedAssetCache({
+      accountId: "account-1",
+      adapter,
+      download: async (asset) => /** @type {Uint8Array} */ (contentsById.get(asset.id)),
+      maxBytes: 3
+    })
+
+    await cache.synchronize({descriptors: assets, online: true, scopeKey: "users"})
+
+    const storedBytes = [...adapter.blobs.values()].reduce((total, blob) => total + blob.byteLength, 0)
+
+    expect(adapter.maximumStoredBytes).toBeLessThanOrEqual(6)
+    expect(storedBytes).toBeLessThanOrEqual(3)
+  })
+
   it("waits for an in-flight eviction before resolving the same digest", async () => {
     const content = bytes([67, 68, 69])
     const asset = descriptor({bytes: content})

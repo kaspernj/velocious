@@ -10,9 +10,11 @@
   blobs from deletion or eviction throughout active cache lookup and download
   operations.
 - Serialize per-digest deletion with new cache activity, recheck live retention
-  before eviction, and count shared download failures once per network attempt.
-- Retain digest protection through eager synchronization and release every
-  incoming digest when one pending-deletion finalizer fails.
+  before eviction, and keep late callers on the same failed download while
+  persisting retry metadata for every participating descriptor.
+- Retain each digest's protection through its eager processing, enforce cleanup
+  between digest groups, and release every remaining incoming digest when one
+  pending-deletion finalizer fails.
 - Persist descriptor reconciliation before exposing it through shared cache
   state, retaining the last committed descriptors after a rejected write while
   preserving queued deletion work across an earlier persistence rollback.

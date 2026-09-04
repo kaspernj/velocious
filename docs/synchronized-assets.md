@@ -54,9 +54,12 @@ without exposing a partially reconciled descriptor set.
 `synchronize` downloads eligible eager descriptors and returns both attempted
 download failures and required asset ids in that scope that remain absent. It
 does not hide a failed authenticated request or corrupt payload. Incoming
-digests stay protected through eager processing. Removing the last reference
-while descriptor persistence, a cache lookup, or a download is active schedules
-any completed blob for deletion instead of leaving unreferenced bytes behind.
+digests stay protected until their eager descriptors finish, then become
+eligible for cleanup before the next digest downloads. This bounds temporary
+storage growth to the current atomic blob write instead of the complete eager
+manifest. Removing the last reference while descriptor persistence, a cache
+lookup, or a download is active schedules any completed blob for deletion
+instead of leaving unreferenced bytes behind.
 
 Call `resolve({assetId, online})` when rendering an asset. A cached URI is
 returned immediately. An absent on-demand asset downloads when online; offline
@@ -78,9 +81,10 @@ converts it to an immediately eligible failed attempt, so interrupted work
 resumes without treating a partial file as valid.
 
 Requests for one digest are single-flighted. Different descriptors with the
-same digest share one stored blob, including concurrent requests. A failed
-shared download advances retry metadata once per participating descriptor,
-regardless of how many callers awaited that network attempt.
+same digest share one stored blob, including callers that arrive while failure
+metadata is still persisting. A failed shared download advances retry metadata
+once per participating descriptor, regardless of how many callers awaited that
+network attempt.
 
 ## Adapter contract
 

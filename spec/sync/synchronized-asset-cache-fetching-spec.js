@@ -3,7 +3,7 @@
 import { deferred } from "awaitery"
 import { describe, expect, it } from "../../src/testing/test.js"
 import SynchronizedAssetCache from "../../src/sync/assets/cache.js"
-import { bytes, DelayedSaveAssetCacheAdapter, descriptor, MemoryAssetCacheAdapter } from "../helpers/synchronized-asset-cache.js"
+import { bytes, DelayedSaveAssetCacheAdapter, descriptor, MemoryAssetCacheAdapter, PausedSaveAssetCacheAdapter } from "../helpers/synchronized-asset-cache.js"
 
 describe("SynchronizedAssetCache fetching", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("eagerly downloads verified bytes once and returns the cached URI", async () => {
@@ -182,6 +182,71 @@ describe("SynchronizedAssetCache fetching", {databaseCleaning: {transaction: fal
     ])
     expect(downloadCount).toEqual(1)
     expect(adapter.maximumActiveSaveCount).toEqual(1)
+  })
+
+  it("joins a failed digest flight while its retry metadata is still persisting", async () => {
+    const content = bytes([102, 103, 104])
+    const firstAsset = descriptor({bytes: content, fetch: "on-demand", id: "attachment-1"})
+    const secondAsset = {...descriptor({bytes: content, fetch: "on-demand", id: "attachment-2"}), recordId: "user-2"}
+    const downloadStarted = deferred()
+    const releaseDownload = deferred()
+    const secondDownloadingSaveStarted = deferred()
+    const adapter = new PausedSaveAssetCacheAdapter()
+
+    class ObservedSynchronizedAssetCache extends SynchronizedAssetCache {
+      /** @returns {Promise<void>} Resolves after state persistence. */
+      async saveState() {
+        if (this.state && this.state.assets.some((entry) => entry.descriptor.id === secondAsset.id && entry.status === "downloading")) {
+          secondDownloadingSaveStarted.resolve(undefined)
+        }
+
+        await super.saveState()
+      }
+    }
+
+    let downloadCount = 0
+    const cache = new ObservedSynchronizedAssetCache({
+      accountId: "account-1",
+      adapter,
+      download: async () => {
+        downloadCount += 1
+
+        if (downloadCount > 1) return content
+
+        downloadStarted.resolve(undefined)
+        await releaseDownload.promise
+        throw new Error("planned download failure")
+      },
+      maxBytes: 1024,
+      now: () => new Date(1000),
+      retryBaseDelayMs: 500
+    })
+
+    await cache.synchronize({descriptors: [firstAsset, secondAsset], online: true, scopeKey: "users"})
+
+    const firstResolve = cache.resolve({assetId: firstAsset.id, online: true})
+
+    await downloadStarted.promise
+    adapter.pauseNextSave = true
+    releaseDownload.resolve(undefined)
+    await adapter.saveCommitted.promise
+
+    const secondResolve = cache.resolve({assetId: secondAsset.id, online: true})
+
+    await secondDownloadingSaveStarted.promise
+    adapter.releaseSave.resolve(undefined)
+
+    const results = await Promise.allSettled([firstResolve, secondResolve])
+    const persistedState = await adapter.loadState({accountId: "account-1"})
+
+    if (!persistedState) throw new Error("Expected persisted asset cache state")
+
+    expect(results.map((result) => result.status)).toEqual(["rejected", "rejected"])
+    expect(downloadCount).toEqual(1)
+    expect(persistedState.assets.map((entry) => ({attempts: entry.attempts, nextRetryAt: entry.nextRetryAt, status: entry.status}))).toEqual([
+      {attempts: 1, nextRetryAt: 1500, status: "failed"},
+      {attempts: 1, nextRetryAt: 1500, status: "failed"}
+    ])
   })
 
   it("counts one failed single-flight download as one retry attempt", async () => {

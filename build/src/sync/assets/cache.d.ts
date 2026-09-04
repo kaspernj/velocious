@@ -14,8 +14,14 @@ export default class SynchronizedAssetCache {
     activeDigestCounts: Map<string, number>;
     /** @type {Map<string, Promise<void>>} */
     deletionPromises: Map<string, Promise<void>>;
-    /** @type {Map<string, Promise<string>>} */
-    downloadPromises: Map<string, Promise<string>>;
+    /** @type {Map<string, Promise<{error: Error, uri: null} | {error: null, uri: string}>>} */
+    downloadPromises: Map<string, Promise<{
+        error: Error;
+        uri: null;
+    } | {
+        error: null;
+        uri: string;
+    }>>;
     /** @type {import("./types.js").SynchronizedAssetCacheState | null} */
     state: import("./types.js").SynchronizedAssetCacheState | null;
     /** @type {Promise<import("./types.js").SynchronizedAssetCacheState> | null} */
@@ -147,11 +153,17 @@ export default class SynchronizedAssetCache {
         uri: string | null;
     }>;
     /**
-     * Downloads one digest and records a shared attempt failure once.
+     * Persists download intent, then downloads one digest and records a shared failure once.
      * @param {import("./types.js").SynchronizedAssetCacheDescriptor} descriptor Asset descriptor.
-     * @returns {Promise<string>} Adapter URI.
+     * @returns {Promise<{error: Error, uri: null} | {error: null, uri: string}>} Shared cache result.
      */
-    downloadAndRecordFailure(descriptor: import("./types.js").SynchronizedAssetCacheDescriptor): Promise<string>;
+    downloadAfterPersistingState(descriptor: import("./types.js").SynchronizedAssetCacheDescriptor): Promise<{
+        error: Error;
+        uri: null;
+    } | {
+        error: null;
+        uri: string;
+    }>;
     /**
      * Advances retry metadata for every live descriptor sharing one failed digest.
      * @param {string} digest Content digest.

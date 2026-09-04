@@ -39,7 +39,7 @@ export default class SynchronizedAssetCache {
     this.activeDigestCounts = new Map()
     /** @type {Map<string, Promise<void>>} */
     this.deletionPromises = new Map()
-    /** @type {Map<string, Promise<string>>} */
+    /** @type {Map<string, Promise<{error: Error, uri: null} | {error: null, uri: string}>>} */
     this.downloadPromises = new Map()
     /** @type {import("./types.js").SynchronizedAssetCacheState | null} */
     this.state = null
@@ -60,34 +60,55 @@ export default class SynchronizedAssetCache {
    */
   async synchronize({descriptors, online, scopeKey}) {
     await this.loadState()
-    const incomingDigests = [...new Set(descriptors.map((asset) => asset.digest))]
+    /** @type {Map<string, import("./types.js").SynchronizedAssetCacheDescriptor[]>} */
+    const descriptorsByDigest = new Map()
     /** @type {import("./types.js").SynchronizedAssetCacheFailure[]} */
     const failures = []
+    /** @type {Set<string>} */
+    const activeDigests = new Set()
 
-    for (const digest of incomingDigests) await this.beginActiveDigest(digest)
+    for (const descriptor of descriptors) {
+      const digestDescriptors = descriptorsByDigest.get(descriptor.digest) || []
 
-    /** @type {Map<string, import("./types.js").SynchronizedAssetCacheEntry>} */
-    let entriesById
+      digestDescriptors.push(descriptor)
+      descriptorsByDigest.set(descriptor.digest, digestDescriptors)
+    }
 
     try {
-      entriesById = await this.reconcileDescriptors({descriptors, scopeKey})
+      for (const digest of descriptorsByDigest.keys()) {
+        await this.beginActiveDigest(digest)
+        activeDigests.add(digest)
+      }
+
+      const entriesById = await this.reconcileDescriptors({descriptors, scopeKey})
+
       await this.deleteUnreferencedDigests()
 
-      if (online) {
-        for (const asset of descriptors) {
-          if (asset.fetch !== "eager") continue
+      for (const [digest, digestDescriptors] of descriptorsByDigest) {
+        const eagerDescriptors = online ? digestDescriptors.filter((descriptor) => descriptor.fetch === "eager") : []
 
-          const entry = entriesById.get(asset.id)
+        if (eagerDescriptors.length === 0) {
+          activeDigests.delete(digest)
+          await this.finishActiveDigest(digest)
+          continue
+        }
+
+        for (const descriptor of eagerDescriptors) {
+          const entry = entriesById.get(descriptor.id)
 
           if (!entry || !this.retryEligible(entry)) continue
 
           const cacheResult = await this.ensureCachedWhileActive(entry)
 
-          if (cacheResult.error) failures.push({assetId: asset.id, error: cacheResult.error})
+          if (cacheResult.error) failures.push({assetId: descriptor.id, error: cacheResult.error})
         }
+
+        activeDigests.delete(digest)
+        await this.finishActiveDigest(digest)
+        await this.cleanup()
       }
     } finally {
-      await this.finishActiveDigests(incomingDigests)
+      await this.finishActiveDigests([...activeDigests])
     }
 
     await this.cleanup()
@@ -458,20 +479,26 @@ export default class SynchronizedAssetCache {
     }
 
     entry.status = "downloading"
-    await this.saveState()
-
     const digest = entry.descriptor.digest
     let downloadPromise = this.downloadPromises.get(digest)
     let ownsDownloadPromise = false
 
     if (!downloadPromise) {
-      downloadPromise = this.downloadAndRecordFailure(entry.descriptor)
+      downloadPromise = this.downloadAfterPersistingState(entry.descriptor)
       this.downloadPromises.set(digest, downloadPromise)
       ownsDownloadPromise = true
+    } else {
+      await this.saveState()
     }
 
     try {
-      const uri = await downloadPromise
+      const cacheResult = await downloadPromise
+
+      if (cacheResult.error) {
+        if (entry.status === "downloading") await this.recordDownloadFailure(digest)
+
+        return cacheResult
+      }
 
       entry.attempts = 0
       entry.lastAccessedAt = this.nowMilliseconds()
@@ -479,11 +506,7 @@ export default class SynchronizedAssetCache {
       entry.status = "cached"
       await this.saveState()
 
-      return {error: null, uri}
-    } catch (error) {
-      const failure = error instanceof Error ? error : new Error(String(error))
-
-      return {error: failure, uri: null}
+      return cacheResult
     } finally {
       if (ownsDownloadPromise && this.downloadPromises.get(digest) === downloadPromise) {
         this.downloadPromises.delete(digest)
@@ -492,18 +515,21 @@ export default class SynchronizedAssetCache {
   }
 
   /**
-   * Downloads one digest and records a shared attempt failure once.
+   * Persists download intent, then downloads one digest and records a shared failure once.
    * @param {import("./types.js").SynchronizedAssetCacheDescriptor} descriptor Asset descriptor.
-   * @returns {Promise<string>} Adapter URI.
+   * @returns {Promise<{error: Error, uri: null} | {error: null, uri: string}>} Shared cache result.
    */
-  async downloadAndRecordFailure(descriptor) {
+  async downloadAfterPersistingState(descriptor) {
+    await this.saveState()
+
     try {
-      return await this.downloadVerified(descriptor)
+      return {error: null, uri: await this.downloadVerified(descriptor)}
     } catch (error) {
       const failure = error instanceof Error ? error : new Error(String(error))
 
       await this.recordDownloadFailure(descriptor.digest)
-      throw failure
+
+      return {error: failure, uri: null}
     }
   }
 
