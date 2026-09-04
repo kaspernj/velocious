@@ -73,7 +73,9 @@ converts it to an immediately eligible failed attempt, so interrupted work
 resumes without treating a partial file as valid.
 
 Requests for one digest are single-flighted. Different descriptors with the
-same digest share one stored blob, including concurrent requests.
+same digest share one stored blob, including concurrent requests. A failed
+shared download advances retry metadata once per participating descriptor,
+regardless of how many callers awaited that network attempt.
 
 ## Adapter contract
 
@@ -93,7 +95,9 @@ An adapter implements the `SynchronizedAssetCacheAdapter` typedef from
 The cache records an unreferenced digest before asking the adapter to delete
 it, then clears that record only after deletion succeeds. A transient deletion
 failure therefore rejects the current synchronization and is retried by the
-next synchronization, including after a process restart.
+next synchronization, including after a process restart. Blob deletion is
+serialized per digest with new lookup and descriptor-reconciliation work, so a
+caller cannot receive a URI or offline-ready result for bytes being removed.
 
 Every operation includes `accountId`. Adapters must use it as a physical
 namespace rather than trusting a digest to isolate users. Signing out or
@@ -111,8 +115,10 @@ pressure handling.
 to it. When the unique cached total exceeds `maxBytes`, it removes the
 least-recently-used blob whose live references are all `evictable`. A blob with
 any `durable` reference or an active lookup/download operation is retained even
-when that leaves the cache above its budget. Evicted descriptor metadata
-remains, allowing the bytes to be fetched again later.
+when that leaves the cache above its budget. Retention references are re-read
+inside the protected deletion boundary so synchronization cannot add a durable
+reference after the eviction decision. Evicted descriptor metadata remains,
+allowing the bytes to be fetched again later.
 
 The `missingRequiredAssetIds` result is the offline-readiness boundary. A sync
 coordinator must not mark a scope offline-ready while this list is non-empty.

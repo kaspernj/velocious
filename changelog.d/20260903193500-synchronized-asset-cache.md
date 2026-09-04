@@ -9,3 +9,5 @@
 - Reject immutable descriptor conflicts before mutating cache state and protect
   blobs from deletion or eviction throughout active cache lookup and download
   operations.
+- Serialize per-digest deletion with new cache activity, recheck live retention
+  before eviction, and count shared download failures once per network attempt.

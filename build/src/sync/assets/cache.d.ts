@@ -12,6 +12,8 @@ export default class SynchronizedAssetCache {
     retryMaxDelayMs: number;
     /** @type {Map<string, number>} */
     activeDigestCounts: Map<string, number>;
+    /** @type {Map<string, Promise<void>>} */
+    deletionPromises: Map<string, Promise<void>>;
     /** @type {Map<string, Promise<string>>} */
     downloadPromises: Map<string, Promise<string>>;
     /** @type {import("./types.js").SynchronizedAssetCacheState | null} */
@@ -107,23 +109,41 @@ export default class SynchronizedAssetCache {
         uri: string | null;
     }>;
     /**
+     * Downloads one digest and records a shared attempt failure once.
+     * @param {import("./types.js").SynchronizedAssetCacheDescriptor} descriptor Asset descriptor.
+     * @returns {Promise<string>} Adapter URI.
+     */
+    downloadAndRecordFailure(descriptor: import("./types.js").SynchronizedAssetCacheDescriptor): Promise<string>;
+    /**
+     * Advances retry metadata for every live descriptor sharing one failed digest.
+     * @param {string} digest Content digest.
+     * @returns {Promise<void>} Resolves after persistence.
+     */
+    recordDownloadFailure(digest: string): Promise<void>;
+    /**
      * Downloads, verifies, and atomically persists one content digest.
      * @param {import("./types.js").SynchronizedAssetCacheDescriptor} descriptor Asset descriptor.
      * @returns {Promise<string>} Adapter URI.
      */
     downloadVerified(descriptor: import("./types.js").SynchronizedAssetCacheDescriptor): Promise<string>;
     /**
-     * Resolves an existing local URI and repairs stale cached metadata.
+     * Resolves an existing local URI after waiting for deletion work.
      * @param {import("./types.js").SynchronizedAssetCacheEntry} entry Descriptor state.
      * @returns {Promise<string | null>} Existing URI.
      */
     cachedUri(entry: import("./types.js").SynchronizedAssetCacheEntry): Promise<string | null>;
     /**
-     * Protects a digest for the duration of one active cache operation.
-     * @param {string} digest Content digest.
-     * @returns {void}
+     * Resolves an existing local URI while its digest is protected.
+     * @param {import("./types.js").SynchronizedAssetCacheEntry} entry Descriptor state.
+     * @returns {Promise<string | null>} Existing URI.
      */
-    beginActiveDigest(digest: string): void;
+    cachedUriWhileActive(entry: import("./types.js").SynchronizedAssetCacheEntry): Promise<string | null>;
+    /**
+     * Waits for deletion and protects a digest for one active cache operation.
+     * @param {string} digest Content digest.
+     * @returns {Promise<void>} Resolves after protection is registered.
+     */
+    beginActiveDigest(digest: string): Promise<void>;
     /**
      * Releases one cache operation and processes deferred deletion after the last.
      * @param {string} digest Content digest.
@@ -141,6 +161,13 @@ export default class SynchronizedAssetCache {
      * @returns {Promise<void>} Resolves after any required deletion.
      */
     deletePendingDigestIfUnreferenced(digest: string): Promise<void>;
+    /**
+     * Runs one deletion only after earlier deletion work and when no cache operation owns the digest.
+     * @param {string} digest Content digest.
+     * @param {() => Promise<boolean>} callback Protected deletion callback.
+     * @returns {Promise<boolean>} Whether the callback deleted the blob.
+     */
+    deleteDigestIfInactive(digest: string, callback: () => Promise<boolean>): Promise<boolean>;
     /**
      * Finds required assets without locally cached bytes.
      * @param {string} scopeKey Synchronized scope to inspect.

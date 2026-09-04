@@ -112,6 +112,22 @@ class FailNextDeleteAssetCacheAdapter extends MemoryAssetCacheAdapter {
   }
 }
 
+/** Adapter that pauses exactly the next blob deletion before removing bytes. */
+class PausedDeleteAssetCacheAdapter extends MemoryAssetCacheAdapter {
+  constructor() {
+    super()
+    this.blobDeletionStarted = deferred()
+    this.releaseBlobDeletion = deferred()
+  }
+
+  /** @param {{accountId: string, digest: string}} args Blob identity. @returns {Promise<void>} */
+  async deleteBlob(args) {
+    this.blobDeletionStarted.resolve(undefined)
+    await this.releaseBlobDeletion.promise
+    await super.deleteBlob(args)
+  }
+}
+
 /** Adapter that pauses after atomically committing blob bytes. */
 class PausedWriteAssetCacheAdapter extends MemoryAssetCacheAdapter {
   constructor() {
@@ -362,6 +378,46 @@ describe("SynchronizedAssetCache", {databaseCleaning: {transaction: false, trunc
     expect(adapter.maximumActiveSaveCount).toEqual(1)
   })
 
+  it("counts one failed single-flight download as one retry attempt", async () => {
+    const content = bytes([64, 65, 66])
+    const asset = descriptor({bytes: content, fetch: "on-demand"})
+    const adapter = new MemoryAssetCacheAdapter()
+    const downloadStarted = deferred()
+    const releaseDownload = deferred()
+    let downloadCount = 0
+    const cache = new SynchronizedAssetCache({
+      accountId: "account-1",
+      adapter,
+      download: async () => {
+        downloadCount += 1
+        downloadStarted.resolve(undefined)
+        await releaseDownload.promise
+        throw new Error("planned download failure")
+      },
+      maxBytes: 1024,
+      now: () => new Date(1000),
+      retryBaseDelayMs: 500
+    })
+
+    await cache.synchronize({descriptors: [asset], online: true, scopeKey: "users"})
+
+    const firstResolve = cache.resolve({assetId: asset.id, online: true})
+    const secondResolve = cache.resolve({assetId: asset.id, online: true})
+
+    await downloadStarted.promise
+    releaseDownload.resolve(undefined)
+
+    const results = await Promise.allSettled([firstResolve, secondResolve])
+    const persistedState = adapter.states.get("account-1")
+
+    if (!persistedState) throw new Error("Expected persisted asset cache state")
+
+    expect(results.map((result) => result.status)).toEqual(["rejected", "rejected"])
+    expect(downloadCount).toEqual(1)
+    expect(persistedState.assets[0].attempts).toEqual(1)
+    expect(persistedState.assets[0].nextRetryAt).toEqual(1500)
+  })
+
   it("reports missing required assets only for the synchronized scope", async () => {
     const firstContent = bytes([31, 32, 33])
     const secondContent = bytes([34, 35, 36])
@@ -497,6 +553,32 @@ describe("SynchronizedAssetCache", {databaseCleaning: {transaction: false, trunc
     expect(adapter.deletedBlobKeys).toEqual([`account-1:${asset.digest}`])
   })
 
+  it("waits for an in-flight eviction before resolving the same digest", async () => {
+    const content = bytes([67, 68, 69])
+    const asset = descriptor({bytes: content})
+    const adapter = new PausedDeleteAssetCacheAdapter()
+    const cache = new SynchronizedAssetCache({
+      accountId: "account-1",
+      adapter,
+      download: async () => content,
+      maxBytes: 1024
+    })
+
+    await cache.synchronize({descriptors: [asset], online: true, scopeKey: "users"})
+    cache.maxBytes = 0
+
+    const cleanupPromise = cache.cleanup()
+
+    await adapter.blobDeletionStarted.promise
+
+    const resolvePromise = cache.resolve({assetId: asset.id, online: false})
+
+    adapter.releaseBlobDeletion.resolve(undefined)
+
+    expect(await cleanupPromise).toEqual(content.byteLength)
+    expect(await resolvePromise).toEqual(null)
+  })
+
   it("does not evict a blob while its download is still completing", async () => {
     const content = bytes([58, 59, 60])
     const asset = descriptor({bytes: content, fetch: "on-demand"})
@@ -595,6 +677,36 @@ describe("SynchronizedAssetCache", {databaseCleaning: {transaction: false, trunc
     expect(await cache.resolve({assetId: newAsset.id, online: false})).toEqual(`memory://account-1:${newAsset.digest}`)
     expect(await cache.resolve({assetId: durableAsset.id, online: false})).toEqual(`memory://account-1:${durableAsset.digest}`)
     expect(adapter.deletedBlobKeys).toEqual([`account-1:${oldAsset.digest}`])
+  })
+
+  it("rechecks live durable references before evicting a digest", async () => {
+    const content = bytes([70, 71, 72])
+    const evictableAsset = descriptor({bytes: content, id: "evictable"})
+    const durableAsset = {
+      ...descriptor({bytes: content, id: "durable", retention: "durable"}),
+      recordId: "user-2"
+    }
+    const adapter = new PausedBlobLookupAssetCacheAdapter()
+    const cache = new SynchronizedAssetCache({
+      accountId: "account-1",
+      adapter,
+      download: async () => content,
+      maxBytes: 1024
+    })
+
+    await cache.synchronize({descriptors: [evictableAsset], online: true, scopeKey: "first-scope"})
+    cache.maxBytes = 0
+    adapter.pauseNextBlobLookup = true
+
+    const cleanupPromise = cache.cleanup()
+
+    await adapter.blobLookupStarted.promise
+    await cache.synchronize({descriptors: [durableAsset], online: false, scopeKey: "second-scope"})
+    adapter.releaseBlobLookup.resolve(undefined)
+
+    expect(await cleanupPromise).toEqual(0)
+    expect(adapter.blobs.size).toEqual(1)
+    expect(await cache.resolve({assetId: durableAsset.id, online: false})).toEqual(`memory://account-1:${durableAsset.digest}`)
   })
 
   it("keeps state and bytes isolated by account namespace", async () => {
