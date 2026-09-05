@@ -2,11 +2,11 @@ import FrontendModelBase from "../frontend-models/base.js";
 export type FrontendModelResourceConfig = import("../frontend-models/base.js").FrontendModelResourceConfig;
 export type FrontendModelClass = import("../frontend-models/base.js").FrontendModelClass;
 export type FrontendModelHookTestCreateUpdatePayload = {
-    id: import("../utils/model-primary-key.js").ModelPrimaryKeyValue;
+    id: import("../frontend-models/base.js").FrontendModelEventPrimaryKeyValue;
     model: FrontendModelBase;
 };
 export type FrontendModelHookTestDestroyPayload = {
-    id: import("../utils/model-primary-key.js").ModelPrimaryKeyValue;
+    id: import("../frontend-models/base.js").FrontendModelEventPrimaryKeyValue;
 };
 export type ErasedFrontendModelHookCallback = (payload: never) => void;
 export type FakeSubscriptions = {

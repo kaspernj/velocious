@@ -973,15 +973,25 @@ export default class ReportResource extends FrontendModelBaseResource {
 
     await cli.execute()
 
-    const userContents = await fs.readFile(`${dummyDirectory()}/src/frontend-models/composite-primary-key-user.js`, "utf8")
+    const generatedUserPath = `${dummyDirectory()}/src/frontend-models/composite-primary-key-user.js`
+    const userContents = await fs.readFile(generatedUserPath, "utf8")
 
     expect(userContents).toContain("@property {number} legacyID - Attribute value.")
     expect(userContents).toContain("@property {number} tenantID - Attribute value.")
     expect(userContents).toContain('@augments {FrontendModelBase<CompositePrimaryKeyUserAttributes, CompositePrimaryKeyUserCreateAttributes, CompositePrimaryKeyUserUpdateAttributes, Pick<CompositePrimaryKeyUserAttributes, "legacyID" | "tenantID">, Pick<CompositePrimaryKeyUserAttributes, "legacyID" | "tenantID">>}')
+    expect(userContents).toContain('Omit<typeof CompositePrimaryKeyUser, "onDestroy"> & {onDestroy: (callback: (payload: {id: Pick<CompositePrimaryKeyUserAttributes, "legacyID" | "tenantID">}) => void')
+    expect(userContents).toContain('/** @type {unknown} */ (CompositePrimaryKeyUser)')
+    expect(userContents).toContain("export {GeneratedCompositePrimaryKeyUserClass as CompositePrimaryKeyUser}")
+    expect(userContents).toContain("export default GeneratedCompositePrimaryKeyUserClass")
     expect(userContents).toContain('primaryKey: ["legacyID","tenantID"]')
     expect(userContents).toContain('memberId: this.scalarPrimaryKeyValue("Custom member command CompositePrimaryKeyUser#refresh")')
 
-    const generatedModule = await import(pathToFileURL(`${dummyDirectory()}/src/frontend-models/composite-primary-key-user.js`).href)
+    const diagnostics = await typescriptCliDiagnostics([generatedUserPath])
+    const sourceDiagnostics = diagnostics.filter((diagnostic) => diagnostic.file?.fileName === generatedUserPath)
+
+    expect(sourceDiagnostics.map((diagnostic) => diagnostic.messageText)).toEqual([])
+
+    const generatedModule = await import(pathToFileURL(generatedUserPath).href)
     const generatedUser = generatedModule.default.instantiateFromResponse({
       model: {email: "composite@example.com", legacyID: 7, tenantID: 12}
     })

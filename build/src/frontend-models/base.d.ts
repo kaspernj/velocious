@@ -1,4 +1,6 @@
 import FrontendModelQuery from "./query.js";
+export type FrontendModelEventPrimaryKeyValue = string | import("../utils/model-primary-key.js").CompositeModelPrimaryKeyValue;
+export type FrontendModelEventOptions = import("./query.js").FrontendModelEventOptions;
 export type FrontendModelRelationship = FrontendModelHasManyRelationship<any, any, any> | FrontendModelSingularRelationship<any, any, any>;
 export type FrontendModelModelEventCallbackEntry<PrimaryKeyValue extends import("../utils/model-primary-key.js").ModelPrimaryKeyValue = import("../utils/model-primary-key.js").ModelPrimaryKeyValue, Model extends FrontendModelBase = FrontendModelBase> = {
     callback: (payload: {
@@ -72,12 +74,17 @@ export type FrontendModelResourceConfig = {
 export type FrontendModelConstructor<T extends FrontendModelBase = FrontendModelBase> = {
     new (attributes?: Record<string, FrontendModelAttributeValue>): T;
 };
-export type FrontendModelClass<T extends FrontendModelBase = FrontendModelBase<any, any, any>, Attributes extends object = any, CreateAttributes extends object = any> = {
+export type FrontendModelClass<T extends FrontendModelBase = FrontendModelBase<any, any, any, any, any>, Attributes extends object = any, CreateAttributes extends object = any> = {
     new (): T;
     create(attributes?: CreateAttributes): Promise<T>;
 } & Omit<typeof FrontendModelBase, "create" | "prototype">;
+export type FrontendModelScalarEventClass = Omit<FrontendModelClass<FrontendModelBase<any, any, any, any, string>>, "onDestroy"> & {
+    onDestroy: (callback: (payload: {
+        id: string;
+    }) => void, options?: import("./query.js").FrontendModelEventOptions) => Promise<() => void>;
+};
 export type FrontendModelCreateAttributesFor<T extends FrontendModelBase> = T extends FrontendModelBase<Record<string, FrontendModelAttributeValue>, infer CreateAttributes, infer _UpdateAttributes> ? CreateAttributes : Record<string, FrontendModelAttributeValue>;
-export type FrontendModelEventPrimaryKeyValueFor<T extends FrontendModelBase> = T extends FrontendModelBase<any, any, any, any, infer EventPrimaryKeyValue> ? EventPrimaryKeyValue : import("../utils/model-primary-key.js").ModelPrimaryKeyValue;
+export type FrontendModelEventPrimaryKeyValueFor<T extends FrontendModelBase> = T extends FrontendModelBase<any, any, any, any, infer EventPrimaryKeyValue> ? EventPrimaryKeyValue : FrontendModelEventPrimaryKeyValue;
 export type FrontendModelRelationshipModel<T extends FrontendModelBase<any, any, any> | typeof FrontendModelBase> = T extends typeof FrontendModelBase ? InstanceType<T> : T;
 export type FrontendModelTransportConfig = {
     /**
@@ -1172,9 +1179,6 @@ export default class FrontendModelBase<Attributes extends object = any, CreateAt
     }) => void, options?: import("./query.js").FrontendModelEventOptions): Promise<() => void>;
     static onDestroy<T extends FrontendModelClass>(this: T, callback: (payload: {
         id: FrontendModelEventPrimaryKeyValueFor<InstanceType<T>>;
-    }) => void, options?: import("./query.js").FrontendModelEventOptions): Promise<() => void>;
-    static onDestroy(callback: (payload: {
-        id: string;
     }) => void, options?: import("./query.js").FrontendModelEventOptions): Promise<() => void>;
     /**
      * Instance-level hook fired when THIS record is updated. The

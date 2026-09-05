@@ -636,9 +636,12 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     fileContent += "\n"
     fileContent += `FrontendModelBase.registerModel(${className})\n`
     fileContent += "\n"
-    fileContent += `export {${className}}\n`
+    // Static generic methods cannot retain the generated subclass identity when structurally compared.
+    fileContent += `const Generated${className}Class = /** @type {Omit<typeof ${className}, "onDestroy"> & {onDestroy: (callback: (payload: {id: ${eventPrimaryKeyValueType}}) => void, options?: import(${JSON.stringify(importPath)}).FrontendModelEventOptions) => Promise<() => void>}} */ (/** @type {unknown} */ (${className}))\n`
     fileContent += "\n"
-    fileContent += `export default ${className}\n`
+    fileContent += `export {Generated${className}Class as ${className}}\n`
+    fileContent += "\n"
+    fileContent += `export default Generated${className}Class\n`
 
     return fileContent
   }

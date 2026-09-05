@@ -1,8 +1,8 @@
 export type FrontendModelClass = import("./base.js").FrontendModelClass;
-export type FrontendModelInstance = import("./base.js").default;
+export type FrontendModelInstance = InstanceType<FrontendModelClass>;
 export type FrontendModelClassUpdateEventPayload = import("./use-model-class-event.js").FrontendModelCreateUpdateEventPayload;
 export type FrontendModelInstanceUpdateEventPayload = {
-    id: import("../utils/model-primary-key.js").ModelPrimaryKeyValue;
+    id: import("./base.js").FrontendModelEventPrimaryKeyValue;
     model: FrontendModelInstance;
 };
 export type FrontendModelUpdateEventPayload = FrontendModelClassUpdateEventPayload | FrontendModelInstanceUpdateEventPayload;

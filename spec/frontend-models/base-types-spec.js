@@ -51,6 +51,17 @@ describe("FrontendModelBase types", {databaseCleaning: {transaction: false, trun
       /** @augments {FrontendModelBase<CompositeAttributes, CompositeAttributes, CompositeAttributes, CompositePrimaryKeyValue>} */
       class CompositeModel extends FrontendModelBase {}
 
+      const GeneratedScalarModel = /** @type {Omit<typeof ScalarModel, "onDestroy"> & {onDestroy: (callback: (event: {id: string}) => void) => Promise<() => void>}} */ (/** @type {unknown} */ (ScalarModel))
+      const GeneratedCompositeModel = /** @type {Omit<typeof CompositeModel, "onDestroy"> & {onDestroy: (callback: (event: {id: CompositePrimaryKeyValue}) => void) => Promise<() => void>}} */ (/** @type {unknown} */ (CompositeModel))
+
+      /** @param {import("${projectRoot}/build/src/frontend-models/use-model-class-event.js").FrontendModelCreateUpdateEventPayload} payload */
+      function lifecycleHookEventId(payload) {
+        /** @type {string | import("${projectRoot}/build/src/utils/model-primary-key.js").CompositeModelPrimaryKeyValue} */
+        const id = payload.id
+
+        return id
+      }
+
       ScalarModel.onCreate(({id, model}) => {
         id.toUpperCase()
         model.primaryKeyValue().toUpperCase()
@@ -69,12 +80,25 @@ describe("FrontendModelBase types", {databaseCleaning: {transaction: false, trun
       })
       CompositeModel.onDestroy(({id}) => id.tenantId.toUpperCase())
 
-      /** @param {{onDestroy(callback: (event: {id: string}) => void): Promise<() => void>}} ModelClass */
-      function acceptScalarDestroyModelClass(ModelClass) {
+      /**
+       * @param {import("${projectRoot}/build/src/frontend-models/base.js").FrontendModelScalarEventClass} ModelClass
+       * @param {(event: {id: string}) => void} callback
+       */
+      function subscribeToScalarDestroy(ModelClass, callback) {
+        return ModelClass.onDestroy(callback)
+      }
+
+      subscribeToScalarDestroy(GeneratedScalarModel, ({id}) => id.toUpperCase())
+      // @ts-expect-error Composite lifecycle event identities are not scalar strings.
+      subscribeToScalarDestroy(GeneratedCompositeModel, ({id}) => id.toUpperCase())
+
+      /** @param {{onDestroy: (callback: (event: {id: string}) => void) => Promise<() => void>}} ModelClass */
+      function acceptStructuralScalarDestroyModelClass(ModelClass) {
         return ModelClass
       }
 
-      acceptScalarDestroyModelClass(ScalarModel)
+      // @ts-expect-error Composite lifecycle event identities are not scalar strings.
+      acceptStructuralScalarDestroyModelClass(GeneratedCompositeModel)
     `
 
     await fs.writeFile(sourcePath, sourceText)

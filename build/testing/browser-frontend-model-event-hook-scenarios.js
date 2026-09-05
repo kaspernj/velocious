@@ -18,10 +18,10 @@ import wait from "awaitery/build/wait.js"
  * @typedef {import("../frontend-models/base.js").FrontendModelClass} FrontendModelClass */
 /**
  * Defines this typedef.
- * @typedef {{id: import("../utils/model-primary-key.js").ModelPrimaryKeyValue, model: FrontendModelBase}} FrontendModelHookTestCreateUpdatePayload */
+ * @typedef {{id: import("../frontend-models/base.js").FrontendModelEventPrimaryKeyValue, model: FrontendModelBase}} FrontendModelHookTestCreateUpdatePayload */
 /**
  * Defines this typedef.
- * @typedef {{id: import("../utils/model-primary-key.js").ModelPrimaryKeyValue}} FrontendModelHookTestDestroyPayload */
+ * @typedef {{id: import("../frontend-models/base.js").FrontendModelEventPrimaryKeyValue}} FrontendModelHookTestDestroyPayload */
 /** @typedef {(payload: never) => void} ErasedFrontendModelHookCallback */
 /**
  * FakeSubscriptions type.

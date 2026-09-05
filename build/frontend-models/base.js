@@ -21,6 +21,9 @@ import {forcedNonBlankString} from "typanic"
 import {modelPrimaryKeyCacheKey, modelPrimaryKeyConditions, readModelPrimaryKeyValue, scalarModelPrimaryKey, scalarModelPrimaryKeyValue} from "../utils/model-primary-key.js"
 import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQueryData, setPayloadAssociationCount, setPayloadComputedAbility, setPayloadQueryData} from "../record-payload-values.js"
 
+/** @typedef {string | import("../utils/model-primary-key.js").CompositeModelPrimaryKeyValue} FrontendModelEventPrimaryKeyValue */
+/** @typedef {import("./query.js").FrontendModelEventOptions} FrontendModelEventOptions */
+
 /**
  * Frontend model relationship helper type. Returned by `getRelationshipByName`,
  * which generated models immediately cast to their concrete relationship type
@@ -114,11 +117,12 @@ import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQuer
  * invariance. Defaulting to `any` lets any subclass satisfy the constraint while
  * the methods' own `@template T` still captures the precise calling class for
  * their return types.
- * @template {FrontendModelBase} [T=FrontendModelBase<any, any, any>]
+ * @template {FrontendModelBase} [T=FrontendModelBase<any, any, any, any, any>]
  * @template {object} [Attributes=any]
  * @template {object} [CreateAttributes=any]
  * @typedef {{new (): T, create(attributes?: CreateAttributes): Promise<T>} & Omit<typeof FrontendModelBase, "create" | "prototype">} FrontendModelClass
  */
+/** @typedef {Omit<FrontendModelClass<FrontendModelBase<any, any, any, any, string>>, "onDestroy"> & {onDestroy: (callback: (payload: {id: string}) => void, options?: import("./query.js").FrontendModelEventOptions) => Promise<() => void>}} FrontendModelScalarEventClass */
 /**
  * Create attributes accepted by a frontend model instance.
  * @template {FrontendModelBase} T
@@ -127,7 +131,7 @@ import {readPayloadAssociationCount, readPayloadComputedAbility, readPayloadQuer
 /**
  * Lifecycle event identity exposed by a concrete frontend model.
  * @template {FrontendModelBase} T
- * @typedef {T extends FrontendModelBase<any, any, any, any, infer EventPrimaryKeyValue> ? EventPrimaryKeyValue : import("../utils/model-primary-key.js").ModelPrimaryKeyValue} FrontendModelEventPrimaryKeyValueFor
+ * @typedef {T extends FrontendModelBase<any, any, any, any, infer EventPrimaryKeyValue> ? EventPrimaryKeyValue : FrontendModelEventPrimaryKeyValue} FrontendModelEventPrimaryKeyValueFor
  */
 /**
  * Loaded instance type for relationship helper generics. Older generated
@@ -3998,12 +4002,6 @@ export default class FrontendModelBase {
    * @overload
    * @param {T} this - Concrete frontend model class.
    * @param {(payload: {id: FrontendModelEventPrimaryKeyValueFor<InstanceType<T>>}) => void} callback - Event callback.
-   * @param {import("./query.js").FrontendModelEventOptions} [options] - Accepted for API symmetry; destroy events carry ids only.
-   * @returns {Promise<() => void>} - Unsubscribe callback.
-   */
-  /**
-   * @overload
-   * @param {(payload: {id: string}) => void} callback - Scalar event callback.
    * @param {import("./query.js").FrontendModelEventOptions} [options] - Accepted for API symmetry; destroy events carry ids only.
    * @returns {Promise<() => void>} - Unsubscribe callback.
    */

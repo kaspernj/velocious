@@ -2,7 +2,7 @@
 
 /**
  * FrontendModelInstance type.
- * @typedef {import("./base.js").default} FrontendModelInstance */
+ * @typedef {InstanceType<import("./base.js").FrontendModelClass>} FrontendModelInstance */
 
 /**
  * Model dependency ids.

@@ -41,7 +41,7 @@ describe("package scripts", {databaseCleaning: {transaction: true}}, () => {
 
     expectNoPosixOnlyCommands(scripts)
     expect(scripts.build).toEqual("node scripts/clean-build.js && npm run compile")
-    expect(scripts.compile).toEqual("tsc -b && npm run copy:js && npm run copy:ejs && npm run copy:templates && node scripts/ensure-bin-executable.js")
+    expect(scripts.compile).toEqual("tsc && npm run copy:js && npm run copy:ejs && npm run copy:templates && node scripts/ensure-bin-executable.js")
     expect(scripts.test).toEqual("node scripts/run-tests.js")
   })
 

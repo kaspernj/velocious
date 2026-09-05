@@ -13,13 +13,13 @@ import useModelClassEvent from "./use-model-class-event.js"
  * @typedef {import("./base.js").FrontendModelClass} FrontendModelClass */
 /**
  * FrontendModelInstance type.
- * @typedef {import("./base.js").default} FrontendModelInstance */
+ * @typedef {InstanceType<FrontendModelClass>} FrontendModelInstance */
 /**
  * FrontendModelClassUpdateEventPayload type.
  * @typedef {import("./use-model-class-event.js").FrontendModelCreateUpdateEventPayload} FrontendModelClassUpdateEventPayload */
 /**
  * Defines this typedef.
- * @typedef {{id: import("../utils/model-primary-key.js").ModelPrimaryKeyValue, model: FrontendModelInstance}} FrontendModelInstanceUpdateEventPayload */
+ * @typedef {{id: import("./base.js").FrontendModelEventPrimaryKeyValue, model: FrontendModelInstance}} FrontendModelInstanceUpdateEventPayload */
 /**
  * FrontendModelUpdateEventPayload type.
  * @typedef {FrontendModelClassUpdateEventPayload | FrontendModelInstanceUpdateEventPayload} FrontendModelUpdateEventPayload */
