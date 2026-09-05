@@ -1177,8 +1177,24 @@ export default class FrontendModelBase<Attributes extends object = any, CreateAt
         id: FrontendModelEventPrimaryKeyValueFor<InstanceType<T>>;
         model: InstanceType<T>;
     }) => void, options?: import("./query.js").FrontendModelEventOptions): Promise<() => void>;
-    static onDestroy<T extends FrontendModelClass>(this: T, callback: (payload: {
-        id: FrontendModelEventPrimaryKeyValueFor<InstanceType<T>>;
+    /**
+     * Class-level hook fired when any record of this model is destroyed.
+     * @param {(payload: {id: FrontendModelEventPrimaryKeyValue}) => void} callback - Event callback.
+     * @param {import("./query.js").FrontendModelEventOptions} [options] - Accepted for API symmetry; destroy events carry ids only.
+     * @returns {Promise<() => void>} - Unsubscribe callback.
+     */
+    static onDestroy(callback: (payload: {
+        id: FrontendModelEventPrimaryKeyValue;
+    }) => void, options?: import("./query.js").FrontendModelEventOptions): Promise<() => void>;
+    /**
+     * Registers a destroy callback after the public model-specific signature has been checked.
+     * @this {FrontendModelClass}
+     * @param {(payload: {id: never}) => void} callback - Type-erased event callback.
+     * @param {import("./query.js").FrontendModelEventOptions} [options] - Destroy event options.
+     * @returns {Promise<() => void>} - Unsubscribe callback.
+     */
+    static _registerDestroyEventCallback(this: FrontendModelClass, callback: (payload: {
+        id: never;
     }) => void, options?: import("./query.js").FrontendModelEventOptions): Promise<() => void>;
     /**
      * Instance-level hook fired when THIS record is updated. The

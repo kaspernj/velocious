@@ -3998,20 +3998,23 @@ export default class FrontendModelBase {
   }
 
   /**
-   * @template {FrontendModelClass} T
-   * @overload
-   * @param {T} this - Concrete frontend model class.
-   * @param {(payload: {id: FrontendModelEventPrimaryKeyValueFor<InstanceType<T>>}) => void} callback - Event callback.
-   * @param {import("./query.js").FrontendModelEventOptions} [options] - Accepted for API symmetry; destroy events carry ids only.
-   * @returns {Promise<() => void>} - Unsubscribe callback.
-   */
-  /**
    * Class-level hook fired when any record of this model is destroyed.
-   * @param {(payload: {id: never}) => void} callback - Event callback erased at the overload implementation boundary.
+   * @param {(payload: {id: FrontendModelEventPrimaryKeyValue}) => void} callback - Event callback.
    * @param {import("./query.js").FrontendModelEventOptions} [options] - Accepted for API symmetry; destroy events carry ids only.
    * @returns {Promise<() => void>} - Unsubscribe callback.
    */
   static async onDestroy(callback, options = {}) {
+    return await this._registerDestroyEventCallback(callback, options)
+  }
+
+  /**
+   * Registers a destroy callback after the public model-specific signature has been checked.
+   * @this {FrontendModelClass}
+   * @param {(payload: {id: never}) => void} callback - Type-erased event callback.
+   * @param {import("./query.js").FrontendModelEventOptions} [options] - Destroy event options.
+   * @returns {Promise<() => void>} - Unsubscribe callback.
+   */
+  static async _registerDestroyEventCallback(callback, options = {}) {
     assertNoDestroyEventFilter(this, options)
 
     const {requestContext} = frontendModelEventOptionsPayload(this, options)
