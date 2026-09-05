@@ -2,7 +2,7 @@
 
 import path from "node:path"
 
-import { describe, expect, it, testEvents, tests as registeredTests } from "../../src/testing/test.js"
+import { describe, expect, it, testEvents } from "../../src/testing/test.js"
 import {
   buildTestingRunner,
   runTestingScope,
@@ -50,17 +50,9 @@ describe("testing package runner parity", {databaseCleaning: {transaction: false
         }
       }
     })
-    const registrationName = "testing package runner focus parity fixture"
     const focusedRunner = buildTestingRunner({excludeTags: ["blocked"], includeTags: ["included"]})
 
-    registeredTests.subs[registrationName] = focusedScope
-
-    try {
-      await focusedRunner.prepare()
-      await runTestingScope(focusedRunner, focusedScope)
-    } finally {
-      delete registeredTests.subs[registrationName]
-    }
+    await runTestingScope(focusedRunner, focusedScope)
 
     expect(focusedCalls).toEqual(["focused", "suite"])
   })
@@ -187,10 +179,15 @@ describe("testing package runner parity", {databaseCleaning: {transaction: false
       }
     })
 
-    await expect(async () => {
-      await runTestingScope(buildTestingRunner(), setupScope)
-    }).toThrowError("setup failed")
+    const setupRunner = buildTestingRunner()
+
+    await runTestingScope(setupRunner, setupScope)
     expect(setupOrder).toEqual(["beforeAll", "afterAll"])
+    expect(setupRunner.getFailedTests()).toBe(2)
+    expect(setupRunner.getFailedTestDetails().map((detail) => detail.error.message)).toEqual([
+      "setup failed",
+      "setup failed"
+    ])
 
     const teardownOrder = []
     const teardownScope = testingScope({

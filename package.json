@@ -3,7 +3,7 @@
     "velocious": "build/bin/velocious.js"
   },
   "name": "velocious",
-  "version": "1.0.644",
+  "version": "1.0.645",
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "files": [
@@ -64,7 +64,6 @@
   "description": "",
   "dependencies": {
     "@js-temporal/polyfill": "^0.5.1",
-    "@velocious/testing": "0.0.1",
     "awaitery": "^1.0.19",
     "bcryptjs": "^3.0.2",
     "better-localstorage": "^1.0.7",
@@ -92,10 +91,11 @@
     "ws": "^8.21.3"
   },
   "peerDependencies": {
+    "@velocious/testing": "0.0.9",
     "react": ">=18",
+    "smtp-connection": "^4.0.2",
     "sqlite": "^5.1.1",
-    "sqlite3": "^6.0.1",
-    "smtp-connection": "^4.0.2"
+    "sqlite3": "^6.0.1"
   },
   "peerDependenciesMeta": {
     "react": {
@@ -121,6 +121,7 @@
     "@types/react-dom": "^19.2.3",
     "@types/strftime": "^0.9.8",
     "@types/ws": "^8.18.1",
+    "@velocious/testing": "0.0.9",
     "chokidar-cli": "^3.0.0",
     "cpy-cli": "^7.0.0",
     "esbuild": "^0.28.0",

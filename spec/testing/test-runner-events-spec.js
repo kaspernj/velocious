@@ -10,7 +10,7 @@ import {configureTests, describe, expect, it, testConfig, testEvents} from "../.
 import TestRunner from "../../src/testing/test-runner.js"
 import wait from "awaitery/build/wait.js"
 
-describe("TestRunner events", {databaseCleaning: {transaction: true}}, () => {
+describe("TestRunner events", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   const buildTestRunner = () => {
     const environmentHandler = new EnvironmentHandlerNode()
     const configuration = new Configuration({

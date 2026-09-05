@@ -172,7 +172,7 @@ export default class TestProfiler {
     this._spans = []
     /** @type {Array<{id: string, parentId: string | undefined, file: string, line: number | undefined}>} */
     this._scopes = []
-    /** @type {WeakMap<import("./test-runner.js").TestsArgument, string>} */
+    /** @type {WeakMap<import("./test-runner.js").TestsArgument | import("@velocious/testing/runner").SuiteDeclaration, string>} */
     this._scopeIds = new WeakMap()
     /** @type {Set<string>} */
     this._customActivityNames = new Set()
@@ -243,7 +243,7 @@ export default class TestProfiler {
 
   /**
    * Registers and returns a deterministic scope identifier.
-   * @param {import("./test-runner.js").TestsArgument} scope - Scope object.
+   * @param {import("./test-runner.js").TestsArgument | import("@velocious/testing/runner").SuiteDeclaration} scope - Scope object.
    * @param {object} args - Scope metadata.
    * @param {string[]} args.descriptions - Scope description path.
    * @param {string | undefined} args.filePath - Scope source path.

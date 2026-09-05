@@ -1,7 +1,9 @@
 export type TestArgs = import("./test-runner.js").TestArgs;
 export type TestData = import("./test-runner.js").TestData;
+export type PackageTestDeclaration = import("@velocious/testing/runner").TestDeclaration;
 /** @typedef {import("./test-runner.js").TestArgs} TestArgs */
 /** @typedef {import("./test-runner.js").TestData} TestData */
+/** @typedef {import("@velocious/testing/runner").TestDeclaration} PackageTestDeclaration */
 export default class VelociousTestArguments {
     testRunner: import("./test-runner.js").default;
     /**
@@ -13,17 +15,20 @@ export default class VelociousTestArguments {
         testRunner: import("./test-runner.js").default;
     });
     /**
-     * Builds the stable framework-owned argument object for one selected test.
-     * @param {TestData} testData - Selected test registration.
-     * @returns {Promise<TestArgs>} - Attempt-shared callback arguments.
+     * Resolves stable Velocious arguments after package-owned table arguments.
+     * @param {object} input - Package resolver input.
+     * @param {PackageTestDeclaration} input.test - Selected declaration.
+     * @returns {Promise<ReturnType<typeof JSON.parse>[]>} - Callback arguments.
      */
-    build(testData: TestData): Promise<TestArgs>;
+    resolve({ test }: {
+        test: PackageTestDeclaration;
+    }): Promise<ReturnType<typeof JSON.parse>[]>;
     /**
      * Copies declaration metadata before selection can inspect it.
-     * @param {TestData} testData - Test registration.
+     * @param {PackageTestDeclaration} testData - Test registration.
      * @returns {TestArgs} - Independent test arguments.
      */
-    copy(testData: TestData): TestArgs;
+    copy(testData: PackageTestDeclaration): TestArgs;
     /**
      * Injects type-specific framework collaborators after selection.
      * @param {TestArgs} testArgs - Selected test arguments.
