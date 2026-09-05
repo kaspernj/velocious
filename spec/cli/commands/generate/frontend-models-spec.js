@@ -107,6 +107,14 @@ class CommandReturnTypeFrontendResource extends FrontendModelBaseResource {
       ]
 }
 
+class DestroyCollectionCommandFrontendResource extends FrontendModelBaseResource {
+  static ModelClass = Call
+
+  static attributes = {id: {type: "uuid"}}
+
+  static collectionCommands = ["onDestroy"]
+}
+
 class SyncPolicyCallFrontendResource extends FrontendModelBaseResource {
   static ModelClass = Call
 
@@ -483,6 +491,26 @@ describe("Cli - generate - frontend-models", () => {
     expect(callContents).toContain("          scope: \"event\",\n")
     expect(callContents).not.toContain("grantScopeAttributes")
     expect(callContents).not.toContain("writableAttributes")
+  })
+
+  it("rejects collection commands that collide with generated lifecycle hooks", async () => {
+    const outputDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-lifecycle-command-collision-"))
+    const cli = new Cli({
+      configuration: buildConfiguration({
+        backendProjectsList: [{
+          frontendModels: {Call: DestroyCollectionCommandFrontendResource},
+          frontendModelsOutputPath: outputDirectory,
+          path: "/tmp/backend"
+        }],
+        initializeModels: async () => configureCallColumns()
+      }),
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:frontend-models"],
+      testing: true
+    })
+
+    await expect(async () => await cli.execute()).toThrow(/collection command 'Call\.onDestroy' collides with the generated lifecycle hook/u)
   })
 
   it("keeps generated frontend write attributes on inherited create and update", async () => {
@@ -979,10 +1007,11 @@ export default class ReportResource extends FrontendModelBaseResource {
     expect(userContents).toContain("@property {number} legacyID - Attribute value.")
     expect(userContents).toContain("@property {number} tenantID - Attribute value.")
     expect(userContents).toContain('@augments {FrontendModelBase<CompositePrimaryKeyUserAttributes, CompositePrimaryKeyUserCreateAttributes, CompositePrimaryKeyUserUpdateAttributes, Pick<CompositePrimaryKeyUserAttributes, "legacyID" | "tenantID">, Pick<CompositePrimaryKeyUserAttributes, "legacyID" | "tenantID">>}')
-    expect(userContents).toContain('Omit<typeof CompositePrimaryKeyUser, "onDestroy"> & {onDestroy: (callback: (payload: {id: Pick<CompositePrimaryKeyUserAttributes, "legacyID" | "tenantID">}) => void')
-    expect(userContents).toContain('/** @type {unknown} */ (CompositePrimaryKeyUser)')
-    expect(userContents).toContain("export {GeneratedCompositePrimaryKeyUserClass as CompositePrimaryKeyUser}")
-    expect(userContents).toContain("export default GeneratedCompositePrimaryKeyUserClass")
+    expect(userContents).toContain('static async onDestroy(callback, options = {})')
+    expect(userContents).toContain('@param {(payload: {id: Pick<CompositePrimaryKeyUserAttributes, "legacyID" | "tenantID">}) => void} callback')
+    expect(userContents).toContain("export {CompositePrimaryKeyUser}")
+    expect(userContents).toContain("export default CompositePrimaryKeyUser")
+    expect(userContents).not.toContain("GeneratedCompositePrimaryKeyUserClass")
     expect(userContents).toContain('primaryKey: ["legacyID","tenantID"]')
     expect(userContents).toContain('memberId: this.scalarPrimaryKeyValue("Custom member command CompositePrimaryKeyUser#refresh")')
 
@@ -990,6 +1019,46 @@ export default class ReportResource extends FrontendModelBaseResource {
     const sourceDiagnostics = diagnostics.filter((diagnostic) => diagnostic.file?.fileName === generatedUserPath)
 
     expect(sourceDiagnostics.map((diagnostic) => diagnostic.messageText)).toEqual([])
+
+    const consumerPath = `${dummyDirectory()}/src/frontend-models/composite-primary-key-user-consumer.js`
+    const consumerContents = `
+      // @ts-check
+
+      import CompositePrimaryKeyUser, {CompositePrimaryKeyUser as NamedCompositePrimaryKeyUser} from "./composite-primary-key-user.js"
+
+      /** @param {CompositePrimaryKeyUser} model */
+      function readDefaultImportedModel(model) {
+        return model.email()
+      }
+
+      /** @param {NamedCompositePrimaryKeyUser} model */
+      function readNamedImportedModel(model) {
+        return model.email()
+      }
+
+      /** @param {{onDestroy: (callback: (payload: {id: string}) => void) => Promise<() => void>}} ModelClass */
+      function acceptScalarDestroyModelClass(ModelClass) {
+        return ModelClass
+      }
+
+      const model = new CompositePrimaryKeyUser()
+
+      readDefaultImportedModel(model)
+      readNamedImportedModel(model)
+      CompositePrimaryKeyUser.onDestroy(({id}) => id.tenantID.toFixed())
+      NamedCompositePrimaryKeyUser.onDestroy(({id}) => id.legacyID.toFixed())
+      // @ts-expect-error Composite lifecycle event identities are not scalar strings.
+      CompositePrimaryKeyUser.onDestroy(({id}) => id.toUpperCase())
+      // @ts-expect-error Composite lifecycle event identities are not scalar strings.
+      acceptScalarDestroyModelClass(CompositePrimaryKeyUser)
+    `
+
+    await fs.writeFile(consumerPath, consumerContents)
+
+    const consumerDiagnostics = await typescriptCliDiagnostics([consumerPath])
+    const consumerSourceDiagnostics = consumerDiagnostics.filter((diagnostic) => diagnostic.file?.fileName === consumerPath)
+
+    expect(consumerSourceDiagnostics.map((diagnostic) => diagnostic.messageText)).toEqual([])
 
     const generatedModule = await import(pathToFileURL(generatedUserPath).href)
     const generatedUser = generatedModule.default.instantiateFromResponse({

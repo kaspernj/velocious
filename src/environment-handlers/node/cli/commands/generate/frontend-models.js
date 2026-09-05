@@ -313,6 +313,11 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     }
     const collectionCommands = modelConfig.collectionCommands
     const memberCommands = modelConfig.memberCommands
+
+    if (Object.hasOwn(collectionCommands, "onDestroy")) {
+      throw new Error(`Frontend model collection command '${className}.onDestroy' collides with the generated lifecycle hook`)
+    }
+
     const declaredCommandMetadata = modelConfig.commandMetadata || {}
     const commandMetadata = await this.commandMetadataWithResourceJsDoc({
       commandMetadata: declaredCommandMetadata,
@@ -632,16 +637,39 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       }
     }
 
+    fileContent += "\n"
+    fileContent += "  /**\n"
+    fileContent += "   * Registers a class-level destroy callback.\n"
+    fileContent += "   * @overload\n"
+    fileContent += `   * @param {(payload: {id: ${eventPrimaryKeyValueType}}) => void} callback - Event callback.\n`
+    fileContent += `   * @param {import(${JSON.stringify(importPath)}).FrontendModelEventOptions} [options] - Destroy event options.\n`
+    fileContent += "   * @returns {Promise<() => void>} - Unsubscribe callback.\n"
+    fileContent += "   */\n"
+    fileContent += "  /**\n"
+    fileContent += `   * @template {import(${JSON.stringify(importPath)}).FrontendModelClass} T\n`
+    fileContent += "   * @overload\n"
+    fileContent += "   * @this {T}\n"
+    fileContent += `   * @param {(payload: {id: import(${JSON.stringify(importPath)}).FrontendModelEventPrimaryKeyValueFor<InstanceType<T>>}) => void} callback - Event callback.\n`
+    fileContent += `   * @param {import(${JSON.stringify(importPath)}).FrontendModelEventOptions} [options] - Destroy event options.\n`
+    fileContent += "   * @returns {Promise<() => void>} - Unsubscribe callback.\n"
+    fileContent += "   */\n"
+    fileContent += "  /**\n"
+    fileContent += "   * Implements class-level destroy callback registration.\n"
+    fileContent += "   * @param {(payload: {id: never}) => void} callback - Type-erased event callback.\n"
+    fileContent += `   * @param {import(${JSON.stringify(importPath)}).FrontendModelEventOptions} [options] - Destroy event options.\n`
+    fileContent += "   * @returns {Promise<() => void>} - Unsubscribe callback.\n"
+    fileContent += "   */\n"
+    fileContent += "  static async onDestroy(callback, options = {}) {\n"
+    fileContent += "    return await this._registerDestroyEventCallback(callback, options)\n"
+    fileContent += "  }\n"
+
     fileContent += "}\n"
     fileContent += "\n"
     fileContent += `FrontendModelBase.registerModel(${className})\n`
     fileContent += "\n"
-    // Static generic methods cannot retain the generated subclass identity when structurally compared.
-    fileContent += `const Generated${className}Class = /** @type {Omit<typeof ${className}, "onDestroy"> & {onDestroy: (callback: (payload: {id: ${eventPrimaryKeyValueType}}) => void, options?: import(${JSON.stringify(importPath)}).FrontendModelEventOptions) => Promise<() => void>}} */ (/** @type {unknown} */ (${className}))\n`
+    fileContent += `export {${className}}\n`
     fileContent += "\n"
-    fileContent += `export {Generated${className}Class as ${className}}\n`
-    fileContent += "\n"
-    fileContent += `export default Generated${className}Class\n`
+    fileContent += `export default ${className}\n`
 
     return fileContent
   }

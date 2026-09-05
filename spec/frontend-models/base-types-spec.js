@@ -51,8 +51,55 @@ describe("FrontendModelBase types", {databaseCleaning: {transaction: false, trun
       /** @augments {FrontendModelBase<CompositeAttributes, CompositeAttributes, CompositeAttributes, CompositePrimaryKeyValue>} */
       class CompositeModel extends FrontendModelBase {}
 
-      const GeneratedScalarModel = /** @type {Omit<typeof ScalarModel, "onDestroy"> & {onDestroy: (callback: (event: {id: string}) => void) => Promise<() => void>}} */ (/** @type {unknown} */ (ScalarModel))
-      const GeneratedCompositeModel = /** @type {Omit<typeof CompositeModel, "onDestroy"> & {onDestroy: (callback: (event: {id: CompositePrimaryKeyValue}) => void) => Promise<() => void>}} */ (/** @type {unknown} */ (CompositeModel))
+      /** @augments {FrontendModelBase<ScalarAttributes, ScalarAttributes, ScalarAttributes, string>} */
+      class GeneratedScalarModel extends FrontendModelBase {
+        /**
+         * @overload
+         * @param {(event: {id: string}) => void} callback
+         * @param {import("${projectRoot}/build/src/frontend-models/base.js").FrontendModelEventOptions} [options]
+         * @returns {Promise<() => void>}
+         */
+        /**
+         * @template {import("${projectRoot}/build/src/frontend-models/base.js").FrontendModelClass} T
+         * @overload
+         * @this {T}
+         * @param {(event: {id: import("${projectRoot}/build/src/frontend-models/base.js").FrontendModelEventPrimaryKeyValueFor<InstanceType<T>>}) => void} callback
+         * @param {import("${projectRoot}/build/src/frontend-models/base.js").FrontendModelEventOptions} [options]
+         * @returns {Promise<() => void>}
+         */
+        /**
+         * @param {(event: {id: never}) => void} callback
+         * @param {import("${projectRoot}/build/src/frontend-models/base.js").FrontendModelEventOptions} [options]
+         */
+        static async onDestroy(callback, options = {}) {
+          return await this._registerDestroyEventCallback(callback, options)
+        }
+      }
+
+      /** @augments {FrontendModelBase<CompositeAttributes, CompositeAttributes, CompositeAttributes, CompositePrimaryKeyValue>} */
+      class GeneratedCompositeModel extends FrontendModelBase {
+        /**
+         * @overload
+         * @param {(event: {id: CompositePrimaryKeyValue}) => void} callback
+         * @param {import("${projectRoot}/build/src/frontend-models/base.js").FrontendModelEventOptions} [options]
+         * @returns {Promise<() => void>}
+         */
+        /**
+         * @template {import("${projectRoot}/build/src/frontend-models/base.js").FrontendModelClass} T
+         * @overload
+         * @this {T}
+         * @param {(event: {id: import("${projectRoot}/build/src/frontend-models/base.js").FrontendModelEventPrimaryKeyValueFor<InstanceType<T>>}) => void} callback
+         * @param {import("${projectRoot}/build/src/frontend-models/base.js").FrontendModelEventOptions} [options]
+         * @returns {Promise<() => void>}
+         */
+        /**
+         * @param {(event: {id: never}) => void} callback
+         * @param {import("${projectRoot}/build/src/frontend-models/base.js").FrontendModelEventOptions} [options]
+         */
+        static async onDestroy(callback, options = {}) {
+          return await this._registerDestroyEventCallback(callback, options)
+        }
+      }
 
       /** @param {import("${projectRoot}/build/src/frontend-models/use-model-class-event.js").FrontendModelCreateUpdateEventPayload} payload */
       function lifecycleHookEventId(payload) {

@@ -4012,6 +4012,17 @@ export default class FrontendModelBase {
    * @returns {Promise<() => void>} - Unsubscribe callback.
    */
   static async onDestroy(callback, options = {}) {
+    return await this._registerDestroyEventCallback(callback, options)
+  }
+
+  /**
+   * Registers a destroy callback after the public model-specific signature has been checked.
+   * @this {FrontendModelClass}
+   * @param {(payload: {id: never}) => void} callback - Type-erased event callback.
+   * @param {import("./query.js").FrontendModelEventOptions} [options] - Destroy event options.
+   * @returns {Promise<() => void>} - Unsubscribe callback.
+   */
+  static async _registerDestroyEventCallback(callback, options = {}) {
     assertNoDestroyEventFilter(this, options)
 
     const {requestContext} = frontendModelEventOptionsPayload(this, options)
