@@ -1,4 +1,4 @@
-export type FrontendModelInstance = import("./base.js").default;
+export type FrontendModelInstance = InstanceType<import("./base.js").FrontendModelClass>;
 /**
  * Runs the modelsFromInput helper.
  * @param {FrontendModelInstance | FrontendModelInstance[] | null | undefined} modelOrModels - Model or models.

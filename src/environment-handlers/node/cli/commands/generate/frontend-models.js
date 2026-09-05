@@ -327,6 +327,9 @@ export default class DbGenerateFrontendModels extends BaseCommand {
       && builtInMemberCommands.find === "find"
       && builtInMemberCommands.update === "update"
       && builtInMemberCommands.url === "url"
+    const primaryKey = this.frontendModelPrimaryKeyForResource({attributeNames, modelClass, modelConfig})
+    const primaryKeyValueType = this.frontendModelPrimaryKeyValueType({attributesTypeName, primaryKey})
+    const eventPrimaryKeyValueType = Array.isArray(primaryKey) ? primaryKeyValueType : "string"
 
     let fileContent = generatedFileBanner(FRONTEND_MODELS_REGENERATE_COMMAND)
 
@@ -368,7 +371,7 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     fileContent += await this.writeAttributesTypedef({attributes, attributesTypeName, modelClass, nestedWriteTypes, permittedParams: permittedUpdateParams, resourceClass, typeName: updateAttributesTypeName})
     fileContent += "/**\n"
     fileContent += ` * Frontend model for ${className}.\n`
-    fileContent += ` * @augments {FrontendModelBase<${attributesTypeName}, ${createAttributesTypeName}, ${updateAttributesTypeName}>}\n`
+    fileContent += ` * @augments {FrontendModelBase<${attributesTypeName}, ${createAttributesTypeName}, ${updateAttributesTypeName}, ${primaryKeyValueType}, ${eventPrimaryKeyValueType}>}\n`
     fileContent += " */\n"
     fileContent += `class ${className} extends FrontendModelBase {\n`
     fileContent += "  /** @returns {FrontendModelResourceConfig} - Resource config. */\n"
@@ -439,8 +442,6 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         values: memberCommands
       })
     }
-    const primaryKey = this.frontendModelPrimaryKeyForResource({attributeNames, modelClass, modelConfig})
-
     if (primaryKey !== "id") {
       fileContent += `      primaryKey: ${JSON.stringify(primaryKey)},\n`
     }
@@ -635,9 +636,12 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     fileContent += "\n"
     fileContent += `FrontendModelBase.registerModel(${className})\n`
     fileContent += "\n"
-    fileContent += `export {${className}}\n`
+    // Static generic methods cannot retain the generated subclass identity when structurally compared.
+    fileContent += `const Generated${className}Class = /** @type {Omit<typeof ${className}, "onDestroy"> & {onDestroy: (callback: (payload: {id: ${eventPrimaryKeyValueType}}) => void, options?: import(${JSON.stringify(importPath)}).FrontendModelEventOptions) => Promise<() => void>}} */ (/** @type {unknown} */ (${className}))\n`
     fileContent += "\n"
-    fileContent += `export default ${className}\n`
+    fileContent += `export {Generated${className}Class as ${className}}\n`
+    fileContent += "\n"
+    fileContent += `export default Generated${className}Class\n`
 
     return fileContent
   }
@@ -1200,6 +1204,21 @@ export default class DbGenerateFrontendModels extends BaseCommand {
     if (!modelClass) return "id"
 
     return this.frontendModelPrimaryKeyForModelClass({attributeNames, modelClass})
+  }
+
+  /**
+   * Builds the generated model's concrete primary-key value type.
+   * @param {{attributesTypeName: string, primaryKey: string | string[]}} args - Primary-key type arguments.
+   * @returns {string} - JSDoc type expression.
+   */
+  frontendModelPrimaryKeyValueType({attributesTypeName, primaryKey}) {
+    if (Array.isArray(primaryKey)) {
+      const attributeNames = primaryKey.map((attributeName) => JSON.stringify(attributeName)).join(" | ")
+
+      return `Pick<${attributesTypeName}, ${attributeNames}>`
+    }
+
+    return `${attributesTypeName}[${JSON.stringify(primaryKey)}]`
   }
 
   /**

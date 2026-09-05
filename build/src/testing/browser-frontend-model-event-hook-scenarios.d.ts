@@ -1,21 +1,23 @@
 import FrontendModelBase from "../frontend-models/base.js";
 export type FrontendModelResourceConfig = import("../frontend-models/base.js").FrontendModelResourceConfig;
+export type FrontendModelClass = import("../frontend-models/base.js").FrontendModelClass;
 export type FrontendModelHookTestCreateUpdatePayload = {
-    id: string | import("../utils/model-primary-key.js").CompositeModelPrimaryKeyValue;
+    id: import("../frontend-models/base.js").FrontendModelEventPrimaryKeyValue;
     model: FrontendModelBase;
 };
 export type FrontendModelHookTestDestroyPayload = {
-    id: string | import("../utils/model-primary-key.js").CompositeModelPrimaryKeyValue;
+    id: import("../frontend-models/base.js").FrontendModelEventPrimaryKeyValue;
 };
+export type ErasedFrontendModelHookCallback = (payload: never) => void;
 export type FakeSubscriptions = {
     /**
-     * - Create callbacks.
+     * - Heterogeneous create callbacks owned by the fake transport.
      */
-    create: Set<(payload: FrontendModelHookTestCreateUpdatePayload) => void>;
+    create: Set<ErasedFrontendModelHookCallback>;
     /**
-     * - Destroy callbacks.
+     * - Heterogeneous destroy callbacks owned by the fake transport.
      */
-    destroy: Set<(payload: FrontendModelHookTestDestroyPayload) => void>;
+    destroy: Set<ErasedFrontendModelHookCallback>;
     /**
      * - Subscription options.
      */
@@ -25,9 +27,9 @@ export type FakeSubscriptions = {
         update: import("../frontend-models/query.js").FrontendModelEventOptionsObject[];
     };
     /**
-     * - Update callbacks.
+     * - Heterogeneous update callbacks owned by the fake transport.
      */
-    update: Set<(payload: FrontendModelHookTestCreateUpdatePayload) => void>;
+    update: Set<ErasedFrontendModelHookCallback>;
 };
 /**
  * Runs class lifecycle scenario.

@@ -17,10 +17,10 @@ import {frontendModelRemoteRequestContextKey} from "./remote-request-context.js"
  * @typedef {"create" | "update" | "destroy"} FrontendModelClassEventName */
 /**
  * Defines this typedef.
- * @typedef {{id: string | import("../utils/model-primary-key.js").CompositeModelPrimaryKeyValue, model: FrontendModelInstance}} FrontendModelCreateUpdateEventPayload */
+ * @typedef {{id: import("./base.js").FrontendModelEventPrimaryKeyValue, model: FrontendModelInstance}} FrontendModelCreateUpdateEventPayload */
 /**
  * Defines this typedef.
- * @typedef {{id: string | import("../utils/model-primary-key.js").CompositeModelPrimaryKeyValue}} FrontendModelDestroyEventPayload */
+ * @typedef {{id: import("./base.js").FrontendModelEventPrimaryKeyValue}} FrontendModelDestroyEventPayload */
 /**
  * FrontendModelClassEventPayload type.
  * @typedef {FrontendModelCreateUpdateEventPayload | FrontendModelDestroyEventPayload} FrontendModelClassEventPayload */
