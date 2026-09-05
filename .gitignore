@@ -1,6 +1,7 @@
 dist
 db/structure-default.sql
 node_modules
+*.tsbuildinfo
 /.env
 /.fallow
 spec/dummy/db/*.sqlite
