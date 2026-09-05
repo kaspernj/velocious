@@ -14,18 +14,22 @@ import wait from "awaitery/build/wait.js"
  * FrontendModelResourceConfig type.
  * @typedef {import("../frontend-models/base.js").FrontendModelResourceConfig} FrontendModelResourceConfig */
 /**
- * Defines this typedef.
- * @typedef {{id: string | import("../utils/model-primary-key.js").CompositeModelPrimaryKeyValue, model: FrontendModelBase}} FrontendModelHookTestCreateUpdatePayload */
+ * FrontendModelClass type.
+ * @typedef {import("../frontend-models/base.js").FrontendModelClass} FrontendModelClass */
 /**
  * Defines this typedef.
- * @typedef {{id: string | import("../utils/model-primary-key.js").CompositeModelPrimaryKeyValue}} FrontendModelHookTestDestroyPayload */
+ * @typedef {{id: import("../utils/model-primary-key.js").ModelPrimaryKeyValue, model: FrontendModelBase}} FrontendModelHookTestCreateUpdatePayload */
+/**
+ * Defines this typedef.
+ * @typedef {{id: import("../utils/model-primary-key.js").ModelPrimaryKeyValue}} FrontendModelHookTestDestroyPayload */
+/** @typedef {(payload: never) => void} ErasedFrontendModelHookCallback */
 /**
  * FakeSubscriptions type.
  * @typedef {object} FakeSubscriptions
- * @property {Set<(payload: FrontendModelHookTestCreateUpdatePayload) => void>} create - Create callbacks.
- * @property {Set<(payload: FrontendModelHookTestDestroyPayload) => void>} destroy - Destroy callbacks.
+ * @property {Set<ErasedFrontendModelHookCallback>} create - Heterogeneous create callbacks owned by the fake transport.
+ * @property {Set<ErasedFrontendModelHookCallback>} destroy - Heterogeneous destroy callbacks owned by the fake transport.
  * @property {{create: import("../frontend-models/query.js").FrontendModelEventOptionsObject[], destroy: import("../frontend-models/query.js").FrontendModelEventOptionsObject[], update: import("../frontend-models/query.js").FrontendModelEventOptionsObject[]}} options - Subscription options.
- * @property {Set<(payload: FrontendModelHookTestCreateUpdatePayload) => void>} update - Update callbacks.
+ * @property {Set<ErasedFrontendModelHookCallback>} update - Heterogeneous update callbacks owned by the fake transport.
  */
 
 /**
@@ -122,7 +126,9 @@ function buildFakeModelClass() {
 
     /**
      * Runs on create.
-     * @param {(payload: FrontendModelHookTestCreateUpdatePayload) => void} callback - Event callback.
+     * @template {FrontendModelClass} T
+     * @this {T}
+     * @param {(payload: {id: import("../frontend-models/base.js").FrontendModelEventPrimaryKeyValueFor<InstanceType<T>>, model: InstanceType<T>}) => void} callback - Event callback.
      * @param {import("../frontend-models/query.js").FrontendModelEventOptionsObject} [options] - Event query or projection options.
      * @returns {Promise<() => void>} - Unsubscribe callback.
      */
@@ -135,7 +141,7 @@ function buildFakeModelClass() {
 
     /**
      * Runs on destroy.
-     * @param {(payload: FrontendModelHookTestDestroyPayload) => void} callback - Event callback.
+     * @param {ErasedFrontendModelHookCallback} callback - Event callback stored by the heterogeneous fake transport.
      * @param {import("../frontend-models/query.js").FrontendModelEventOptionsObject} [options] - Event query or projection options.
      * @returns {Promise<() => void>} - Unsubscribe callback.
      */
@@ -148,7 +154,9 @@ function buildFakeModelClass() {
 
     /**
      * Runs on update.
-     * @param {(payload: FrontendModelHookTestCreateUpdatePayload) => void} callback - Event callback.
+     * @template {FrontendModelClass} T
+     * @this {T}
+     * @param {(payload: {id: import("../frontend-models/base.js").FrontendModelEventPrimaryKeyValueFor<InstanceType<T>>, model: InstanceType<T>}) => void} callback - Event callback.
      * @param {import("../frontend-models/query.js").FrontendModelEventOptionsObject} [options] - Event query or projection options.
      * @returns {Promise<() => void>} - Unsubscribe callback.
      */
@@ -173,7 +181,7 @@ function buildFakeModelClass() {
 function emitEvent(subscriptions, eventName, payload) {
   if (eventName === "destroy") {
     for (const callback of subscriptions.destroy) {
-      callback({id: payload.id})
+      /** @type {(event: FrontendModelHookTestDestroyPayload) => void} */ (callback)({id: payload.id})
     }
 
     return
@@ -184,7 +192,7 @@ function emitEvent(subscriptions, eventName, payload) {
   }
 
   for (const callback of subscriptions[eventName]) {
-    callback(payload)
+    /** @type {(event: FrontendModelHookTestCreateUpdatePayload) => void} */ (callback)(payload)
   }
 }
 

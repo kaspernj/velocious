@@ -1,17 +1,17 @@
 import FrontendModelQuery from "./query.js";
 export type FrontendModelRelationship = FrontendModelHasManyRelationship<any, any, any> | FrontendModelSingularRelationship<any, any, any>;
-export type FrontendModelModelEventCallbackEntry = {
+export type FrontendModelModelEventCallbackEntry<PrimaryKeyValue extends import("../utils/model-primary-key.js").ModelPrimaryKeyValue = import("../utils/model-primary-key.js").ModelPrimaryKeyValue, Model extends FrontendModelBase = FrontendModelBase> = {
     callback: (payload: {
-        id: string | import("../utils/model-primary-key.js").CompositeModelPrimaryKeyValue;
-        model: FrontendModelBase;
+        id: PrimaryKeyValue;
+        model: Model;
     }) => void;
     eventFilterKey: string | null;
     eventFilterPayload: import("./query.js").FrontendModelEventFilterPayload | null;
     projectionPayload: import("./query.js").FrontendModelProjectionPayload;
 };
-export type FrontendModelDestroyEventCallbackEntry = {
+export type FrontendModelDestroyEventCallbackEntry<PrimaryKeyValue extends import("../utils/model-primary-key.js").ModelPrimaryKeyValue = import("../utils/model-primary-key.js").ModelPrimaryKeyValue> = {
     callback: (payload: {
-        id: string | import("../utils/model-primary-key.js").CompositeModelPrimaryKeyValue;
+        id: PrimaryKeyValue;
     }) => void;
 };
 export type FrontendModelCommandType = "create" | "find" | "index" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url";
@@ -77,6 +77,7 @@ export type FrontendModelClass<T extends FrontendModelBase = FrontendModelBase<a
     create(attributes?: CreateAttributes): Promise<T>;
 } & Omit<typeof FrontendModelBase, "create" | "prototype">;
 export type FrontendModelCreateAttributesFor<T extends FrontendModelBase> = T extends FrontendModelBase<Record<string, FrontendModelAttributeValue>, infer CreateAttributes, infer _UpdateAttributes> ? CreateAttributes : Record<string, FrontendModelAttributeValue>;
+export type FrontendModelEventPrimaryKeyValueFor<T extends FrontendModelBase> = T extends FrontendModelBase<any, any, any, any, infer EventPrimaryKeyValue> ? EventPrimaryKeyValue : import("../utils/model-primary-key.js").ModelPrimaryKeyValue;
 export type FrontendModelRelationshipModel<T extends FrontendModelBase<any, any, any> | typeof FrontendModelBase> = T extends typeof FrontendModelBase ? InstanceType<T> : T;
 export type FrontendModelTransportConfig = {
     /**
@@ -177,7 +178,7 @@ export declare class AttributeNotSelectedError extends Error {
  * @template {object} [TargetCreateAttributes=Record<string, FrontendModelAttributeValue>]
  */
 export declare class FrontendModelSingularRelationship<S extends FrontendModelBase<any, any, any> | typeof FrontendModelBase, T extends FrontendModelBase<any, any, any> | typeof FrontendModelBase, TargetCreateAttributes extends object = Record<string, FrontendModelAttributeValue>> {
-    model: FrontendModelBase<any, any, any>;
+    model: FrontendModelBase<any, any, any, import("../utils/model-primary-key.js").ModelPrimaryKeyValue, import("../utils/model-primary-key.js").ModelPrimaryKeyValue>;
     relationshipName: string;
     targetModelClass: FrontendModelClass<FrontendModelRelationshipModel<T>, Record<string, FrontendModelTransportValue>, TargetCreateAttributes> | null;
     _preloaded: boolean;
@@ -236,7 +237,7 @@ export declare class FrontendModelSingularRelationship<S extends FrontendModelBa
  * @template {object} [TargetCreateAttributes=Record<string, FrontendModelAttributeValue>]
  */
 export declare class FrontendModelHasManyRelationship<S extends FrontendModelBase<any, any, any> | typeof FrontendModelBase, T extends FrontendModelBase<any, any, any> | typeof FrontendModelBase, TargetCreateAttributes extends object = Record<string, FrontendModelAttributeValue>> {
-    model: FrontendModelBase<any, any, any>;
+    model: FrontendModelBase<any, any, any, import("../utils/model-primary-key.js").ModelPrimaryKeyValue, import("../utils/model-primary-key.js").ModelPrimaryKeyValue>;
     relationshipName: string;
     targetModelClass: FrontendModelClass<FrontendModelRelationshipModel<T>, Record<string, FrontendModelTransportValue>, TargetCreateAttributes> | null;
     _preloaded: boolean;
@@ -363,7 +364,7 @@ export declare class FrontendModelAttachmentDownload {
  * Frontend-model attachment helper for one attachment name.
  */
 export declare class FrontendModelAttachmentHandle {
-    model: FrontendModelBase<any, any, any>;
+    model: FrontendModelBase<any, any, any, import("../utils/model-primary-key.js").ModelPrimaryKeyValue, import("../utils/model-primary-key.js").ModelPrimaryKeyValue>;
     attachmentName: string;
     /**
      * Pending attachment inputs queued for the next model save.
@@ -462,8 +463,10 @@ export declare class FrontendModelAttachmentHandle {
  * @template {object} [Attributes=any]
  * @template {object} [CreateAttributes=any]
  * @template {object} [UpdateAttributes=any]
+ * @template {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} [PrimaryKeyValue=import("../utils/model-primary-key.js").ModelPrimaryKeyValue]
+ * @template {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} [EventPrimaryKeyValue=PrimaryKeyValue]
  */
-export default class FrontendModelBase<Attributes extends object = any, CreateAttributes extends object = any, UpdateAttributes extends object = any> {
+export default class FrontendModelBase<Attributes extends object = any, CreateAttributes extends object = any, UpdateAttributes extends object = any, PrimaryKeyValue extends import("../utils/model-primary-key.js").ModelPrimaryKeyValue = import("../utils/model-primary-key.js").ModelPrimaryKeyValue, EventPrimaryKeyValue extends import("../utils/model-primary-key.js").ModelPrimaryKeyValue = PrimaryKeyValue> {
     static _generatedAttachmentMethods: boolean | undefined;
     /**
      * Narrows the runtime value to the documented type.
@@ -739,9 +742,9 @@ export default class FrontendModelBase<Attributes extends object = any, CreateAt
     static primaryKey(this: FrontendModelClass): import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition;
     /**
      * Runs primary key value.
-     * @returns {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} - Primary key value.
+     * @returns {PrimaryKeyValue} - Primary key value.
      */
-    primaryKeyValue(): import("../utils/model-primary-key.js").ModelPrimaryKeyValue;
+    primaryKeyValue(): PrimaryKeyValue;
     /**
      * Returns the scalar identity required by scalar-only frontend features.
      * @param {string} operation - Operation requiring a scalar identity.
@@ -750,9 +753,9 @@ export default class FrontendModelBase<Attributes extends object = any, CreateAt
     scalarPrimaryKeyValue(operation: string): import("../utils/model-primary-key.js").ModelPrimaryKeyScalar;
     /**
      * Returns the identity represented by the last persisted frontend attributes.
-     * @returns {import("../utils/model-primary-key.js").ModelPrimaryKeyValue} - Persisted primary-key value.
+     * @returns {PrimaryKeyValue} - Persisted primary-key value.
      */
-    persistedPrimaryKeyValue(): import("../utils/model-primary-key.js").ModelPrimaryKeyValue;
+    persistedPrimaryKeyValue(): PrimaryKeyValue;
     /**
      * Runs read attribute.
      * @param {string} attributeName - Attribute name.
@@ -1145,57 +1148,55 @@ export default class FrontendModelBase<Attributes extends object = any, CreateAt
      * accepted, future `create` events for this model are delivered
      * without re-checking per-record visibility. Query options can still
      * narrow which events reach this callback.
-     * @this {FrontendModelClass}
-     * @param {(payload: {id: string | import("../utils/model-primary-key.js").CompositeModelPrimaryKeyValue, model: FrontendModelBase}) => void} callback - Event callback.
+     * @template {FrontendModelClass} T
+     * @this {T}
+     * @param {(payload: {id: FrontendModelEventPrimaryKeyValueFor<InstanceType<T>>, model: InstanceType<T>}) => void} callback - Event callback.
      * @param {import("./query.js").FrontendModelEventOptions} [options] - Event query or record projection options.
      * @returns {Promise<() => void>} - Unsubscribe callback.
      */
-    static onCreate(this: FrontendModelClass, callback: (payload: {
-        id: string | import("../utils/model-primary-key.js").CompositeModelPrimaryKeyValue;
-        model: FrontendModelBase;
+    static onCreate<T extends FrontendModelClass>(this: T, callback: (payload: {
+        id: FrontendModelEventPrimaryKeyValueFor<InstanceType<T>>;
+        model: InstanceType<T>;
     }) => void, options?: import("./query.js").FrontendModelEventOptions): Promise<() => void>;
     /**
      * Class-level hook fired when any record of this model is updated.
-     * @this {FrontendModelClass}
-     * @param {(payload: {id: string | import("../utils/model-primary-key.js").CompositeModelPrimaryKeyValue, model: FrontendModelBase}) => void} callback - Event callback.
+     * @template {FrontendModelClass} T
+     * @this {T}
+     * @param {(payload: {id: FrontendModelEventPrimaryKeyValueFor<InstanceType<T>>, model: InstanceType<T>}) => void} callback - Event callback.
      * @param {import("./query.js").FrontendModelEventOptions} [options] - Event query or record projection options.
      * @returns {Promise<() => void>} - Unsubscribe callback.
      */
-    static onUpdate(this: FrontendModelClass, callback: (payload: {
-        id: string | import("../utils/model-primary-key.js").CompositeModelPrimaryKeyValue;
-        model: FrontendModelBase;
+    static onUpdate<T extends FrontendModelClass>(this: T, callback: (payload: {
+        id: FrontendModelEventPrimaryKeyValueFor<InstanceType<T>>;
+        model: InstanceType<T>;
     }) => void, options?: import("./query.js").FrontendModelEventOptions): Promise<() => void>;
-    /**
-     * Class-level hook fired when any record of this model is destroyed.
-     * @this {FrontendModelClass}
-     * @param {(payload: {id: string | import("../utils/model-primary-key.js").CompositeModelPrimaryKeyValue}) => void} callback - Event callback.
-     * @param {import("./query.js").FrontendModelEventOptions} [options] - Accepted for API symmetry; destroy events carry ids only.
-     * @returns {Promise<() => void>} - Unsubscribe callback.
-     */
-    static onDestroy(this: FrontendModelClass, callback: (payload: {
-        id: string | import("../utils/model-primary-key.js").CompositeModelPrimaryKeyValue;
+    static onDestroy<T extends FrontendModelClass>(this: T, callback: (payload: {
+        id: FrontendModelEventPrimaryKeyValueFor<InstanceType<T>>;
+    }) => void, options?: import("./query.js").FrontendModelEventOptions): Promise<() => void>;
+    static onDestroy(callback: (payload: {
+        id: string;
     }) => void, options?: import("./query.js").FrontendModelEventOptions): Promise<() => void>;
     /**
      * Instance-level hook fired when THIS record is updated. The
      * instance's attributes are auto-merged with the broadcast payload
      * before the callback runs, so callers can read fresh values via
      * `this.someAttr()` without re-fetching.
-     * @param {(payload: {id: string | import("../utils/model-primary-key.js").CompositeModelPrimaryKeyValue, model: FrontendModelBase}) => void} callback - Event callback.
+     * @param {(payload: {id: EventPrimaryKeyValue, model: FrontendModelBase<Attributes, CreateAttributes, UpdateAttributes, PrimaryKeyValue, EventPrimaryKeyValue>}) => void} callback - Event callback.
      * @param {import("./query.js").FrontendModelEventOptions} [options] - Event query or record projection options.
      * @returns {Promise<() => void>} - Unsubscribe callback.
      */
     onUpdate(callback: (payload: {
-        id: string | import("../utils/model-primary-key.js").CompositeModelPrimaryKeyValue;
-        model: FrontendModelBase;
+        id: EventPrimaryKeyValue;
+        model: FrontendModelBase<Attributes, CreateAttributes, UpdateAttributes, PrimaryKeyValue, EventPrimaryKeyValue>;
     }) => void, options?: import("./query.js").FrontendModelEventOptions): Promise<() => void>;
     /**
      * Instance-level hook fired when THIS record is destroyed.
-     * @param {(payload: {id: string | import("../utils/model-primary-key.js").CompositeModelPrimaryKeyValue}) => void} callback - Event callback.
+     * @param {(payload: {id: EventPrimaryKeyValue}) => void} callback - Event callback.
      * @param {import("./query.js").FrontendModelEventOptions} [options] - Accepted for API symmetry; destroy events carry ids only.
      * @returns {Promise<() => void>} - Unsubscribe callback.
      */
     onDestroy(callback: (payload: {
-        id: string | import("../utils/model-primary-key.js").CompositeModelPrimaryKeyValue;
+        id: EventPrimaryKeyValue;
     }) => void, options?: import("./query.js").FrontendModelEventOptions): Promise<() => void>;
     /**
      * Runs pluck.

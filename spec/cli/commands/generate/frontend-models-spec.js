@@ -366,7 +366,7 @@ describe("Cli - generate - frontend-models", () => {
     expect(taskContents).toContain("            retention: \"evictable\",\n")
     expect(taskContents).not.toContain("driver:")
     expect(taskContents).toContain("@typedef {object} TaskUpdateAttributes")
-    expect(taskContents).toContain("@augments {FrontendModelBase<TaskAttributes, TaskCreateAttributes, TaskUpdateAttributes>}")
+    expect(taskContents).toContain("@augments {FrontendModelBase<TaskAttributes, TaskCreateAttributes, TaskUpdateAttributes, TaskAttributes[\"id\"], string>}")
     expect(taskContents).toContain("export {Task}")
     expect(taskContents).toContain("export default Task")
     expect(taskContents).not.toContain("export default /** @type")
@@ -977,6 +977,7 @@ export default class ReportResource extends FrontendModelBaseResource {
 
     expect(userContents).toContain("@property {number} legacyID - Attribute value.")
     expect(userContents).toContain("@property {number} tenantID - Attribute value.")
+    expect(userContents).toContain('@augments {FrontendModelBase<CompositePrimaryKeyUserAttributes, CompositePrimaryKeyUserCreateAttributes, CompositePrimaryKeyUserUpdateAttributes, Pick<CompositePrimaryKeyUserAttributes, "legacyID" | "tenantID">, Pick<CompositePrimaryKeyUserAttributes, "legacyID" | "tenantID">>}')
     expect(userContents).toContain('primaryKey: ["legacyID","tenantID"]')
     expect(userContents).toContain('memberId: this.scalarPrimaryKeyValue("Custom member command CompositePrimaryKeyUser#refresh")')
 

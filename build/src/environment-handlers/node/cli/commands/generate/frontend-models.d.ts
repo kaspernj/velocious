@@ -425,6 +425,15 @@ export default class DbGenerateFrontendModels extends BaseCommand {
         modelConfig: import("../../../../../configuration-types.js").NormalizedFrontendModelResourceConfiguration;
     }): string | Array<string>;
     /**
+     * Builds the generated model's concrete primary-key value type.
+     * @param {{attributesTypeName: string, primaryKey: string | string[]}} args - Primary-key type arguments.
+     * @returns {string} - JSDoc type expression.
+     */
+    frontendModelPrimaryKeyValueType({ attributesTypeName, primaryKey }: {
+        attributesTypeName: string;
+        primaryKey: string | string[];
+    }): string;
+    /**
      * Validates an explicitly configured frontend-model primary key.
      * @param {{attributeNames: Array<string>, primaryKey: string | string[]}} args - Configured primary key args.
      * @returns {string | string[]} - Configured primary key.

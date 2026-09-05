@@ -19,7 +19,7 @@ import useModelClassEvent from "./use-model-class-event.js"
  * @typedef {import("./use-model-class-event.js").FrontendModelDestroyEventPayload} FrontendModelClassDestroyEventPayload */
 /**
  * Defines this typedef.
- * @typedef {{id: string | import("../utils/model-primary-key.js").CompositeModelPrimaryKeyValue}} FrontendModelInstanceDestroyEventPayload */
+ * @typedef {{id: import("../utils/model-primary-key.js").ModelPrimaryKeyValue}} FrontendModelInstanceDestroyEventPayload */
 /**
  * FrontendModelDestroyEventPayload type.
  * @typedef {FrontendModelClassDestroyEventPayload | FrontendModelInstanceDestroyEventPayload} FrontendModelDestroyEventPayload */
