@@ -25,13 +25,16 @@ export default class VelociousSuiteHookExecutor {
     void fullName
     void timeoutMs
     const metadata = this.testRunner.hookMetadata(hook)
+    const filePath = metadata.ownerFilePath && this.testRunner.getTestFiles().includes(metadata.ownerFilePath)
+      ? metadata.ownerFilePath
+      : undefined
 
     try {
       await this.testRunner.runProfileSpan({
         phase,
         declarationIndex: metadata.declarationIndex,
         declarationScopeId: metadata.declarationScopeId,
-        filePath: metadata.ownerFilePath
+        filePath
       }, async () => {
         await defaultExecute([{configuration: this.testRunner.getConfiguration()}])
       })

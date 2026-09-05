@@ -5,7 +5,6 @@ import {deferred} from "awaitery"
 import timeout from "awaitery/build/timeout.js"
 import wait from "awaitery/build/wait.js"
 import BackgroundJobsMain from "../../src/background-jobs/main.js"
-import BackgroundJobsStore from "../../src/background-jobs/store.js"
 import createBackgroundJobsSocketBarrier from "../helpers/background-jobs-socket-barrier.js"
 import {outputPathFor, startBackgroundJobs, waitForOutputJson, withBackgroundJobs} from "../helpers/background-jobs-helper.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
@@ -15,40 +14,10 @@ import FailingJob from "../dummy/src/jobs/failing-job.js"
 import SocketBarrierTestJob from "../dummy/src/jobs/socket-barrier-test-job.js"
 import SlowTestJob from "../dummy/src/jobs/slow-test-job.js"
 
-class QueuedOrphanStore extends BackgroundJobsStore {
-  /** @returns {Promise<import("../../src/background-jobs/types.js").BackgroundJobRow[]>} - Reclaimed orphan rows. */
-  async markOrphanedJobs() {
-    return [{
-      args: ["stale build"],
-      attempts: 1,
-      completedAtMs: null,
-      concurrencyKey: null,
-      createdAtMs: 1,
-      executionMode: "inline",
-      failedAtMs: null,
-      handedOffAtMs: null,
-      handoffId: null,
-      id: "orphaned-job",
-      jobName: FailingJob.jobName(),
-      lastError: "Worker heartbeat expired",
-      maxConcurrency: null,
-      maxRetries: 2,
-      orphanedAtMs: 2,
-      queue: "default",
-      scheduledAtMs: 2,
-      scheduleKey: null,
-      status: "queued",
-      timeoutMs: null,
-      workerId: null
-    }]
-  }
-}
-
 class MainWithBlockedDrain extends BackgroundJobsMain {
   /** @param {ConstructorParameters<typeof BackgroundJobsMain>[0]} args - Main options. */
   constructor(args) {
     super(args)
-    this.store = new QueuedOrphanStore({configuration: args.configuration})
     this.drainStarted = deferred()
     this.drainCanFinish = deferred()
   }
@@ -83,7 +52,32 @@ describe("Background jobs - queue", {databaseCleaning: {truncate: true}}, () => 
     const orphanEvents = []
     const onOrphan = (/** @type {ReturnType<typeof JSON.parse>} */ payload) => orphanEvents.push(payload)
     errorEvents.on("background-job-orphaned", onOrphan)
-    const sweep = main._sweepOrphans()
+    const sweep = main._handleOrphanedJobs({
+      jobs: [{
+        args: ["stale build"],
+        attempts: 1,
+        completedAtMs: null,
+        concurrencyKey: null,
+        createdAtMs: 1,
+        executionMode: "inline",
+        failedAtMs: null,
+        handedOffAtMs: null,
+        handoffId: null,
+        id: "orphaned-job",
+        jobName: FailingJob.jobName(),
+        lastError: "Worker heartbeat expired",
+        maxConcurrency: null,
+        maxRetries: 2,
+        orphanedAtMs: 2,
+        queue: "default",
+        scheduledAtMs: 2,
+        scheduleKey: null,
+        status: "queued",
+        timeoutMs: null,
+        workerId: null
+      }],
+      warning: "Marked orphaned background jobs"
+    })
 
     try {
       await main.drainStarted.promise
