@@ -2,6 +2,14 @@
 
 export default class VelociousDatabaseQuerySelectBase {
   /**
+   * Returns the explicit result alias carried by this select.
+   * @returns {string | undefined} - Selected result alias, or undefined when the select has none.
+   */
+  getAlias() {
+    return undefined
+  }
+
+  /**
    * Runs get options.
    * @returns {import("../query-parser/options.js").default} - The options options.
    */

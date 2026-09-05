@@ -208,6 +208,32 @@ describe("Record - query", {tags: ["dummy"]}, () => {
     expect(tasks[0].createdAt()).not.toBeUndefined()
   })
 
+  it("keeps explicitly selected calculated aliases in attributes without leaking them", async () => {
+    const project = await Project.create({name: "Calculated select project"})
+    const task = await Task.create({name: "Calculated select task", project})
+    const calculatedQuery = Task
+      .where({id: task.id()})
+      .select("id")
+
+    calculatedQuery.select(`1 AS ${calculatedQuery.driver.quoteColumn("selectedCalculation")}`)
+
+    const calculatedTask = await calculatedQuery.first()
+
+    if (!calculatedTask) throw new Error("Expected calculated task")
+
+    expect(calculatedTask.attributes().selectedCalculation).toEqual(1)
+    await expect(() => calculatedTask.readAttribute("selectedCalculation"))
+      .toThrow(/Couldn't figure out column name for attribute: selectedCalculation/u)
+
+    const ordinaryTask = await Task.find(task.id())
+
+    if (!ordinaryTask) throw new Error("Expected ordinary task")
+
+    ordinaryTask.loadExistingRecord({...ordinaryTask.rawAttributes(), selectedCalculation: 2})
+
+    expect("selectedCalculation" in ordinaryTask.attributes()).toBeFalse()
+  })
+
   it("qualifies shorthand select columns with the latest root from reference", () => {
     const query = Task
       .all()

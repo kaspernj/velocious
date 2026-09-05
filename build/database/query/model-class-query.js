@@ -992,11 +992,18 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   async load() {
     const models = []
     const results = await this.results()
+    const selectedAttributeAliases = new Set()
+
+    for (const select of this.getSelects()) {
+      const alias = select.getAlias()
+
+      if (alias) selectedAttributeAliases.add(alias)
+    }
 
     for (const result of results) {
       const model = this.build()
 
-      model.loadExistingRecord(result)
+      model.loadExistingRecord(result, selectedAttributeAliases)
       models.push(model)
     }
 

@@ -1777,6 +1777,13 @@ const accountNames = tasks.map((task) => task.project().account().name())
 const tasks = await Task.select(["tasks.id", "tasks.name"]).toArray()
 ```
 
+Loaded records expose cached physical model columns through `attributes()`. A
+terminal calculated `AS` alias explicitly requested by that query is included
+under the alias spelling returned by the database driver. Other unmapped row
+keys are omitted from `attributes()` so an older process can safely read rows
+after a rolling schema addition; they remain available through
+`rawAttributes()` and `readColumn()`, while `readAttribute()` remains strict.
+
 ### Reselecting columns
 
 `reselect` replaces any previously accumulated `SELECT` clauses — useful
