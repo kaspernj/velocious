@@ -167,11 +167,6 @@ job's application writes and its background-job persistence rows. Only active
 non-tenant database connections are shared, and multiple databases are matched by
 their configured identifiers.
 
-When a transactional background-job spec has an out-of-band signal that the job
-body finished, await that signal before polling its durable status. The status read
-uses the same brokered physical connection as the child, so polling while the child
-still performs database work creates unnecessary cross-owner contention.
-
 Reusable pooled runners receive broker mode and capability with every job dispatch,
 so a warm child can safely cross test-attempt boundaries. A capability change closes
 the child's retained proxy state before the next job; concurrent jobs for that same

@@ -63,9 +63,10 @@ describe("TestRunner - async crash reporting", () => {
     /** @type {number | null} */
     let listenersDuringRun = null
 
-    runner.runPackageTests = async () => {
+    runner.runTests = async () => {
       listenersDuringRun = process.listenerCount("uncaughtException")
     }
+    runner.getConfiguration = () => /** @type {any} */ ({ensureConnections: async (_name, callback) => await callback()})
 
     await runner.run()
 

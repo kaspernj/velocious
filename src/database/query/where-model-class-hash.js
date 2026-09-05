@@ -345,7 +345,7 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
     if (!columnType) return value
 
     const normalizedType = columnType.toLowerCase()
-    const stringTypes = new Set(["char", "varchar", "nvarchar", "string", "enum", "json", "jsonb", "citext", "binary", "varbinary", "character varying"])
+    const stringTypes = new Set(["char", "varchar", "nvarchar", "string", "enum", "json", "jsonb", "citext", "binary", "varbinary"])
     const isUuidType = normalizedType.includes("uuid")
     const shouldCoerceToString = normalizedType.includes("uuid") ||
       normalizedType.includes("text") ||

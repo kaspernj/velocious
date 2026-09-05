@@ -32,9 +32,8 @@ describe("Background jobs - pooled broker attempt reuse", {tags: ["dummy"], data
     await Project.create({creatingUserReference: parentMarker})
     const jobId = await SharedTransactionTestJob.performLaterWithOptions({args: [parentMarker, childMarker, outputPath], options: {executionMode: "pooled"}})
 
-    // Let child database work finish before polling status on the same brokered connection.
-    const result = await waitForOutputJson({outputPath, timeoutSeconds: 10})
     await waitForJobCompleted({jobId, store: backgroundJobs.store, timeoutSeconds: 10})
+    const result = await waitForOutputJson({outputPath, timeoutSeconds: 10})
     expect(result.parentCount).toEqual(1)
     expect(result.childCount).toEqual(1)
     firstAttemptPid = result.pid
@@ -53,9 +52,8 @@ describe("Background jobs - pooled broker attempt reuse", {tags: ["dummy"], data
       return await SharedTransactionTestJob.performLaterWithOptions({args: [parentMarker, childMarker, outputPaths[index]], options: {executionMode: "pooled"}})
     }))
 
-    // Let child database work finish before polling status on the same brokered connection.
-    const results = await Promise.all(outputPaths.map(async (outputPath) => await waitForOutputJson({outputPath, timeoutSeconds: concurrentPooledTransactionTimeoutSeconds})))
     await Promise.all(jobIds.map(async (jobId) => await waitForJobCompleted({jobId, store: backgroundJobs.store, timeoutSeconds: concurrentPooledTransactionTimeoutSeconds})))
+    const results = await Promise.all(outputPaths.map(async (outputPath) => await waitForOutputJson({outputPath, timeoutSeconds: concurrentPooledTransactionTimeoutSeconds})))
     expect(results.map((result) => result.pid)).toEqual([firstAttemptPid, firstAttemptPid])
     expect(results.map((result) => result.parentCount)).toEqual([1, 1])
     expect(results.map((result) => result.childCount)).toEqual([1, 1])

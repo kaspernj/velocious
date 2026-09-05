@@ -146,7 +146,7 @@ describe("package scripts", {databaseCleaning: {transaction: true}}, () => {
           "--ignore-scripts",
           "--no-audit",
           "--no-fund",
-          "--prefer-online"
+          "--prefer-offline"
         ],
         cwd: consumerDirectory,
         description: "install Velocious from the temporary Git checkout",

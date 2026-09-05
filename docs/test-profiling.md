@@ -123,8 +123,7 @@ newline. Each key is an entry test file relative to the profiling path base and 
 measured total milliseconds. Its weight includes that entry's import, file-owned
 `beforeAll`/`afterAll`, and every attempt of its tests. Complete attempt time
 includes inherited `beforeEach`/`afterEach` work and retry cost. Shard-global
-fixed setup is excluded, including suite hooks declared by the testing
-configuration rather than by a selected entry file.
+fixed setup is excluded.
 
 When an entry imports a helper that registers tests or hooks, those registrations
 belong deterministically to the importing entry file. This keeps helper source
