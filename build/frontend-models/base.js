@@ -3998,8 +3998,16 @@ export default class FrontendModelBase {
   }
 
   /**
+   * @template {FrontendModelClass} T
+   * @overload
+   * @param {T} this - Concrete frontend model class.
+   * @param {(payload: {id: FrontendModelEventPrimaryKeyValueFor<InstanceType<T>>}) => void} callback - Event callback.
+   * @param {import("./query.js").FrontendModelEventOptions} [options] - Accepted for API symmetry; destroy events carry ids only.
+   * @returns {Promise<() => void>} - Unsubscribe callback.
+   */
+  /**
    * Class-level hook fired when any record of this model is destroyed.
-   * @param {(payload: {id: FrontendModelEventPrimaryKeyValue}) => void} callback - Event callback.
+   * @param {(payload: {id: never}) => void} callback - Event callback erased at the overload implementation boundary.
    * @param {import("./query.js").FrontendModelEventOptions} [options] - Accepted for API symmetry; destroy events carry ids only.
    * @returns {Promise<() => void>} - Unsubscribe callback.
    */

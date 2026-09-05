@@ -40,34 +40,60 @@ describe("FrontendModelBase types", {databaseCleaning: {transaction: false, trun
 
       /** @typedef {{id: string, name: string}} ScalarAttributes */
       /** @augments {FrontendModelBase<ScalarAttributes, ScalarAttributes, ScalarAttributes, string>} */
-      class ScalarModel extends FrontendModelBase {
-        /**
-         * @param {(event: {id: string}) => void} callback
-         * @param {import("${projectRoot}/build/src/frontend-models/base.js").FrontendModelEventOptions} [options]
-         */
-        static async onDestroy(callback, options = {}) {
-          return await this._registerDestroyEventCallback(callback, options)
-        }
-      }
+      class ScalarModel extends FrontendModelBase {}
 
       /** @typedef {{id: number, name: string}} NumericAttributes */
       /** @augments {FrontendModelBase<NumericAttributes, NumericAttributes, NumericAttributes, number, string>} */
-      class NumericModel extends FrontendModelBase {
-        /**
-         * @param {(event: {id: string}) => void} callback
-         * @param {import("${projectRoot}/build/src/frontend-models/base.js").FrontendModelEventOptions} [options]
-         */
-        static async onDestroy(callback, options = {}) {
-          return await this._registerDestroyEventCallback(callback, options)
-        }
-      }
+      class NumericModel extends FrontendModelBase {}
 
       /** @typedef {{localId: number, tenantId: string}} CompositeAttributes */
       /** @typedef {{localId: number, tenantId: string}} CompositePrimaryKeyValue */
       /** @augments {FrontendModelBase<CompositeAttributes, CompositeAttributes, CompositeAttributes, CompositePrimaryKeyValue>} */
-      class CompositeModel extends FrontendModelBase {
+      class CompositeModel extends FrontendModelBase {}
+
+      /** @augments {FrontendModelBase<ScalarAttributes, ScalarAttributes, ScalarAttributes, string>} */
+      class GeneratedScalarModel extends FrontendModelBase {
         /**
+         * @overload
+         * @param {(event: {id: string}) => void} callback
+         * @param {import("${projectRoot}/build/src/frontend-models/base.js").FrontendModelEventOptions} [options]
+         * @returns {Promise<() => void>}
+         */
+        /**
+         * @template {import("${projectRoot}/build/src/frontend-models/base.js").FrontendModelClass} T
+         * @overload
+         * @this {T}
+         * @param {(event: {id: import("${projectRoot}/build/src/frontend-models/base.js").FrontendModelEventPrimaryKeyValueFor<InstanceType<T>>}) => void} callback
+         * @param {import("${projectRoot}/build/src/frontend-models/base.js").FrontendModelEventOptions} [options]
+         * @returns {Promise<() => void>}
+         */
+        /**
+         * @param {(event: {id: never}) => void} callback
+         * @param {import("${projectRoot}/build/src/frontend-models/base.js").FrontendModelEventOptions} [options]
+         */
+        static async onDestroy(callback, options = {}) {
+          return await this._registerDestroyEventCallback(callback, options)
+        }
+      }
+
+      /** @augments {FrontendModelBase<CompositeAttributes, CompositeAttributes, CompositeAttributes, CompositePrimaryKeyValue>} */
+      class GeneratedCompositeModel extends FrontendModelBase {
+        /**
+         * @overload
          * @param {(event: {id: CompositePrimaryKeyValue}) => void} callback
+         * @param {import("${projectRoot}/build/src/frontend-models/base.js").FrontendModelEventOptions} [options]
+         * @returns {Promise<() => void>}
+         */
+        /**
+         * @template {import("${projectRoot}/build/src/frontend-models/base.js").FrontendModelClass} T
+         * @overload
+         * @this {T}
+         * @param {(event: {id: import("${projectRoot}/build/src/frontend-models/base.js").FrontendModelEventPrimaryKeyValueFor<InstanceType<T>>}) => void} callback
+         * @param {import("${projectRoot}/build/src/frontend-models/base.js").FrontendModelEventOptions} [options]
+         * @returns {Promise<() => void>}
+         */
+        /**
+         * @param {(event: {id: never}) => void} callback
          * @param {import("${projectRoot}/build/src/frontend-models/base.js").FrontendModelEventOptions} [options]
          */
         static async onDestroy(callback, options = {}) {
@@ -109,9 +135,9 @@ describe("FrontendModelBase types", {databaseCleaning: {transaction: false, trun
         return ModelClass.onDestroy(callback)
       }
 
-      subscribeToScalarDestroy(ScalarModel, ({id}) => id.toUpperCase())
+      subscribeToScalarDestroy(GeneratedScalarModel, ({id}) => id.toUpperCase())
       // @ts-expect-error Composite lifecycle event identities are not scalar strings.
-      subscribeToScalarDestroy(CompositeModel, ({id}) => id.toUpperCase())
+      subscribeToScalarDestroy(GeneratedCompositeModel, ({id}) => id.toUpperCase())
 
       /** @param {{onDestroy: (callback: (event: {id: string}) => void) => Promise<() => void>}} ModelClass */
       function acceptStructuralScalarDestroyModelClass(ModelClass) {
@@ -119,7 +145,7 @@ describe("FrontendModelBase types", {databaseCleaning: {transaction: false, trun
       }
 
       // @ts-expect-error Composite lifecycle event identities are not scalar strings.
-      acceptStructuralScalarDestroyModelClass(CompositeModel)
+      acceptStructuralScalarDestroyModelClass(GeneratedCompositeModel)
     `
 
     await fs.writeFile(sourcePath, sourceText)

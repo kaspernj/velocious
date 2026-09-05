@@ -107,6 +107,14 @@ class CommandReturnTypeFrontendResource extends FrontendModelBaseResource {
       ]
 }
 
+class DestroyCollectionCommandFrontendResource extends FrontendModelBaseResource {
+  static ModelClass = Call
+
+  static attributes = {id: {type: "uuid"}}
+
+  static collectionCommands = ["onDestroy"]
+}
+
 class SyncPolicyCallFrontendResource extends FrontendModelBaseResource {
   static ModelClass = Call
 
@@ -483,6 +491,26 @@ describe("Cli - generate - frontend-models", () => {
     expect(callContents).toContain("          scope: \"event\",\n")
     expect(callContents).not.toContain("grantScopeAttributes")
     expect(callContents).not.toContain("writableAttributes")
+  })
+
+  it("rejects collection commands that collide with generated lifecycle hooks", async () => {
+    const outputDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-lifecycle-command-collision-"))
+    const cli = new Cli({
+      configuration: buildConfiguration({
+        backendProjectsList: [{
+          frontendModels: {Call: DestroyCollectionCommandFrontendResource},
+          frontendModelsOutputPath: outputDirectory,
+          path: "/tmp/backend"
+        }],
+        initializeModels: async () => configureCallColumns()
+      }),
+      directory: dummyDirectory(),
+      environmentHandler: new EnvironmentHandlerNode(),
+      processArgs: ["g:frontend-models"],
+      testing: true
+    })
+
+    await expect(async () => await cli.execute()).toThrow(/collection command 'Call\.onDestroy' collides with the generated lifecycle hook/u)
   })
 
   it("keeps generated frontend write attributes on inherited create and update", async () => {
@@ -1019,6 +1047,8 @@ export default class ReportResource extends FrontendModelBaseResource {
       readNamedImportedModel(model)
       CompositePrimaryKeyUser.onDestroy(({id}) => id.tenantID.toFixed())
       NamedCompositePrimaryKeyUser.onDestroy(({id}) => id.legacyID.toFixed())
+      // @ts-expect-error Composite lifecycle event identities are not scalar strings.
+      CompositePrimaryKeyUser.onDestroy(({id}) => id.toUpperCase())
       // @ts-expect-error Composite lifecycle event identities are not scalar strings.
       acceptScalarDestroyModelClass(CompositePrimaryKeyUser)
     `
