@@ -3,9 +3,10 @@
 export default class VelociousDatabaseQuerySelectBase {
   /**
    * Returns the explicit result alias carried by this select.
+   * @param {{getType: () => string}} _driver - Driver that determines returned identifier spelling.
    * @returns {string | undefined} - Selected result alias, or undefined when the select has none.
    */
-  getAlias() {
+  getAlias(_driver) {
     return undefined
   }
 

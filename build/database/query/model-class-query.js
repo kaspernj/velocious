@@ -995,7 +995,7 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     const selectedAttributeAliases = new Set()
 
     for (const select of this.getSelects()) {
-      const alias = select.getAlias()
+      const alias = select.getAlias(this.driver)
 
       if (alias) selectedAttributeAliases.add(alias)
     }

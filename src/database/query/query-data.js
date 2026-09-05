@@ -315,7 +315,7 @@ function selectedAliases(query) {
   const aliases = []
 
   for (const select of query.getSelects().slice(1)) {
-    const alias = select.getAlias()
+    const alias = select.getAlias(query.driver)
 
     if (!alias) return null
 

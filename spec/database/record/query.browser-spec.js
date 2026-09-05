@@ -215,13 +215,17 @@ describe("Record - query", {tags: ["dummy"]}, () => {
       .where({id: task.id()})
       .select("id")
 
-    calculatedQuery.select(`1 AS ${calculatedQuery.driver.quoteColumn("selectedCalculation")}`)
+    calculatedQuery.select("1 AS selectedCalculation")
 
     const calculatedTask = await calculatedQuery.first()
+    const returnedAlias = calculatedQuery.driver.getType() == "pgsql"
+      ? "selectedcalculation"
+      : "selectedCalculation"
 
     if (!calculatedTask) throw new Error("Expected calculated task")
 
-    expect(calculatedTask.attributes().selectedCalculation).toEqual(1)
+    expect(calculatedTask.rawAttributes()[returnedAlias]).toEqual(1)
+    expect(calculatedTask.attributes()[returnedAlias]).toEqual(1)
     await expect(() => calculatedTask.readAttribute("selectedCalculation"))
       .toThrow(/Couldn't figure out column name for attribute: selectedCalculation/u)
 
@@ -229,9 +233,9 @@ describe("Record - query", {tags: ["dummy"]}, () => {
 
     if (!ordinaryTask) throw new Error("Expected ordinary task")
 
-    ordinaryTask.loadExistingRecord({...ordinaryTask.rawAttributes(), selectedCalculation: 2})
+    ordinaryTask.loadExistingRecord({...ordinaryTask.rawAttributes(), [returnedAlias]: 2})
 
-    expect("selectedCalculation" in ordinaryTask.attributes()).toBeFalse()
+    expect(returnedAlias in ordinaryTask.attributes()).toBeFalse()
   })
 
   it("qualifies shorthand select columns with the latest root from reference", () => {
