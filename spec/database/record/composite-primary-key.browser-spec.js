@@ -357,9 +357,11 @@ describe("Record - composite primary key", {tags: ["dummy"]}, () => {
   it("prepares attachment schema before a cross-model caller-owned transaction", {databaseCleaning: {transaction: false, truncate: false}}, async () => {
     TransactionPreparingPlainTask.preparationTransactionStates = []
 
-    await TransactionPreparingPlainTask.transaction(async () => {
-      expect(TransactionPreparingPlainTask.connection().insideTransaction()).toBeTrue()
-      await CompositePrimaryKeyTask.transaction(async () => {})
+    await Configuration.current().ensureConnections(async () => {
+      await TransactionPreparingPlainTask.transaction(async () => {
+        expect(TransactionPreparingPlainTask.connection().insideTransaction()).toBeTrue()
+        await CompositePrimaryKeyTask.transaction(async () => {})
+      })
     })
 
     expect(TransactionPreparingPlainTask.preparationTransactionStates).toEqual([false])

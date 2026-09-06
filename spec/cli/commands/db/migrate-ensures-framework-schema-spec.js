@@ -76,7 +76,7 @@ describe("Cli - Commands - db:migrate framework schema", () => {
         await dbs.default.dropTable("velocious_attachments", {cascade: true, ifExists: true})
       })
 
-      await handler.ensureFrameworkSchema({dbs: {projectTenant: dbs.default}})
+      await handler.ensureFrameworkSchema({dbs: {mssql: dbs.default}})
 
       expect(await dbs.default.tableExists("background_jobs")).toEqual(false)
       expect(await dbs.default.tableExists("velocious_attachments")).toEqual(true)

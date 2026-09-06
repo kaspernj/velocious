@@ -30,8 +30,9 @@ describe("Background jobs - shared test transaction broker", {tags: ["dummy"], d
           options: {executionMode}
         })
         jobIds.push(jobId)
-        await waitForJobCompleted({jobId, store, timeoutSeconds: childCompletionTimeoutSeconds})
+        // Let child database work finish before polling status on the same brokered connection.
         const result = await waitForOutputJson({outputPath, timeoutSeconds: childCompletionTimeoutSeconds})
+        await waitForJobCompleted({jobId, store, timeoutSeconds: childCompletionTimeoutSeconds})
 
         expect(result.parentCount).toEqual(1)
         expect(result.childCount).toEqual(1)
