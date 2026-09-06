@@ -2,6 +2,15 @@
 
 export default class VelociousDatabaseQuerySelectBase {
   /**
+   * Returns the explicit result alias carried by this select.
+   * @param {{getType: () => string}} _driver - Driver that determines returned identifier spelling.
+   * @returns {string | undefined} - Selected result alias, or undefined when the select has none.
+   */
+  getAlias(_driver) {
+    return undefined
+  }
+
+  /**
    * Runs get options.
    * @returns {import("../query-parser/options.js").default} - The options options.
    */

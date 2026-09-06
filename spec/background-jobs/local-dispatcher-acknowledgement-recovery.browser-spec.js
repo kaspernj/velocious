@@ -109,14 +109,28 @@ async function acknowledgementRecoveryHarness({ acknowledgementMethod, acknowled
   const registry = new LocalBackgroundJobRegistry({ jobClasses })
 
   dispatcher = new LocalBackgroundJobsDispatcher({ clock, configuration, registry, store })
+  await store.clearAll()
   await dispatcher.start()
 
   return { clock, configuration, dispatcher, store }
 }
 
+/**
+ * Stops one acknowledgement-recovery harness and clears only its durable job state.
+ * @param {{dispatcher: LocalBackgroundJobsDispatcher, store: LocalBackgroundJobsStore}} args - Owned harness state.
+ * @returns {Promise<void>} - Resolves after cleanup.
+ */
+async function stopAcknowledgementRecoveryHarness({dispatcher, store}) {
+  try {
+    await dispatcher.stop()
+  } finally {
+    await store.clearAll()
+  }
+}
+
 const cappedOptions = { concurrencyKey: "acknowledgement-recovery", maxConcurrency: 1 }
 
-describe("Local background jobs dispatcher - acknowledgement recovery", { tags: ["dummy"], databaseCleaning: { transaction: false, truncate: true } }, () => {
+describe("Local background jobs dispatcher - acknowledgement recovery", { tags: ["dummy"], databaseCleaning: { transaction: false, truncate: false } }, () => {
   it("retains completion acknowledgement ownership until the durable claim is released", async () => {
     resetLocalBackgroundJobClasses()
     const { configuration, dispatcher, store } = await acknowledgementRecoveryHarness({
@@ -154,7 +168,7 @@ describe("Local background jobs dispatcher - acknowledgement recovery", { tags: 
     } finally {
       configuration.getErrorEvents().off("framework-error", onFrameworkError)
       configuration.getErrorEvents().off("all-error", onAllError)
-      await dispatcher.stop()
+      await stopAcknowledgementRecoveryHarness({dispatcher, store})
     }
   })
 
@@ -185,7 +199,7 @@ describe("Local background jobs dispatcher - acknowledgement recovery", { tags: 
       expect((await store.getJob(followingJobId))?.status).toEqual("completed")
       expect(RetryingLocalJob.attempts.get("following")).toEqual(1)
     } finally {
-      await dispatcher.stop()
+      await stopAcknowledgementRecoveryHarness({dispatcher, store})
     }
   })
 
@@ -211,7 +225,7 @@ describe("Local background jobs dispatcher - acknowledgement recovery", { tags: 
       expect((await store.getJob(rescheduledJobId))?.status).toEqual("completed")
       expect(ReschedulingLocalJob.attempts).toEqual(2)
     } finally {
-      await dispatcher.stop()
+      await stopAcknowledgementRecoveryHarness({dispatcher, store})
     }
   })
 
@@ -253,7 +267,7 @@ describe("Local background jobs dispatcher - acknowledgement recovery", { tags: 
     } finally {
       configuration.getErrorEvents().off("framework-error", onFrameworkError)
       configuration.getErrorEvents().off("all-error", onAllError)
-      await dispatcher.stop()
+      await stopAcknowledgementRecoveryHarness({dispatcher, store})
     }
   })
 })

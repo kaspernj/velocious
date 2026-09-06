@@ -132,6 +132,8 @@ describe("Record - preloader - model preload", {tags: ["dummy"]}, () => {
 
     expect(loadedProject.readColumn("creating_user_reference")).toEqual("ref-extra")
     expect(loadedProject.readColumn("extra_flag")).toEqual(1)
+    expect(loadedProject.attributes().extra_flag).toEqual(1)
+    expect("extra_flag" in found.attributes()).toBeFalse()
   })
 
   it("skips re-loading an already-preloaded relationship unless forced", async () => {

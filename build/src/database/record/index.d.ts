@@ -137,6 +137,10 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
              * @type {Record<string, ReturnType<typeof JSON.parse>>} */
             _attributes: Record<string, ReturnType<typeof JSON.parse>>;
             /**
+             * Unmapped result aliases explicitly selected by the query that hydrated this record.
+             * @type {Set<string>} */
+            _selectedAttributeAliases: Set<string>;
+            /**
              * Changes.
              * @type {Record<string, ReturnType<typeof JSON.parse>>} */
             _changes: Record<string, ReturnType<typeof JSON.parse>>;
@@ -469,10 +473,11 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
             ensureModelClassInitialized(ModelClass: typeof VelociousDatabaseRecord, configuration: import("../../configuration.js").default): Promise<void>;
             /**
              * Runs load existing record.
-             * @param {object} attributes - Attributes.
+             * @param {Record<string, ReturnType<typeof JSON.parse>>} attributes - Column-keyed database values.
+             * @param {Set<string>} [selectedAttributeAliases] - Explicit result aliases selected by the loading query.
              * @returns {void} - No return value.
              */
-            loadExistingRecord(attributes: object): void;
+            loadExistingRecord(attributes: Record<string, ReturnType<typeof JSON.parse>>, selectedAttributeAliases?: Set<string>): void;
             /**
              * Assigns the given attributes to the record.
              * @param {Record<string, ReturnType<typeof JSON.parse>>} attributesToAssign - Attributes to assign.
@@ -2202,6 +2207,10 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
      * @type {Record<string, ReturnType<typeof JSON.parse>>} */
     _attributes: Record<string, ReturnType<typeof JSON.parse>>;
     /**
+     * Unmapped result aliases explicitly selected by the query that hydrated this record.
+     * @type {Set<string>} */
+    _selectedAttributeAliases: Set<string>;
+    /**
      * Changes.
      * @type {Record<string, ReturnType<typeof JSON.parse>>} */
     _changes: Record<string, ReturnType<typeof JSON.parse>>;
@@ -3610,10 +3619,11 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
     ensureModelClassInitialized(ModelClass: typeof VelociousDatabaseRecord, configuration: import("../../configuration.js").default): Promise<void>;
     /**
      * Runs load existing record.
-     * @param {object} attributes - Attributes.
+     * @param {Record<string, ReturnType<typeof JSON.parse>>} attributes - Column-keyed database values.
+     * @param {Set<string>} [selectedAttributeAliases] - Explicit result aliases selected by the loading query.
      * @returns {void} - No return value.
      */
-    loadExistingRecord(attributes: object): void;
+    loadExistingRecord(attributes: Record<string, ReturnType<typeof JSON.parse>>, selectedAttributeAliases?: Set<string>): void;
     /**
      * Assigns the given attributes to the record.
      * @param {Record<string, ReturnType<typeof JSON.parse>>} attributesToAssign - Attributes to assign.

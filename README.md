@@ -1515,6 +1515,8 @@ You can chain multiple commands in one invocation:
 npx velocious db:create db:migrate
 ```
 
+Database creation waits for the server-side DDL to finish. On MS-SQL, only the `CREATE DATABASE` request bypasses node-mssql's ordinary request deadline; later schema and application queries keep their configured timeout.
+
 Run script files with initialized app/database context:
 
 ```bash
@@ -1776,6 +1778,13 @@ const accountNames = tasks.map((task) => task.project().account().name())
 ```js
 const tasks = await Task.select(["tasks.id", "tasks.name"]).toArray()
 ```
+
+Loaded records expose cached physical model columns through `attributes()`. A
+terminal calculated `AS` alias explicitly requested by that query is included
+under the alias spelling returned by the database driver. Other unmapped row
+keys are omitted from `attributes()` so an older process can safely read rows
+after a rolling schema addition; they remain available through
+`rawAttributes()` and `readColumn()`, while `readAttribute()` remains strict.
 
 ### Reselecting columns
 
@@ -2271,6 +2280,8 @@ option; the default configuration keeps sequential `TRUNCATE TABLE` requests. Se
 Request tests share transaction-active, non-tenant database connections with their in-process HTTP handlers. Eligibility is evaluated when each request is dispatched, so a hook can start a transaction and issue a request in the same callback. This makes uncommitted setup visible to handlers while preserving rollback isolation. Without an active transaction, handlers use independent pooled connections, so concurrency and locking tests can opt out of transaction cleanup and exercise production-style connections. Shared connection state is scoped to the test lifecycle and cleared around each test. See [docs/testing-guidelines.md](docs/testing-guidelines.md#request-test-database-connections).
 
 Transactional tests also share active non-tenant connections with real forked, reusable pooled, and spawned background-job child runners through a per-attempt test-only loopback broker. Parent setup and child writes therefore occupy the same physical transaction and roll back together, including background-job persistence. Backend harnesses can use [`TestTransactionSession`](docs/test-transaction-sessions.md) to propagate an ephemeral capability to already-running services and lazily enroll exact tenant physical identities. Tests using `{transaction: false, truncate: true}` retain ordinary independent connections for DDL, lock contention, independent commits, and genuine concurrency. See [docs/testing-guidelines.md](docs/testing-guidelines.md#request-test-database-connections).
+
+In broker-backed background-job specs, await an out-of-band job-body completion signal before polling durable job status so the parent poll does not contend with the child's database work on the shared physical connection.
 
 Multiple configured databases route by identifier. Tenant-only databases remain excluded by default; a test can explicitly call `registerTransactionalTenant({databaseIdentifier, tenant})` from its attempt args to share one transaction with same-process paths resolving that exact physical tenant configuration. That registration remains active through `afterEach` and is revoked, rolled back, and released afterward. Emergency cleanup for a lifecycle hung beyond timeout grace revokes pending setup before it can publish stale state, bounds cleanup waits, and discards its physical tenant connection, so stale resumed work cannot use a driver recycled into a successor attempt. See [docs/testing-guidelines.md](docs/testing-guidelines.md#in-process-test-database-connections).
 

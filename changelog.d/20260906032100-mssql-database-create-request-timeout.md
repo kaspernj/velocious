@@ -1,0 +1,1 @@
+Fixed `db:create` on MS-SQL so database file initialization can finish without being cancelled by node-mssql's ordinary 15-second request deadline. The override applies only to the `CREATE DATABASE` request.

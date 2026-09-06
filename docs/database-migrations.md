@@ -7,6 +7,8 @@ or ledger semantics. See [migration execution phases](migration-execution-phases
 
 Velocious migration helpers default new tables to UUID primary keys:
 
+`npx velocious db:create` waits for database-creation DDL to finish. MS-SQL database creation can legitimately outlast node-mssql's ordinary request deadline while SQL Server initializes its data files, so that one administrative request runs without the driver deadline. Creating `schema_migrations` and subsequent migration or application queries retain the configured request timeout.
+
 ```js
 await this.createTable("tasks", (table) => {
   table.string("name")

@@ -164,6 +164,12 @@ export function createSharedTransactionProxyDriver(DriverClass, config, configur
      */
     async _queryActual(sql) { return await this.sharedTransactionClient.call("_queryActual", [sql]) }
     /**
+     * Keeps MS-SQL session-owned advisory locks on the parent broker session.
+     * @param {string} sql - Advisory-lock SQL statement.
+     * @returns {Promise<import("../database/drivers/base.js").QueryResultType>} - Result rows.
+     */
+    async _advisoryLockQuery(sql) { return await this.sharedTransactionClient.call("_queryActual", [sql]) }
+    /**
      * Routes an affected-row query.
      * @param {string} sql - SQL statement.
      * @returns {Promise<number>} - Affected rows.
