@@ -1,5 +1,6 @@
 import Project from "../../dummy/src/models/project.js"
 import Task from "../../dummy/src/models/task.js"
+import {registerCounterCacheParentUpdateListener} from "../../../src/database/record/counter-cache-parent-updates.js"
 
 describe("Record - counterCache", {tags: ["dummy"]}, () => {
   it("increments parent count on create", async () => {
@@ -40,5 +41,24 @@ describe("Record - counterCache", {tags: ["dummy"]}, () => {
 
     expect(projectA.tasksCount()).toEqual(0)
     expect(projectB.tasksCount()).toEqual(1)
+  })
+
+  it("notifies listeners with the committed parent after an ordinary counter update", async () => {
+    const project = await Project.create()
+    /** @type {Array<InstanceType<typeof Project>>} */
+    const updatedParents = []
+    const removeListener = registerCounterCacheParentUpdateListener(Project, (parent) => {
+      updatedParents.push(/** @type {Project} */ (parent))
+    })
+
+    try {
+      await Task.create({name: "Counter notification", project})
+    } finally {
+      removeListener()
+    }
+
+    expect(updatedParents.length).toEqual(1)
+    expect(updatedParents[0].id()).toEqual(project.id())
+    expect(updatedParents[0].tasksCount()).toEqual(1)
   })
 })

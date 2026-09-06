@@ -5,12 +5,14 @@ import {frontendModelResourcesWithBuiltInsForBackendProject} from "./built-in-re
 import {frontendModelResourceDefinitionIsClass} from "./resource-definition.js"
 import {serializeFrontendModelTransportValue} from "./transport-serialization.js"
 import {modelPrimaryKeyCacheKey, readModelPrimaryKeyValue} from "../utils/model-primary-key.js"
+import {registerCounterCacheParentUpdateListener} from "../database/record/counter-cache-parent-updates.js"
 
 /** @typedef {{primaryKey: import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition}} FrontendModelPublisherResource */
 /** @typedef {Record<string, import("./query.js").FrontendModelTransportValue>} FrontendModelDestroyAuthorizationRecord */
 /** @typedef {import("../database/record/index.js").default & {__frontendModelWebsocketAction?: "create" | "update", __frontendModelWebsocketDestroyAuthorizationRecord?: FrontendModelDestroyAuthorizationRecord, __frontendModelWebsocketPreviousIds?: Map<string, import("../utils/model-primary-key.js").ModelPrimaryKeyValue>}} FrontendModelWebsocketRecord */
 
 const modelClassesWithRegisteredHooks = new WeakSet()
+const modelClassesWithRegisteredCounterCacheParentListeners = new WeakSet()
 const channelClassRegisteredConfigurations = new WeakSet()
 /** @type {WeakMap<import("../configuration.js").default, WeakMap<typeof import("../database/record/index.js").default, Map<string, FrontendModelPublisherResource>>>} */
 const publisherResourcesByConfiguration = new WeakMap()
@@ -150,6 +152,15 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
     publisherResources.set(modelName, {
       primaryKey
     })
+
+    const canonicalModelClass = modelClass.canonicalRecordMetadataModelClass()
+
+    if (!modelClassesWithRegisteredCounterCacheParentListeners.has(canonicalModelClass)) {
+      modelClassesWithRegisteredCounterCacheParentListeners.add(canonicalModelClass)
+      registerCounterCacheParentUpdateListener(canonicalModelClass, (parent) => {
+        broadcastFrontendModelEvents(parent, "update")
+      })
+    }
 
     // Register lifecycle hooks once per model class, not per configuration. A model class belongs to a
     // single backend project/config in production, so per-config registration only differs in tests where

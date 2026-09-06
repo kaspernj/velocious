@@ -6,10 +6,27 @@ import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
 import FrontendModelBaseResource from "../../src/frontend-model-resource/base-resource.js"
 import AuthorizationBaseResource from "../../src/authorization/base-resource.js"
 import Record from "../../src/database/record/index.js"
+import {counterCacheParentUpdateHarness} from "../helpers/counter-cache-parent-update-harness.js"
 import Task from "../dummy/src/models/task.js"
 import User from "../dummy/src/models/user.js"
 
 describe("Frontend models - websocket publishers", {databaseCleaning: {transaction: true}}, () => {
+  it("publishes an update for a counter-cache parent after the counter write", async () => {
+    const {broadcasts, invokeCounterUpdate} = await counterCacheParentUpdateHarness()
+
+    await invokeCounterUpdate()
+
+    expect(broadcasts).toEqual([{
+      body: {
+        action: "update",
+        id: 7,
+        model: "CounterCacheParent"
+      },
+      broadcastParams: {model: "CounterCacheParent"},
+      channel: "frontend-models"
+    }])
+  })
+
   it("keeps destroy authorization records out of the persisted broadcast body", async () => {
     class TestRecord extends Record {}
 

@@ -155,6 +155,7 @@ throw VelociousError.safe("Task placement was rejected.", {
 
 ## React event hooks
 - Use `useModelClassEvent(ModelClass, "create" | "update" | "destroy", callback)` to subscribe to frontend-model lifecycle broadcasts from React components.
+- Backend parent records updated by ordinary `counterCache` or `magnitudeCounterCache` SQL receive the same frontend-model `update` delivery as lifecycle-saved records. Delivery waits for the source record's outer transaction to commit, reloads the complete parent through that source operation's model and tenant context, and then applies the current frontend resource identity, authorization, and projection. Rolled-back writes and missing parents publish nothing. A post-commit reload or publisher failure is reported through `framework-error` and `all-error` without undoing or rejecting the already-committed source save.
 - Pass an array of event names to subscribe one callback to several class-level events, for example `useModelClassEvent(Subscription, ["create", "update"], reloadStatus)`.
 - Convenience wrappers are available as `useCreatedEvent(ModelClass, callback)`, `useUpdatedEvent(ModelClassOrModel, callback)`, and `useDestroyedEvent(ModelClassOrModel, callback)`.
 - `useUpdatedEvent` and `useDestroyedEvent` accept a model instance or array of model instances for instance-level subscriptions.
