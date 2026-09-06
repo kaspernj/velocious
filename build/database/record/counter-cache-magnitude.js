@@ -1,5 +1,7 @@
 // @ts-check
 
+import {prepareCounterCacheParentUpdate, scheduleCounterCacheParentUpdate} from "./counter-cache-parent-updates.js"
+
 /**
  * Reactive counter-cache driven by a per-record magnitude.
  *
@@ -206,17 +208,26 @@ async function incrementParentCounter(record, definition, parentId, amount) {
 
   // Resolve through the record so an operation both owns the parent write and
   // rejects a relationship whose parent routes to another database.
-  const db = record
-    .queryForModel(parentModelClass)
-    .driver
+  const parentQuery = record.queryForModel(parentModelClass)
+  const db = parentQuery.driver
   const counterColumnSql = db.quoteColumn(definition.counterColumn)
   const truncatedAmount = Math.trunc(amount)
+  const preparedParentUpdate = await prepareCounterCacheParentUpdate({
+    parentId,
+    parentModelClass,
+    parentPrimaryKey: relationship.getPrimaryKey(),
+    parentQuery
+  })
 
   await db.query(
     `UPDATE ${db.quoteTable(parentModelClass.tableName())} ` +
     `SET ${counterColumnSql} = COALESCE(${counterColumnSql}, 0) + ${truncatedAmount} ` +
     `WHERE ${db.quoteColumn(relationship.getPrimaryKey())} = ${db.quote(parentId)}`
   )
+  await scheduleCounterCacheParentUpdate({
+    preparedUpdate: preparedParentUpdate,
+    sourceRecord: record
+  })
 }
 
 /**

@@ -5,12 +5,14 @@ import {frontendModelResourcesWithBuiltInsForBackendProject} from "./built-in-re
 import {frontendModelResourceDefinitionIsClass} from "./resource-definition.js"
 import {serializeFrontendModelTransportValue} from "./transport-serialization.js"
 import {modelPrimaryKeyCacheKey, readModelPrimaryKeyValue} from "../utils/model-primary-key.js"
+import {registerCounterCacheParentUpdateListener} from "../database/record/counter-cache-parent-updates.js"
 
 /** @typedef {{primaryKey: import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition}} FrontendModelPublisherResource */
 /** @typedef {Record<string, import("./query.js").FrontendModelTransportValue>} FrontendModelDestroyAuthorizationRecord */
 /** @typedef {import("../database/record/index.js").default & {__frontendModelWebsocketAction?: "create" | "update", __frontendModelWebsocketDestroyAuthorizationRecord?: FrontendModelDestroyAuthorizationRecord, __frontendModelWebsocketPreviousIds?: Map<string, import("../utils/model-primary-key.js").ModelPrimaryKeyValue>}} FrontendModelWebsocketRecord */
 
 const modelClassesWithRegisteredHooks = new WeakSet()
+const modelClassesWithRegisteredCounterCacheParentListeners = new WeakSet()
 const channelClassRegisteredConfigurations = new WeakSet()
 /** @type {WeakMap<import("../configuration.js").default, WeakMap<typeof import("../database/record/index.js").default, Map<string, FrontendModelPublisherResource>>>} */
 const publisherResourcesByConfiguration = new WeakMap()
@@ -127,6 +129,7 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
     if (!resourceClass.ModelClass) continue
 
     const modelClass = resourceClass.modelClass()
+    const canonicalModelClass = modelClass.canonicalRecordMetadataModelClass()
     const resourceConfiguration = resourceClass.resourceConfig()
     const configuredPrimaryKey = resourceConfiguration.primaryKey
     const modelPrimaryKey = modelClass.primaryKey()
@@ -140,38 +143,47 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
       publisherResourcesByConfiguration.set(configuration, publisherResourcesByModelClass)
     }
 
-    let publisherResources = publisherResourcesByModelClass.get(modelClass)
+    let publisherResources = publisherResourcesByModelClass.get(canonicalModelClass)
 
     if (!publisherResources) {
       publisherResources = new Map()
-      publisherResourcesByModelClass.set(modelClass, publisherResources)
+      publisherResourcesByModelClass.set(canonicalModelClass, publisherResources)
     }
 
     publisherResources.set(modelName, {
       primaryKey
     })
 
+    if (!modelClassesWithRegisteredCounterCacheParentListeners.has(canonicalModelClass)) {
+      modelClassesWithRegisteredCounterCacheParentListeners.add(canonicalModelClass)
+      registerCounterCacheParentUpdateListener(canonicalModelClass, (parent, previousParent) => {
+        const previousIds = previousParent ? frontendModelResourceIdentities(previousParent) : undefined
+
+        broadcastFrontendModelEvents(parent, "update", previousIds)
+      })
+    }
+
     // Register lifecycle hooks once per model class, not per configuration. A model class belongs to a
     // single backend project/config in production, so per-config registration only differs in tests where
     // the same model class is reachable from multiple configs — there it attaches duplicate beforeCreate/
     // afterSave/afterDestroy hooks that double-fire broadcasts (and leak across specs). The hooks read the
     // model's runtime configuration when broadcasting, so a single registration is sufficient.
-    if (modelClassesWithRegisteredHooks.has(modelClass)) continue
+    if (modelClassesWithRegisteredHooks.has(canonicalModelClass)) continue
 
-    modelClassesWithRegisteredHooks.add(modelClass)
+    modelClassesWithRegisteredHooks.add(canonicalModelClass)
 
-    modelClass.beforeCreate((model) => {
+    canonicalModelClass.beforeCreate((model) => {
       /** @type {FrontendModelWebsocketRecord} */ (model).__frontendModelWebsocketAction = "create"
     })
 
-    modelClass.beforeUpdate(async (model) => {
+    canonicalModelClass.beforeUpdate(async (model) => {
       const websocketModel = /** @type {FrontendModelWebsocketRecord} */ (model)
 
       websocketModel.__frontendModelWebsocketAction = "update"
       websocketModel.__frontendModelWebsocketPreviousIds = await frontendModelPreviousResourceIdentities(model)
     })
 
-    modelClass.beforeDestroy(async (model) => {
+    canonicalModelClass.beforeDestroy(async (model) => {
       const websocketModel = /** @type {FrontendModelWebsocketRecord} */ (model)
       const persistedModel = await model
         .queryForModel(model.getModelClass())
@@ -183,7 +195,7 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
       websocketModel.__frontendModelWebsocketDestroyAuthorizationRecord = frontendModelDestroyAuthorizationRecord(persistedModel)
     })
 
-    modelClass.afterSave((model) => {
+    canonicalModelClass.afterSave((model) => {
       const modelWithWebsocketAction = /** @type {FrontendModelWebsocketRecord} */ (model)
       const action = modelWithWebsocketAction.__frontendModelWebsocketAction
 
@@ -197,7 +209,7 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
       delete modelWithWebsocketAction.__frontendModelWebsocketPreviousIds
     })
 
-    modelClass.afterDestroy((model) => {
+    canonicalModelClass.afterDestroy((model) => {
       const websocketModel = /** @type {FrontendModelWebsocketRecord} */ (model)
       const destroyAuthorizationRecord = websocketModel.__frontendModelWebsocketDestroyAuthorizationRecord
       const previousIds = websocketModel.__frontendModelWebsocketPreviousIds
@@ -217,7 +229,7 @@ export async function ensureFrontendModelWebsocketPublishersRegistered(configura
  * @returns {Promise<Map<string, import("../utils/model-primary-key.js").ModelPrimaryKeyValue>>} - Previous identities by resource name.
  */
 async function frontendModelPreviousResourceIdentities(model) {
-  const publisherResources = publisherResourcesByConfiguration.get(model._getConfiguration())?.get(model.getModelClass())
+  const publisherResources = publisherResourcesForModel(model)
   /** @type {Map<string, import("../utils/model-primary-key.js").ModelPrimaryKeyValue>} */
   const previousIds = new Map()
 
@@ -252,7 +264,7 @@ async function frontendModelPreviousResourceIdentities(model) {
  * @returns {Map<string, import("../utils/model-primary-key.js").ModelPrimaryKeyValue>} - Identities by resource name.
  */
 function frontendModelResourceIdentities(model) {
-  const publisherResources = publisherResourcesByConfiguration.get(model._getConfiguration())?.get(model.getModelClass())
+  const publisherResources = publisherResourcesForModel(model)
   /** @type {Map<string, import("../utils/model-primary-key.js").ModelPrimaryKeyValue>} */
   const identities = new Map()
 
@@ -265,6 +277,17 @@ function frontendModelResourceIdentities(model) {
   }
 
   return identities
+}
+
+/**
+ * Returns publisher resources through the backing model's canonical registry owner.
+ * @param {import("../database/record/index.js").default} model - Backing model instance.
+ * @returns {Map<string, FrontendModelPublisherResource> | undefined} - Publisher resources for the model.
+ */
+function publisherResourcesForModel(model) {
+  const canonicalModelClass = model.getModelClass().canonicalRecordMetadataModelClass()
+
+  return publisherResourcesByConfiguration.get(model._getConfiguration())?.get(canonicalModelClass)
 }
 
 /**
@@ -337,7 +360,7 @@ function frontendModelResourceIdentity({model, previous = false, primaryKey}) {
  */
 function broadcastFrontendModelEvents(model, action, previousIds, destroyAuthorizationRecord) {
   const configuration = model._getConfiguration()
-  const publisherResources = publisherResourcesByConfiguration.get(configuration)?.get(model.getModelClass())
+  const publisherResources = publisherResourcesForModel(model)
 
   if (!publisherResources) return
 
