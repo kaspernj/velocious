@@ -1,0 +1,1 @@
+Graceful `VelociousWebsocketClient.close()` now classifies pending channel handles as `client_close` before closing the underlying socket, instead of reporting a normal client shutdown as `session_destroyed`. Channel callback failures are surfaced only after all pending handles and the transport finish closing.

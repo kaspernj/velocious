@@ -118,19 +118,51 @@ export default class VelociousWebsocketClient extends SnapReqWebSocketClient {
     if (this.gracefulClosePromise) return await this.gracefulClosePromise
 
     this.autoReconnect = false
+    const channelSubscriptions = [...this._channelSubscriptions.values()]
     const socket = this.socket
+
+    this._channelSubscriptions.clear()
+    const {promise: publishedClosePromise, reject: rejectPublishedClose, resolve: resolvePublishedClose} = Promise.withResolvers()
+
+    this.gracefulClosePromise = publishedClosePromise
+    // This internal bridge exists only for synchronous reentrancy. Its rejection
+    // duplicates closePromise, which remains the public error source below.
+    void publishedClosePromise.catch(() => {})
     const closePromise = (async () => {
-      if (socket && socket.readyState === socket.OPEN) {
-        await new Promise((resolve) => {
-          socket.addEventListener("close", () => resolve(undefined), {once: true})
-          socket.close(1000)
-        })
+      /** @type {unknown[]} */
+      const closeErrors = []
+
+      for (const subscription of channelSubscriptions) {
+        try {
+          subscription._handleClosed("client_close")
+        } catch (error) {
+          closeErrors.push(error)
+        }
       }
 
-      await super.close()
+      try {
+        if (socket && socket.readyState === socket.OPEN) {
+          await new Promise((resolve) => {
+            socket.addEventListener("close", () => resolve(undefined), {once: true})
+            socket.close(1000)
+          })
+        }
+      } catch (error) {
+        closeErrors.push(error)
+      }
+
+      try {
+        await super.close()
+      } catch (error) {
+        closeErrors.push(error)
+      }
+
+      if (closeErrors.length === 1) throw closeErrors[0]
+      if (closeErrors.length > 1) throw new AggregateError(closeErrors, "Failed to close WebSocket client")
     })()
 
     this.gracefulClosePromise = closePromise
+    void closePromise.then(resolvePublishedClose, rejectPublishedClose)
 
     try {
       await closePromise
