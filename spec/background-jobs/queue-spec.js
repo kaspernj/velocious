@@ -9,7 +9,6 @@ import createBackgroundJobsSocketBarrier from "../helpers/background-jobs-socket
 import {outputPathFor, startBackgroundJobs, waitForOutputJson, withBackgroundJobs} from "../helpers/background-jobs-helper.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import AppendJob from "../dummy/src/jobs/append-job.js"
-import DelayedJob from "../dummy/src/jobs/delayed-job.js"
 import FailingJob from "../dummy/src/jobs/failing-job.js"
 import SocketBarrierTestJob from "../dummy/src/jobs/socket-barrier-test-job.js"
 import SlowTestJob from "../dummy/src/jobs/slow-test-job.js"
@@ -115,34 +114,31 @@ describe("Background jobs - queue", {databaseCleaning: {truncate: true}}, () => 
 
   it("does not block the worker when running forked jobs", async () => {
     const {main, worker} = await startBackgroundJobs()
-    const forkedPath = await outputPathFor("forked")
+    const barrier = await createBackgroundJobsSocketBarrier(1)
     const inlinePath = await outputPathFor("inline")
 
-    await DelayedJob.performLater("forked", forkedPath)
-    const inlineResult = await appendInlineAndWait(inlinePath)
-
-    expect(inlineResult).toEqual(["inline"])
-
-    let forkedExists = true
-
     try {
-      await fs.readFile(forkedPath, "utf8")
-    } catch {
-      forkedExists = false
+      await SocketBarrierTestJob.performLaterWithOptions({
+        args: [barrier.port],
+        options: {executionMode: "forked"}
+      })
+      await barrier.waiting
+      expect(worker.inflightProcessJobs.size).toEqual(1)
+      const [forkedExecution] = worker.inflightProcessJobs
+      if (!forkedExecution) throw new Error("Expected a tracked forked execution")
+
+      const inlineResult = await appendInlineAndWait(inlinePath)
+
+      expect(inlineResult).toEqual(["inline"])
+      expect(worker.inflightProcessJobs.size).toEqual(1)
+
+      barrier.release()
+      await forkedExecution
+    } finally {
+      await barrier.close()
+      await worker.stop()
+      await main.stop()
     }
-
-    expect(forkedExists).toBeFalse()
-
-    const forkedResult = await waitForOutputJson({
-      outputPath: forkedPath,
-      predicate: (value) => value?.value === "forked",
-      timeoutSeconds: 6
-    })
-
-    expect(forkedResult).toEqual({value: "forked"})
-
-    await worker.stop()
-    await main.stop()
   })
 
   it("limits forked runner concurrency without blocking inline job capacity", async () => {

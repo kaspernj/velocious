@@ -10,11 +10,46 @@ import BackgroundJobsWorker from "../../src/background-jobs/worker.js"
 import AsyncTrackedMultiConnectionPool from "../../src/database/pool/async-tracked-multi-connection.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 
+/** @typedef {{accepted: boolean, jobId: string, status: "completed" | "failed" | "rescheduled"}} BackgroundJobUpdate */
+
 const defaultBackgroundJobsConfig = dummyConfiguration.getBackgroundJobsConfig()
 const generationConfigKeys = new Set(["generationId", "initialGenerationState", "lifecycleSocketPath"])
 const legacyDefaultBackgroundJobsConfig = Object.fromEntries(
   Object.entries(defaultBackgroundJobsConfig).filter(([key]) => !generationConfigKeys.has(key))
 )
+
+/**
+ * Observes durable background-job updates without using polling deadlines.
+ * @returns {{onJobUpdated: (update: BackgroundJobUpdate) => void, waitForUpdate: (jobId: string) => Promise<BackgroundJobUpdate>}} - Update observer.
+ */
+export function createBackgroundJobUpdateObserver() {
+  /** @type {Map<string, BackgroundJobUpdate>} */
+  const updates = new Map()
+  /** @type {Map<string, (update: BackgroundJobUpdate) => void>} */
+  const waiters = new Map()
+
+  return {
+    onJobUpdated: (update) => {
+      const waiter = waiters.get(update.jobId)
+      if (waiter) {
+        waiters.delete(update.jobId)
+        waiter(update)
+      } else {
+        updates.set(update.jobId, update)
+      }
+    },
+    waitForUpdate: (jobId) => {
+      const update = updates.get(jobId)
+      if (update) {
+        updates.delete(jobId)
+        return Promise.resolve(update)
+      }
+      if (waiters.has(jobId)) throw new Error(`Already waiting for background job update: ${jobId}`)
+
+      return new Promise((resolve) => { waiters.set(jobId, resolve) })
+    }
+  }
+}
 
 /**
  * Clears only framework background-job persistence.

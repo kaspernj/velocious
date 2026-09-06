@@ -63,7 +63,7 @@ describe("Database - query - model class query", {databaseCleaning: {transaction
     expect(count).toEqual(4)
   })
 
-  it("quotes numeric predicates for PostgreSQL character varying metadata", async () => {
+  it("matches numeric predicates against PostgreSQL character varying metadata across drivers", async () => {
     class PostgreSqlStringTask extends Record {
       static getColumnTypeByName(name) {
         if (name === "name") return "character varying"
@@ -74,10 +74,10 @@ describe("Database - query - model class query", {databaseCleaning: {transaction
 
     PostgreSqlStringTask.setTableName("tasks")
     await PostgreSqlStringTask.ensureInitialized()
+    const project = await Project.create({nameEn: "String predicate", nameDe: "String-Prädikat"})
+    await Task.create({name: "1", project})
 
-    const sql = PostgreSqlStringTask.where({name: 1}).toSql()
-
-    expect(sql).toMatch(/name[^=]*= '1'/)
+    expect(await PostgreSqlStringTask.where({name: 1}).count()).toEqual(1)
   })
 
   it("counts records after limit and offset are applied", async () => {

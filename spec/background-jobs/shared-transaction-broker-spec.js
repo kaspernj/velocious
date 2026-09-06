@@ -1,13 +1,12 @@
 // @ts-check
 
-import { outputPathFor, startBackgroundJobs, waitForJobCompleted, waitForOutputJson } from "../helpers/background-jobs-helper.js"
+import { createBackgroundJobUpdateObserver, outputPathFor, startBackgroundJobs, waitForOutputJson } from "../helpers/background-jobs-helper.js"
 import BackgroundJobsStore from "../../src/background-jobs/store.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import Project from "../dummy/src/models/project.js"
 import SharedTransactionTestJob from "../dummy/src/jobs/shared-transaction-test-job.js"
 
 const markerPrefix = `shared-transaction-broker-${process.pid}-${Date.now()}`
-const childCompletionTimeoutSeconds = 30
 /** @type {string[]} */
 const jobIds = []
 
@@ -16,6 +15,8 @@ describe("Background jobs - shared test transaction broker", {tags: ["dummy"], d
     const parentMarker = `${markerPrefix}-parent`
     await Project.create({creatingUserReference: parentMarker})
     const {main, store, worker} = await startBackgroundJobs({workerOptions: {pooledRunnerCount: 1, pooledRunnerMaxJobs: 10}})
+    const updates = createBackgroundJobUpdateObserver()
+    main.onJobUpdated = updates.onJobUpdated
 
     try {
       const modes = ["forked", "pooled", "pooled", "spawned"]
@@ -30,9 +31,9 @@ describe("Background jobs - shared test transaction broker", {tags: ["dummy"], d
           options: {executionMode}
         })
         jobIds.push(jobId)
-        // Let child database work finish before polling status on the same brokered connection.
-        const result = await waitForOutputJson({outputPath, timeoutSeconds: childCompletionTimeoutSeconds})
-        await waitForJobCompleted({jobId, store, timeoutSeconds: childCompletionTimeoutSeconds})
+        const update = await updates.waitForUpdate(jobId)
+        expect(update).toEqual({accepted: true, jobId, status: "completed"})
+        const result = await waitForOutputJson({outputPath})
 
         expect(result.parentCount).toEqual(1)
         expect(result.childCount).toEqual(1)
