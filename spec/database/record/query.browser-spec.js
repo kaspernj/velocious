@@ -208,6 +208,36 @@ describe("Record - query", {tags: ["dummy"]}, () => {
     expect(tasks[0].createdAt()).not.toBeUndefined()
   })
 
+  it("keeps explicitly selected calculated aliases in attributes without leaking them", async () => {
+    const project = await Project.create({name: "Calculated select project"})
+    const task = await Task.create({name: "Calculated select task", project})
+    const calculatedQuery = Task
+      .where({id: task.id()})
+      .select("id")
+
+    calculatedQuery.select("1 AS selectedCalculation")
+
+    const calculatedTask = await calculatedQuery.first()
+    const returnedAlias = calculatedQuery.driver.getType() == "pgsql"
+      ? "selectedcalculation"
+      : "selectedCalculation"
+
+    if (!calculatedTask) throw new Error("Expected calculated task")
+
+    expect(calculatedTask.rawAttributes()[returnedAlias]).toEqual(1)
+    expect(calculatedTask.attributes()[returnedAlias]).toEqual(1)
+    await expect(() => calculatedTask.readAttribute("selectedCalculation"))
+      .toThrow(/Couldn't figure out column name for attribute: selectedCalculation/u)
+
+    const ordinaryTask = await Task.find(task.id())
+
+    if (!ordinaryTask) throw new Error("Expected ordinary task")
+
+    ordinaryTask.loadExistingRecord({...ordinaryTask.rawAttributes(), [returnedAlias]: 2})
+
+    expect(returnedAlias in ordinaryTask.attributes()).toBeFalse()
+  })
+
   it("qualifies shorthand select columns with the latest root from reference", () => {
     const query = Task
       .all()

@@ -132,6 +132,10 @@ export type QueryOptions = {
      */
     processListComment?: boolean;
     /**
+     * - Per-request driver timeout in milliseconds; zero disables the deadline on supporting drivers.
+     */
+    requestTimeoutMs?: number;
+    /**
      * - Whether retryable errors may retry the query; defaults to true.
      */
     retry?: boolean;

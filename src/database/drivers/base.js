@@ -64,6 +64,7 @@
  * @property {string} [logName] - Query log subject.
  * @property {boolean} [logQuery] - Whether to log the query.
  * @property {boolean} [processListComment] - Whether to add process-list comments to the query.
+ * @property {number} [requestTimeoutMs] - Per-request driver timeout in milliseconds; zero disables the deadline on supporting drivers.
  * @property {boolean} [retry] - Whether retryable errors may retry the query; defaults to true.
  * @property {boolean} [sessionTimeZone] - Whether to ensure the configured database session time zone before the query.
  * @property {boolean} [sqliteScript] - Internal SQLite flag selecting native multi-statement script execution.

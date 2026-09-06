@@ -1,0 +1,1 @@
+Fixed `Record.attributes()` so rolling-schema `SELECT *` rows omit physical columns absent from an older process's cached model map while preserving calculated aliases explicitly selected by the hydrating query.

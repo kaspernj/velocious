@@ -517,6 +517,11 @@ class VelociousDatabaseRecord {
   _attributes = {}
 
   /**
+   * Unmapped result aliases explicitly selected by the query that hydrated this record.
+   * @type {Set<string>} */
+  _selectedAttributeAliases = new Set()
+
+  /**
    * Changes.
    * @type {Record<string, ReturnType<typeof JSON.parse>>} */
   _changes = {}
@@ -3809,11 +3814,13 @@ class VelociousDatabaseRecord {
 
   /**
    * Runs load existing record.
-   * @param {object} attributes - Attributes.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} attributes - Column-keyed database values.
+   * @param {Set<string>} [selectedAttributeAliases] - Explicit result aliases selected by the loading query.
    * @returns {void} - No return value.
    */
-  loadExistingRecord(attributes) {
+  loadExistingRecord(attributes, selectedAttributeAliases = new Set()) {
     this._attributes = attributes
+    this._selectedAttributeAliases = new Set(selectedAttributeAliases)
     this._isNewRecord = false
   }
 
@@ -3843,9 +3850,13 @@ class VelociousDatabaseRecord {
     const attributes = {}
 
     for (const columnName in data) {
-      const attributeName = columnNameToAttributeName[columnName] || columnName
+      if (Object.hasOwn(columnNameToAttributeName, columnName)) {
+        const attributeName = columnNameToAttributeName[columnName]
 
-      attributes[attributeName] = this.readAttribute(attributeName)
+        attributes[attributeName] = this.readAttribute(attributeName)
+      } else if (this._selectedAttributeAliases.has(columnName)) {
+        attributes[columnName] = data[columnName]
+      }
     }
 
     return attributes
@@ -4918,7 +4929,7 @@ class VelociousDatabaseRecord {
 
     if (!reloadedModel) throw new Error(`${this.constructor.name}#${id} couldn't be reloaded - record didn't exist`)
 
-    this._attributes = reloadedModel.rawAttributes()
+    this.loadExistingRecord(reloadedModel.rawAttributes(), reloadedModel._selectedAttributeAliases)
     this._changes = {}
     this._assignedAttributeNames = undefined
   }

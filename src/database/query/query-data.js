@@ -315,12 +315,11 @@ function selectedAliases(query) {
   const aliases = []
 
   for (const select of query.getSelects().slice(1)) {
-    const sql = select.toSql()
-    const match = sql.match(/\sAS\s+([^\s]+)\s*$/iu)
+    const alias = select.getAlias(query.driver)
 
-    if (!match) return null
+    if (!alias) return null
 
-    aliases.push(match[1].replace(/^["[`]|["`\]]$/gu, ""))
+    aliases.push(alias)
   }
 
   return aliases

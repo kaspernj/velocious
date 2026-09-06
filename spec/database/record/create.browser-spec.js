@@ -307,6 +307,25 @@ describe("Record - create", {tags: ["dummy"]}, () => {
     expect("created_at" in attrs).toBeFalse()
   })
 
+  it("omits raw columns missing from cached model metadata", async () => {
+    const project = await Project.create({name: "Forward-compatible attribute project"})
+    const task = await Task.create({name: "Forward-compatible attribute task", project})
+
+    task.loadExistingRecord({
+      ...task.rawAttributes(),
+      added_after_model_initialization: "new physical column"
+    })
+
+    const attrs = task.attributes()
+
+    expect(attrs.name).toEqual("Forward-compatible attribute task")
+    expect("added_after_model_initialization" in attrs).toBeFalse()
+    expect(task.rawAttributes().added_after_model_initialization).toEqual("new physical column")
+    expect(task.readColumn("added_after_model_initialization")).toEqual("new physical column")
+    await expect(() => task.readAttribute("addedAfterModelInitialization"))
+      .toThrow(/Couldn't figure out column name for attribute: addedAfterModelInitialization/u)
+  })
+
   it("returns column names from rawAttributes()", async () => {
     const project = await Project.create({name: "Column project"})
     const task = await Task.create({name: "Column task", project})
