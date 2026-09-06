@@ -102,4 +102,41 @@ describe("VelociousRunnerReporter", {databaseCleaning: {transaction: false, trun
     expect(failedEvents.length).toBe(1)
     expect(failedEvents[0].error).toBeUndefined()
   })
+
+  it("projects package root setup failures when no suite hook outcome was recorded", async () => {
+    const context = createTestContext()
+    const testRunner = buildTestingRunner({context})
+    const reporter = new VelociousRunnerReporter({testRunner})
+    const failedEvents = []
+    const handler = (payload) => failedEvents.push(payload)
+
+    declareTest(context)
+    testRunner.analyzeDeclarations()
+    testEvents.on("testFailed", handler)
+
+    try {
+      await reporter.onEvent({protocolMajor: 1, timestamp: 0, type: "test:start", fullName: "adapter reports"})
+      await reporter.onEvent({
+        protocolMajor: 1,
+        timestamp: 0,
+        type: "test:finish",
+        test: {
+          fullName: "adapter reports",
+          status: "failed",
+          attempts: [],
+          location: {},
+          error: {name: "Error", message: "root setup failed", stack: "Error: root setup failed\n    at root-setup.js:1:1"}
+        }
+      })
+    } finally {
+      testEvents.off("testFailed", handler)
+    }
+
+    const failedError = testRunner.getFailedTestDetails()[0].error
+
+    expect(failedError).toBeInstanceOf(Error)
+    expect(failedError.message).toEqual("root setup failed")
+    expect(failedError.stack).toContain("root-setup.js:1:1")
+    expect(failedEvents[0].error).toBe(failedError)
+  })
 })

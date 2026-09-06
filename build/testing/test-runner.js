@@ -1484,13 +1484,15 @@ export default class TestRunner {
   recordSuiteHookFailure(failure) { this._suiteHookFailures.push(failure) }
 
   /**
-   * Gets the raw ancestor setup failure for a package test.
+   * Gets the raw ancestor setup failure outcome for a package test.
    * @param {PackageTestDeclaration} test - Package test declaration.
-   * @returns {ReturnType<typeof JSON.parse>} - Raw setup failure.
+   * @returns {{failed: false} | {failed: true, error: ReturnType<typeof JSON.parse>}} - Raw setup failure outcome.
    */
-  setupFailureFor(test) {
+  setupFailureOutcomeFor(test) {
     const suites = this.testMetadata(test).suites
-    return this._suiteHookFailures.find((failure) => failure.phase === "beforeAll" && suites.includes(failure.suite))?.error
+    const failure = this._suiteHookFailures.find((entry) => entry.phase === "beforeAll" && suites.includes(entry.suite))
+
+    return failure ? {failed: true, error: failure.error} : {failed: false}
   }
 
   /**

@@ -1,5 +1,5 @@
 export type PackageTestDeclaration = import("@velocious/testing/runner").TestDeclaration;
-/** @typedef {import("@velocious/testing/runner").TestDeclaration} PackageTestDeclaration */
+export type PackageTestErrorRecord = import("@velocious/testing/runner").TestErrorRecord;
 /** Stops package traversal after framework-owned connection quarantine. */
 export declare class AbortRemainingTestsError extends Error {
 }
