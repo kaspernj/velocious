@@ -27,6 +27,22 @@ describe("Frontend models - websocket publishers", {databaseCleaning: {transacti
     }])
   })
 
+  it("publishes a counter-cache parent loaded through a schema-bound model class", async () => {
+    const {broadcasts, invokeCounterUpdate} = await counterCacheParentUpdateHarness({schemaBoundParentModelClass: true})
+
+    await invokeCounterUpdate()
+
+    expect(broadcasts).toEqual([{
+      body: {
+        action: "update",
+        id: 7,
+        model: "CounterCacheParent"
+      },
+      broadcastParams: {model: "CounterCacheParent"},
+      channel: "frontend-models"
+    }])
+  })
+
   it("keeps destroy authorization records out of the persisted broadcast body", async () => {
     class TestRecord extends Record {}
 

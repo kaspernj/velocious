@@ -18,13 +18,14 @@ describe("database records - counter-cache parent update delivery", {databaseCle
 
     await invokeCounterUpdate()
 
-    expect(parentFindConditions).toEqual([{id: 7}])
+    expect(parentFindConditions).toEqual([{id: 7}, {id: 7}])
     expect(broadcasts).toEqual([])
   })
 
   it("delivers the complete committed parent record to the publisher", async () => {
     const {broadcasts, invokeCounterUpdate} = await counterCacheParentUpdateHarness({
       parentAttributes: {counterCacheChildrenCount: 3, id: 7, name: "Committed parent"},
+      previousParentAttributes: {counterCacheChildrenCount: 2, id: 7, name: "Previous parent"},
       primaryKey: ["id", "counterCacheChildrenCount"]
     })
 
@@ -33,7 +34,8 @@ describe("database records - counter-cache parent update delivery", {databaseCle
     expect(broadcasts.map(({body}) => body)).toEqual([{
       action: "update",
       id: {counterCacheChildrenCount: 3, id: 7},
-      model: "CounterCacheParent"
+      model: "CounterCacheParent",
+      previousId: {counterCacheChildrenCount: 2, id: 7}
     }])
   })
 

@@ -28,7 +28,7 @@ describe("database records - counter-cache parent update transaction semantics",
       expect(error).toBe(rollbackError)
     }
 
-    expect(parentFindConditions).toEqual([])
+    expect(parentFindConditions).toEqual([{id: 7}])
     expect(broadcasts).toEqual([])
   })
 
@@ -44,7 +44,7 @@ describe("database records - counter-cache parent update transaction semantics",
     })
 
     expect(attempts).toEqual(2)
-    expect(parentFindConditions).toEqual([{id: 7}])
+    expect(parentFindConditions).toEqual([{id: 7}, {id: 7}, {id: 7}])
     expect(broadcasts.map(({body}) => body)).toEqual([{action: "update", id: 7, model: "CounterCacheParent"}])
   })
 
@@ -67,7 +67,7 @@ describe("database records - counter-cache parent update transaction semantics",
 
     await invokeCounterUpdate()
 
-    expect(parentFindConditions).toEqual([{id: 7}])
+    expect(parentFindConditions).toEqual([{id: 7}, {id: 7}])
     expect(broadcasts.map(({body}) => body)).toEqual([{action: "update", id: 7, model: "CounterCacheParent"}])
   })
 
@@ -79,7 +79,7 @@ describe("database records - counter-cache parent update transaction semantics",
       await invokeCounterUpdate()
     })
 
-    expect(parentFindConditions).toEqual([{id: 7}, {id: 7}])
+    expect(parentFindConditions).toEqual([{id: 7}, {id: 7}, {id: 7}, {id: 7}])
     expect(broadcasts.map(({body}) => body)).toEqual([
       {action: "update", id: 7, model: "CounterCacheParent"},
       {action: "update", id: 7, model: "CounterCacheParent"}

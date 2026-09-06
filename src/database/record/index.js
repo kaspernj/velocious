@@ -56,7 +56,7 @@ import {formatValue} from "../../utils/format-value.js"
 import {modelPrimaryKeyCacheKey, modelPrimaryKeyConditions, readModelPrimaryKeyValue, scalarModelPrimaryKey, scalarModelPrimaryKeyValue} from "../../utils/model-primary-key.js"
 import {captureCreateAuditChanges, captureUpdateAuditChanges, createAudit, createCreateAudit, createDestroyAudit, createUpdateAudit, initializeAuditing, registerAuditCallback, registerAuditing, withoutAudit} from "./auditing.js"
 import {registerMagnitudeCounterCache} from "./counter-cache-magnitude.js"
-import {scheduleCounterCacheParentUpdate} from "./counter-cache-parent-updates.js"
+import {prepareCounterCacheParentUpdate, scheduleCounterCacheParentUpdate} from "./counter-cache-parent-updates.js"
 import {stateMachine} from "./state-machine.js"
 import ValidatorsFormat from "./validators/format.js"
 import ValidatorsLength from "./validators/length.js"
@@ -1003,15 +1003,18 @@ class VelociousDatabaseRecord {
       const parentQuery = record.queryForModel(ParentModel)
       const connection = parentQuery.driver
       const quoted = connection.quote(parentId)
+      const preparedParentUpdate = await prepareCounterCacheParentUpdate({
+        parentId,
+        parentModelClass: ParentModel,
+        parentPrimaryKey: primaryKey,
+        parentQuery
+      })
 
       const sql = `UPDATE ${connection.quoteTable(parentTable)} SET ${connection.quoteColumn(counterColumn)} = (SELECT COUNT(*) FROM ${connection.quoteTable(childTable)} WHERE ${connection.quoteColumn(fk)} = ${quoted}) WHERE ${connection.quoteColumn(pkColumn)} = ${quoted}`
 
       await connection.query(sql, {logName: `${ParentModel.name} Update`})
       await scheduleCounterCacheParentUpdate({
-        parentId,
-        parentModelClass: ParentModel,
-        parentPrimaryKey: primaryKey,
-        parentQuery,
+        preparedUpdate: preparedParentUpdate,
         sourceRecord: record
       })
     }

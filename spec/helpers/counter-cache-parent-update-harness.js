@@ -56,8 +56,10 @@ class CounterCacheParentTransactionDriver extends DatabaseDriverBase {
  * @param {Error} [options.findError] - Error raised while reloading the parent.
  * @param {boolean} [options.missingParent] - Whether the parent reload returns no record.
  * @param {Record<string, ReturnType<typeof JSON.parse>>} [options.parentAttributes] - Reloaded parent attributes.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} [options.previousParentAttributes] - Parent attributes visible before the counter mutation.
  * @param {string | string[]} [options.primaryKey] - Frontend resource identity.
  * @param {boolean} [options.registerPublisher] - Whether to register a parent delivery listener.
+ * @param {boolean} [options.schemaBoundParentModelClass] - Whether reloaded parents expose an operation-bound model proxy.
  * @returns {Promise<{
  *   broadcasts: Array<{body: Record<string, ReturnType<typeof JSON.parse>>, broadcastParams: Record<string, ReturnType<typeof JSON.parse>>, channel: string}>,
  *   errorEvents: EventEmitter,
@@ -73,8 +75,10 @@ export async function counterCacheParentUpdateHarness({
   findError,
   missingParent = false,
   parentAttributes = {counterCacheChildrenCount: 1, id: 7, name: "Committed parent"},
+  previousParentAttributes = parentAttributes,
   primaryKey = "id",
-  registerPublisher = true
+  registerPublisher = true,
+  schemaBoundParentModelClass = false
 } = {}) {
   /** @type {import("../../src/configuration.js").default} */
   let configuration
@@ -107,6 +111,14 @@ export async function counterCacheParentUpdateHarness({
     }
   }
 
+  const reloadedParentModelClass = schemaBoundParentModelClass
+    ? new Proxy(CounterCacheParent, {
+      get: (target, property, receiver) => property == "_recordMetadataModelClass"
+        ? target
+        : Reflect.get(target, property, receiver)
+    })
+    : CounterCacheParent
+
   CounterCacheChild._registerCounterCacheCallbacks("counterCacheParent")
 
   /** @type {Array<{body: Record<string, ReturnType<typeof JSON.parse>>, broadcastParams: Record<string, ReturnType<typeof JSON.parse>>, channel: string}>} */
@@ -132,26 +144,37 @@ export async function counterCacheParentUpdateHarness({
     registerWebsocketChannel: () => {}
   })
 
-  const parent = /** @type {InstanceType<typeof CounterCacheParent>} */ ({
-    _getConfiguration: () => configuration,
-    attributes: () => parentAttributes,
-    changes: () => ({}),
-    getModelClass: () => CounterCacheParent
-  })
+  /**
+   * Builds one immutable reload snapshot so the pre-mutation record retains its old identity.
+   * @param {Record<string, ReturnType<typeof JSON.parse>>} attributes - Reloaded attributes.
+   * @returns {InstanceType<typeof CounterCacheParent>} - Parent snapshot.
+   */
+  function reloadedParent(attributes) {
+    return /** @type {InstanceType<typeof CounterCacheParent>} */ ({
+      _getConfiguration: () => configuration,
+      attributes: () => attributes,
+      changes: () => ({}),
+      getModelClass: () => reloadedParentModelClass
+    })
+  }
+
+  let counterWriteCompleted = false
   /** @type {Record<string, ReturnType<typeof JSON.parse>>[]} */
   const parentFindConditions = []
   const parentQuery = {
     driver: {
-      query: async () => {},
+      query: async () => { counterWriteCompleted = true },
       quote: (/** @type {number | string} */ value) => `${value}`,
       quoteColumn: (/** @type {string} */ column) => `"${column}"`,
       quoteTable: (/** @type {string} */ table) => `"${table}"`
     },
     findBy: async (/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ conditions) => {
       parentFindConditions.push(conditions)
-      if (findError) throw findError
+      if (findError && counterWriteCompleted) throw findError
 
-      return missingParent ? undefined : parent
+      if (missingParent) return undefined
+
+      return reloadedParent(counterWriteCompleted ? parentAttributes : previousParentAttributes)
     }
   }
   const sourceConnection = new CounterCacheParentTransactionDriver({deadlockMaxRetries: 2}, Configuration.current())

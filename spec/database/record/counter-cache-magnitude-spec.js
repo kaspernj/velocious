@@ -341,7 +341,7 @@ describe("magnitudeCounterCache", {databaseCleaning: {transaction: true}}, () =>
       removeListener()
     }
 
-    expect(currentParentFindConditions).toEqual([{id: "srv1"}])
+    expect(currentParentFindConditions).toEqual([{id: "srv1"}, {id: "srv1"}])
     expect(deliveredParents).toEqual([currentReloadedParent])
   })
 })

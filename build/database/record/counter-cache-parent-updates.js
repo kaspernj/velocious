@@ -3,7 +3,8 @@
 import Logger from "../../logger.js"
 import {ensureError} from "typanic"
 
-/** @typedef {(parent: import("./index.js").default) => void | Promise<void>} CounterCacheParentUpdateListener */
+/** @typedef {(parent: import("./index.js").default, previousParent: import("./index.js").default | undefined) => void | Promise<void>} CounterCacheParentUpdateListener */
+/** @typedef {{canonicalParentModelClass: typeof import("./index.js").default, listeners: CounterCacheParentUpdateListener[], parentId: ReturnType<typeof JSON.parse>, parentPrimaryKey: string, parentQuery: import("../query/model-class-query.js").default<typeof import("./index.js").default>, previousParent: import("./index.js").default | undefined}} PreparedCounterCacheParentUpdate */
 
 /** @type {WeakMap<typeof import("./index.js").default, Set<CounterCacheParentUpdateListener>>} */
 const listenersByParentModelClass = new WeakMap()
@@ -29,22 +30,42 @@ export function registerCounterCacheParentUpdateListener(parentModelClass, liste
 }
 
 /**
- * Schedules one non-coalesced parent reload and notification on the source record's commit lifecycle.
+ * Captures one counter-cache parent's pre-mutation state when listeners are registered.
  * @param {object} args - Parent update arguments.
  * @param {ReturnType<typeof JSON.parse>} args.parentId - Parent relationship identity.
  * @param {typeof import("./index.js").default} args.parentModelClass - Parent model class.
  * @param {string} args.parentPrimaryKey - Parent relationship primary key.
  * @param {import("../query/model-class-query.js").default<typeof import("./index.js").default>} args.parentQuery - Source-owned parent query.
- * @param {import("./index.js").default} args.sourceRecord - Source record that owns the transaction lifecycle.
- * @returns {Promise<void>} - Resolves after registration or immediate delivery.
+ * @returns {Promise<PreparedCounterCacheParentUpdate | undefined>} - Prepared delivery, or undefined when no listener is registered.
  */
-export async function scheduleCounterCacheParentUpdate({parentId, parentModelClass, parentPrimaryKey, parentQuery, sourceRecord}) {
+export async function prepareCounterCacheParentUpdate({parentId, parentModelClass, parentPrimaryKey, parentQuery}) {
   const canonicalParentModelClass = parentModelClass.canonicalRecordMetadataModelClass()
   const registeredListeners = listenersByParentModelClass.get(canonicalParentModelClass)
 
   if (!registeredListeners || registeredListeners.size == 0) return
+  const previousParent = await parentQuery.findBy({[parentPrimaryKey]: parentId}) || undefined
 
-  const listeners = [...registeredListeners]
+  return {
+    canonicalParentModelClass,
+    listeners: [...registeredListeners],
+    parentId,
+    parentPrimaryKey,
+    parentQuery,
+    previousParent
+  }
+}
+
+/**
+ * Schedules one non-coalesced parent reload and notification on the source record's commit lifecycle.
+ * @param {object} args - Parent update arguments.
+ * @param {PreparedCounterCacheParentUpdate | undefined} args.preparedUpdate - Pre-mutation parent delivery state.
+ * @param {import("./index.js").default} args.sourceRecord - Source record that owns the transaction lifecycle.
+ * @returns {Promise<void>} - Resolves after registration or immediate delivery.
+ */
+export async function scheduleCounterCacheParentUpdate({preparedUpdate, sourceRecord}) {
+  if (!preparedUpdate) return
+
+  const {canonicalParentModelClass, listeners, parentId, parentPrimaryKey, parentQuery, previousParent} = preparedUpdate
 
   await sourceRecord.connection().afterCommit(async () => {
     let parent
@@ -60,7 +81,7 @@ export async function scheduleCounterCacheParentUpdate({parentId, parentModelCla
 
     for (const listener of listeners) {
       try {
-        await listener(parent)
+        await listener(parent, previousParent)
       } catch (error) {
         await reportCounterCacheParentUpdateError(parent._getConfiguration(), error)
       }
