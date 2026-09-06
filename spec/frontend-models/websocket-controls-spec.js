@@ -217,6 +217,111 @@ describe("frontend-models - WebSocket controls", () => {
     }
   })
 
+  it("finishes graceful shutdown when a pending channel close callback throws", async () => {
+    const OriginalWebSocket = globalThis.WebSocket
+    const callbackError = new Error("channel close callback failed")
+    /** @type {Array<{name: string, reason: string}>} */
+    const closures = []
+    /** @type {Promise<void> | undefined} */
+    let reentrantClose
+
+    ControlledWebSocket.autoOpen = true
+    ControlledWebSocket.closeCodes = []
+    ControlledWebSocket.instances = []
+    globalThis.WebSocket = /** @type {typeof WebSocket} */ (ControlledWebSocket)
+
+    const client = new VelociousWebsocketClient({url: "ws://example.test/websocket"})
+
+    try {
+      await client.connect()
+      const firstSubscription = client.subscribeChannel("first-pending", {
+        onClose: (reason) => {
+          closures.push({name: "first", reason})
+          throw callbackError
+        }
+      })
+      const secondSubscription = client.subscribeChannel("second-pending", {
+        onClose: (reason) => {
+          closures.push({name: "second", reason})
+          reentrantClose = expect(async () => await client.close()).toThrow(callbackError)
+        }
+      })
+      const expectedReadyError = "Subscription closed before acknowledgement: client_close"
+      const firstReadyRejection = expect(async () => await firstSubscription.ready).toThrow(expectedReadyError)
+      const secondReadyRejection = expect(async () => await secondSubscription.ready).toThrow(expectedReadyError)
+
+      const closeError = await client.close().catch((error) => error)
+
+      expect(closures).toEqual([
+        {name: "first", reason: "client_close"},
+        {name: "second", reason: "client_close"}
+      ])
+      expect(firstSubscription.isClosed()).toBe(true)
+      expect(secondSubscription.isClosed()).toBe(true)
+      expect(ControlledWebSocket.closeCodes).toEqual([1000])
+      expect(client.isOpen()).toBe(false)
+      expect(client.socket).toBe(undefined)
+      expect(closeError).toBe(callbackError)
+      await Promise.all([firstReadyRejection, secondReadyRejection])
+
+      if (!reentrantClose) throw new Error("Expected the second close callback to reenter client.close()")
+      await reentrantClose
+    } finally {
+      const socket = ControlledWebSocket.instances[0]
+
+      if (socket && socket.readyState !== socket.CLOSED) socket.close()
+      globalThis.WebSocket = OriginalWebSocket
+    }
+  })
+
+  it("does not emit an unhandled rejection when a pending channel close callback throws", async () => {
+    const OriginalWebSocket = globalThis.WebSocket
+    const callbackError = new Error("channel close callback failed")
+    /** @type {string[]} */
+    const closeReasons = []
+    /** @type {unknown[]} */
+    const unhandledRejections = []
+    const onUnhandledRejection = (reason) => unhandledRejections.push(reason)
+
+    ControlledWebSocket.autoOpen = true
+    ControlledWebSocket.closeCodes = []
+    ControlledWebSocket.instances = []
+    globalThis.WebSocket = /** @type {typeof WebSocket} */ (ControlledWebSocket)
+    process.on("unhandledRejection", onUnhandledRejection)
+
+    const client = new VelociousWebsocketClient({url: "ws://example.test/websocket"})
+
+    try {
+      await client.connect()
+      const subscription = client.subscribeChannel("pending", {
+        onClose: (reason) => {
+          closeReasons.push(reason)
+          throw callbackError
+        }
+      })
+      const readyRejection = expect(async () => await subscription.ready)
+        .toThrow("Subscription closed before acknowledgement: client_close")
+
+      const closeError = await client.close().catch((error) => error)
+
+      await readyRejection
+      await wait(0)
+      expect(closeReasons).toEqual(["client_close"])
+      expect(subscription.isClosed()).toBe(true)
+      expect(ControlledWebSocket.closeCodes).toEqual([1000])
+      expect(client.isOpen()).toBe(false)
+      expect(client.socket).toBe(undefined)
+      expect(closeError).toBe(callbackError)
+      expect(unhandledRejections).toEqual([])
+    } finally {
+      process.removeListener("unhandledRejection", onUnhandledRejection)
+      const socket = ControlledWebSocket.instances[0]
+
+      if (socket && socket.readyState !== socket.CLOSED) socket.close()
+      globalThis.WebSocket = OriginalWebSocket
+    }
+  })
+
   it("composes configured controls into direct connect and preserves the session abort reason", async () => {
     const OriginalWebSocket = globalThis.WebSocket
     const controller = new AbortController()
