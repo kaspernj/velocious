@@ -46,7 +46,7 @@ export default class DbCreate extends DbBaseCommand{
     const databaseName = digg(databaseConfiguration, "database")
     const {databaseCharset, databaseCollation} = databaseConfiguration
     const sqls = this.getDatabaseConnection().createDatabaseSql(databaseName, {ifNotExists: true, databaseCharset, databaseCollation})
-    await this.queryOrCollectSqls(sqls, (sql) => ({databaseName, sql}))
+    await this.queryOrCollectSqls(sqls, (sql) => ({databaseName, sql}), {requestTimeoutMs: 0})
   }
 
   /**

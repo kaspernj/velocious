@@ -123,9 +123,10 @@ export default class VelociousDatabaseDriversMssql extends Base {
     /**
      * Runs query actual.
      * @param {string} sql - SQL string.
+     * @param {import("../base.js").QueryOptions} [options] - Query options.
      * @returns {Promise<import("../base.js").QueryResultType>} - Resolves with the query actual.
      */
-    _queryActual(sql: string): Promise<import("../base.js").QueryResultType>;
+    _queryActual(sql: string, options?: import("../base.js").QueryOptions): Promise<import("../base.js").QueryResultType>;
     /**
      * Executes a mutation with affected-row metadata.
      * @param {string} sql - Mutation SQL.

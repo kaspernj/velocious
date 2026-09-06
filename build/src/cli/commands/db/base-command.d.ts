@@ -24,9 +24,10 @@ export default class DbBaseCommand extends BaseCommand {
      * Runs query or collect sqls.
      * @param {string[]} sqls - SQL statements.
      * @param {(sql: string) => object} resultEntryForSql - Test result entry builder.
+     * @param {import("../../../database/drivers/base.js").QueryOptions} [options] - Query options.
      * @returns {Promise<void>} - Resolves when SQLs have been collected or executed.
      */
-    queryOrCollectSqls(sqls: string[], resultEntryForSql: (sql: string) => object): Promise<void>;
+    queryOrCollectSqls(sqls: string[], resultEntryForSql: (sql: string) => object, options?: import("../../../database/drivers/base.js").QueryOptions): Promise<void>;
     /**
      * Runs collect sql results.
      * @param {string[]} sqls - SQL statements.
@@ -37,8 +38,9 @@ export default class DbBaseCommand extends BaseCommand {
     /**
      * Runs query sqls.
      * @param {string[]} sqls - SQL statements.
+     * @param {import("../../../database/drivers/base.js").QueryOptions} [options] - Query options.
      * @returns {Promise<void>} - Resolves when complete.
      */
-    querySqls(sqls: string[]): Promise<void>;
+    querySqls(sqls: string[], options?: import("../../../database/drivers/base.js").QueryOptions): Promise<void>;
 }
 //# sourceMappingURL=base-command.d.ts.map

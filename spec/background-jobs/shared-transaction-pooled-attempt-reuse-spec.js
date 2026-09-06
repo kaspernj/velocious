@@ -17,7 +17,7 @@ describe("Background jobs - pooled broker attempt reuse", {tags: ["dummy"], data
   beforeAll(async () => {
     backgroundJobs = await startBackgroundJobs({workerOptions: {pooledRunnerConcurrency: 2, pooledRunnerCount: 1, pooledRunnerMaxJobs: 10}})
     backgroundJobs.worker._createPooledChild()
-    updateObserver = createBackgroundJobUpdateObserver()
+    updateObserver = createBackgroundJobUpdateObserver({store: backgroundJobs.store})
     backgroundJobs.main.onJobUpdated = updateObserver.onJobUpdated
   })
 

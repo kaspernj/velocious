@@ -45,13 +45,14 @@ export default class DbBaseCommand extends BaseCommand {
    * Runs query or collect sqls.
    * @param {string[]} sqls - SQL statements.
    * @param {(sql: string) => object} resultEntryForSql - Test result entry builder.
+   * @param {import("../../../database/drivers/base.js").QueryOptions} [options] - Query options.
    * @returns {Promise<void>} - Resolves when SQLs have been collected or executed.
    */
-  async queryOrCollectSqls(sqls, resultEntryForSql) {
+  async queryOrCollectSqls(sqls, resultEntryForSql, options = {}) {
     if (this.args.testing) {
       this.collectSqlResults(sqls, resultEntryForSql)
     } else {
-      await this.querySqls(sqls)
+      await this.querySqls(sqls, options)
     }
   }
 
@@ -72,11 +73,12 @@ export default class DbBaseCommand extends BaseCommand {
   /**
    * Runs query sqls.
    * @param {string[]} sqls - SQL statements.
+   * @param {import("../../../database/drivers/base.js").QueryOptions} [options] - Query options.
    * @returns {Promise<void>} - Resolves when complete.
    */
-  async querySqls(sqls) {
+  async querySqls(sqls, options = {}) {
     for (const sql of sqls) {
-      await this.getDatabaseConnection().query(sql)
+      await this.getDatabaseConnection().query(sql, options)
     }
   }
 }

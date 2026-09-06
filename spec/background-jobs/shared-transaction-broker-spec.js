@@ -15,7 +15,7 @@ describe("Background jobs - shared test transaction broker", {tags: ["dummy"], d
     const parentMarker = `${markerPrefix}-parent`
     await Project.create({creatingUserReference: parentMarker})
     const {main, store, worker} = await startBackgroundJobs({workerOptions: {pooledRunnerCount: 1, pooledRunnerMaxJobs: 10}})
-    const updates = createBackgroundJobUpdateObserver()
+    const updates = createBackgroundJobUpdateObserver({store})
     main.onJobUpdated = updates.onJobUpdated
 
     try {

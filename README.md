@@ -1515,6 +1515,8 @@ You can chain multiple commands in one invocation:
 npx velocious db:create db:migrate
 ```
 
+Database creation waits for the server-side DDL to finish. On MS-SQL, only the `CREATE DATABASE` request bypasses node-mssql's ordinary request deadline; later schema and application queries keep their configured timeout.
+
 Run script files with initialized app/database context:
 
 ```bash

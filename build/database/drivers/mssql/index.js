@@ -320,9 +320,10 @@ export default class VelociousDatabaseDriversMssql extends Base{
   /**
    * Runs query actual.
    * @param {string} sql - SQL string.
+   * @param {import("../base.js").QueryOptions} [options] - Query options.
    * @returns {Promise<import("../base.js").QueryResultType>} - Resolves with the query actual.
    */
-  async _queryActual(sql) {
+  async _queryActual(sql, options = {}) {
     let result
     let tries = 0
 
@@ -330,9 +331,16 @@ export default class VelociousDatabaseDriversMssql extends Base{
       tries++
 
       try {
-        const request = this._currentTransaction
-          ? new mssql.Request(this._currentTransaction)
-          : new mssql.Request(this.connection)
+        const requestOptions = options.requestTimeoutMs === undefined
+          ? undefined
+          : {requestTimeout: options.requestTimeoutMs}
+        // node-mssql supports request-local overrides, but its DefinitelyTyped
+        // constructor declaration still exposes only the legacy first argument.
+        const request = requestOptions
+          ? Reflect.construct(mssql.Request, [this._currentTransaction || this.connection, requestOptions])
+          : this._currentTransaction
+            ? new mssql.Request(this._currentTransaction)
+            : new mssql.Request(this.connection)
         result = await request.query(sql)
         break
       } catch (error) {

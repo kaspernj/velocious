@@ -20,9 +20,11 @@ const legacyDefaultBackgroundJobsConfig = Object.fromEntries(
 
 /**
  * Observes durable background-job updates without using polling deadlines.
+ * @param {object} args - Observer options.
+ * @param {BackgroundJobsStore} args.store - Durable job store used to surface failure details.
  * @returns {{onJobUpdated: (update: BackgroundJobUpdate) => void, waitForUpdate: (jobId: string) => Promise<BackgroundJobUpdate>}} - Update observer.
  */
-export function createBackgroundJobUpdateObserver() {
+export function createBackgroundJobUpdateObserver({store}) {
   /** @type {Map<string, BackgroundJobUpdate>} */
   const updates = new Map()
   /** @type {Map<string, (update: BackgroundJobUpdate) => void>} */
@@ -38,15 +40,21 @@ export function createBackgroundJobUpdateObserver() {
         updates.set(update.jobId, update)
       }
     },
-    waitForUpdate: (jobId) => {
-      const update = updates.get(jobId)
-      if (update) {
-        updates.delete(jobId)
-        return Promise.resolve(update)
+    waitForUpdate: async (jobId) => {
+      let update = updates.get(jobId)
+      if (update) updates.delete(jobId)
+      else {
+        if (waiters.has(jobId)) throw new Error(`Already waiting for background job update: ${jobId}`)
+        update = await new Promise((resolve) => { waiters.set(jobId, resolve) })
       }
-      if (waiters.has(jobId)) throw new Error(`Already waiting for background job update: ${jobId}`)
 
-      return new Promise((resolve) => { waiters.set(jobId, resolve) })
+      if (update.status === "failed") {
+        const failedJob = await store.getJob(jobId)
+
+        throw new Error(`Background job ${jobId} failed: ${failedJob?.lastError || "failure details unavailable"}`)
+      }
+
+      return update
     }
   }
 }
