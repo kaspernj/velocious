@@ -53,8 +53,10 @@ The compatibility contract is covered by
   `testArgs` object across retries;
 - a failed `beforeAll` prevents descendant callbacks, records every selected
   descendant as a matched failure outcome even though it has no attempt, and
-  still runs `afterAll`; after-all failures reject the Velocious run after
-  same-scope cleanup continues in reverse order;
+  still runs `afterAll`; Velocious restores the package runner's serialized
+  setup error when its deadline fires before the adapter hook returns, so these
+  zero-attempt failures retain their message and stack; after-all failures reject
+  the Velocious run after same-scope cleanup continues in reverse order;
 - legacy attempt/retry/final-failure event listeners are awaited in order; and
 - cleanup aggregation retains falsy values thrown or rejected by the test body.
 
@@ -75,9 +77,11 @@ callbacks with no arguments.
 The package stores serializable errors in its results. Velocious separately retains
 the raw thrown value for awaited `testAttemptFailed`, `testRetrying`, `testRetried`,
 and `testFailed` payloads, including `undefined`, `null`, `false`, `0`, and an empty
-string. Compatible physical copies share protocol-1/schema-3 declarations, matcher
-context, runner events, and real deadline primitives; schema-1 copies fail at import
-in either order.
+string. When a package-owned setup deadline prevents the adapter from retaining the
+raw value in time, the final failure uses the serialized package error instead of an
+undefined diagnostic. Compatible physical copies share protocol-1/schema-3
+declarations, matcher context, runner events, and real deadline primitives; schema-1
+copies fail at import in either order.
 
 ## Truncation cleanup
 

@@ -837,11 +837,16 @@ export default class TestRunner {
         error: ReturnType<typeof JSON.parse>;
     }): void;
     /**
-     * Gets the raw ancestor setup failure for a package test.
+     * Gets the raw ancestor setup failure outcome for a package test.
      * @param {PackageTestDeclaration} test - Package test declaration.
-     * @returns {ReturnType<typeof JSON.parse>} - Raw setup failure.
+     * @returns {{failed: false} | {failed: true, error: ReturnType<typeof JSON.parse>}} - Raw setup failure outcome.
      */
-    setupFailureFor(test: PackageTestDeclaration): ReturnType<typeof JSON.parse>;
+    setupFailureOutcomeFor(test: PackageTestDeclaration): {
+        failed: false;
+    } | {
+        failed: true;
+        error: ReturnType<typeof JSON.parse>;
+    };
     /**
      * Finds the next incomplete declaration with a package full name.
      * @param {string} fullName - Package full name.

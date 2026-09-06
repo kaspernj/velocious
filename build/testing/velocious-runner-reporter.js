@@ -7,6 +7,23 @@ import restArgsError from "../utils/rest-args-error.js"
 import { testEvents } from "./test.js"
 
 /** @typedef {import("@velocious/testing/runner").TestDeclaration} PackageTestDeclaration */
+/** @typedef {import("@velocious/testing/runner").TestErrorRecord} PackageTestErrorRecord */
+
+/**
+ * Restores the Error shape serialized by the package runner.
+ * @param {PackageTestErrorRecord} errorRecord - Serialized package failure.
+ * @returns {Error} - Error compatible with Velocious's legacy reporter contract.
+ */
+function errorFromPackageRecord(errorRecord) {
+  const error = errorRecord.errors
+    ? new AggregateError(errorRecord.errors.map(errorFromPackageRecord), errorRecord.message)
+    : new Error(errorRecord.message)
+
+  error.name = errorRecord.name
+  if (errorRecord.stack) error.stack = errorRecord.stack
+
+  return error
+}
 
 /** Stops package traversal after framework-owned connection quarantine. */
 export class AbortRemainingTestsError extends Error {}
@@ -186,9 +203,14 @@ export default class VelociousRunnerReporter {
       const outcome = finalAttempt
         ? this.testRunner.attemptOutcome(test, finalAttempt.attemptNumber)
         : undefined
+      const setupFailure = this.testRunner.setupFailureOutcomeFor(test)
       const error = outcome?.failed
         ? outcome.error
-        : this.testRunner.setupFailureFor(test)
+        : setupFailure.failed
+          ? setupFailure.error
+          : packageTestResult.error
+            ? errorFromPackageRecord(packageTestResult.error)
+            : undefined
 
       await this.reportFailedTest({
         attemptConsoleOutputs: this.attemptConsoleOutputs.get(test) || [],
