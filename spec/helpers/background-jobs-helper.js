@@ -51,7 +51,8 @@ export function createBackgroundJobUpdateObserver({store}) {
       if (update.status === "failed") {
         const failedJob = await store.getJob(jobId)
 
-        throw new Error(`Background job ${jobId} failed: ${failedJob?.lastError || "failure details unavailable"}`)
+        if (!failedJob) throw new Error(`Background job ${jobId} reported failure without a durable row`)
+        throw new Error(`Background job ${jobId} failed: ${failedJob.lastError}`)
       }
 
       return update
