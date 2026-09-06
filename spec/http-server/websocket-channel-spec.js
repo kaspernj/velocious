@@ -449,7 +449,7 @@ describe("WebsocketChannelV2 ()", {databaseCleaning: {transaction: true}}, () =>
     })
   })
 
-  it("fires onClose(session_destroyed) on all live subscriptions when the socket drops", async () => {
+  it("fires onClose(client_close) on all live subscriptions when the client closes", async () => {
     await Dummy.run(async () => {
       const client = new WebsocketClient()
 
@@ -466,7 +466,7 @@ describe("WebsocketChannelV2 ()", {databaseCleaning: {transaction: true}}, () =>
       await client.close()
 
       await waitFor(() => subscription.isClosed())
-      expect(closeReasons).toEqual(["session_destroyed"])
+      expect(closeReasons).toEqual(["client_close"])
     })
   })
 
