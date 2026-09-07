@@ -1,0 +1,1 @@
+Update SnapReq to 0.0.15 so WebSocket clients preserve fresh-session and reconnect handshake ordering, wait for session readiness across concurrent callers, and reject all waiting callers if a reconnect closes before readiness.
