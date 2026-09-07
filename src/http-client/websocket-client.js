@@ -180,12 +180,12 @@ export default class VelociousWebsocketClient extends SnapReqWebSocketClient {
     this.reconnectGeneration += 1
     await super.disconnectAndStopReconnect()
 
-    if (this.runningReconnectTasks.size === 0) return
-
     while (this.runningReconnectTasks.size > 0) {
       await Promise.all(this.runningReconnectTasks)
     }
 
+    // A stale attempt may have finished during the first close after changing
+    // stopped state, even when the task set is already empty here.
     await super.disconnectAndStopReconnect()
   }
 }
