@@ -1111,6 +1111,14 @@ export default class TestRunner {
   }
 
   /**
+   * Distinguishes an empty selection from a failure before selected cases execute.
+   * @returns {boolean} - Whether selection matched no declarations.
+   */
+  hasNoMatches() {
+    return this._packageResult?.noMatches === true
+  }
+
+  /**
    * Returns the tests recorded during the run, slowest first.
    * @param {number} [limit] - Maximum number of tests to return (0 returns all).
    * @returns {Array<{fullDescription: string, filePath: string, line: number, durationMs: number}>} - Slowest tests, slowest first.
