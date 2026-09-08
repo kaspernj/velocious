@@ -28,13 +28,16 @@ run; the browser runner executes them normally.
 
 ## Package runner and Velocious compatibility
 
-Velocious uses `@velocious/testing` `0.0.9` as its framework-neutral declaration
+Velocious uses `@velocious/testing` `0.0.12` as its framework-neutral declaration
 registry and execution engine. The package owns focus/tag/example/line selection,
 suite traversal, retries, console capture, structured runner events, and result
 accounting. Velocious adapts each package attempt with application/request arguments,
 database and tenant cleanup, shared-transaction brokers, pending broadcasts, dummy
 handling, timeout quarantine, and framework profiler spans. Framework effects run
 once per package attempt and are never replayed by a second runner.
+
+For terminal shared-resource failures and their effect on later selected tests, see
+[Testing terminal resource lifecycle](testing-terminal-resource-lifecycle.md).
 
 The compatibility contract is covered by
 `spec/testing/testing-package-runner-parity-spec.js`,

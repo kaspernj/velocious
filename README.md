@@ -178,7 +178,7 @@ Baselines are generated against a fresh checkout (no generated dummy `configurat
 # Testing
 
 Application tests may import the testing DSL from the independent public package.
-`@velocious/testing` `0.0.9` is the declaration and execution engine. Compatible
+`@velocious/testing` `0.0.12` is the declaration and execution engine. Compatible
 installed copies share one protocol-1/schema-3 default registry. Velocious adapts each
 package-owned attempt with its database, request, profiling, and cleanup behavior; the
 existing Velocious facade exports the same declaration DSL and remains supported.
