@@ -3,6 +3,7 @@
 import * as inflection from "inflection"
 import {isPlainObject} from "is-plain-object"
 import WhereBase from "./where-base.js"
+import WhereIn from "./where-in.js"
 
 /**
  * No match.
@@ -379,6 +380,34 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
   }
 
   /**
+   * Normalizes explicit membership through the model's column metadata.
+   * @param {{modelClass: typeof import("../record/index.js").default, columnName: string, tableName?: string, condition: unknown}} args - Resolved column and untrusted membership descriptor.
+   * @returns {string} - Complete column membership predicate.
+   */
+  _whereSQLFromInCondition({modelClass, columnName, tableName, condition}) {
+    const options = this.getOptions()
+    const values = WhereIn.values(condition)
+    const normalizedValues = this._normalizeSqliteBooleanValue({columnName, modelClass, value: values})
+    /** @type {import("./where-in.js").InValue[] | typeof NO_MATCH} */
+    const typedValues = this._normalizeValueForColumnType({columnName, modelClass, value: normalizedValues})
+
+    if (typedValues === NO_MATCH) return "1=0"
+
+    const columnSql = tableName
+      ? `${options.quoteTableName(tableName)}.${options.quoteColumnName(columnName)}`
+      : options.quoteColumnName(columnName)
+    const columnType = modelClass.getColumnTypeByName(columnName)
+    const castText = this.getQuery().driver.getType() === "mssql" && columnType?.toLowerCase() === "text"
+
+    return WhereIn.toSql({
+      columnSql,
+      inColumnSql: castText ? `CAST(${columnSql} AS NVARCHAR(MAX))` : columnSql,
+      options,
+      values: typedValues
+    })
+  }
+
+  /**
    * Runs where sqlfrom hash.
    * @param {WhereHash} hash - Hash.
    * @param {typeof import("../record/index.js").default} modelClass - Model class.
@@ -400,7 +429,11 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
         : null
       const resolvedColumnName = this._resolveColumnName(modelClass, whereKey)
 
-      if (relationship && tuples) {
+      if (resolvedColumnName && !relationship && isPlainObject(whereValue)) {
+        if (index > 0) sql += " AND "
+
+        sql += this._whereSQLFromInCondition({columnName: resolvedColumnName, condition: whereValue, modelClass, tableName})
+      } else if (relationship && tuples) {
         if (index > 0) sql += " AND "
 
         const rawTargetModelClass = relationship.getTargetModelClass()

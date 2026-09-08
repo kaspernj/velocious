@@ -8,7 +8,7 @@ import {
   validateTimingManifest
 } from "../../src/testing/timing-manifest.js"
 
-describe("timing manifest validation", () => {
+describe("timing manifest validation", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("canonicalizes portable relative paths and preserves sorted non-negative durations", () => {
     expect(validateTimingManifest({})).toEqual({})
     expect(validateTimingManifest({

@@ -1,6 +1,7 @@
 // @ts-check
 
 import WhereBase from "./where-base.js"
+import WhereIn from "./where-in.js"
 
 /**
  * VelociousDatabaseQueryWhereHash class.
@@ -50,7 +51,17 @@ export default class VelociousDatabaseQueryWhereHash extends WhereBase {
         if (index > 0) sql += " AND "
         sql += "1=0"
       } else if (!Array.isArray(whereValue) && whereValue !== null && typeof whereValue == "object") {
-        sql += this._whereSQLFromHash(whereValue, whereKey, index)
+        if (tableName && "in" in whereValue) {
+          if (index > 0) sql += " AND "
+
+          sql += WhereIn.toSql({
+            columnSql: `${options.quoteTableName(tableName)}.${options.quoteColumnName(whereKey)}`,
+            options,
+            values: WhereIn.values(whereValue)
+          })
+        } else {
+          sql += this._whereSQLFromHash(whereValue, whereKey, index)
+        }
       } else {
         if (index > 0) sql += " AND "
 

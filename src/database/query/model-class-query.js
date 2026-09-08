@@ -1468,7 +1468,9 @@ function splitWhereHash({hash, modelClass}) {
     const isNested = isPlainObject(value)
     const relationship = getRelationshipByName(modelClass, key)
 
-    if (isNested) {
+    if (isNested && !relationship && resolveColumnName(modelClass, key)) {
+      resolvedHash[key] = value
+    } else if (isNested) {
       if (relationship) {
         const rawTargetModelClass = relationship.getTargetModelClass()
         if (!rawTargetModelClass) {

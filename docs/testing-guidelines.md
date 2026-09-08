@@ -7,6 +7,7 @@
 - Database-cleaning metadata is transactional by default. Omit `databaseCleaning` for ordinary model and in-process request coverage so the configured testing hook keeps setup, application work, and cleanup on one rollback-owned connection.
 - Use `{transaction: false, truncate: true}` only when behavior genuinely requires independent committed sessions, DDL that auto-commits or cannot run inside the wrapper transaction, or lock contention. Truncation disables and restores constraints around every example and is substantially slower, especially on SQL Server; never use it as a timeout or isolation workaround.
 - Pool-lifecycle tests that restart or directly own their connections, and tests that never touch configured databases, can opt out without truncation using `{transaction: false, truncate: false}`. Transaction-disabled non-request tests own their checkouts; the runner does not pin or expose a shared connection for them.
+- Pure validation suites, such as timing-manifest path/duration checks, should explicitly use `{databaseCleaning: {transaction: false, truncate: false}}`. Otherwise the default transaction lifecycle checks out every configured database before a pure test body runs, creating an unnecessary dependency on database availability.
 - Node tests tagged `dummy`, and specs that invoke `Dummy.run()` directly, bootstrap the shared dummy application outside inherited database-connection contexts and the revocable test-attempt scope, then run the callback in its original scope. Transaction and truncation cleaning receive a runner-owned connection across hooks and the callback; explicit no-cleaning tests retain independent callback checkouts. Only transaction-cleaned and request tests expose dynamic shared connections to in-process work.
 - Browser tests tagged `dummy` follow the same cleaning metadata. Transaction-cleaned and explicit no-cleaning tests do not receive additional pre/post truncation from browser dummy setup.
 - If a timed-out browser database-cleaning lifecycle remains active after the cleanup grace period, the runner quarantines its connections and aborts the remaining run rather than sharing them with another test. This applies to transaction rollback and explicit truncation cleaning.
@@ -175,6 +176,19 @@ When a transactional background-job spec has an out-of-band signal that the job
 body finished, await that signal before polling its durable status. The status read
 uses the same brokered physical connection as the child, so polling while the child
 still performs database work creates unnecessary cross-owner contention.
+
+For an owned in-process main, install `createBackgroundJobUpdateObserver({store})`
+from `spec/helpers/background-jobs-helper.js` on `main.onJobUpdated` before
+enqueueing. Await the returned job ID's durable update and assert accepted
+completion before reading an output file written by the job. The observer retains
+early updates and surfaces durable failure details. Read and parse the file
+directly after completion so I/O and JSON errors remain visible, rather than
+racing a short file-poll deadline against dispatch. Keep the normal test lifecycle
+deadline and transaction cleaning; `withBackgroundJobs` stops both owned services
+and propagates callback and cleanup failures.
+If a transactional example constructs a main directly, pass
+`closeDatabaseConnectionsOnStop: false`: the test runner, not that main, owns the
+shared connection and its final rollback.
 
 Reusable pooled runners receive broker mode and capability with every job dispatch,
 so a warm child can safely cross test-attempt boundaries. A capability change closes
