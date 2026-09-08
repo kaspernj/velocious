@@ -63,7 +63,7 @@ describe("browser test session", {databaseCleaning: {transaction: false, truncat
     expect(process.env.SELENIUM_REMOTE_URL).toBe(previousRemoteUrl)
   })
 
-  it("keeps the headless container Chrome arguments and enables the remote debugging pipe exactly once", async () => {
+  it("forwards the exact prewarmed Chrome runtime and keeps the required Chrome arguments", async () => {
     /** @type {import("../../scripts/browser-test-session.js").BrowserTestSystemTestConfig | undefined} */
     let receivedConfig
     const systemTestCurrent = (config) => {
@@ -78,11 +78,16 @@ describe("browser test session", {databaseCleaning: {transaction: false, truncat
       systemTestCurrent
     })
 
-    const systemTest = factory({browserPath: "/opt/chrome/chrome", remoteUrl: "http://127.0.0.1:4567"})
+    const systemTest = factory({
+      browserPath: "/opt/chrome/chrome",
+      driverPath: "/opt/chromedriver/chromedriver",
+      remoteUrl: "http://127.0.0.1:4567"
+    })
 
     expect(systemTest).toBeDefined()
     expect(receivedConfig?.driver.type).toEqual("selenium")
     expect(receivedConfig?.driver.options.chromeBinaryPath).toEqual("/opt/chrome/chrome")
+    expect(receivedConfig?.driver.options.chromedriverPath).toEqual("/opt/chromedriver/chromedriver")
     expect(receivedConfig?.driver.options.chromeArguments).toContain("--headless=new")
     expect(receivedConfig?.driver.options.chromeArguments).toContain("--no-sandbox")
     expect(receivedConfig?.driver.options.chromeArguments).toContain("--disable-dev-shm-usage")

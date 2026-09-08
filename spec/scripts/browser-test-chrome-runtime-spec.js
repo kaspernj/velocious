@@ -23,8 +23,8 @@ describe("browser test Chrome runtime", {databaseCleaning: {transaction: false, 
       await fs.chmod(driverPath, 0o755)
 
       await prewarmBrowserTestChromeRuntime({
-        binaryPathsResolver: () => ({browserPath, driverPath}),
         manifestPath,
+        runtimeResolver: async () => ({chromeBinaryPath: browserPath, chromedriverPath: driverPath}),
         versionReader: async (executablePath) => executablePath === browserPath
           ? "Google Chrome 145.0.7632.117"
           : "ChromeDriver 145.0.7632.117"
