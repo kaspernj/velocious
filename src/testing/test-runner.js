@@ -142,6 +142,8 @@ import VelociousTestArguments from "./velocious-test-arguments.js"
  * @property {import("../database/pool/base.js").TestSharedConnectionRegistration | undefined} sharedRegistration - Physical-key shared registration once published.
  */
 
+const testingPackageDirectory = path.dirname(fileURLToPath(import.meta.resolve("@velocious/testing/package.json")))
+
 /**
  * Runs to file slug.
  * @param {string} value - Value to sanitize.
@@ -197,6 +199,8 @@ export default class TestRunner {
     this._successfulTests = 0
     this._testsCount = 0
     this._failedTestDetails = []
+    /** @type {import("@velocious/testing/runner").NonRunTestResult[]} */
+    this._notRunTestDetails = []
     /** @type {{fullDescription: string, filePath: string, line: number} | null} */
     this._lastTestContext = null
     /** @type {Array<{fullDescription: string, filePath: string, line: number, durationMs: number}>} */
@@ -1008,6 +1012,25 @@ export default class TestRunner {
   }
 
   /**
+   * Counts selected tests blocked by a terminal resource.
+   * @returns {number} - Selected tests not executed because a shared resource failed.
+   */
+  getNotRunTests() { return this._notRunTestDetails.length }
+
+  /**
+   * Returns runtime non-run attribution.
+   * @returns {import("@velocious/testing/runner").NonRunTestResult[]} - Runtime non-run details with the originating failure.
+   */
+  getNotRunTestDetails() { return this._notRunTestDetails }
+
+  /**
+   * Records a selected test that did not execute.
+   * @param {import("@velocious/testing/runner").NonRunTestResult} result - Terminal-resource non-run record.
+   * @returns {void}
+   */
+  recordNotRunTest(result) { this._notRunTestDetails.push(result) }
+
+  /**
    * Runs get failed test details.
    * @returns {FailedTestDetail[]} - Failed test details.
    */
@@ -1088,6 +1111,14 @@ export default class TestRunner {
   }
 
   /**
+   * Distinguishes an empty selection from a failure before selected cases execute.
+   * @returns {boolean} - Whether selection matched no declarations.
+   */
+  hasNoMatches() {
+    return this._packageResult?.noMatches === true
+  }
+
+  /**
    * Returns the tests recorded during the run, slowest first.
    * @param {number} [limit] - Maximum number of tests to return (0 returns all).
    * @returns {Array<{fullDescription: string, filePath: string, line: number, durationMs: number}>} - Slowest tests, slowest first.
@@ -1105,6 +1136,7 @@ export default class TestRunner {
   async prepare() {
     this.anyTestsFocussed = false
     this._failedTests = 0
+    this._notRunTestDetails = []
     this._successfulTests = 0
     this._testsCount = 0
     this._abortRemainingTests = false
@@ -1177,7 +1209,7 @@ export default class TestRunner {
 
       if (portablePath.endsWith("/src/testing/test-runner.js")) continue
       if (portablePath.endsWith("/src/testing/test.js")) continue
-      if (portablePath.includes("/node_modules/@velocious/testing/")) continue
+      if (resolvedFilePath.startsWith(`${testingPackageDirectory}${path.sep}`)) continue
 
       return {filePath: resolvedFilePath, line: Number(match[2])}
     }

@@ -11,7 +11,7 @@ import repoRoot from "../helpers/repo-root.js"
 const execFileAsync = promisify(execFile)
 
 describe("@velocious/testing packed consumer", {databaseCleaning: {transaction: false, truncate: false}}, () => {
-  it("installs exactly one valid physical 0.0.9 package", async () => {
+  it("installs exactly one valid physical 0.0.12 package", async () => {
     const temporaryRoot = path.join(repoRoot(), "tmp")
 
     await fs.mkdir(temporaryRoot, {recursive: true})
@@ -46,7 +46,7 @@ describe("@velocious/testing packed consumer", {databaseCleaning: {transaction: 
 
       expect(physicalPaths).toHaveLength(1)
       const installedManifest = JSON.parse(await fs.readFile(path.join(physicalPaths[0], "package.json"), "utf8"))
-      expect(installedManifest.version).toBe("0.0.9")
+      expect(installedManifest.version).toBe("0.0.12")
     } finally {
       await fs.rm(consumerDirectory, {force: true, recursive: true})
     }

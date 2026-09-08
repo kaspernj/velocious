@@ -265,24 +265,72 @@ describe("test profile CLI integration", () => {
 
     try {
       const noTestsPath = path.join(directory, "no-tests.json")
+      const unmatchedPath = path.join(directory, "unmatched.json")
       const importErrorPath = path.join(directory, "import-error.json")
       const noTestsTestPath = await writeTestFixture(directory, "empty.fixture.js", "export {}\n")
+      const unmatchedTestPath = await writeTestFixture(directory, "unmatched.fixture.js", `
+        import { describe, it } from "velocious/build/src/testing/test.js"
+        describe("unmatched fixture", {databaseCleaning: {transaction: false, truncate: false}}, () => {
+          it("existing example", () => { throw new Error("unselected callback ran") })
+        })
+      `)
       const importErrorTestPath = await writeTestFixture(
         directory,
         "import-error.fixture.js",
         'throw new Error("fixture import error must not enter profile JSON")\n'
       )
       const noTests = await runTestCommand([`--profile-json=${noTestsPath}`, noTestsTestPath])
+      const unmatched = await runTestCommand([`--profile-json=${unmatchedPath}`, "--example=absent example", unmatchedTestPath])
       const importError = await runTestCommand([`--profile-json=${importErrorPath}`, importErrorTestPath])
       const noTestsProfile = JSON.parse(await fs.readFile(noTestsPath, "utf8"))
+      const unmatchedProfile = JSON.parse(await fs.readFile(unmatchedPath, "utf8"))
       const importErrorProfile = JSON.parse(await fs.readFile(importErrorPath, "utf8"))
 
       expect(noTests.code).toBe(1)
       expect(importError.code).toBe(1)
       expect(noTestsProfile.status).toBe("no-tests")
       expect(noTestsProfile.counts.executed).toBe(0)
+      expect(unmatched.code).toBe(1)
+      expect(unmatched.stderr).toContain("No tests matched the provided filters")
+      expect(unmatchedProfile.status).toBe("no-tests")
+      expect(unmatchedProfile.counts.executed).toBe(0)
       expect(importErrorProfile.status).toBe("error")
       expect(JSON.stringify(importErrorProfile).includes("fixture import error")).toBe(false)
+    } finally {
+      await fs.rm(directory, {force: true, recursive: true})
+    }
+  })
+
+  it("keeps terminal setup profiles failed when filters select cases that cannot run", async () => {
+    const directory = await makeTestDirectory("velocious-profile-cli-terminal-")
+    const profilePath = path.join(directory, "terminal.json")
+
+    try {
+      const testPath = await writeTestFixture(directory, "terminal.fixture.js", `
+        import { afterAll, beforeAll, describe, it } from "velocious/build/src/testing/test.js"
+        describe("terminal setup fixture", {databaseCleaning: {transaction: false, truncate: false}}, () => {
+          beforeAll(() => {
+            throw Object.assign(new Error("setup resource lost", {cause: new Error("setup command cause")}), {
+              terminalResource: {scope: "run", name: "fixture"}
+            })
+          })
+          afterAll(() => console.log("TERMINAL_FIXTURE_CLEANUP"))
+          it("selected example", () => console.log("LATER_CALLBACK_RAN"))
+        })
+      `)
+      const result = await runTestCommand([`--profile-json=${profilePath}`, "--example=selected example", testPath])
+      const profile = JSON.parse(await fs.readFile(profilePath, "utf8"))
+      const output = result.stdout + result.stderr
+
+      expect(result.code).toBe(1)
+      expect(profile.status).toBe("failed")
+      expect(profile.counts.executed).toBe(0)
+      expect(profile.counts.failed).toBe(0)
+      expect(output).toContain("1 tests not run because a shared resource failed")
+      expect(output).toContain("setup command cause")
+      expect(output.includes("No tests matched the provided filters")).toBe(false)
+      expect(output.includes("LATER_CALLBACK_RAN")).toBe(false)
+      expect(output.split("TERMINAL_FIXTURE_CLEANUP").length - 1).toBe(1)
     } finally {
       await fs.rm(directory, {force: true, recursive: true})
     }

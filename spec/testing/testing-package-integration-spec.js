@@ -35,8 +35,8 @@ describe("@velocious/testing integration", {databaseCleaning: {transaction: fals
     const packageJson = JSON.parse(await fs.readFile(path.join(repositoryDirectory, "package.json"), "utf8"))
 
     expect(packageJson.dependencies["@velocious/testing"]).toEqual(undefined)
-    expect(packageJson.peerDependencies["@velocious/testing"]).toEqual("0.0.9")
-    expect(packageJson.devDependencies["@velocious/testing"]).toEqual("0.0.9")
+    expect(packageJson.peerDependencies["@velocious/testing"]).toEqual("^0.0.12")
+    expect(packageJson.devDependencies["@velocious/testing"]).toEqual("0.0.12")
   })
 
   it("discovers facade and direct-package declarations in both import orders", async () => {
