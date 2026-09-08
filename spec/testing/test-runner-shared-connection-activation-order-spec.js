@@ -1,6 +1,7 @@
 // @ts-check
 
 import Application from "../../src/application.js"
+import { createTestContext, defaultTestContext } from "@velocious/testing"
 import Configuration from "../../src/configuration.js"
 import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
 import {describe, expect, it} from "../../src/testing/test.js"
@@ -100,10 +101,16 @@ describe("TestRunner shared connection activation order", {databaseCleaning: {tr
       locales: ["en"],
       testing: `${process.cwd()}/spec/dummy/src/config/testing.js`
     })
-    const testRunner = new TestRunner({configuration, testFiles: ["example-spec.js"]})
+    const outerRegistry = defaultTestContext.registry
+    const testRunner = new TestRunner({
+      configuration,
+      context: createTestContext(),
+      testFiles: ["example-spec.js"]
+    })
 
     await testRunner.prepare()
 
+    expect(defaultTestContext.registry).toBe(outerRegistry)
     expect(order).toEqual(["testing config", "test files"])
   })
 
