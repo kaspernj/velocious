@@ -98,6 +98,13 @@ existing rendering and driver-specific NULL behavior. They do **not** opt in to
 an IS NULL branch. Use the explicit descriptor when NULL rows must match; legacy
 empty arrays still match nothing.
 
+In particular, a legacy direct-array null is passed through the driver's quoting
+path. MSSQL currently renders it as the string `N'null'`, not SQL `NULL`. A
+case-insensitive column can therefore match a stored string such as `"Null"`.
+The explicit descriptor instead separates actual null members into `IS NULL`;
+ordinary string members still follow the column's collation. Do not rely on
+legacy direct arrays for portable null matching.
+
 This feature adds no frontend-model transport protocol, Ransack grammar,
 subquery support or additional operators. See [query bulk operations](query-bulk-operations.md)
 for operations that reuse a query's filtering conditions.

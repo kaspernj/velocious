@@ -18,7 +18,7 @@ describe("Database - query - explicit IN", {tags: ["dummy"]}, () => {
 
   beforeEach(async () => {
     project = await Project.create({nameEn: "Membership project"})
-    nullTask = await Task.create({project, name: "Null", description: null, isDone: false})
+    nullTask = await Task.create({project, name: "Missing description", description: null, isDone: false})
     manualTask = await Task.create({project, name: "Manual", description: "manual", isDone: true})
     githubTask = await Task.create({project, name: "Github", description: "github", isDone: null})
     const otherProject = await Project.create({nameEn: "Other membership project"})
@@ -106,7 +106,7 @@ describe("Database - query - explicit IN", {tags: ["dummy"]}, () => {
     }
   })
 
-  it("leaves direct arrays and their SQL NULL behavior unchanged", async () => {
+  it("leaves direct arrays and their driver-specific null behavior unchanged", async () => {
     await expectTasks(Task.where({projectId: project.id(), name: [null, "Manual"]}), [manualTask])
     await expectTasks(Task.where({projectId: project.id(), name: ["Manual", "Github"]}), [manualTask, githubTask])
     await expectTasks(Task.where({name: []}), [])

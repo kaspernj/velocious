@@ -1686,7 +1686,8 @@ const tasks = await Task.all().toArray()
 Use `{in: [...]}` for explicit null-aware membership. Mixed lists match either
 IN members or SQL NULL, grouped locally so sibling and chained filters still
 apply. Null-only lists use IS NULL; empty lists match nothing. Direct arrays keep
-their existing behavior. See [Query filtering](docs/query-filtering.md) for
+their existing driver-specific behavior, including string-null quoting and
+column collation. See [Query filtering](docs/query-filtering.md) for
 validation, normalization, negation, relationships and raw-query boundaries.
 
 ```js
