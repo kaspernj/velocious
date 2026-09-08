@@ -103,6 +103,17 @@ export default class VelociousDatabaseQueryWhereModelClassHash extends WhereBase
         value: ReturnType<typeof JSON.parse>;
     }): ReturnType<typeof JSON.parse>;
     /**
+     * Normalizes explicit membership through the model's column metadata.
+     * @param {{modelClass: typeof import("../record/index.js").default, columnName: string, tableName?: string, condition: unknown}} args - Resolved column and untrusted membership descriptor.
+     * @returns {string} - Complete column membership predicate.
+     */
+    _whereSQLFromInCondition({ modelClass, columnName, tableName, condition }: {
+        modelClass: typeof import("../record/index.js").default;
+        columnName: string;
+        tableName?: string;
+        condition: unknown;
+    }): string;
+    /**
      * Runs where sqlfrom hash.
      * @param {WhereHash} hash - Hash.
      * @param {typeof import("../record/index.js").default} modelClass - Model class.

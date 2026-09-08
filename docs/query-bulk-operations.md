@@ -2,6 +2,10 @@
 
 Velocious model queries support bulk operations that execute a single SQL statement against all rows matching the query's WHERE clause.
 
+See [Query filtering](query-filtering.md) for model and relationship conditions,
+including explicit `{in: [...]}` membership that can match SQL NULL without
+weakening sibling filters.
+
 ## updateAll
 
 `Query#updateAll(data)` executes a single `UPDATE ... SET ... WHERE ...` statement. It bypasses model lifecycle callbacks (`beforeUpdate`, `afterUpdate`, validations) — use it for efficient batch updates where per-row hooks aren't needed.

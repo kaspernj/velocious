@@ -1683,8 +1683,18 @@ const tasks = await Task.all().toArray()
 
 ### Filtering
 
+Use `{in: [...]}` for explicit null-aware membership. Mixed lists match either
+IN members or SQL NULL, grouped locally so sibling and chained filters still
+apply. Null-only lists use IS NULL; empty lists match nothing. Direct arrays keep
+their existing behavior. See [Query filtering](docs/query-filtering.md) for
+validation, normalization, negation, relationships and raw-query boundaries.
+
 ```js
 const tasks = await Task.where({status: "open"}).toArray()
+
+const nullOrManualTasks = await Task
+  .where({projectId: project.id(), description: {in: [null, "manual"]}})
+  .toArray()
 
 const tasksForActiveProjects = await Task.where({
   project: {projectDetail: {isActive: true}}
