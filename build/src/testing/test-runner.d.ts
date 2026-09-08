@@ -313,6 +313,8 @@ export default class TestRunner {
     _failedTests: number;
     _successfulTests: number;
     _testsCount: number;
+    /** @type {import("@velocious/testing/runner").NonRunTestResult[]} */
+    _notRunTestDetails: import("@velocious/testing/runner").NonRunTestResult[];
     /** @type {{fullDescription: string, filePath: string, line: number} | null} */
     _lastTestContext: {
         fullDescription: string;
@@ -663,6 +665,22 @@ export default class TestRunner {
      * @returns {number} - The failed tests.
      */
     getFailedTests(): number;
+    /**
+     * Counts selected tests blocked by a terminal resource.
+     * @returns {number} - Selected tests not executed because a shared resource failed.
+     */
+    getNotRunTests(): number;
+    /**
+     * Returns runtime non-run attribution.
+     * @returns {import("@velocious/testing/runner").NonRunTestResult[]} - Runtime non-run details with the originating failure.
+     */
+    getNotRunTestDetails(): import("@velocious/testing/runner").NonRunTestResult[];
+    /**
+     * Records a selected test that did not execute.
+     * @param {import("@velocious/testing/runner").NonRunTestResult} result - Terminal-resource non-run record.
+     * @returns {void}
+     */
+    recordNotRunTest(result: import("@velocious/testing/runner").NonRunTestResult): void;
     /**
      * Runs get failed test details.
      * @returns {FailedTestDetail[]} - Failed test details.

@@ -203,7 +203,7 @@ export default class VelociousCliCommandsTest extends BaseCommand {
       const hasExampleFilters = examplePatterns.length > 0
       const hasTagFilters = includeTags.length > 0 || effectiveExcludeTagCount > 0
 
-      if ((hasTagFilters || hasLineFilters || hasExampleFilters) && executedTests === 0) {
+      if ((hasTagFilters || hasLineFilters || hasExampleFilters) && executedTests === 0 && !testRunner.isFailed()) {
         console.error(picocolors.red("\nNo tests matched the provided filters"))
         await finalizeProfile("no-tests")
         process.exit(1)
@@ -247,6 +247,7 @@ export default class VelociousCliCommandsTest extends BaseCommand {
           }
         }
 
+        if (testRunner.getNotRunTests() > 0) console.error(`${testRunner.getNotRunTests()} tests not run because a shared resource failed`)
         console.error(picocolors.red(`\nTest run failed with ${testRunner.getFailedTests()} failed tests and ${testRunner.getSuccessfulTests()} successfull`))
         await finalizeProfile("failed")
         process.exit(1)

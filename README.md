@@ -327,6 +327,8 @@ Use `consoleOutput: "live"` to preserve the previous passthrough behavior where 
 
 Listen for attempt and retry events if you need to reset shared state after a failed attempt or log retry lifecycle details. `testAttemptFailed` fires after every failed attempt, including the final failed attempt when no retries remain. `testRetrying` only fires before a retry, and `testFailed` only fires after retries are exhausted.
 
+A shared resource owner may throw an error carrying `terminalResource: {scope: "run", name: "shared-resource"}`. With a compatible `@velocious/testing` runner, Velocious preserves this contract through causes and aggregate errors, reports the originating failure with full causal stacks, suppresses retries, and emits `testNotRun` for later selected cases instead of running their callbacks. `testNotRun` receives `{configuration, test, testRunner}`; `test` has `status: "not-run"`, `fullName`, `location`, and the originating `reason`. `testRunner.getNotRunTests()` and `getNotRunTestDetails()` expose this separate accounting. Entered suites clean up once; the CLI exits unsuccessfully even for terminal setup with zero executed cases. This does not restart a browser or cancel already-issued work. Upgrade the shared runner and this reporter adapter together before enabling terminal resource owners; earlier shared runners ignore the marker. See [terminal resource reporting](docs/terminal-resource-reporting.md).
+
 ```js
 import {testEvents} from "velocious/build/src/testing/test.js"
 

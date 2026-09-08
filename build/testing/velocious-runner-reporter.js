@@ -1,7 +1,6 @@
 // @ts-check
 
 import { addTrackedStackToError } from "../utils/with-tracked-stack.js"
-import BacktraceCleaner from "../utils/backtrace-cleaner-node.js"
 import picocolors from "picocolors"
 import restArgsError from "../utils/rest-args-error.js"
 import { testEvents } from "./test.js"
@@ -21,6 +20,8 @@ function errorFromPackageRecord(errorRecord) {
 
   error.name = errorRecord.name
   if (errorRecord.stack) error.stack = errorRecord.stack
+  if (errorRecord.cause) error.cause = errorFromPackageRecord(errorRecord.cause)
+  if (errorRecord.terminalResource) Object.assign(error, {terminalResource: errorRecord.terminalResource})
 
   return error
 }
@@ -68,7 +69,27 @@ export default class VelociousRunnerReporter {
       return
     }
 
-    if (event.type === "run:finish") this.testRunner.recordPackageResult(event.result)
+    if (event.type === "test:not-run") {
+      const test = this.testRunner.findTestDeclaration(event.test.fullName)
+      if (!test) throw new Error(`Package not-run result did not match a declaration: ${event.test.fullName}`)
+      this.testRunner.recordNotRunTest(event.test)
+      this.testRunner.completeTestDeclaration(test)
+      console.error(`Not run: ${event.test.fullName} (terminal resource failure in ${event.test.reason.fullName})`)
+      await this.emitEvent("testNotRun", {
+        configuration: this.testRunner.getConfiguration(),
+        test: event.test,
+        testRunner: this.testRunner
+      })
+      return
+    }
+
+    if (event.type === "run:finish") {
+      this.testRunner.recordPackageResult(event.result)
+      for (const failure of event.result.errors) {
+        console.error(`Suite ${failure.phase} failed: ${failure.suite}`)
+        this.printErrorCauses(errorFromPackageRecord(failure.error))
+      }
+    }
   }
 
   /**
@@ -95,7 +116,7 @@ export default class VelociousRunnerReporter {
     const failed = outcome?.failed ?? Boolean(attempt.error)
     const error = outcome?.error
     const retriesUsed = Math.min(attempt.attemptNumber, retryCount)
-    const willRetry = failed && !outcome?.abortRemainingTests && attempt.attemptNumber <= retryCount
+    const willRetry = failed && !event.terminalFailure && !outcome?.abortRemainingTests && attempt.attemptNumber <= retryCount
     const {descriptions, testDescription} = this.testRunner.testMetadata(test)
     const compatibility = this.testRunner.testData(test)
 
@@ -245,15 +266,8 @@ export default class VelociousRunnerReporter {
 
     if (error instanceof Error) {
       console.error(picocolors.red(`${leftPadding}  Test failed: ${error.message}`))
-      addTrackedStackToError(error)
+      this.printErrorCauses(error)
 
-      const backtraceCleaner = new BacktraceCleaner(error)
-      const cleanedStack = backtraceCleaner.getCleanedStack()
-      const stackLines = cleanedStack?.split("\n")
-
-      if (stackLines) {
-        for (const stackLine of stackLines) console.error(picocolors.red(`${leftPadding}  ${stackLine}`))
-      }
     } else {
       console.error(picocolors.red(`${leftPadding}  Test failed with a ${typeof error}: ${String(error)}`))
     }
@@ -272,6 +286,33 @@ export default class VelociousRunnerReporter {
     })
 
     testRunner.printRerunCommand({descriptions, testDescription, testData, leftPadding})
+  }
+
+  /**
+   * Prints complete primary and secondary stacks once, including cyclic cause graphs.
+   * @param {unknown} error - Thrown value at the reporting boundary.
+   * @param {Set<Error>} [reported] - Error identities already printed.
+   * @returns {void}
+   */
+  printErrorCauses(error, reported = new Set()) {
+    if (!(error instanceof Error)) {
+      console.error(String(error))
+      return
+    }
+    if (reported.has(error)) return
+    reported.add(error)
+    addTrackedStackToError(error)
+    console.error(error.stack || `${error.name}: ${error.message}`)
+    if (error.cause !== undefined) {
+      console.error("Caused by:")
+      this.printErrorCauses(error.cause, reported)
+    }
+    if (error instanceof AggregateError) {
+      for (const secondary of error.errors) {
+        console.error("Related failure:")
+        this.printErrorCauses(secondary, reported)
+      }
+    }
   }
 
   /**

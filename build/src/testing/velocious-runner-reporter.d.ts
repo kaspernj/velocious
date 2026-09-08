@@ -57,6 +57,13 @@ export default class VelociousRunnerReporter {
         testDescription: string;
     }): Promise<void>;
     /**
+     * Prints complete primary and secondary stacks once, including cyclic cause graphs.
+     * @param {unknown} error - Thrown value at the reporting boundary.
+     * @param {Set<Error>} [reported] - Error identities already printed.
+     * @returns {void}
+     */
+    printErrorCauses(error: unknown, reported?: Set<Error>): void;
+    /**
      * Emits one legacy event and awaits listeners in registration order.
      * @param {string} eventName - Event name.
      * @param {object} payload - Event payload.
