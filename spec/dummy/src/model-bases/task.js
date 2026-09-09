@@ -115,7 +115,7 @@ export default class TaskBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @param {Record<string, ReturnType<typeof JSON.parse>>} [attributes]
+   * @param {ConstructorParameters<typeof import("../models/project.js").default>[0]} [attributes]
    * @returns {import("../models/project.js").default}
    */
   buildProject(attributes) { void attributes; throw new Error("Not implemented") }
@@ -145,7 +145,7 @@ export default class TaskBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @param {Record<string, ReturnType<typeof JSON.parse>>} [attributes]
+   * @param {ConstructorParameters<typeof import("../models/project.js").default>[0]} [attributes]
    * @returns {import("../models/project.js").default}
    */
   buildReviewProject(attributes) { void attributes; throw new Error("Not implemented") }
@@ -169,59 +169,59 @@ export default class TaskBase extends DatabaseRecord {
   setReviewProject(newModel) { void newModel; throw new Error("Not implemented") }
 
   /**
-   * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/task.js").default, typeof import("../../../../src/database/record/index.js").default>}
+   * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/task.js").default, typeof import("../models/interaction.js").default>}
    */
-  interactions() { return /** @type {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/task.js").default, typeof import("../../../../src/database/record/index.js").default>} */ (this.getRelationshipByName("interactions")) }
+  interactions() { return /** @type {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/task.js").default, typeof import("../models/interaction.js").default>} */ (this.getRelationshipByName("interactions")) }
 
   /**
-   * @returns {Array<import("../../../../src/database/record/index.js").default>}
+   * @returns {Array<import("../models/interaction.js").default>}
    */
-  interactionsLoaded() { return /** @type {Array<import("../../../../src/database/record/index.js").default>} */ (this.getRelationshipByName("interactions").loaded()) }
+  interactionsLoaded() { return /** @type {Array<import("../models/interaction.js").default>} */ (this.getRelationshipByName("interactions").loaded()) }
 
   /**
    * @abstract
-   * @returns {Promise<Array<import("../../../../src/database/record/index.js").default>>}
+   * @returns {Promise<Array<import("../models/interaction.js").default>>}
    */
   loadInteractions() { throw new Error("Not implemented") }
 
   /**
-   * @returns {Promise<Array<import("../../../../src/database/record/index.js").default>>}
+   * @returns {Promise<Array<import("../models/interaction.js").default>>}
    */
-  interactionsOrLoad() { return /** @type {Promise<Array<import("../../../../src/database/record/index.js").default>>} */ (this.relationshipOrLoad("interactions")) }
+  interactionsOrLoad() { return /** @type {Promise<Array<import("../models/interaction.js").default>>} */ (this.relationshipOrLoad("interactions")) }
 
   /**
    * @abstract
-   * @param {Array<import("../../../../src/database/record/index.js").default>} newModels
+   * @param {Array<import("../models/interaction.js").default>} newModels
    * @returns {void}
    */
   setInteractions(newModels) { void newModels; throw new Error("Not implemented") }
 
   /**
-   * @returns {import("velocious/build/src/database/record/index.js").default}
+   * @returns {import("../models/interaction.js").default}
    */
-  primaryInteraction() { return /** @type {import("velocious/build/src/database/record/index.js").default} */ (this.getRelationshipByName("primaryInteraction").loaded()) }
+  primaryInteraction() { return /** @type {import("../models/interaction.js").default} */ (this.getRelationshipByName("primaryInteraction").loaded()) }
 
   /**
    * @abstract
-   * @param {Record<string, ReturnType<typeof JSON.parse>>} [attributes]
-   * @returns {import("velocious/build/src/database/record/index.js").default}
+   * @param {ConstructorParameters<typeof import("../models/interaction.js").default>[0]} [attributes]
+   * @returns {import("../models/interaction.js").default}
    */
   buildPrimaryInteraction(attributes) { void attributes; throw new Error("Not implemented") }
 
   /**
    * @abstract
-   * @returns {Promise<import("velocious/build/src/database/record/index.js").default | undefined>}
+   * @returns {Promise<import("../models/interaction.js").default | undefined>}
    */
   loadPrimaryInteraction() { throw new Error("Not implemented") }
 
   /**
-   * @returns {Promise<import("velocious/build/src/database/record/index.js").default | undefined>}
+   * @returns {Promise<import("../models/interaction.js").default | undefined>}
    */
-  primaryInteractionOrLoad() { return /** @type {Promise<import("velocious/build/src/database/record/index.js").default | undefined>} */ (this.relationshipOrLoad("primaryInteraction")) }
+  primaryInteractionOrLoad() { return /** @type {Promise<import("../models/interaction.js").default | undefined>} */ (this.relationshipOrLoad("primaryInteraction")) }
 
   /**
    * @abstract
-   * @param {import("velocious/build/src/database/record/index.js").default} newModel
+   * @param {import("../models/interaction.js").default} newModel
    * @returns {void}
    */
   setPrimaryInteraction(newModel) { void newModel; throw new Error("Not implemented") }

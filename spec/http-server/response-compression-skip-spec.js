@@ -33,17 +33,25 @@ async function deliverSkipped({body = COMPRESSIBLE_BODY, contentType, headers = 
 describe("http server - response compression skip conditions", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("skips responses that already carry a Content-Encoding", async () => {
     const {outputs} = await deliverSkipped({headers: {"Content-Encoding": "custom"}})
+    const headers = headerText(outputs)
 
-    expect(headerText(outputs)).toContain("Content-Encoding: custom\r\n")
-    expect(headerText(outputs)).not.toContain("Content-Encoding: br")
+    expect(headers).toContain("Content-Encoding: custom\r\n")
+    expect(headers).not.toContain("Content-Encoding: br")
+    // An application-supplied Content-Encoding is an application-owned
+    // representation contract: the framework adds no Vary dimension.
+    expect(headers).not.toContain("Vary")
     expect(bodyBuffer(outputs).toString("utf8")).toEqual(COMPRESSIBLE_BODY)
   })
 
   it("passes application-supplied Content-Encoding responses through even when identity is forbidden", async () => {
     const {outputs} = await deliverSkipped({headers: {"Content-Encoding": "custom"}, requestHeaders: {"Accept-Encoding": "identity;q=0"}})
+    const headers = headerText(outputs)
 
-    expect(headerText(outputs)).toContain("HTTP/1.1 200 OK\r\n")
-    expect(headerText(outputs)).toContain("Content-Encoding: custom\r\n")
+    expect(headers).toContain("HTTP/1.1 200 OK\r\n")
+    expect(headers).toContain("Content-Encoding: custom\r\n")
+    // Application-supplied Content-Encoding stays application-owned: no
+    // framework Vary dimension.
+    expect(headers).not.toContain("Vary")
     expect(bodyBuffer(outputs).toString("utf8")).toEqual(COMPRESSIBLE_BODY)
   })
 
@@ -53,6 +61,7 @@ describe("http server - response compression skip conditions", {databaseCleaning
     expect(headerText(outputs)).toContain("HTTP/1.1 406 Not Acceptable\r\n")
     expect(headerText(outputs)).toContain("Content-Length: 0\r\n")
     expect(headerText(outputs)).not.toContain("Content-Encoding")
+    expect(headerText(outputs)).toContain("Vary: Accept-Encoding\r\n")
     expect(bodyBuffer(outputs).length).toEqual(0)
   })
 
@@ -61,6 +70,7 @@ describe("http server - response compression skip conditions", {databaseCleaning
 
     expect(headerText(outputs)).toContain("HTTP/1.1 406 Not Acceptable\r\n")
     expect(headerText(outputs)).toContain("Content-Length: 0\r\n")
+    expect(headerText(outputs)).toContain("Vary: Accept-Encoding\r\n")
     expect(bodyBuffer(outputs).length).toEqual(0)
   })
 
@@ -70,6 +80,7 @@ describe("http server - response compression skip conditions", {databaseCleaning
     expect(headerText(outputs)).toContain("HTTP/1.1 406 Not Acceptable\r\n")
     expect(headerText(outputs)).toContain("Content-Length: 0\r\n")
     expect(headerText(outputs)).not.toContain("Content-Encoding")
+    expect(headerText(outputs)).toContain("Vary: Accept-Encoding\r\n")
     expect(bodyBuffer(outputs).length).toEqual(0)
   })
 
@@ -84,6 +95,7 @@ describe("http server - response compression skip conditions", {databaseCleaning
     expect(headerText(outputs)).toContain("HTTP/1.1 406 Not Acceptable\r\n")
     expect(headerText(outputs)).toContain("Content-Length: 0\r\n")
     expect(headerText(outputs)).not.toContain("Content-Encoding")
+    expect(headerText(outputs)).toContain("Vary: Accept-Encoding\r\n")
     expect(bodyBuffer(outputs).length).toEqual(0)
   })
 
@@ -91,6 +103,9 @@ describe("http server - response compression skip conditions", {databaseCleaning
     const {outputs} = await deliverSkipped({headers: {"Cache-Control": "public, no-transform"}})
 
     expect(headerText(outputs)).not.toContain("Content-Encoding")
+    // A skipped transformation is still an encoding-negotiated representation:
+    // the framework advertises the negotiation dimension to caches.
+    expect(headerText(outputs)).toContain("Vary: Accept-Encoding\r\n")
     expect(bodyBuffer(outputs).toString("utf8")).toEqual(COMPRESSIBLE_BODY)
   })
 
@@ -98,6 +113,7 @@ describe("http server - response compression skip conditions", {databaseCleaning
     const {outputs} = await deliverSkipped({contentType: "text/event-stream"})
 
     expect(headerText(outputs)).not.toContain("Content-Encoding")
+    expect(headerText(outputs)).toContain("Vary: Accept-Encoding\r\n")
     expect(bodyBuffer(outputs).toString("utf8")).toEqual(COMPRESSIBLE_BODY)
   })
 
@@ -106,6 +122,7 @@ describe("http server - response compression skip conditions", {databaseCleaning
 
     expect(headerText(outputs)).toContain("HTTP/1.1 206 Partial Content\r\n")
     expect(headerText(outputs)).not.toContain("Content-Encoding")
+    expect(headerText(outputs)).toContain("Vary: Accept-Encoding\r\n")
     expect(bodyBuffer(outputs).toString("utf8")).toEqual(COMPRESSIBLE_BODY)
   })
 
@@ -113,6 +130,7 @@ describe("http server - response compression skip conditions", {databaseCleaning
     const {outputs} = await deliverSkipped({requestHeaders: {"Range": "bytes=0-99"}})
 
     expect(headerText(outputs)).not.toContain("Content-Encoding")
+    expect(headerText(outputs)).toContain("Vary: Accept-Encoding\r\n")
     expect(bodyBuffer(outputs).toString("utf8")).toEqual(COMPRESSIBLE_BODY)
   })
 
@@ -120,6 +138,7 @@ describe("http server - response compression skip conditions", {databaseCleaning
     const {outputs} = await deliverSkipped({requestHeaders: {"Authorization": "Bearer secret-token"}})
 
     expect(headerText(outputs)).not.toContain("Content-Encoding")
+    expect(headerText(outputs)).toContain("Vary: Accept-Encoding\r\n")
     expect(bodyBuffer(outputs).toString("utf8")).toEqual(COMPRESSIBLE_BODY)
   })
 
@@ -127,6 +146,7 @@ describe("http server - response compression skip conditions", {databaseCleaning
     const {outputs} = await deliverSkipped({requestHeaders: {"cookie": "session=secret"}})
 
     expect(headerText(outputs)).not.toContain("Content-Encoding")
+    expect(headerText(outputs)).toContain("Vary: Accept-Encoding\r\n")
     expect(bodyBuffer(outputs).toString("utf8")).toEqual(COMPRESSIBLE_BODY)
   })
 
@@ -134,6 +154,7 @@ describe("http server - response compression skip conditions", {databaseCleaning
     const {outputs} = await deliverSkipped({headers: {"Set-Cookie": "session=secret; HttpOnly"}})
 
     expect(headerText(outputs)).not.toContain("Content-Encoding")
+    expect(headerText(outputs)).toContain("Vary: Accept-Encoding\r\n")
     expect(bodyBuffer(outputs).toString("utf8")).toEqual(COMPRESSIBLE_BODY)
   })
 
@@ -142,6 +163,7 @@ describe("http server - response compression skip conditions", {databaseCleaning
       const {outputs} = await deliverSkipped({headers})
 
       expect(headerText(outputs)).not.toContain("Content-Encoding")
+      expect(headerText(outputs)).toContain("Vary: Accept-Encoding\r\n")
       expect(bodyBuffer(outputs).toString("utf8")).toEqual(COMPRESSIBLE_BODY)
     }
   })
@@ -153,6 +175,7 @@ describe("http server - response compression skip conditions", {databaseCleaning
     expect(headers).toContain("HTTP/1.1 406 Not Acceptable\r\n")
     expect(headers).toContain("Content-Length: 0\r\n")
     expect(headers).not.toContain("Content-Encoding")
+    expect(headers).toContain("Vary: Accept-Encoding\r\n")
     expect(bodyBuffer(outputs).length).toEqual(0)
   })
 
@@ -160,6 +183,7 @@ describe("http server - response compression skip conditions", {databaseCleaning
     const {outputs} = await deliverSkipped({headers: {"Content-Range": "bytes 0-99/2048"}})
 
     expect(headerText(outputs)).not.toContain("Content-Encoding")
+    expect(headerText(outputs)).toContain("Vary: Accept-Encoding\r\n")
     expect(bodyBuffer(outputs).toString("utf8")).toEqual(COMPRESSIBLE_BODY)
   })
 
@@ -170,6 +194,8 @@ describe("http server - response compression skip conditions", {databaseCleaning
     expect(headers).toContain("HTTP/1.1 304 Not Modified\r\n")
     expect(headers).not.toContain("Content-Encoding")
     expect(headers).not.toContain("Content-Length")
+    // A truly bodyless response selects no representation: no Vary dimension.
+    expect(headers).not.toContain("Vary")
     expect(bodyBuffer(outputs).length).toEqual(0)
   })
 
@@ -181,6 +207,7 @@ describe("http server - response compression skip conditions", {databaseCleaning
     })
 
     expect(headerText(outputs)).not.toContain("Content-Encoding")
+    expect(headerText(outputs)).toContain("Vary: Accept-Encoding\r\n")
     expect(bodyBuffer(outputs).toString("utf8")).toEqual(COMPRESSIBLE_BODY)
   })
 
@@ -188,6 +215,7 @@ describe("http server - response compression skip conditions", {databaseCleaning
     const {outputs} = await deliverSkipped({contentType: "application/octet-stream"})
 
     expect(headerText(outputs)).not.toContain("Content-Encoding")
+    expect(headerText(outputs)).toContain("Vary: Accept-Encoding\r\n")
     expect(bodyBuffer(outputs).toString("utf8")).toEqual(COMPRESSIBLE_BODY)
   })
 
@@ -196,6 +224,7 @@ describe("http server - response compression skip conditions", {databaseCleaning
       const {outputs} = await deliverSkipped({contentType})
 
       expect(headerText(outputs)).not.toContain("Content-Encoding")
+      expect(headerText(outputs)).toContain("Vary: Accept-Encoding\r\n")
       expect(bodyBuffer(outputs).toString("utf8")).toEqual(COMPRESSIBLE_BODY)
     }
   })
@@ -204,6 +233,7 @@ describe("http server - response compression skip conditions", {databaseCleaning
     const {outputs} = await deliverSkipped({contentType: ""})
 
     expect(headerText(outputs)).not.toContain("Content-Encoding")
+    expect(headerText(outputs)).toContain("Vary: Accept-Encoding\r\n")
     expect(bodyBuffer(outputs).toString("utf8")).toEqual(COMPRESSIBLE_BODY)
   })
 
@@ -254,9 +284,14 @@ describe("http server - response compression skip conditions", {databaseCleaning
     })
 
     await client.sendResponse(buildRequestRunner({request, response}))
+    const headers = headerText(outputs)
 
     expect(fileSendBody).toBeTrue()
-    expect(headerText(outputs)).not.toContain("Content-Encoding")
-    expect(headerText(outputs)).toContain(`Content-Length: ${stats.size}\r\n`)
+    expect(headers).not.toContain("Content-Encoding")
+    expect(headers).toContain(`Content-Length: ${stats.size}\r\n`)
+    // A file's representation varies by Accept-Encoding: the same resource is
+    // 200 identity for an identity-accepting request and 406 when identity is
+    // forbidden, so the framework advertises the negotiation dimension.
+    expect(headers).toContain("Vary: Accept-Encoding\r\n")
   })
 })

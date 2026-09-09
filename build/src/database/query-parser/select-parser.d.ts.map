@@ -1,0 +1,1 @@
+{"version":3,"file":"select-parser.d.ts","sourceRoot":"","sources":["../../../../src/database/query-parser/select-parser.js"],"names":[],"mappings":"AAIA,MAAM,CAAC,OAAO,OAAO,wCAAwC;IAUpD,MAAM;IACN,KAAK;IAVZ;;;;;OAKG;IACH,YAAY,EAAC,MAAM,EAAE,KAAK,EAAE,GAAG,QAAQ,EAAC,EAHrC;QAAsB,MAAM,EAApB,OAAO,CACf;QAAkD,KAAK,EAA/C,OAAO,mBAAmB,EAAE,OAAO,CAC7C;KACuC,EAKvC;IAED,KAAK,WA+CJ;CACF"}

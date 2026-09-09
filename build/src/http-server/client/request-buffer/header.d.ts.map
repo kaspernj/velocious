@@ -1,0 +1,1 @@
+{"version":3,"file":"header.d.ts","sourceRoot":"","sources":["../../../../../src/http-server/client/request-buffer/header.js"],"names":[],"mappings":"AAEA,MAAM,CAAC,OAAO,OAAO,MAAM;IAOlB,aAAa;IACb,IAAI;IACJ,KAAK;IARZ;;;;OAIG;IACH,YAAY,IAAI,EAHL,MAGK,EAAE,KAAK,EAFZ,MAEY,EAItB;IAED,OAAO,WAAuB;IAC9B,gBAAgB,WAAgC;IAChD,QAAQ,WAAwB;IAChC,QAAQ,WAAqD;CAC9D"}

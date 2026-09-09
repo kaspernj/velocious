@@ -13,7 +13,7 @@ class ExplicitPrimaryKeyRecord extends DatabaseRecord {
 
 ExplicitPrimaryKeyRecord.setPrimaryKey("legacy_code")
 
-describe("database - record - explicit primary key create", {tags: ["dummy"]}, () => {
+describe("database - record - explicit primary key create", {databaseCleaning: {transaction: false, truncate: true}, tags: ["dummy"]}, () => {
   it("reloads created records by the caller-provided primary key", async () => {
     await Configuration.current().ensureConnections(async (dbs) => {
       const configuration = Configuration.current()

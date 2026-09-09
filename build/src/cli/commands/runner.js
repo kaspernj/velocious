@@ -1,0 +1,12 @@
+import BaseCommand from "../base-command.js";
+/** CLI command for evaluating inline JavaScript in app context. */
+export default class RunnerCommand extends BaseCommand {
+    /**
+     * Runs execute.
+     * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
+     */
+    async execute() {
+        return await this.getConfiguration().getEnvironmentHandler().cliCommandsRunner(this);
+    }
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoicnVubmVyLmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiLi4vLi4vLi4vLi4vc3JjL2NsaS9jb21tYW5kcy9ydW5uZXIuanMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBQUEsT0FBTyxXQUFXLE1BQU0sb0JBQW9CLENBQUE7QUFFNUMsbUVBQW1FO0FBQ25FLE1BQU0sQ0FBQyxPQUFPLE9BQU8sYUFBYyxTQUFRLFdBQVc7SUFDcEQ7OztPQUdHO0lBQ0gsS0FBSyxDQUFDLE9BQU87UUFDWCxPQUFPLE1BQU0sSUFBSSxDQUFDLGdCQUFnQixFQUFFLENBQUMscUJBQXFCLEVBQUUsQ0FBQyxpQkFBaUIsQ0FBQyxJQUFJLENBQUMsQ0FBQTtJQUN0RixDQUFDO0NBQ0YiLCJzb3VyY2VzQ29udGVudCI6WyJpbXBvcnQgQmFzZUNvbW1hbmQgZnJvbSBcIi4uL2Jhc2UtY29tbWFuZC5qc1wiXG5cbi8qKiBDTEkgY29tbWFuZCBmb3IgZXZhbHVhdGluZyBpbmxpbmUgSmF2YVNjcmlwdCBpbiBhcHAgY29udGV4dC4gKi9cbmV4cG9ydCBkZWZhdWx0IGNsYXNzIFJ1bm5lckNvbW1hbmQgZXh0ZW5kcyBCYXNlQ29tbWFuZCB7XG4gIC8qKlxuICAgKiBSdW5zIGV4ZWN1dGUuXG4gICAqIEByZXR1cm5zIHtQcm9taXNlPFJldHVyblR5cGU8dHlwZW9mIEpTT04ucGFyc2U+Pn0gLSBSZXNvbHZlcyB3aXRoIHRoZSBjb21tYW5kIHJlc3VsdC5cbiAgICovXG4gIGFzeW5jIGV4ZWN1dGUoKSB7XG4gICAgcmV0dXJuIGF3YWl0IHRoaXMuZ2V0Q29uZmlndXJhdGlvbigpLmdldEVudmlyb25tZW50SGFuZGxlcigpLmNsaUNvbW1hbmRzUnVubmVyKHRoaXMpXG4gIH1cbn1cbiJdfQ==

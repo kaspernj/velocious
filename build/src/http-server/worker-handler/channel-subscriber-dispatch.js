@@ -1,0 +1,27 @@
+// @ts-check
+/**
+ * Runs dispatch channel subscribers.
+ * @param {object} args - Dispatch arguments.
+ * @param {string} args.channel - Channel name.
+ * @param {string | undefined} args.createdAt - Event creation timestamp.
+ * @param {string | undefined} args.eventId - Event identifier.
+ * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
+ * @param {import("../../logger.js").default} args.logger - Logger for isolated subscriber failures.
+ * @param {ReturnType<typeof JSON.parse>} args.payload - Broadcast payload.
+ * @returns {Promise<void>} Resolves after subscribers have been attempted.
+ */
+export default async function dispatchChannelSubscribers({ channel, configuration, createdAt, eventId, logger, payload }) {
+    try {
+        await configuration.getWebsocketChannelSubscribers().dispatch({ channel, createdAt, eventId, payload });
+    }
+    catch (error) {
+        logger.error(() => [`Channel subscriber dispatch failed for ${channel}`, error]);
+        const errorPayload = {
+            context: { channel, createdAt, eventId, source: "websocket-channel-subscribers" },
+            error
+        };
+        configuration.getErrorEvents().emit("framework-error", errorPayload);
+        configuration.getErrorEvents().emit("all-error", { ...errorPayload, errorType: "framework-error" });
+    }
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiY2hhbm5lbC1zdWJzY3JpYmVyLWRpc3BhdGNoLmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiLi4vLi4vLi4vLi4vc3JjL2h0dHAtc2VydmVyL3dvcmtlci1oYW5kbGVyL2NoYW5uZWwtc3Vic2NyaWJlci1kaXNwYXRjaC5qcyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQSxZQUFZO0FBRVo7Ozs7Ozs7Ozs7R0FVRztBQUNILE1BQU0sQ0FBQyxPQUFPLENBQUMsS0FBSyxVQUFVLDBCQUEwQixDQUFDLEVBQUMsT0FBTyxFQUFFLGFBQWEsRUFBRSxTQUFTLEVBQUUsT0FBTyxFQUFFLE1BQU0sRUFBRSxPQUFPLEVBQUM7SUFDcEgsSUFBSSxDQUFDO1FBQ0gsTUFBTSxhQUFhLENBQUMsOEJBQThCLEVBQUUsQ0FBQyxRQUFRLENBQUMsRUFBQyxPQUFPLEVBQUUsU0FBUyxFQUFFLE9BQU8sRUFBRSxPQUFPLEVBQUMsQ0FBQyxDQUFBO0lBQ3ZHLENBQUM7SUFBQyxPQUFPLEtBQUssRUFBRSxDQUFDO1FBQ2YsTUFBTSxDQUFDLEtBQUssQ0FBQyxHQUFHLEVBQUUsQ0FBQyxDQUFDLDBDQUEwQyxPQUFPLEVBQUUsRUFBRSxLQUFLLENBQUMsQ0FBQyxDQUFBO1FBRWhGLE1BQU0sWUFBWSxHQUFHO1lBQ25CLE9BQU8sRUFBRSxFQUFDLE9BQU8sRUFBRSxTQUFTLEVBQUUsT0FBTyxFQUFFLE1BQU0sRUFBRSwrQkFBK0IsRUFBQztZQUMvRSxLQUFLO1NBQ04sQ0FBQTtRQUVELGFBQWEsQ0FBQyxjQUFjLEVBQUUsQ0FBQyxJQUFJLENBQUMsaUJBQWlCLEVBQUUsWUFBWSxDQUFDLENBQUE7UUFDcEUsYUFBYSxDQUFDLGNBQWMsRUFBRSxDQUFDLElBQUksQ0FBQyxXQUFXLEVBQUUsRUFBQyxHQUFHLFlBQVksRUFBRSxTQUFTLEVBQUUsaUJBQWlCLEVBQUMsQ0FBQyxDQUFBO0lBQ25HLENBQUM7QUFDSCxDQUFDIiwic291cmNlc0NvbnRlbnQiOlsiLy8gQHRzLWNoZWNrXG5cbi8qKlxuICogUnVucyBkaXNwYXRjaCBjaGFubmVsIHN1YnNjcmliZXJzLlxuICogQHBhcmFtIHtvYmplY3R9IGFyZ3MgLSBEaXNwYXRjaCBhcmd1bWVudHMuXG4gKiBAcGFyYW0ge3N0cmluZ30gYXJncy5jaGFubmVsIC0gQ2hhbm5lbCBuYW1lLlxuICogQHBhcmFtIHtzdHJpbmcgfCB1bmRlZmluZWR9IGFyZ3MuY3JlYXRlZEF0IC0gRXZlbnQgY3JlYXRpb24gdGltZXN0YW1wLlxuICogQHBhcmFtIHtzdHJpbmcgfCB1bmRlZmluZWR9IGFyZ3MuZXZlbnRJZCAtIEV2ZW50IGlkZW50aWZpZXIuXG4gKiBAcGFyYW0ge2ltcG9ydChcIi4uLy4uL2NvbmZpZ3VyYXRpb24uanNcIikuZGVmYXVsdH0gYXJncy5jb25maWd1cmF0aW9uIC0gQ29uZmlndXJhdGlvbiBpbnN0YW5jZS5cbiAqIEBwYXJhbSB7aW1wb3J0KFwiLi4vLi4vbG9nZ2VyLmpzXCIpLmRlZmF1bHR9IGFyZ3MubG9nZ2VyIC0gTG9nZ2VyIGZvciBpc29sYXRlZCBzdWJzY3JpYmVyIGZhaWx1cmVzLlxuICogQHBhcmFtIHtSZXR1cm5UeXBlPHR5cGVvZiBKU09OLnBhcnNlPn0gYXJncy5wYXlsb2FkIC0gQnJvYWRjYXN0IHBheWxvYWQuXG4gKiBAcmV0dXJucyB7UHJvbWlzZTx2b2lkPn0gUmVzb2x2ZXMgYWZ0ZXIgc3Vic2NyaWJlcnMgaGF2ZSBiZWVuIGF0dGVtcHRlZC5cbiAqL1xuZXhwb3J0IGRlZmF1bHQgYXN5bmMgZnVuY3Rpb24gZGlzcGF0Y2hDaGFubmVsU3Vic2NyaWJlcnMoe2NoYW5uZWwsIGNvbmZpZ3VyYXRpb24sIGNyZWF0ZWRBdCwgZXZlbnRJZCwgbG9nZ2VyLCBwYXlsb2FkfSkge1xuICB0cnkge1xuICAgIGF3YWl0IGNvbmZpZ3VyYXRpb24uZ2V0V2Vic29ja2V0Q2hhbm5lbFN1YnNjcmliZXJzKCkuZGlzcGF0Y2goe2NoYW5uZWwsIGNyZWF0ZWRBdCwgZXZlbnRJZCwgcGF5bG9hZH0pXG4gIH0gY2F0Y2ggKGVycm9yKSB7XG4gICAgbG9nZ2VyLmVycm9yKCgpID0+IFtgQ2hhbm5lbCBzdWJzY3JpYmVyIGRpc3BhdGNoIGZhaWxlZCBmb3IgJHtjaGFubmVsfWAsIGVycm9yXSlcblxuICAgIGNvbnN0IGVycm9yUGF5bG9hZCA9IHtcbiAgICAgIGNvbnRleHQ6IHtjaGFubmVsLCBjcmVhdGVkQXQsIGV2ZW50SWQsIHNvdXJjZTogXCJ3ZWJzb2NrZXQtY2hhbm5lbC1zdWJzY3JpYmVyc1wifSxcbiAgICAgIGVycm9yXG4gICAgfVxuXG4gICAgY29uZmlndXJhdGlvbi5nZXRFcnJvckV2ZW50cygpLmVtaXQoXCJmcmFtZXdvcmstZXJyb3JcIiwgZXJyb3JQYXlsb2FkKVxuICAgIGNvbmZpZ3VyYXRpb24uZ2V0RXJyb3JFdmVudHMoKS5lbWl0KFwiYWxsLWVycm9yXCIsIHsuLi5lcnJvclBheWxvYWQsIGVycm9yVHlwZTogXCJmcmFtZXdvcmstZXJyb3JcIn0pXG4gIH1cbn1cbiJdfQ==

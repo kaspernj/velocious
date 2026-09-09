@@ -15,7 +15,7 @@ class ImplicitUuidItem extends DatabaseRecord {
 }
 
 describe("database - migration - uuid primary key", {tags: ["dummy"]}, () => {
-  it("uses UUIDs for implicit primary keys", async () => {
+  it("uses UUIDs for implicit primary keys", {databaseCleaning: {transaction: false, truncate: true}}, async () => {
     await Configuration.current().ensureConnections(async (dbs) => {
       const configuration = Configuration.current()
       const driver = dbs.default
@@ -40,7 +40,7 @@ describe("database - migration - uuid primary key", {tags: ["dummy"]}, () => {
     })
   })
 
-  it("uses UUIDs for implicit reference columns", async () => {
+  it("uses UUIDs for implicit reference columns", {databaseCleaning: {transaction: false, truncate: true}}, async () => {
     await Configuration.current().ensureConnections(async (dbs) => {
       const configuration = Configuration.current()
       const driver = dbs.default
@@ -68,7 +68,7 @@ describe("database - migration - uuid primary key", {tags: ["dummy"]}, () => {
     })
   })
 
-  it("uses configured primary key types for implicit primary keys and references", async () => {
+  it("uses configured primary key types for implicit primary keys and references", {databaseCleaning: {transaction: false, truncate: true}}, async () => {
     const configuration = Configuration.current()
     const databaseConfiguration = configuration.getDatabaseConfiguration().default
     const originalPrimaryKeyType = databaseConfiguration.primaryKeyType
@@ -115,7 +115,7 @@ describe("database - migration - uuid primary key", {tags: ["dummy"]}, () => {
     }
   })
 
-  it("keeps reference defaults tied to the database primary key type when table IDs are explicit", async () => {
+  it("keeps reference defaults tied to the database primary key type when table IDs are explicit", {databaseCleaning: {transaction: false, truncate: true}}, async () => {
     await Configuration.current().ensureConnections(async (dbs) => {
       const configuration = Configuration.current()
       const driver = dbs.default
@@ -137,7 +137,7 @@ describe("database - migration - uuid primary key", {tags: ["dummy"]}, () => {
     })
   })
 
-  it("uses the explicit migration driver for primary key defaults outside a pool checkout", async () => {
+  it("uses the explicit migration driver for primary key defaults outside a pool checkout", {databaseCleaning: {transaction: false, truncate: false}}, async () => {
     const configuration = Configuration.current()
     const pool = configuration.getDatabasePool("default")
     const outsideContextConnection = pool.withoutCurrentConnectionContext(() => pool.getCurrentContextConnection())

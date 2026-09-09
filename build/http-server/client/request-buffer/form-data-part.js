@@ -1,0 +1,139 @@
+// @ts-check
+
+import fs from "fs"
+import path from "path"
+import {tmpdir} from "os"
+import Logger from "../../../logger.js"
+import MemoryUploadedFile from "../uploaded-file/memory-uploaded-file.js"
+import TemporaryUploadedFile from "../uploaded-file/temporary-uploaded-file.js"
+
+const MAX_IN_MEMORY_FILE_SIZE = 2 * 1024 * 1024
+
+export default class FormDataPart {
+  logger = new Logger(this, {debug: false})
+
+  /**
+   * Headers.
+   * @type {Record<string, import("./header.js").default>} */
+  headers = {}
+
+  /**
+   * Body.
+   * @type {number[]} */
+  body = []
+
+  /**
+   * Runs add header.
+   * @param {import("./header.js").default} header - Header value.
+   */
+  addHeader(header) {
+    const name = header.formattedName
+
+    this.headers[name] = header
+
+    if (name == "content-disposition") {
+      const match = header.value.match(/^form-data;\s*name="(.+?)"(?:;\s*filename="(.+?)")?$/)
+
+      if (match) {
+        this.name = match[1]
+        this.filename = match[2]
+      } else {
+        this.logger.error(() => [`Couldn't match name from content-disposition`, {headerValue: header.value}])
+      }
+    } else if (name == "content-length") {
+      this.contentLength = parseInt(header.value)
+    } else if (name == "content-type") {
+      this.contentType = header.value
+    }
+  }
+
+  finish() {
+    const buffer = Buffer.from(this.body)
+
+    this.size = buffer.length
+
+    if (this.isFile()) {
+      this.value = this.buildUploadedFile(buffer)
+    } else {
+      this.value = buffer.toString()
+    }
+
+    this.body = []
+  }
+
+  /**
+   * Runs build uploaded file.
+   * @param {Buffer} buffer - File buffer.
+   * @returns {import("../uploaded-file/memory-uploaded-file.js").default | import("../uploaded-file/temporary-uploaded-file.js").default} - Uploaded file wrapper.
+   */
+  buildUploadedFile(buffer) {
+    const filename = this._sanitizeFilename(this.filename) || "upload"
+    const fieldName = this.getName()
+    const commonArgs = {
+      contentType: this.contentType,
+      fieldName,
+      filename,
+      size: this.size || buffer.length
+    }
+
+    if (buffer.length <= MAX_IN_MEMORY_FILE_SIZE) {
+      return new MemoryUploadedFile({...commonArgs, buffer})
+    }
+
+    const tempFilePath = this.createTempFile(buffer, filename)
+
+    return new TemporaryUploadedFile({...commonArgs, path: tempFilePath})
+  }
+
+  /**
+   * Runs create temp file.
+   * @param {Buffer} buffer - Buffer.
+   * @param {string} filename - Filename.
+   * @returns {string} - The temp file.
+   */
+  createTempFile(buffer, filename) {
+    const tempDirectory = fs.mkdtempSync(path.join(tmpdir(), "velocious-upload-"))
+    const tempFilePath = path.join(tempDirectory, filename)
+
+    fs.writeFileSync(tempFilePath, buffer)
+
+    return tempFilePath
+  }
+
+  /**
+   * Prevent path traversal/absolute paths from filenames coming from headers.
+   * @param {string | undefined} filename - Filename.
+   * @returns {string} - The sanitize filename.
+   */
+  _sanitizeFilename(filename) {
+    if (!filename) return ""
+
+    const base = path.basename(filename)
+
+    if (base === "." || base === ".." || base === "") return "upload"
+
+    return base
+  }
+
+  getName() {
+    if (!this.name) throw new Error("Name hasn't been set")
+
+    return this.name
+  }
+
+  getValue() {
+    if (typeof this.value === "undefined") throw new Error("Value hasn't been set")
+
+    return this.value
+  }
+
+  isFile() { return Boolean(this.filename) }
+
+  /**
+   * Runs remove from body.
+   * @param {string} text - Text.
+   */
+  removeFromBody(text) {
+    this.body = this.body.slice(0, this.body.length - text.length)
+  }
+}

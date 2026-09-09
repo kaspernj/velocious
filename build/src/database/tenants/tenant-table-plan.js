@@ -1,0 +1,19 @@
+// @ts-check
+/**
+ * Describes how one table's rows are partitioned between tenants so a DataCopier can select
+ * the subset that belongs to a given tenant key.
+ *
+ * A row belongs to the tenant when its `keyColumn` equals the tenant key value, or — for
+ * tables that have no direct tenant column — when its `parentColumn` references a row of
+ * `parentTableName` that was itself already selected as belonging to the tenant. Exactly
+ * one of `keyColumn` or the (`parentTableName` + `parentColumn`) pair must be set; a
+ * parent-scoped entry must appear after its parent in the plan so the parent ids are known
+ * by the time the child is loaded.
+ * @typedef {object} TenantTablePlanEntry
+ * @property {string} tableName Name of the table whose rows are partitioned by tenant.
+ * @property {string} [keyColumn] Column matched directly against the tenant key value.
+ * @property {string} [parentTableName] Earlier-in-plan table whose selected rows scope this one.
+ * @property {string} [parentColumn] Column on this table referencing the parent table's primary key.
+ */
+export {};
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoidGVuYW50LXRhYmxlLXBsYW4uanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuLi8uLi8uLi8uLi9zcmMvZGF0YWJhc2UvdGVuYW50cy90ZW5hbnQtdGFibGUtcGxhbi5qcyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQSxZQUFZO0FBRVo7Ozs7Ozs7Ozs7Ozs7OztHQWVHO0FBRUgsT0FBTyxFQUFFLENBQUEiLCJzb3VyY2VzQ29udGVudCI6WyIvLyBAdHMtY2hlY2tcblxuLyoqXG4gKiBEZXNjcmliZXMgaG93IG9uZSB0YWJsZSdzIHJvd3MgYXJlIHBhcnRpdGlvbmVkIGJldHdlZW4gdGVuYW50cyBzbyBhIERhdGFDb3BpZXIgY2FuIHNlbGVjdFxuICogdGhlIHN1YnNldCB0aGF0IGJlbG9uZ3MgdG8gYSBnaXZlbiB0ZW5hbnQga2V5LlxuICpcbiAqIEEgcm93IGJlbG9uZ3MgdG8gdGhlIHRlbmFudCB3aGVuIGl0cyBga2V5Q29sdW1uYCBlcXVhbHMgdGhlIHRlbmFudCBrZXkgdmFsdWUsIG9yIOKAlCBmb3JcbiAqIHRhYmxlcyB0aGF0IGhhdmUgbm8gZGlyZWN0IHRlbmFudCBjb2x1bW4g4oCUIHdoZW4gaXRzIGBwYXJlbnRDb2x1bW5gIHJlZmVyZW5jZXMgYSByb3cgb2ZcbiAqIGBwYXJlbnRUYWJsZU5hbWVgIHRoYXQgd2FzIGl0c2VsZiBhbHJlYWR5IHNlbGVjdGVkIGFzIGJlbG9uZ2luZyB0byB0aGUgdGVuYW50LiBFeGFjdGx5XG4gKiBvbmUgb2YgYGtleUNvbHVtbmAgb3IgdGhlIChgcGFyZW50VGFibGVOYW1lYCArIGBwYXJlbnRDb2x1bW5gKSBwYWlyIG11c3QgYmUgc2V0OyBhXG4gKiBwYXJlbnQtc2NvcGVkIGVudHJ5IG11c3QgYXBwZWFyIGFmdGVyIGl0cyBwYXJlbnQgaW4gdGhlIHBsYW4gc28gdGhlIHBhcmVudCBpZHMgYXJlIGtub3duXG4gKiBieSB0aGUgdGltZSB0aGUgY2hpbGQgaXMgbG9hZGVkLlxuICogQHR5cGVkZWYge29iamVjdH0gVGVuYW50VGFibGVQbGFuRW50cnlcbiAqIEBwcm9wZXJ0eSB7c3RyaW5nfSB0YWJsZU5hbWUgTmFtZSBvZiB0aGUgdGFibGUgd2hvc2Ugcm93cyBhcmUgcGFydGl0aW9uZWQgYnkgdGVuYW50LlxuICogQHByb3BlcnR5IHtzdHJpbmd9IFtrZXlDb2x1bW5dIENvbHVtbiBtYXRjaGVkIGRpcmVjdGx5IGFnYWluc3QgdGhlIHRlbmFudCBrZXkgdmFsdWUuXG4gKiBAcHJvcGVydHkge3N0cmluZ30gW3BhcmVudFRhYmxlTmFtZV0gRWFybGllci1pbi1wbGFuIHRhYmxlIHdob3NlIHNlbGVjdGVkIHJvd3Mgc2NvcGUgdGhpcyBvbmUuXG4gKiBAcHJvcGVydHkge3N0cmluZ30gW3BhcmVudENvbHVtbl0gQ29sdW1uIG9uIHRoaXMgdGFibGUgcmVmZXJlbmNpbmcgdGhlIHBhcmVudCB0YWJsZSdzIHByaW1hcnkga2V5LlxuICovXG5cbmV4cG9ydCB7fVxuIl19

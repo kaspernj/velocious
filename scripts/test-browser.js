@@ -11,8 +11,8 @@ import BrowserEnvironmentHandler from "../src/environment-handlers/browser.js"
 import NodeEnvironmentHandler from "../src/environment-handlers/node.js"
 import SqliteWebDriver from "../src/database/drivers/sqlite/index.web.js"
 import SingleMultiUsePool from "../src/database/pool/single-multi-use.js"
-import queryWeb from "../src/database/drivers/sqlite/query.web.js"
 import Migrator from "../src/database/migrator.js"
+import SqljsTestDatabase from "../src/testing/sqljs-test-database.js"
 import TestFilesFinder from "../src/testing/test-files-finder.js"
 import TestRunner from "../src/testing/test-runner.js"
 import {normalizeExamplePatterns, parseFilters} from "../src/testing/test-filter-parser.js"
@@ -31,8 +31,8 @@ const distDir = path.join(rootDir, "dist")
 const entryFile = path.join(rootDir, "src/testing/browser-test-app.js")
 const defaultBrowserPattern = /\.browser-(spec|test)\.(m|)js$/
 const shared = {
-  sqlJsDatabase: null,
-  sqlJsConnection: null,
+  /** @type {SqljsTestDatabase | null} */
+  sqlJsTestDatabase: null,
   migrationsPrepared: false,
   modelsPrepared: false
 }
@@ -116,32 +116,17 @@ async function buildBrowserTestApp() {
  * @returns {Promise<import("sql.js").Database>} - The SQL.js database instance.
  */
 async function getSqlJsDatabase() {
-  if (shared.sqlJsDatabase) return shared.sqlJsDatabase
+  if (shared.sqlJsTestDatabase) return shared.sqlJsTestDatabase.database()
 
   const SQL = await initSqlJs({
     locateFile: (file) => path.join(rootDir, "node_modules/sql.js/dist", file)
   })
 
-  shared.sqlJsDatabase = new SQL.Database()
+  shared.sqlJsTestDatabase = new SqljsTestDatabase({
+    createDatabase: (data) => new SQL.Database(data)
+  })
 
-  return shared.sqlJsDatabase
-}
-
-/**
- * @param {import("sql.js").Database} database - SQL.js database instance.
- * @returns {{query: (sql: string) => Promise<Record<string, unknown>[]>, affectedRows: (sql: string) => Promise<number>, close: () => Promise<void>}} - Connection wrapper.
- */
-function createSqlJsConnection(database) {
-  return {
-    query: async (sql) => await queryWeb(database, sql),
-    affectedRows: async (sql) => {
-      await queryWeb(database, sql)
-      return database.getRowsModified()
-    },
-    close: async () => {
-      database.close()
-    }
-  }
+  return shared.sqlJsTestDatabase.database()
 }
 
 /**
@@ -162,6 +147,8 @@ async function runDummyMigrations(configuration) {
     await migrator.migrateFiles(migrations, async (filePath) => await nodeEnvironmentHandler.requireMigration(filePath))
   })
 
+  if (!shared.sqlJsTestDatabase) throw new Error("SQL.js test database was not initialized")
+  shared.sqlJsTestDatabase.captureBaseline()
   shared.migrationsPrepared = true
 }
 
@@ -238,11 +225,8 @@ async function findFiles(directory) {
  * @returns {Promise<import("../src/configuration.js").default>} - The configuration.
  */
 async function resolveConfiguration({testFilesRequireContextCallback} = {}) {
-  const sqlJsDatabase = await getSqlJsDatabase()
-
-  if (!shared.sqlJsConnection) {
-    shared.sqlJsConnection = createSqlJsConnection(sqlJsDatabase)
-  }
+  await getSqlJsDatabase()
+  if (!shared.sqlJsTestDatabase) throw new Error("SQL.js test database was not initialized")
 
   const configuration = new Configuration({
     database: {
@@ -253,7 +237,10 @@ async function resolveConfiguration({testFilesRequireContextCallback} = {}) {
           type: "sqlite",
           name: "browser-test-db",
           migrations: true,
-          getConnection: () => shared.sqlJsConnection
+          getConnection: () => {
+            if (!shared.sqlJsTestDatabase) throw new Error("SQL.js test database was not initialized")
+            return shared.sqlJsTestDatabase.connection()
+          }
         }
       }
     },

@@ -2,6 +2,7 @@
 
 import {describe, expect, it} from "../../src/testing/test.js"
 import FrontendModelBase from "../../src/frontend-models/base.js"
+import { frontendModelRemoteRequestContextKey } from "../../src/frontend-models/remote-request-context.js"
 import {resetFrontendModelTransport, stubFrontendModelFetch} from "../helpers/frontend-model-test-helpers.js"
 
 class ScopedTask extends FrontendModelBase {
@@ -17,6 +18,15 @@ class ScopedTask extends FrontendModelBase {
 }
 
 describe("frontend-model remote request context", () => {
+  it("distinguishes inherited context from an explicit empty override", () => {
+    const inheritedContextKey = frontendModelRemoteRequestContextKey(undefined)
+    const explicitEmptyContextKey = frontendModelRemoteRequestContextKey({})
+
+    expect(inheritedContextKey).not.toEqual(explicitEmptyContextKey)
+    expect(frontendModelRemoteRequestContextKey(undefined)).toEqual(inheritedContextKey)
+    expect(frontendModelRemoteRequestContextKey({})).toEqual(explicitEmptyContextKey)
+  })
+
   it("captures independent immutable context for entries sharing one batch", async () => {
     const stub = stubFrontendModelFetch({status: "success"})
     const sourceContext = {projectId: "project-alpha", routingEpoch: 3}

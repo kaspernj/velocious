@@ -66,29 +66,29 @@ export default class UuidItemBase extends DatabaseRecord {
   hasUpdatedAt() { return this._hasAttribute(this.updatedAt()) }
 
   /**
-   * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/uuid-item.js").default, typeof import("../../../../src/database/record/index.js").default>}
+   * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/uuid-item.js").default, typeof import("../models/uuid-interaction.js").default>}
    */
-  uuidInteractions() { return /** @type {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/uuid-item.js").default, typeof import("../../../../src/database/record/index.js").default>} */ (this.getRelationshipByName("uuidInteractions")) }
+  uuidInteractions() { return /** @type {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/uuid-item.js").default, typeof import("../models/uuid-interaction.js").default>} */ (this.getRelationshipByName("uuidInteractions")) }
 
   /**
-   * @returns {Array<import("../../../../src/database/record/index.js").default>}
+   * @returns {Array<import("../models/uuid-interaction.js").default>}
    */
-  uuidInteractionsLoaded() { return /** @type {Array<import("../../../../src/database/record/index.js").default>} */ (this.getRelationshipByName("uuidInteractions").loaded()) }
+  uuidInteractionsLoaded() { return /** @type {Array<import("../models/uuid-interaction.js").default>} */ (this.getRelationshipByName("uuidInteractions").loaded()) }
 
   /**
    * @abstract
-   * @returns {Promise<Array<import("../../../../src/database/record/index.js").default>>}
+   * @returns {Promise<Array<import("../models/uuid-interaction.js").default>>}
    */
   loadUuidInteractions() { throw new Error("Not implemented") }
 
   /**
-   * @returns {Promise<Array<import("../../../../src/database/record/index.js").default>>}
+   * @returns {Promise<Array<import("../models/uuid-interaction.js").default>>}
    */
-  uuidInteractionsOrLoad() { return /** @type {Promise<Array<import("../../../../src/database/record/index.js").default>>} */ (this.relationshipOrLoad("uuidInteractions")) }
+  uuidInteractionsOrLoad() { return /** @type {Promise<Array<import("../models/uuid-interaction.js").default>>} */ (this.relationshipOrLoad("uuidInteractions")) }
 
   /**
    * @abstract
-   * @param {Array<import("../../../../src/database/record/index.js").default>} newModels
+   * @param {Array<import("../models/uuid-interaction.js").default>} newModels
    * @returns {void}
    */
   setUuidInteractions(newModels) { void newModels; throw new Error("Not implemented") }

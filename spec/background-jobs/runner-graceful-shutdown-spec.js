@@ -9,8 +9,8 @@ import {closeRunnerConnections} from "../../src/background-jobs/runner-graceful-
  * shutdown, optionally overriding each to throw or hang. Structurally matches the
  * `RunnerCloseableConfiguration` contract `closeRunnerConnections` depends on, so no
  * broad cast is needed to pass it.
- * @param {{closeDatabaseConnections?: () => Promise<void>, disconnectBeacon?: () => Promise<void>}} [overrides] - Per-call behavior overrides.
- * @returns {{calls: string[], closeDatabaseConnections: () => Promise<void>, disconnectBeacon: () => Promise<void>}} - The fake configuration.
+ * @param {{closeDatabaseConnections?: () => Promise<void>, disconnectBeacon?: () => Promise<void>, shutdown?: () => Promise<void>}} [overrides] - Per-call behavior overrides.
+ * @returns {{calls: string[], closeDatabaseConnections: () => Promise<void>, disconnectBeacon: () => Promise<void>, shutdown: () => Promise<void>}} - The fake configuration.
  */
 function fakeConfiguration(overrides = {}) {
   /** @type {string[]} */
@@ -25,6 +25,10 @@ function fakeConfiguration(overrides = {}) {
     async closeDatabaseConnections() {
       calls.push("closeDatabaseConnections")
       if (overrides.closeDatabaseConnections) await overrides.closeDatabaseConnections()
+    },
+    async shutdown() {
+      calls.push("shutdown")
+      if (overrides.shutdown) await overrides.shutdown()
     }
   }
 }
@@ -50,8 +54,7 @@ describe("runner graceful shutdown", () => {
 
     await closeRunnerConnections(configuration)
 
-    // Order-independent: the two closes run concurrently.
-    expect([...configuration.calls].sort()).toEqual(["closeDatabaseConnections", "disconnectBeacon"])
+    expect(configuration.calls).toEqual(["shutdown", "disconnectBeacon", "closeDatabaseConnections"])
   })
 
   it("still closes the database even when the beacon disconnect hangs, and surfaces the failure", async () => {
@@ -80,6 +83,24 @@ describe("runner graceful shutdown", () => {
     const error = await errorFrom(() => closeRunnerConnections(configuration))
 
     expect(error).toBeInstanceOf(Error)
+  })
+
+  it("attempts application and framework cleanup and aggregates failures in lifecycle order", async () => {
+    const applicationError = new Error("application close failed")
+    const beaconError = new Error("beacon close failed")
+    const databaseError = new Error("database close failed")
+    const configuration = fakeConfiguration({
+      closeDatabaseConnections: async () => { throw databaseError },
+      disconnectBeacon: async () => { throw beaconError },
+      shutdown: async () => { throw applicationError }
+    })
+
+    const error = await errorFrom(() => closeRunnerConnections(configuration))
+
+    expect(configuration.calls).toEqual(["shutdown", "disconnectBeacon", "closeDatabaseConnections"])
+    expect(error).toBeInstanceOf(AggregateError)
+    expect(/** @type {AggregateError} */ (error).errors).toEqual([applicationError, beaconError, databaseError])
+    expect(error.cause).toBe(applicationError)
   })
 
   it("is bounded so a wedged database close cannot block the exit (rejects instead of hanging)", async () => {

@@ -1,0 +1,12 @@
+import BaseCommand from "../../base-command.js";
+/** CLI command for loading and running src/db/seed.js. */
+export default class DbSeed extends BaseCommand {
+    /**
+     * Runs execute.
+     * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
+     */
+    async execute() {
+        return await this.getConfiguration().getEnvironmentHandler().cliCommandsDbSeed(this);
+    }
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoic2VlZC5qcyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbIi4uLy4uLy4uLy4uLy4uL3NyYy9jbGkvY29tbWFuZHMvZGIvc2VlZC5qcyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQSxPQUFPLFdBQVcsTUFBTSx1QkFBdUIsQ0FBQTtBQUUvQywwREFBMEQ7QUFDMUQsTUFBTSxDQUFDLE9BQU8sT0FBTyxNQUFPLFNBQVEsV0FBVztJQUM3Qzs7O09BR0c7SUFDSCxLQUFLLENBQUMsT0FBTztRQUNYLE9BQU8sTUFBTSxJQUFJLENBQUMsZ0JBQWdCLEVBQUUsQ0FBQyxxQkFBcUIsRUFBRSxDQUFDLGlCQUFpQixDQUFDLElBQUksQ0FBQyxDQUFBO0lBQ3RGLENBQUM7Q0FDRiIsInNvdXJjZXNDb250ZW50IjpbImltcG9ydCBCYXNlQ29tbWFuZCBmcm9tIFwiLi4vLi4vYmFzZS1jb21tYW5kLmpzXCJcblxuLyoqIENMSSBjb21tYW5kIGZvciBsb2FkaW5nIGFuZCBydW5uaW5nIHNyYy9kYi9zZWVkLmpzLiAqL1xuZXhwb3J0IGRlZmF1bHQgY2xhc3MgRGJTZWVkIGV4dGVuZHMgQmFzZUNvbW1hbmQge1xuICAvKipcbiAgICogUnVucyBleGVjdXRlLlxuICAgKiBAcmV0dXJucyB7UHJvbWlzZTxSZXR1cm5UeXBlPHR5cGVvZiBKU09OLnBhcnNlPj59IC0gUmVzb2x2ZXMgd2l0aCB0aGUgY29tbWFuZCByZXN1bHQuXG4gICAqL1xuICBhc3luYyBleGVjdXRlKCkge1xuICAgIHJldHVybiBhd2FpdCB0aGlzLmdldENvbmZpZ3VyYXRpb24oKS5nZXRFbnZpcm9ubWVudEhhbmRsZXIoKS5jbGlDb21tYW5kc0RiU2VlZCh0aGlzKVxuICB9XG59XG4iXX0=

@@ -1,0 +1,1 @@
+- Add Rails-style application process initializer teardown with immutable process contexts, idempotent reverse shutdown, ordered error aggregation, and owned HTTP/background-job runner lifecycle integration.

@@ -6,7 +6,7 @@ import dummyConfiguration from "../../dummy/src/config/configuration.js"
 import dummyDirectory from "../../dummy/dummy-directory.js"
 import EnvironmentHandlerNode from "../../../src/environment-handlers/node.js"
 
-describe("Cli - Commands - console", () => {
+describe("Cli - Commands - console", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("loads the console via the alias", async () => {
     const originalEnvironment = dummyConfiguration.getEnvironment()
 

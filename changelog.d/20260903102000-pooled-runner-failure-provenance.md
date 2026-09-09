@@ -1,0 +1,1 @@
+Add shared process-exit provenance to `background-job-failed` events when one pooled runner failure affects multiple jobs, including active handoff identities, release/worker lifecycle, runner and worker PIDs, exit code/signal, timeout cause, and an explicit nullable OOM verdict.

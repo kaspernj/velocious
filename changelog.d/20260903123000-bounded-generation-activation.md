@@ -1,0 +1,1 @@
+Bound background-job generation activation to queue-derived and active or stale concurrency keys, repair secondary indexes missed by older SQL schema upgrades with conflict-safe SQLite DDL, and reject candidate activation when recovery retirement wins the race.

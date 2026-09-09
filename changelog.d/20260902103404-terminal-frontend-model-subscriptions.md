@@ -1,0 +1,1 @@
+Frontend-model event subscriptions no longer retry channels that the server permanently rejects, preventing authorization failures from creating resubscribe loops while preserving transport reconnects.

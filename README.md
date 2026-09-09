@@ -3,17 +3,17 @@
 * Concurrent multi threadded web server
 * Database framework with familiar MVC concepts
 * Database models with migrations and validations
-* Database models that work almost the same in frontend and backend
+* Database models that work almost the same in frontend and backend, including online CRUD for [composite primary keys](docs/composite-primary-keys.md)
 * Connection-scoped advisory locks with automatic cleanup before pooled connections are reused or closed (see [docs/advisory-locks.md](docs/advisory-locks.md))
 * Built-in record auditing for model lifecycle changes (see [docs/auditing.md](docs/auditing.md))
 * Declarative state machines for models, with typed event methods generated into the base model (see [docs/state-machine.md](docs/state-machine.md))
-* Migrations for schema changes and UTC datetime storage, including recorded `changeTable` batches that combine operations into one `ALTER` on bulk-capable drivers (see [docs/database-migrations.md](docs/database-migrations.md) and [docs/change-table.md](docs/change-table.md))
+* Migrations for schema changes and UTC datetime storage, including caller-selected `pre-runtime` and `post-publication` execution sets and recorded `changeTable` batches that combine operations into one `ALTER` on bulk-capable drivers (see [docs/database-migrations.md](docs/database-migrations.md), [docs/migration-execution-phases.md](docs/migration-execution-phases.md), and [docs/change-table.md](docs/change-table.md))
 * Tenant-selected base-model and structure generation with one immutable, fail-closed physical database context; tenant-only model metadata initializes only after that context is active (see [docs/tenant-selected-database-generation.md](docs/tenant-selected-database-generation.md))
 * Read-only tenant migration deploy preflight with stable JSON output and fail-closed ledger reads (see [docs/tenant-migration-deploy-preflight.md](docs/tenant-migration-deploy-preflight.md))
 * External packages (engines) that contribute data models, frontend-model resources and migrations to a consuming app (see [docs/packages.md](docs/packages.md))
 * Optional Rampway-owned durable deployment control plane mounted through the standard routes DSL on Velocious 1.0.577 or newer (see [docs/rampway-integration.md](docs/rampway-integration.md))
 * Controllers and views for HTTP endpoints
-* Frontend-model transport for creating, updating, querying, and subscribing to query-filtered lifecycle events over HTTP/WebSocket, with structured per-attribute validation error responses, immutable per-operation remote request context, and one-budget WebSocket startup controls (see [docs/frontend-models.md](docs/frontend-models.md), [docs/remote-request-context.md](docs/remote-request-context.md), and [docs/websocket-channels.md](docs/websocket-channels.md))
+* Frontend-model transport for creating, updating, querying, and subscribing to query-filtered lifecycle events over HTTP/WebSocket, including committed counter-cache parent updates, structured per-attribute validation error responses, immutable per-operation remote request context, registration-local tenant subscription partitioning, and one-budget WebSocket startup controls (see [docs/frontend-models.md](docs/frontend-models.md), [docs/remote-request-context.md](docs/remote-request-context.md), and [docs/websocket-channels.md](docs/websocket-channels.md))
 * Client-side offline sync mutation logs and frontend-model optimistic queueing primitives (see the [shared-resource sync developer guide](docs/shared-resource-sync-guide.md) and [offline sync architecture](docs/offline-sync.md))
 * Declarative client sync scopes with per-scope cursors, automatic mutation tracking, opt-in durable base-version conflict replay, realtime delivery, and immutable-handle project clients whose local database state plus remote pull/replay/realtime request context stay tenant-bound through reconnect (see [docs/sync-client.md](docs/sync-client.md), [docs/remote-request-context.md](docs/remote-request-context.md), and [docs/offline-sync.md](docs/offline-sync.md))
 * Reactive `useLiveQuery(Model.where(...))` queries for default databases plus immutable-handle tenant live-query sources whose committed events and refreshes stay on the captured physical tenant (see [docs/live-queries.md](docs/live-queries.md))
@@ -32,11 +32,12 @@
 * Per-record ability checks via `.abilities(...)` on frontend queries + `record.can(action)` (see [docs/abilities.md](docs/abilities.md))
 * Translated model attributes with current-locale relationship sorting (see [docs/translations.md](docs/translations.md))
 * Cross-process broadcast bus for `broadcastToChannel` via `velocious beacon`, including background job runner processes (see [docs/beacon.md](docs/beacon.md))
+* Rails-style application process initializer teardown with immutable process identity, reverse idempotent shutdown, and explicit HTTP/background-job ownership (see [docs/application-process-lifecycle.md](docs/application-process-lifecycle.md))
 * Configurable HTTP server worker handlers plus backpressured, descriptor-only file responses with completion callbacks (see [docs/http-server.md](docs/http-server.md))
 * Default-on buffered HTTP response compression with Brotli/gzip content negotiation, global and per-response opt-outs, and HEAD-correct representation headers (see [docs/http-server.md](docs/http-server.md#response-compression))
-* Background jobs with Node SQL/TCP workers plus a Browser/Expo local SQLite store and in-process dispatcher, failure events, and authorized database-scoped dashboard count snapshots/deltas (see [docs/background-jobs.md](docs/background-jobs.md), [docs/local-background-jobs.md](docs/local-background-jobs.md), and [docs/background-jobs-dashboard.md](docs/background-jobs-dashboard.md))
+* Background jobs with Node SQL/TCP workers plus a Browser/Expo local SQLite store and in-process dispatcher, including failure events, authorized database-scoped dashboard counts, and an opt-in release-scoped main/worker generation protocol with acknowledged activation, asynchronous retirement, and retired-main recovery. Production compliance additionally requires downstream supervisor retention/activation ordering and release pins (see [docs/background-jobs.md](docs/background-jobs.md), [docs/local-background-jobs.md](docs/local-background-jobs.md), and [docs/background-jobs-dashboard.md](docs/background-jobs-dashboard.md))
 * Durable one-off background-job scheduling with exact epoch timestamps (see [docs/scheduled-background-job-enqueue.md](docs/scheduled-background-job-enqueue.md))
-* Rails-style request and database query logging (see [docs/logging.md](docs/logging.md))
+* Rails-style request and database query logging with structured credential redaction (see [docs/logging.md](docs/logging.md))
 * EJS-backed mailers with delivery, queueing, and payload rendering support (see [docs/mailers.md](docs/mailers.md))
 * Trusted reverse proxy handling for `request.remoteAddress()` (see [docs/trusted-proxies.md](docs/trusted-proxies.md))
 * In-process driver schema metadata caching (see [docs/schema-metadata-cache.md](docs/schema-metadata-cache.md))
@@ -46,7 +47,7 @@
 * AbortSignal-driven MySQL/MariaDB query cancellation for raw, model, and cross-tenant aggregate queries (see [docs/database-query-cancellation.md](docs/database-query-cancellation.md))
 * Optional built-in debug endpoint for inspecting server and database connection state (see [docs/debug-endpoint.md](docs/debug-endpoint.md))
 * Optional built-in API manifest endpoint describing every registered frontend-model resource as human- and machine-readable JSON (see [docs/api-manifest-endpoint.md](docs/api-manifest-endpoint.md))
-* Backend record attachments with filesystem, S3, native callback, and bounded Node path-input persistence (see [docs/attachments.md](docs/attachments.md))
+* Backend record attachments with filesystem, S3, native callback, bounded Node path-input persistence, and model-declared client sync policy (see [docs/attachments.md](docs/attachments.md))
 
 # Setup
 
@@ -58,7 +59,17 @@ npm install velocious
 npx velocious init
 ```
 
+Pinned Git commits can be installed without lifecycle scripts by using a GitHub
+commit archive. Velocious checks in generated `build/` output for this purpose;
+see [Git dependency installation](docs/git-installation.md).
+
 By default, Velocious looks for your configuration in `src/config/configuration.js`. If you keep the configuration elsewhere, make sure your app imports it early and calls `configuration.setCurrent()`.
+
+Application initializers may implement `teardown()` and inspect their frozen
+`getProcessContext()` value. Long-lived process owners call
+`configuration.shutdown()` before framework connection cleanup; see the
+[application process lifecycle guide](docs/application-process-lifecycle.md) for
+promise identity, errors, process types, and pooled/forked runner semantics.
 
 # Node SQLite driver
 
@@ -166,6 +177,20 @@ Baselines are generated against a fresh checkout (no generated dummy `configurat
 
 # Testing
 
+Application tests may import the testing DSL from the independent public package.
+`@velocious/testing` `0.0.12` is the declaration and execution engine. Compatible
+installed copies share one protocol-1/schema-3 default registry. Velocious adapts each
+package-owned attempt with its database, request, profiling, and cleanup behavior; the
+existing Velocious facade exports the same declaration DSL and remains supported.
+
+```js
+import {describe, expect, it} from "@velocious/testing"
+
+describe("Tasks", () => {
+  it("adds a task", () => expect(1 + 1).toEqual(2))
+})
+```
+
 The dummy database configurations require `MSSQL_SA_PASSWORD` whenever they include
 the shared MSSQL test database. Set it in the local process environment rather than
 writing the password into `spec/dummy/src/config/configuration*.js`. TensorBuzz CI
@@ -269,7 +294,7 @@ npx velocious test:timing-manifest:merge --output tmp/test-timings.json \
 See [test profiling](docs/test-profiling.md) for lifecycle accounting, custom
 activity spans, schema, and privacy guarantees.
 
-Prefer waiting for a real signal or condition over sleeping a fixed duration. `waitForEvent(emitter, eventName, {timeoutMs, filter})` resolves the instant a matching event fires (a background job finishing, a model update, a websocket message) and rejects on timeout; for polling an arbitrary condition, use awaitery's `waitFor`. The stable Velocious import remains `velocious/build/src/testing/test.js`; its generic `waitForEvent` primitive comes from `@velocious/testing`, while the keyed testing DSL and framework runner remain owned by Velocious.
+Prefer waiting for a real signal or condition over sleeping a fixed duration. `waitForEvent(emitter, eventName, {timeoutMs, filter})` resolves the instant a matching event fires (a background job finishing, a model update, a websocket message) and rejects on timeout; for polling an arbitrary condition, use awaitery's `waitFor`. Both `@velocious/testing` and the backward-compatible `velocious/build/src/testing/test.js` facade are supported imports; the Velocious runner consumes public-package declarations and adds the framework-specific database, request, profiling, and cleanup behavior.
 
 ```js
 import {waitForEvent} from "velocious/build/src/testing/test.js"
@@ -301,6 +326,8 @@ export default async function configureTesting() {
 Use `consoleOutput: "live"` to preserve the previous passthrough behavior where test console output is printed while tests run.
 
 Listen for attempt and retry events if you need to reset shared state after a failed attempt or log retry lifecycle details. `testAttemptFailed` fires after every failed attempt, including the final failed attempt when no retries remain. `testRetrying` only fires before a retry, and `testFailed` only fires after retries are exhausted.
+
+A shared resource owner may throw an error carrying `terminalResource: {scope: "run", name: "shared-resource"}`. With a compatible `@velocious/testing` runner, Velocious preserves this contract through causes and aggregate errors, reports the originating failure with full causal stacks, suppresses retries, and emits `testNotRun` for later selected cases instead of running their callbacks. `testNotRun` receives `{configuration, test, testRunner}`; `test` has `status: "not-run"`, `fullName`, `location`, and the originating `reason`. `testRunner.getNotRunTests()` and `getNotRunTestDetails()` expose this separate accounting. Entered suites clean up once; the CLI exits unsuccessfully even for terminal setup with zero executed cases. Unmatched filters retain their explanatory message and `no-tests` profile status, independently of terminal setup failures. This does not restart a browser or cancel already-issued work. Upgrade the shared runner and this reporter adapter together before enabling terminal resource owners; earlier shared runners ignore the marker. See [terminal resource reporting](docs/terminal-resource-reporting.md).
 
 ```js
 import {testEvents} from "velocious/build/src/testing/test.js"
@@ -606,7 +633,7 @@ npx velocious g:frontend-models
 
 Frontend-model attributes can usually be declared by name. The generator infers JSDoc typedefs and nullability from backend model columns and translated attribute columns. When an attribute entry needs resource-specific options such as `selectedByDefault: false`, keep only that option in the resource config, for example `{name: "archivedAt", selectedByDefault: false}`; the column type and nullability are still inferred. For computed resource attributes, add a typed `${attributeName}Attribute(model)` method with an `@returns` tag in the backend project's `src` tree. Resource attribute return types take precedence over column types because the resource method controls the serialized value. If Velocious cannot infer a read attribute from a column, generated model accessor, resource method JSDoc, or explicit metadata, generation fails with a clear error instead of emitting a broad fallback type.
 
-This creates `src/frontend-models/user.js` (and one file per configured resource). Import each model directly by its file path (e.g. `import User from ".../frontend-models/user.js"`); `src/frontend-models/setup.js` side-effect-imports every model file so they self-register (import it once at app startup). No barrel/`index.js` is generated. Every generated file — the per-model files and `setup.js` here, and the base-model files from `g:base-models` — starts with an auto-generated banner stating it must not be edited manually because changes are overwritten on the next regeneration, and naming the command that regenerates it. Apply changes at their source (resource/model definitions or the generator) and regenerate. Generated classes support:
+This creates `src/frontend-models/user.js` (and one file per configured resource). Import each model directly by its file path (e.g. `import User from ".../frontend-models/user.js"`); named and default exports remain class declarations, so they can be constructed and referenced as instance types. `src/frontend-models/setup.js` side-effect-imports every model file so they self-register (import it once at app startup). No barrel/`index.js` is generated. Every generated file — the per-model files and `setup.js` here, and the base-model files from `g:base-models` — starts with an auto-generated banner stating it must not be edited manually because changes are overwritten on the next regeneration, and naming the command that regenerates it. Apply changes at their source (resource/model definitions or the generator) and regenerate. Generated classes support:
 
 - `await User.find(5)`
 - `await User.findBy({email: "john@example.com"})`
@@ -649,10 +676,13 @@ import useModelClassEvent from "velocious/build/src/frontend-models/use-model-cl
 
 useModelClassEvent(Subscription, ["create", "update"], () => {
   void loadSubscriptionStatus()
+}, {
+  query: Subscription.where({workspaceId}),
+  requestContext: {workspaceId}
 })
 ```
 
-`useCreatedEvent`, `useUpdatedEvent`, and `useDestroyedEvent` are also available. `useUpdatedEvent` and `useDestroyedEvent` accept either a model class or model instance. Lifecycle subscriptions accept the same projection options as frontend-model queries for event records, including `select`, `preload`, `withCount`, `abilities`, and `queryData`.
+`useCreatedEvent`, `useUpdatedEvent`, and `useDestroyedEvent` are also available. `useUpdatedEvent` and `useDestroyedEvent` accept either a model class or model instance. Generated lifecycle callbacks retain the concrete generated model type; scalar event ids are strings and composite event ids are objects keyed by the configured primary-key attributes. Lifecycle subscriptions accept the same projection options as frontend-model queries for event records, including `select`, `preload`, `withCount`, `abilities`, and `queryData`. Pass a registration-local `requestContext` when several tenant routes for the same model can be mounted concurrently. Omitting it inherits the configured transport context; passing `{}` explicitly replaces that context with an unscoped registration. Velocious captures it immutably, sends it to the tenant resolver, and partitions server subscriptions by its value: equal contexts retain multiplexing, while distinct contexts never share an event-filter request. The backend must still authorize the resolved tenant; request context is not proof of access.
 
 Frontend-model `group(...)` is attribute/path based and does not accept raw SQL fragments. Use model/relationship shapes (for example `Task.group({project: {account: ["id"]}})`) so grouping resolves through known relationships and mapped columns.
 Frontend-model `where(...)` supports nested relationship descriptors (for example `Task.where({project: {creatingUser: {reference: "owner-b"}}})`) and does not accept raw SQL fragments.
@@ -673,10 +703,21 @@ For backend models, you can declare attachment helpers directly:
 Task.hasManyAttachments("files")
 Task.hasOneAttachment("descriptionFile")
 Task.hasOneAttachment("archivedPdf", {driver: "s3"})
+User.hasOneAttachment("profilePicture", {
+  sync: {
+    fetch: "eager",
+    offlineRequirement: "optional",
+    retention: "evictable"
+  }
+})
 ```
 
-See [Backend record attachments](docs/attachments.md) for the complete input,
-storage-driver, lifecycle, and path-security contracts.
+`db:migrate` provisions the framework-owned attachment table before runtime
+attachment work begins. See [Backend record attachments](docs/attachments.md)
+for the complete input, storage-driver, lifecycle, and path-security contracts.
+Offline-capable clients can apply synchronized attachment descriptors through
+the platform-neutral [Synchronized asset cache](docs/synchronized-assets.md),
+while Expo and web packages own their respective byte-storage adapters.
 
 You can also pass a driver class or instance directly on the attachment:
 
@@ -786,7 +827,9 @@ behavior. See
 [docs/attachments.md](docs/attachments.md#normalized-storage-driver-input) for
 the normalized input passed to custom drivers.
 
-For frontend models, configure `resourceConfig().attachments` and use:
+For a resource with a backing model, the model attachment declaration
+automatically generates `resourceConfig().attachments`; do not repeat it on the
+resource. Use the generated attachment handles normally:
 
 ```js
 await frontendTask.update({descriptionFile: file})
@@ -799,7 +842,18 @@ await frontendTask.attach(file)
 
 Frontend model attachment input does not support `{path: ...}`.
 Use `File`/`Blob`/bytes/`contentBase64` payloads instead.
-Attachment metadata is exposed through the built-in `VelociousAttachment` frontend model with safe fields only: `id`, `recordType`, `recordId`, `name`, `position`, `filename`, `contentType`, `byteSize`, `createdAt`, and `updatedAt`. Storage internals such as `driver`, `storageKey`, and `contentBase64` remain hidden and non-queryable. Direct metadata queries require owner filters: `recordType`, `recordId`, and `name`.
+The optional model-level `sync` block is client-safe policy metadata for asset
+cache adapters. It distinguishes eager/on-demand fetching,
+durable/evictable retention, and optional/required offline availability.
+Required offline assets must be durable. Backend driver configuration never
+appears in generated frontend models or API manifests. A descriptor ID keeps
+its digest, byte size, and content type immutably. Cache descriptors that share
+a digest must agree on byte size and content type, and eager synchronization
+attempts each shared digest only once per reconciliation. On-demand resolution
+rechecks the backing blob after cleanup and returns `null` instead of a stale
+local URI when concurrent eviction removed it. Cleanup deferred by an active
+cached resolution runs again after that digest's final guard releases.
+Attachment metadata is exposed through the built-in `VelociousAttachment` frontend model with safe fields only: `id`, `recordType`, `recordId`, `name`, `position`, `filename`, `contentType`, `byteSize`, `createdAt`, and `updatedAt`. Storage internals such as `driver`, `storageKey`, and `contentBase64` remain hidden and non-queryable. Metadata collection queries require owner filters: `resourceName`, `recordType`, `recordId`, and `name`. Composite `recordId` values retain the complete canonical tuple without a 255-character limit, and key-changing saves rekey attachment ownership in the record transaction. `VelociousAttachment.find(id)` uses the member endpoint and authorizes against configured resource aliases backed by the attachment owner type.
 
 When your frontend app calls a backend on another host/port (or under a path prefix), configure transport once:
 
@@ -1023,10 +1077,16 @@ closure without overlapping stale and current bootstrap side effects.
 
 ## Lifecycle callbacks
 
-Register lifecycle callbacks with either a function or an instance method name. Registrations run in order, so you can stack multiple callbacks on the same lifecycle hook.
+Records support implicit same-named lifecycle methods plus explicit function or
+string method-name registrations. Registrations run in order, so independent
+responsibilities can use multiple small named callbacks.
 
 ```js
 class Task extends Record {
+  beforeSave() {
+    this.setName(this.name().trim())
+  }
+
   async validateSomething() {
     await doSomethingElse()
   }
@@ -1038,6 +1098,14 @@ Task.beforeValidation(async (task) => {
 
 Task.beforeValidation("validateSomething")
 ```
+
+Function registrations receive the record argument; arrow-function `this` is
+lexical and is not rebound to the record. Keep implicit hooks cohesive, use
+multiple explicit registrations when concerns or ordering should be visible, and
+put irreversible effects behind `afterCommit` rather than directly in
+`afterSave`. See [Record lifecycle callbacks](docs/lifecycle-callbacks.md) for
+phase ordering, transaction boundaries, bulk-operation caveats, and testing
+guidance.
 
 ## Preloading relationships
 
@@ -1134,6 +1202,8 @@ FrontendModelBase.setAutoload(false)
 ```
 
 Scoped frontend queries (e.g. `Task.where(...).preload([name]).toArray()` from user code) bypass cohort batching by design, same as the backend. Siblings with locally set state from `.setRelationship()` / `.build()` are preserved across cohort batches.
+
+Backend relationship `build(...)` / `create(...)` helpers and generated singular builders with a concrete target use that model's generated write-attribute type. Model-valued relationship attributes are accepted, while unknown and invalid attributes fail type checking. Targetless polymorphic `belongsTo` builders remain generic because no single target write contract exists. See [docs/relationships.md](docs/relationships.md#building-related-records).
 
 ## Through relationships
 
@@ -1421,6 +1491,22 @@ Migrations that must be rerunnable can guard changes with `tableExists(...)`, `c
 npx velocious db:migrate
 ```
 
+Migrations default to the `pre-runtime` phase. A migration can declare
+`Migration.runInPhase("post-publication")`, and callers can run exactly one
+declared set while preserving timestamp order, package migrations, database
+targets, and ledger behavior:
+
+```bash
+npx velocious db:migrate --phase pre-runtime
+npx velocious db:migrate --phase post-publication
+```
+
+Omitting `--phase` remains backward-compatible and runs all pending migrations.
+Velocious does not choose when either set runs; the application or deployment
+caller owns invocation timing. See [migration execution phases](docs/migration-execution-phases.md)
+for the class API, programmatic selector, require-context behavior, and tenant
+commands.
+
 Run project seeds from `src/db/seed.js` (default export should be an async function):
 
 ```bash
@@ -1432,6 +1518,8 @@ You can chain multiple commands in one invocation:
 ```bash
 npx velocious db:create db:migrate
 ```
+
+Database creation waits for the server-side DDL to finish. On MS-SQL, only the `CREATE DATABASE` request bypasses node-mssql's ordinary request deadline; later schema and application queries keep their configured timeout.
 
 Run script files with initialized app/database context:
 
@@ -1599,8 +1687,19 @@ const tasks = await Task.all().toArray()
 
 ### Filtering
 
+Use `{in: [...]}` for explicit null-aware membership. Mixed lists match either
+IN members or SQL NULL, grouped locally so sibling and chained filters still
+apply. Null-only lists use IS NULL; empty lists match nothing. Direct arrays keep
+their existing driver-specific behavior, including string-null quoting and
+column collation. See [Query filtering](docs/query-filtering.md) for
+validation, normalization, negation, relationships and raw-query boundaries.
+
 ```js
 const tasks = await Task.where({status: "open"}).toArray()
+
+const nullOrManualTasks = await Task
+  .where({projectId: project.id(), description: {in: [null, "manual"]}})
+  .toArray()
 
 const tasksForActiveProjects = await Task.where({
   project: {projectDetail: {isActive: true}}
@@ -1694,6 +1793,13 @@ const accountNames = tasks.map((task) => task.project().account().name())
 ```js
 const tasks = await Task.select(["tasks.id", "tasks.name"]).toArray()
 ```
+
+Loaded records expose cached physical model columns through `attributes()`. A
+terminal calculated `AS` alias explicitly requested by that query is included
+under the alias spelling returned by the database driver. Other unmapped row
+keys are omitted from `attributes()` so an older process can safely read rows
+after a rolling schema addition; they remain available through
+`rawAttributes()` and `readColumn()`, while `readAttribute()` remains strict.
 
 ### Reselecting columns
 
@@ -1829,7 +1935,7 @@ database: {
 }
 ```
 
-`pool.max` caps live async-tracked connections for that pool and defaults to `10` when omitted. When the cap is reached, new checkouts wait until a matching checked-in connection can be handed over or capacity is freed. Set `pool.max` to `null` only when a process is deliberately allowed to open an unbounded number of database connections. The built-in debug endpoint reports each in-use connection's `checkedOutForMs`, each idle connection's `idleForMs`, and queued `pendingCheckouts[].waitingForMs` so production diagnostics can distinguish long-held checkouts from pool-capacity waits.
+`pool.max` caps live async-tracked connections for that pool and defaults to `10` when omitted. When the cap is reached, new checkouts wait until a matching checked-in connection can be handed over or capacity is freed. Set `pool.max` to `null` only when a process is deliberately allowed to open an unbounded number of database connections. The built-in debug endpoint reports each in-use connection's `checkedOutForMs`, each idle connection's `idleForMs`, queued `pendingCheckouts[].waitingForMs`, and matching idle capacity plus checkout-drain state so production diagnostics can distinguish long-held checkouts, pool-capacity waits, and an invariant violation where compatible capacity is unexpectedly idle.
 
 Debug snapshots also expose cumulative connection-creation, checkout-wait and
 timeout, idle-reap, and peak-live-connection telemetry. Opt-in test profiles can
@@ -1908,7 +2014,8 @@ const configuration = new Configuration({
     console: false,            // disable console output
     file: true,                // enable file output
     directory: "/custom/logs", // optional, defaults to "<project>/log" in Node
-    filePath: "/tmp/app.log"   // optional explicit path
+    filePath: "/tmp/app.log",  // optional explicit path
+    sensitiveNames: ["integrationPin"] // optional app-specific additions
   }
 })
 ```
@@ -1968,6 +2075,8 @@ Task Load (1.9ms)  SELECT `tasks`.* FROM `tasks` WHERE `tasks`.`id` = 1 LIMIT 1
 Model queries use operation names such as `Task Load`, `Task Count`, `Task Pluck`, `Task Create`, `Task Update`, and `Task Destroy`. Raw driver queries use `SQL`. The source arrow is included only when Velocious can identify an application frame; dependency and framework frames such as `node_modules` are omitted.
 
 Query logging defaults to off in the `test` environment to keep CI output quiet and is skipped when no output emits `info`. Override it with `logging: {queryLogging: true}` when a test build should write SQL timing logs, and use the normal logging output settings to send those logs to console or file.
+
+- **Credential redaction**: Request headers, parsed body/params, nested arrays, URL queries, WebSocket authentication params, rendered SQL diagnostics, and request/frontend-model errors are redacted before formatting and output fan-out. Defaults match common authorization, authentication, credential, password, secret, token, API-key, cookie/session, and base64-content name variants case-insensitively. Add application names with `logging.sensitiveNames`; entries must be non-blank strings. Exact request-scoped values are replaced in SQL/error text while safe fields, SQL shape, timing, source lines, error class/backtrace, and correlation metadata remain visible. Import `LOG_REDACTION_MARKER` from `velocious/build/src/log-redactor.js` when code needs to compare the deterministic marker. See [logging and credential redaction](docs/logging.md#credential-redaction).
 
 ## Listen for framework errors
 
@@ -2030,7 +2139,9 @@ await client.close()
 
 For long-lived Node clients, the constructor also accepts opt-in liveness options (all default off, so browser/Expo usage is unchanged): `webSocketImplementation` (inject Node's `ws`, since the global/undici WebSocket exposes neither protocol ping nor an unref-able socket), `heartbeatIntervalMs` (a ping heartbeat that drops a socket whose peer stops ponging, so a client notices a vanished server), and `unref` (unref the underlying socket so an idle connection can't keep the process alive on its own). See [docs/websocket-channels.md](docs/websocket-channels.md).
 
-`await client.close()` is a final graceful shutdown that releases resumable server-session state; unexpected transport drops first attempt to resume that state. A successful resume retains the existing server-side connection and channel instances. If the server instead rejects the old session with `session-gone`, SnapReq promotes the already-established fresh session, reopens still-live one-to-one connection handles, and re-subscribes still-live channel handles. Those public handles remain usable and channel readiness resolves on the fresh session; explicitly closed handles stay closed. See [the WebSocket channel lifecycle guarantees](docs/websocket-channels.md#lifecycle-guarantees-phase-1b).
+`await client.close()` is a final graceful shutdown that releases resumable server-session state. Every channel subscription still tracked by the client, including a pending subscription, becomes closed and receives `onClose("client_close")`. A pending `subscription.ready` still rejects because no subscribe acknowledgement arrived, and its error identifies `client_close`. Throwing channel close callbacks do not stop the remaining handles or transport/base cleanup; after cleanup, `client.close()` rejects with the original error for one failed callback or teardown step, or with an `AggregateError` for multiple failures.
+
+Unexpected transport drops first attempt to resume server-session state. On a multi-worker server, the client automatically puts the prior session identity in the reconnect upgrade URL so the host can route it to its owning worker; routing is session-based and never source-IP-based. A successful resume retains the existing server-side connection and channel instances. If the server instead rejects the old session with `session-gone`, SnapReq promotes the already-established fresh session, reopens still-live one-to-one connection handles, and re-subscribes still-live channel handles. Those public handles remain usable and channel readiness resolves on the fresh session; explicitly closed handles stay closed. A channel that the server permanently closes or rejects remains terminal and is not automatically reopened; register a new listener after changing the authorization or request context. See [the WebSocket channel lifecycle guarantees](docs/websocket-channels.md#lifecycle-guarantees-phase-1b).
 
 ## Subscribe to events
 
@@ -2161,6 +2272,11 @@ If you are using Velocious for an app, Velocious has a built-in testing framewor
 npx velocious test
 ```
 
+Test declarations can be imported from `@velocious/testing`; the compatibility
+`velocious/build/src/testing/test.js` facade uses the same package registry and remains
+supported. Under Velocious, ordinary callbacks receive `testArgs`, while `it.each`
+callbacks receive their row arguments followed by `testArgs`.
+
 If you are developing on Velocious, you can run the tests with:
 
 ```bash
@@ -2168,6 +2284,9 @@ If you are developing on Velocious, you can run the tests with:
 ```
 
 Tests default to a 60-second timeout. Override per test with `{timeoutSeconds: 5}` or set a suite-wide default via `configureTests({defaultTimeoutSeconds: 30})`.
+Failed root setup records every selected descendant as a zero-attempt failure and reports the original message and stack, including when the package runner's timeout settles before the framework adapter hook returns.
+
+Database-backed tests default `testArgs.databaseCleaning` to transaction rollback. The configured testing hook uses this metadata to cover `beforeEach`, the test body, and `afterEach` hooks on one pinned connection. Use `{databaseCleaning: {transaction: false, truncate: true}}` only for behavior that requires physical root transactions, independent commits, DDL that auto-commits or cannot run inside the wrapper transaction, lock contention, or genuine concurrency. Transaction-disabled non-request tests use ordinary independently owned checkouts instead of a runner-pinned connection. Tests that own their pool lifecycle or use only private databases can disable configured cleaning with `{databaseCleaning: {transaction: false, truncate: false}}`. See [database cleanup guidance](docs/testing-guidelines.md#preferred-strategy).
 
 Truncation-based test cleanup batches eligible tables into one request on PostgreSQL,
 SQL Server, and SQLite while preserving each driver's existing identity behavior,
@@ -2179,6 +2298,8 @@ option; the default configuration keeps sequential `TRUNCATE TABLE` requests. Se
 Request tests share transaction-active, non-tenant database connections with their in-process HTTP handlers. Eligibility is evaluated when each request is dispatched, so a hook can start a transaction and issue a request in the same callback. This makes uncommitted setup visible to handlers while preserving rollback isolation. Without an active transaction, handlers use independent pooled connections, so concurrency and locking tests can opt out of transaction cleanup and exercise production-style connections. Shared connection state is scoped to the test lifecycle and cleared around each test. See [docs/testing-guidelines.md](docs/testing-guidelines.md#request-test-database-connections).
 
 Transactional tests also share active non-tenant connections with real forked, reusable pooled, and spawned background-job child runners through a per-attempt test-only loopback broker. Parent setup and child writes therefore occupy the same physical transaction and roll back together, including background-job persistence. Backend harnesses can use [`TestTransactionSession`](docs/test-transaction-sessions.md) to propagate an ephemeral capability to already-running services and lazily enroll exact tenant physical identities. Tests using `{transaction: false, truncate: true}` retain ordinary independent connections for DDL, lock contention, independent commits, and genuine concurrency. See [docs/testing-guidelines.md](docs/testing-guidelines.md#request-test-database-connections).
+
+In broker-backed background-job specs, await an out-of-band job-body completion signal before polling durable job status so the parent poll does not contend with the child's database work on the shared physical connection.
 
 Multiple configured databases route by identifier. Tenant-only databases remain excluded by default; a test can explicitly call `registerTransactionalTenant({databaseIdentifier, tenant})` from its attempt args to share one transaction with same-process paths resolving that exact physical tenant configuration. That registration remains active through `afterEach` and is revoked, rolled back, and released afterward. Emergency cleanup for a lifecycle hung beyond timeout grace revokes pending setup before it can publish stale state, bounds cleanup waits, and discards its physical tenant connection, so stale resumed work cannot use a driver recycled into a successor attempt. See [docs/testing-guidelines.md](docs/testing-guidelines.md#in-process-test-database-connections).
 
@@ -2312,9 +2433,32 @@ Create the file `src/routes/testing/another-action.ejs` and so something like th
 
 Velocious includes a simple background jobs system inspired by Sidekiq.
 
-Jobs can opt into cross-worker durable concurrency limits by pairing a non-empty `concurrencyKey` with a positive-integer `maxConcurrency` in their background-job options. The first cap registered for a key is stable; conflicting caps are rejected. See [durable concurrency limits](docs/background-jobs.md#durable-concurrency-limits).
+In a release-directory production topology, one jobs generation is a
+same-release `background-jobs-main` and worker pool on its own endpoint. Start the
+complete candidate generation before activation. A retired main stops schedules,
+new dispatch, and new handoffs but remains with its old workers to supervise the
+handoffs it already owns until every worker drains. Old workers never transfer to
+the new main. Deploy and HTTP/WebSocket drain completion are independent of this
+potentially hours-long lifecycle. See [release-generation
+draining](docs/background-jobs.md#release-generation-draining).
 
-Production apps can listen for `background-job-failed` (or its `all-error` mirror) to report accepted failed attempts, including retry and terminal-state metadata, and for `background-job-orphaned` to react to a specific job the main process reclaimed after its worker died mid-run — e.g. enqueue a targeted recovery for the work it left behind, instead of only polling for the aftermath. Orphan handlers run before the sweep waits for reclaimed jobs to be dispatched, so a stalled dispatcher does not delay application recovery. See [docs/background-jobs.md](docs/background-jobs.md#failure-events).
+Velocious provides the opt-in generation protocol; production still requires a
+supervisor that preserves old generation units and release pins, and a deploy
+coordinator that retires the old generation before activating the healthy
+candidate without waiting for retired work to finish.
+
+Candidate activation performs bounded durable concurrency reconciliation: it
+examines queue-derived keys and counters that are active or stale instead of
+running a job-table count query for every historical key. If recovery retires a
+candidate while that work is still in flight, the retirement fence wins and
+activation cannot later restore ownership or acknowledge success. The SQL store
+also repairs secondary indexes missed by older background-job add-column
+upgrades through a one-time internal migration, with conflict-safe SQLite index
+creation across generation processes.
+
+Jobs can opt into cross-worker durable concurrency limits by pairing a non-empty `concurrencyKey` with a positive-integer `maxConcurrency` in their background-job options, or by deriving the key in a hydrated job instance's non-static `concurrencyKey()` method. Explicit enqueue options win. The first cap registered for a key is stable; conflicting caps are rejected. See [durable concurrency limits](docs/background-jobs.md#durable-concurrency-limits).
+
+Production apps can listen for `background-job-failed` (or its `all-error` mirror) to report accepted failed attempts, including retry and terminal-state metadata. Process-level pooled-runner failures also carry one shared `context.runnerFailure` snapshot for every affected job, with active handoff identities, runner/worker lifecycle and PIDs, exit code/signal, termination reason, and an explicit nullable OOM verdict. Listen for `background-job-orphaned` to react to a specific job the main process reclaimed after its worker died mid-run — e.g. enqueue a targeted recovery for the work it left behind, instead of only polling for the aftermath. Orphan handlers run before the sweep waits for reclaimed jobs to be dispatched, so a stalled dispatcher does not delay application recovery. See [docs/background-jobs.md](docs/background-jobs.md#failure-events).
 
 ## Setup
 
@@ -2356,7 +2500,11 @@ export default new Configuration({
     pooledRunnerMaxRssBytes: 536870912,
     pooledRunnerMaxLifetimeMs: 3600000,
     dispatchStrategy: "beacon",
-    jobTimeoutMs: null
+    jobTimeoutMs: null,
+    // Release-directory deployments opt in with one exact id and local socket:
+    generationId: "release-20260828.1",
+    initialGenerationState: "candidate",
+    lifecycleSocketPath: "/srv/app/releases/20260828.1/run/background-jobs.sock"
   }
 })
 ```
@@ -2419,9 +2567,33 @@ VELOCIOUS_BACKGROUND_JOBS_DISPATCH_STRATEGY=beacon
 VELOCIOUS_BACKGROUND_JOBS_POLL_INTERVAL_MS=1000
 VELOCIOUS_BACKGROUND_JOBS_WORKER_SHUTDOWN_TIMEOUT_MS=indefinite
 VELOCIOUS_BACKGROUND_JOBS_JOB_TIMEOUT_MS=5400000
+# Opt-in release generation values (omit all three for exact legacy behavior):
+VELOCIOUS_BACKGROUND_JOBS_GENERATION_ID=release-20260828.1
+VELOCIOUS_BACKGROUND_JOBS_INITIAL_GENERATION_STATE=candidate
+VELOCIOUS_BACKGROUND_JOBS_LIFECYCLE_SOCKET_PATH=/srv/app/releases/20260828.1/run/background-jobs.sock
 ```
 
-`VELOCIOUS_BACKGROUND_JOBS_WORKER_SHUTDOWN_TIMEOUT_MS` (default: `indefinite`) bounds how long a `background-jobs-worker` waits for in-flight jobs on `SIGTERM`/`SIGINT` before terminating any forked or spawned child runners still running, so they are not orphaned across a deploy. The default waits for jobs to finish and never interrupts a running job; set a positive number of milliseconds for a finite cap (keep it shorter than your process supervisor's graceful-stop window so the worker reaps its own runners first). See [docs/background-jobs.md](docs/background-jobs.md#worker-shutdown-and-process-job-draining).
+Activate or retire that exact generation with one acknowledged local request:
+
+```sh
+npx velocious background-jobs:activate --generation release-20260828.1 --socket /srv/app/releases/20260828.1/run/background-jobs.sock
+npx velocious background-jobs:retire --generation release-20260828.1 --socket /srv/app/releases/20260828.1/run/background-jobs.sock
+```
+
+Each lifecycle command sends one request with no retry and has a hard 10000ms
+deadline; `--timeout-ms` accepts 1 through 60000ms. Generation-aware workers,
+clients, and reporters require their hello acknowledgement before readiness or
+mutation and bound it to 4000ms by default.
+
+Generation ids supplied through config, environment, API, or CLI must be
+identical and match `^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`; invalid or conflicting
+identity fails before listening. Omit generation settings to preserve legacy
+worker ids, protocol, disconnect recovery, and custom-adapter compatibility.
+An ID-only configuration derives `candidate`; that default does not conflict
+with an explicit API/CLI `active` or `retired` recovery state, while multiple
+actual state sources must still agree.
+
+`VELOCIOUS_BACKGROUND_JOBS_WORKER_SHUTDOWN_TIMEOUT_MS` (default: `indefinite`) bounds how long a `background-jobs-worker` waits for in-flight jobs on `SIGTERM`/`SIGINT` before terminating any forked or spawned child runners still running. The default waits for jobs to finish and never interrupts a running job; a positive finite cap is a per-worker shutdown control for an explicitly requested process stop, not the normal deploy-completion mechanism. During release retirement, the old jobs-main and workers may drain for hours after deploy returns. See [docs/background-jobs.md](docs/background-jobs.md#worker-shutdown-and-process-job-draining).
 
 `maxConcurrentInlineJobs` (default: `4`) caps how many `executionMode: "inline"` jobs a single `background-jobs-worker` process runs in parallel. Concurrency is at the JS event-loop level: every job in flight shares the worker's process and DB connection pool, so the cap should fit the pool, not the CPU count. Forking remains the right tool when you need memory isolation across long-running jobs or want to use more cores; select it with `executionMode: "forked"`.
 
@@ -2628,7 +2800,7 @@ Each job must define exactly one of `every` or `cron`. Cron times are evaluated 
 
 ## Persistence and retries
 
-Jobs are persisted in the configured database (`backgroundJobs.databaseIdentifier`) in an internal `background_jobs` table. When a worker picks a job, the main generates a unique lease id before asking the adapter to mark the job handed off, and the worker reports completion or failure back to the main process. If that persistence call has an ambiguous result, only the exact caller-generated lease is conditionally returned; failed recovery is retained for the dispatch error-retry path, so worker admission and concurrency do not remain stranded and a newer lease is never reclaimed. Custom adapters must persist a supplied `markHandedOff({handoffId})` exactly; built-in adapters continue generating one for legacy direct callers that omit it. If a worker socket disconnects unexpectedly, only the leases handed to that exact socket are immediately returned to the queue; late reports are fenced by lease id so they cannot mutate a newer attempt. This recovery is at-least-once and may repeat application side effects if the disconnected attempt had already started them. Gracefully draining workers keep their leases while they finish. When the **main** itself restarts (every deploy), a reconnecting worker's still-active handoffs are adopted into its new socket on `hello` so a later disconnect releases them instead of leaving them stuck until the orphan sweep; the main never time-reclaims a disconnected worker's jobs, so a gracefully-draining old-release worker is not double-run. For rolling upgrades, upgrade workers before the main process: a lease-aware main keeps legacy workers connected for old reports but dispatches new jobs only to workers advertising lease-reporting support. See [docs/background-jobs.md](docs/background-jobs.md#worker-disconnect-recovery).
+Jobs are persisted in the configured database (`backgroundJobs.databaseIdentifier`) in an internal `background_jobs` table. When a worker picks a job, the main generates a unique lease id before asking the adapter to mark the job handed off, and the worker reports completion or failure back to the main process. If that persistence call has an ambiguous result, only the exact caller-generated lease is conditionally returned; failed recovery is retained for the dispatch error-retry path, so worker admission and concurrency do not remain stranded and a newer lease is never reclaimed. Custom adapters must persist a supplied `markHandedOff({handoffId})` exactly; built-in adapters continue generating one for legacy direct callers that omit it. A legacy worker disconnect returns only that socket's leases immediately. Generation mode instead preserves the exact leases through reconnect grace for the same qualified worker, then returns them to the global queue on expiry. Late reports are fenced by generation-qualified worker id, lease id, and handoff time so they cannot mutate a newer attempt. This recovery is at-least-once and may repeat application side effects if the disconnected attempt had already started them. A release-retiring worker revokes readiness but retains heartbeat, its unchanged old endpoint, exact-generation reconnect, accepted work, child execution, durable reports, and acknowledgements until its drain settles; retiring/retired mains reject new identities and never grant reconnecting workers readiness. Startup reconnection/adoption is an abnormal crash/legacy-recovery facility, not the normal deploy topology: during ordinary release retirement the old main remains alive and owns its old workers, and they must not reconnect to the new main. A production integration that restarts jobs-main on every deploy and depends on worker adoption is not compliant with the release-generation contract. See [release-generation draining](docs/background-jobs.md#release-generation-draining) and [worker disconnect recovery](docs/background-jobs.md#worker-disconnect-recovery).
 
 Failed jobs are re-queued with backoff and retried up to 10 times by default (10s, 1m, 10m, 1h, then +1h per retry). You can override the retry limit per job:
 
@@ -2658,7 +2830,7 @@ backgroundJobs: {
 }
 ```
 
-A job with no queue runs on `"default"`; a queue with no cap is unlimited. Caps are enforced through the durable per-key concurrency mechanism (the reserved `queue:<name>` key) and hold regardless of how many worker processes run. Changing a cap and rebuilding durable active counts happen only when `background-jobs-main` starts (serialized across processes with a database advisory lock and logged with database identifier/duration); `db:migrate`, `db:tenants:*`, and routine store/application initialization with an intact jobs table never adopt queued jobs or rebuild global concurrency counts. If schema repair must recreate a missing `background_jobs` table while the migration marker and concurrency table survive, it resets the now-orphaned active counts against that newly empty table. Scheduled jobs honor a job's `static queue` too.
+A job with no queue runs on `"default"`; a queue with no cap is unlimited. Caps are enforced through the durable per-key concurrency mechanism (the reserved `queue:<name>` key) and hold regardless of how many worker processes run. Queue-policy changes are adopted by queued backlog rows when `background-jobs-main` starts; already handed-off jobs drain under their original policy. If they return, reschedule, or retry, the reporting generation releases the original reservation without changing shared policy, and the active generation applies its current queue policy immediately before the next handoff and sends that committed policy to the worker; explicit concurrency remains unchanged. Handoff persistence is fenced against concurrent policy changes. Startup also rebuilds durable active counts under a database advisory lock. The active main then checks those counts every minute, performs no counter writes while they are exact, repairs only locked mismatches, logs a bounded structured repair summary, and immediately retries dispatch so stale capacity cannot require a restart. `db:migrate`, `db:tenants:*`, and routine store/application initialization with an intact jobs table never adopt queued jobs or rebuild global concurrency counts. If schema repair must recreate a missing `background_jobs` table while the migration marker and concurrency table survive, it resets the now-orphaned active counts against that newly empty table. Scheduled jobs honor a job's `static queue` too.
 
 Set `priority` (default `0`) to dispatch a queue ahead of lower-priority ones regardless of enqueue order, so a small time-critical queue is never starved by a flood of low-priority work sharing a worker pool. Unlike Sidekiq's strict queue ordering, priority composes with the caps: a higher-priority queue already at its `maxConcurrent` is skipped and dispatch falls through to the next eligible job. See [docs/background-jobs.md](docs/background-jobs.md#queues-per-queue-concurrency-caps).
 
@@ -2703,11 +2875,23 @@ It exposes `GET /api/stats`, `/api/jobs`, `/api/jobs/:id`, `/api/schedule` and `
 npx velocious server --host 0.0.0.0 --port 8082
 ```
 
+Threaded servers default to `os.availableParallelism()` HTTP workers. Pass
+`--workers` or configure `httpServer.workers` to override that count. Ordinary
+connections are distributed round-robin even behind a loopback reverse proxy,
+while resumable WebSockets return to their session's worker. Each worker owns a
+separate configuration and database pools, so per-worker limits multiply across
+the effective worker count (for example, four workers with `pool.max: 10` can
+open 40 connections for that pool). The debug snapshot exposes the configured
+and effective counts; default in-process mode uses one effective handler.
+Only requests carrying a resumable-session query wait for upgrade headers before
+worker assignment; ordinary and malformed requests continue directly to the
+request parser.
+
 When the server runs in the `development` environment, Velocious watches application `src/` trees and hot-reloads by recycling HTTP workers after `.js`/`.mjs`/`.cjs`/`.json`/`.ejs` changes. That picks up edited controllers, models, resources, routes, and views without a manual server restart while keeping production/test behavior unchanged.
 
 Starting the HTTP server creates `tmp/server.lock` under the configured application directory before Beacon, workers, or the TCP listener start. A second server for the same app fails fast with the lock owner details instead of partially starting. Normal shutdown removes the lock; stale locks with a dead local PID are reclaimed automatically, while locks from another host or unreadable metadata should be removed manually only after confirming no server is running. See [docs/http-server.md](docs/http-server.md#server-lock).
 
-Buffered string and `Uint8Array` responses are compressed with Brotli (`br`) or gzip by default whenever request negotiation and response eligibility allow — no opt-in is required. Disable compression globally with `httpServer.compression: false` or `httpServer.compression: {enabled: false}`, and tune it with `threshold`/`brotliQuality`/`gzipLevel` overrides. Negotiation honors `Accept-Encoding` q-values, wildcards, and identity semantics (empty `406` when no acceptable representation exists), merges `Accept-Encoding` into `Vary`, and skips streamed `sendFile` responses, already-encoded or `no-transform` responses, server-sent events, partial/range responses, bodyless statuses, and non-allowlisted content types. Transformation is additionally excluded automatically for credentialed traffic and validator-carrying responses — requests with `Authorization`/`Cookie` and responses with `Set-Cookie`, `ETag`, `Digest`, or `Content-Digest` are never compressed (compression-oracle protection, and validators stay application-owned). Controllers opt out per response with `response.disableCompression()`, and HEAD requests compute GET-equivalent representation headers without emitting a body. See [docs/http-server.md](docs/http-server.md#response-compression).
+Buffered string and `Uint8Array` responses are compressed with Brotli (`br`) or gzip by default whenever request negotiation and response eligibility allow — no opt-in is required. Disable compression globally with `httpServer.compression: false` or `httpServer.compression: {enabled: false}`, and tune it with `threshold`/`brotliQuality`/`gzipLevel` overrides. Negotiation honors `Accept-Encoding` q-values, wildcards, and identity semantics (empty `406` when no acceptable representation exists), combines repeated `Accept-Encoding` header fields in wire order, and advertises a framework-owned `Vary: Accept-Encoding` on every framework-selected representation (transformed, identity, `406`, and file) so caches key on the field. Streamed `sendFile` responses are never buffered or re-encoded: they are sent identity, so when the client forbids identity the server answers with the same empty `406` without opening or streaming the file. Transformation also skips already-encoded or `no-transform` responses, server-sent events, partial/range responses, bodyless statuses, and non-allowlisted content types. Transformation is additionally excluded automatically for credentialed traffic and validator-carrying responses — requests with `Authorization`/`Cookie` and responses with `Set-Cookie`, `ETag`, `Digest`, or `Content-Digest` are never compressed (compression-oracle protection, and validators stay application-owned). Controllers opt out per response with `response.disableCompression()`, and HEAD requests compute GET-equivalent representation headers without emitting a body. See [docs/http-server.md](docs/http-server.md#response-compression).
 
 # Authorization (CanCan-style)
 

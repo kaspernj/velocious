@@ -1,0 +1,54 @@
+// @ts-check
+/**
+ * Records currently being written from an already-synced source (sync replay
+ * applies, importers applying device-origin data). Module-scoped so the
+ * framework's replay apply can mark records without holding a publisher
+ * instance.
+ * @type {WeakSet<object>}
+ */
+const serverApplyRecords = new WeakSet();
+let withoutPublishingDepth = 0;
+/**
+ * Marks one record as being written from an already-synced source so server
+ * publish callbacks skip it (record-precise suppression). The framework's
+ * routed sync replay apply uses this internally around every applied write, so
+ * replayed device mutations never publish a second, server-origin sync change.
+ * @param {ReturnType<typeof JSON.parse>} record - Server model record about to be written.
+ * @returns {() => void} Release callback re-enabling publishing for the record.
+ */
+export function markServerApply(record) {
+    serverApplyRecords.add(record);
+    return () => serverApplyRecords.delete(record);
+}
+/**
+ * Runs a callback with server publish callbacks suppressed - for code applying
+ * already-synced data outside the framework's replay apply (importers,
+ * backfills applying device-origin rows). Suppression covers the whole async
+ * duration of the callback (nested calls stack) and is process-wide while it
+ * runs: mutations from concurrently running requests are also suppressed for
+ * that window, so prefer `markServerApply(record)` when other flows can
+ * interleave.
+ * @template T
+ * @param {() => Promise<T> | T} callback - Work whose model writes should not publish sync changes.
+ * @returns {Promise<T>} The callback result.
+ */
+export async function withoutPublishing(callback) {
+    withoutPublishingDepth++;
+    try {
+        return await callback();
+    }
+    finally {
+        withoutPublishingDepth--;
+    }
+}
+/**
+ * Whether server publishing is currently suppressed for a record: either the
+ * record was marked as a server apply (`markServerApply`) or a
+ * `withoutPublishing` callback is running.
+ * @param {ReturnType<typeof JSON.parse>} record - Server model record being written.
+ * @returns {boolean} Whether publishing is suppressed for the record.
+ */
+export function isPublishingSuppressed(record) {
+    return withoutPublishingDepth > 0 || serverApplyRecords.has(record);
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoic3luYy1wdWJsaXNoLXN1cHByZXNzaW9uLmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiLi4vLi4vLi4vc3JjL3N5bmMvc3luYy1wdWJsaXNoLXN1cHByZXNzaW9uLmpzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQUFBLFlBQVk7QUFFWjs7Ozs7O0dBTUc7QUFDSCxNQUFNLGtCQUFrQixHQUFHLElBQUksT0FBTyxFQUFFLENBQUE7QUFFeEMsSUFBSSxzQkFBc0IsR0FBRyxDQUFDLENBQUE7QUFFOUI7Ozs7Ozs7R0FPRztBQUNILE1BQU0sVUFBVSxlQUFlLENBQUMsTUFBTTtJQUNwQyxrQkFBa0IsQ0FBQyxHQUFHLENBQUMsTUFBTSxDQUFDLENBQUE7SUFFOUIsT0FBTyxHQUFHLEVBQUUsQ0FBQyxrQkFBa0IsQ0FBQyxNQUFNLENBQUMsTUFBTSxDQUFDLENBQUE7QUFDaEQsQ0FBQztBQUVEOzs7Ozs7Ozs7OztHQVdHO0FBQ0gsTUFBTSxDQUFDLEtBQUssVUFBVSxpQkFBaUIsQ0FBQyxRQUFRO0lBQzlDLHNCQUFzQixFQUFFLENBQUE7SUFFeEIsSUFBSSxDQUFDO1FBQ0gsT0FBTyxNQUFNLFFBQVEsRUFBRSxDQUFBO0lBQ3pCLENBQUM7WUFBUyxDQUFDO1FBQ1Qsc0JBQXNCLEVBQUUsQ0FBQTtJQUMxQixDQUFDO0FBQ0gsQ0FBQztBQUVEOzs7Ozs7R0FNRztBQUNILE1BQU0sVUFBVSxzQkFBc0IsQ0FBQyxNQUFNO0lBQzNDLE9BQU8sc0JBQXNCLEdBQUcsQ0FBQyxJQUFJLGtCQUFrQixDQUFDLEdBQUcsQ0FBQyxNQUFNLENBQUMsQ0FBQTtBQUNyRSxDQUFDIiwic291cmNlc0NvbnRlbnQiOlsiLy8gQHRzLWNoZWNrXG5cbi8qKlxuICogUmVjb3JkcyBjdXJyZW50bHkgYmVpbmcgd3JpdHRlbiBmcm9tIGFuIGFscmVhZHktc3luY2VkIHNvdXJjZSAoc3luYyByZXBsYXlcbiAqIGFwcGxpZXMsIGltcG9ydGVycyBhcHBseWluZyBkZXZpY2Utb3JpZ2luIGRhdGEpLiBNb2R1bGUtc2NvcGVkIHNvIHRoZVxuICogZnJhbWV3b3JrJ3MgcmVwbGF5IGFwcGx5IGNhbiBtYXJrIHJlY29yZHMgd2l0aG91dCBob2xkaW5nIGEgcHVibGlzaGVyXG4gKiBpbnN0YW5jZS5cbiAqIEB0eXBlIHtXZWFrU2V0PG9iamVjdD59XG4gKi9cbmNvbnN0IHNlcnZlckFwcGx5UmVjb3JkcyA9IG5ldyBXZWFrU2V0KClcblxubGV0IHdpdGhvdXRQdWJsaXNoaW5nRGVwdGggPSAwXG5cbi8qKlxuICogTWFya3Mgb25lIHJlY29yZCBhcyBiZWluZyB3cml0dGVuIGZyb20gYW4gYWxyZWFkeS1zeW5jZWQgc291cmNlIHNvIHNlcnZlclxuICogcHVibGlzaCBjYWxsYmFja3Mgc2tpcCBpdCAocmVjb3JkLXByZWNpc2Ugc3VwcHJlc3Npb24pLiBUaGUgZnJhbWV3b3JrJ3NcbiAqIHJvdXRlZCBzeW5jIHJlcGxheSBhcHBseSB1c2VzIHRoaXMgaW50ZXJuYWxseSBhcm91bmQgZXZlcnkgYXBwbGllZCB3cml0ZSwgc29cbiAqIHJlcGxheWVkIGRldmljZSBtdXRhdGlvbnMgbmV2ZXIgcHVibGlzaCBhIHNlY29uZCwgc2VydmVyLW9yaWdpbiBzeW5jIGNoYW5nZS5cbiAqIEBwYXJhbSB7UmV0dXJuVHlwZTx0eXBlb2YgSlNPTi5wYXJzZT59IHJlY29yZCAtIFNlcnZlciBtb2RlbCByZWNvcmQgYWJvdXQgdG8gYmUgd3JpdHRlbi5cbiAqIEByZXR1cm5zIHsoKSA9PiB2b2lkfSBSZWxlYXNlIGNhbGxiYWNrIHJlLWVuYWJsaW5nIHB1Ymxpc2hpbmcgZm9yIHRoZSByZWNvcmQuXG4gKi9cbmV4cG9ydCBmdW5jdGlvbiBtYXJrU2VydmVyQXBwbHkocmVjb3JkKSB7XG4gIHNlcnZlckFwcGx5UmVjb3Jkcy5hZGQocmVjb3JkKVxuXG4gIHJldHVybiAoKSA9PiBzZXJ2ZXJBcHBseVJlY29yZHMuZGVsZXRlKHJlY29yZClcbn1cblxuLyoqXG4gKiBSdW5zIGEgY2FsbGJhY2sgd2l0aCBzZXJ2ZXIgcHVibGlzaCBjYWxsYmFja3Mgc3VwcHJlc3NlZCAtIGZvciBjb2RlIGFwcGx5aW5nXG4gKiBhbHJlYWR5LXN5bmNlZCBkYXRhIG91dHNpZGUgdGhlIGZyYW1ld29yaydzIHJlcGxheSBhcHBseSAoaW1wb3J0ZXJzLFxuICogYmFja2ZpbGxzIGFwcGx5aW5nIGRldmljZS1vcmlnaW4gcm93cykuIFN1cHByZXNzaW9uIGNvdmVycyB0aGUgd2hvbGUgYXN5bmNcbiAqIGR1cmF0aW9uIG9mIHRoZSBjYWxsYmFjayAobmVzdGVkIGNhbGxzIHN0YWNrKSBhbmQgaXMgcHJvY2Vzcy13aWRlIHdoaWxlIGl0XG4gKiBydW5zOiBtdXRhdGlvbnMgZnJvbSBjb25jdXJyZW50bHkgcnVubmluZyByZXF1ZXN0cyBhcmUgYWxzbyBzdXBwcmVzc2VkIGZvclxuICogdGhhdCB3aW5kb3csIHNvIHByZWZlciBgbWFya1NlcnZlckFwcGx5KHJlY29yZClgIHdoZW4gb3RoZXIgZmxvd3MgY2FuXG4gKiBpbnRlcmxlYXZlLlxuICogQHRlbXBsYXRlIFRcbiAqIEBwYXJhbSB7KCkgPT4gUHJvbWlzZTxUPiB8IFR9IGNhbGxiYWNrIC0gV29yayB3aG9zZSBtb2RlbCB3cml0ZXMgc2hvdWxkIG5vdCBwdWJsaXNoIHN5bmMgY2hhbmdlcy5cbiAqIEByZXR1cm5zIHtQcm9taXNlPFQ+fSBUaGUgY2FsbGJhY2sgcmVzdWx0LlxuICovXG5leHBvcnQgYXN5bmMgZnVuY3Rpb24gd2l0aG91dFB1Ymxpc2hpbmcoY2FsbGJhY2spIHtcbiAgd2l0aG91dFB1Ymxpc2hpbmdEZXB0aCsrXG5cbiAgdHJ5IHtcbiAgICByZXR1cm4gYXdhaXQgY2FsbGJhY2soKVxuICB9IGZpbmFsbHkge1xuICAgIHdpdGhvdXRQdWJsaXNoaW5nRGVwdGgtLVxuICB9XG59XG5cbi8qKlxuICogV2hldGhlciBzZXJ2ZXIgcHVibGlzaGluZyBpcyBjdXJyZW50bHkgc3VwcHJlc3NlZCBmb3IgYSByZWNvcmQ6IGVpdGhlciB0aGVcbiAqIHJlY29yZCB3YXMgbWFya2VkIGFzIGEgc2VydmVyIGFwcGx5IChgbWFya1NlcnZlckFwcGx5YCkgb3IgYVxuICogYHdpdGhvdXRQdWJsaXNoaW5nYCBjYWxsYmFjayBpcyBydW5uaW5nLlxuICogQHBhcmFtIHtSZXR1cm5UeXBlPHR5cGVvZiBKU09OLnBhcnNlPn0gcmVjb3JkIC0gU2VydmVyIG1vZGVsIHJlY29yZCBiZWluZyB3cml0dGVuLlxuICogQHJldHVybnMge2Jvb2xlYW59IFdoZXRoZXIgcHVibGlzaGluZyBpcyBzdXBwcmVzc2VkIGZvciB0aGUgcmVjb3JkLlxuICovXG5leHBvcnQgZnVuY3Rpb24gaXNQdWJsaXNoaW5nU3VwcHJlc3NlZChyZWNvcmQpIHtcbiAgcmV0dXJuIHdpdGhvdXRQdWJsaXNoaW5nRGVwdGggPiAwIHx8IHNlcnZlckFwcGx5UmVjb3Jkcy5oYXMocmVjb3JkKVxufVxuIl19

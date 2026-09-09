@@ -89,6 +89,27 @@ describe("Record - destroy", {tags: ["dummy"]}, () => {
     expect(foundProject).toBeDefined()
   })
 
+  it("checks dependent restrict records using the persisted primary key", async () => {
+    const project = await Project.create()
+    await Task.create({name: "Persisted identity blocking task", project})
+    const persistedId = project.id()
+
+    project.setId(persistedId + 1)
+
+    await expect(async () => project.destroy()).toThrowError("Cannot delete record because dependent tasks exist")
+    expect(await Project.find(persistedId)).toBeDefined()
+  })
+
+  it("destroys dependent records using the persisted primary key", async () => {
+    const project = await Project.create()
+    const projectDetail = await ProjectDetail.create({projectId: project.id()})
+
+    project.setId(project.id() + 1)
+    await project.destroy()
+
+    expect(await ProjectDetail.findBy({id: projectDetail.id()})).toEqual(undefined)
+  })
+
   it("allows destroy when no dependent restrict records exist", async () => {
     const project = await Project.create()
 

@@ -2,6 +2,8 @@
 
 import net from "node:net"
 import BackgroundJobsWorker from "../../src/background-jobs/worker.js"
+import Configuration from "../../src/configuration.js"
+import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
 import JsonSocket from "../../src/background-jobs/json-socket.js"
 import {startBackgroundJobsMain} from "../helpers/background-jobs-helper.js"
 
@@ -68,19 +70,21 @@ async function startConfiguredWorker(workerOptions) {
   const address = server.address()
   if (!address || typeof address === "string") throw new Error("Expected a TCP server address")
 
-  const configuration = /** @type {import("../../src/configuration.js").default} */ (/** @type {unknown} */ ({
-    setCurrent: () => {},
-    initialize: async () => {},
-    connectBeacon: async () => {},
-    disconnectBeacon: async () => {},
-    closeDatabaseConnections: async () => {},
-    getBackgroundJobsConfig: () => ({
+  const configuration = new Configuration({
+    backgroundJobs: {
       host: "127.0.0.1", port: address.port,
       maxConcurrentInlineJobs: 4, maxConcurrentForkedJobs: 4,
       pooledRunnerCount: 7, pooledRunnerMaxJobs: 31,
       pooledRunnerMaxRssBytes: 12345, pooledRunnerMaxLifetimeMs: 67890
-    })
-  }))
+    },
+    beacon: {inProcess: true},
+    directory: process.cwd(),
+    environment: "test",
+    environmentHandler: new EnvironmentHandlerNode(),
+    initializeModels: async () => {},
+    locale: "en",
+    localeFallbacks: {en: ["en"]}
+  })
   const worker = new BackgroundJobsWorker({configuration, ...workerOptions})
   try {
     await worker.start()
@@ -670,7 +674,7 @@ describe("Background jobs - worker resilience", {databaseCleaning: {truncate: tr
 
     try {
       const worker = fakeWorkerSocket()
-      const role = main._handleSocketMessage({
+      const role = await main._handleSocketMessage({
         jsonSocket: worker,
         message: {type: "hello", role: "worker", workerId: "stopping-worker", supportsHandoffIdReporting: true, supportsHeartbeat: true},
         role: null

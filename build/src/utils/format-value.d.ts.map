@@ -1,0 +1,1 @@
+{"version":3,"file":"format-value.d.ts","sourceRoot":"","sources":["../../../src/utils/format-value.js"],"names":[],"mappings":"AAiBA;;;;GAIG;AACH,iBAAS,iBAAiB,CAAC,KAAK,EAHrB,UAAU,CAAC,OAAO,IAAI,CAAC,KAAK,CAGP,GAFnB,MAAM,CAgDlB;AAED;;;;GAIG;AACH,iBAAS,WAAW,CAAC,KAAK,EAHf,UAAU,CAAC,OAAO,IAAI,CAAC,KAAK,CAGb,GAFb,MAAM,CAyBlB;AAED,OAAO,EAAC,WAAW,EAAE,iBAAiB,EAAC,CAAA"}

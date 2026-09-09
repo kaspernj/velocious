@@ -1,0 +1,26 @@
+// @ts-check
+/** @type {Map<string, ReturnType<typeof JSON.parse>>} */
+const frontendModelRegistry = new Map();
+/**
+ * Register a frontend model class so it can be resolved by name in relationship lookups.
+ * Uses resourceConfig().modelName when available to support minified builds where class names are mangled.
+ * @param {ReturnType<typeof JSON.parse>} modelClass - Model class to register.
+ * @returns {void}
+ */
+export function registerFrontendModel(modelClass) {
+    const modelName = modelClass.getModelName();
+    frontendModelRegistry.set(modelName, modelClass);
+}
+/**
+ * Resolve a relationship model class value that may be a class reference or a string name.
+ * @param {ReturnType<typeof JSON.parse>} value - Class or class name string.
+ * @returns {ReturnType<typeof JSON.parse>} - Resolved model class or null.
+ */
+export function resolveFrontendModelClass(value) {
+    if (!value)
+        return null;
+    if (typeof value === "string")
+        return frontendModelRegistry.get(value) || null;
+    return value;
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoibW9kZWwtcmVnaXN0cnkuanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuLi8uLi8uLi9zcmMvZnJvbnRlbmQtbW9kZWxzL21vZGVsLXJlZ2lzdHJ5LmpzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQUFBLFlBQVk7QUFFWix5REFBeUQ7QUFDekQsTUFBTSxxQkFBcUIsR0FBRyxJQUFJLEdBQUcsRUFBRSxDQUFBO0FBRXZDOzs7OztHQUtHO0FBQ0gsTUFBTSxVQUFVLHFCQUFxQixDQUFDLFVBQVU7SUFDOUMsTUFBTSxTQUFTLEdBQUcsVUFBVSxDQUFDLFlBQVksRUFBRSxDQUFBO0lBRTNDLHFCQUFxQixDQUFDLEdBQUcsQ0FBQyxTQUFTLEVBQUUsVUFBVSxDQUFDLENBQUE7QUFDbEQsQ0FBQztBQUVEOzs7O0dBSUc7QUFDSCxNQUFNLFVBQVUseUJBQXlCLENBQUMsS0FBSztJQUM3QyxJQUFJLENBQUMsS0FBSztRQUFFLE9BQU8sSUFBSSxDQUFBO0lBQ3ZCLElBQUksT0FBTyxLQUFLLEtBQUssUUFBUTtRQUFFLE9BQU8scUJBQXFCLENBQUMsR0FBRyxDQUFDLEtBQUssQ0FBQyxJQUFJLElBQUksQ0FBQTtJQUU5RSxPQUFPLEtBQUssQ0FBQTtBQUNkLENBQUMiLCJzb3VyY2VzQ29udGVudCI6WyIvLyBAdHMtY2hlY2tcblxuLyoqIEB0eXBlIHtNYXA8c3RyaW5nLCBSZXR1cm5UeXBlPHR5cGVvZiBKU09OLnBhcnNlPj59ICovXG5jb25zdCBmcm9udGVuZE1vZGVsUmVnaXN0cnkgPSBuZXcgTWFwKClcblxuLyoqXG4gKiBSZWdpc3RlciBhIGZyb250ZW5kIG1vZGVsIGNsYXNzIHNvIGl0IGNhbiBiZSByZXNvbHZlZCBieSBuYW1lIGluIHJlbGF0aW9uc2hpcCBsb29rdXBzLlxuICogVXNlcyByZXNvdXJjZUNvbmZpZygpLm1vZGVsTmFtZSB3aGVuIGF2YWlsYWJsZSB0byBzdXBwb3J0IG1pbmlmaWVkIGJ1aWxkcyB3aGVyZSBjbGFzcyBuYW1lcyBhcmUgbWFuZ2xlZC5cbiAqIEBwYXJhbSB7UmV0dXJuVHlwZTx0eXBlb2YgSlNPTi5wYXJzZT59IG1vZGVsQ2xhc3MgLSBNb2RlbCBjbGFzcyB0byByZWdpc3Rlci5cbiAqIEByZXR1cm5zIHt2b2lkfVxuICovXG5leHBvcnQgZnVuY3Rpb24gcmVnaXN0ZXJGcm9udGVuZE1vZGVsKG1vZGVsQ2xhc3MpIHtcbiAgY29uc3QgbW9kZWxOYW1lID0gbW9kZWxDbGFzcy5nZXRNb2RlbE5hbWUoKVxuXG4gIGZyb250ZW5kTW9kZWxSZWdpc3RyeS5zZXQobW9kZWxOYW1lLCBtb2RlbENsYXNzKVxufVxuXG4vKipcbiAqIFJlc29sdmUgYSByZWxhdGlvbnNoaXAgbW9kZWwgY2xhc3MgdmFsdWUgdGhhdCBtYXkgYmUgYSBjbGFzcyByZWZlcmVuY2Ugb3IgYSBzdHJpbmcgbmFtZS5cbiAqIEBwYXJhbSB7UmV0dXJuVHlwZTx0eXBlb2YgSlNPTi5wYXJzZT59IHZhbHVlIC0gQ2xhc3Mgb3IgY2xhc3MgbmFtZSBzdHJpbmcuXG4gKiBAcmV0dXJucyB7UmV0dXJuVHlwZTx0eXBlb2YgSlNPTi5wYXJzZT59IC0gUmVzb2x2ZWQgbW9kZWwgY2xhc3Mgb3IgbnVsbC5cbiAqL1xuZXhwb3J0IGZ1bmN0aW9uIHJlc29sdmVGcm9udGVuZE1vZGVsQ2xhc3ModmFsdWUpIHtcbiAgaWYgKCF2YWx1ZSkgcmV0dXJuIG51bGxcbiAgaWYgKHR5cGVvZiB2YWx1ZSA9PT0gXCJzdHJpbmdcIikgcmV0dXJuIGZyb250ZW5kTW9kZWxSZWdpc3RyeS5nZXQodmFsdWUpIHx8IG51bGxcblxuICByZXR1cm4gdmFsdWVcbn1cbiJdfQ==

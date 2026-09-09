@@ -1,0 +1,83 @@
+// @ts-check
+import VelociousError from "./velocious-error.js";
+import isPlainObject from "./utils/plain-object.js";
+/** @typedef {Readonly<Record<string, string | number | boolean>>} RemoteRequestContext */
+const UNSAFE_CONTEXT_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+/**
+ * Captures and validates immutable scalar context for one remote operation.
+ * @param {ReturnType<typeof JSON.parse> | undefined} value - Configured context value.
+ * @param {object} [args] - Validation options.
+ * @param {string} [args.label] - Context label used in errors.
+ * @param {Iterable<string>} [args.reservedKeys] - Framework-owned keys unavailable to context.
+ * @returns {RemoteRequestContext} Frozen context snapshot.
+ */
+export function captureRemoteRequestContext(value, { label = "Remote request context", reservedKeys = [] } = {}) {
+    if (value === undefined || value === null)
+        return Object.freeze({});
+    if (!isPlainObject(value)) {
+        throw remoteRequestContextError(`${label} must be a plain object of scalar values`);
+    }
+    const reservedKeySet = new Set(reservedKeys);
+    /** @type {Record<string, string | number | boolean>} */
+    const context = {};
+    for (const key of Object.keys(value).sort()) {
+        if (!key.trim())
+            throw remoteRequestContextError(`${label} keys must be non-blank strings`);
+        if (UNSAFE_CONTEXT_KEYS.has(key) || reservedKeySet.has(key)) {
+            throw remoteRequestContextError(`${label} key ${JSON.stringify(key)} is reserved by the framework`);
+        }
+        const contextValue = value[key];
+        if (!remoteRequestContextScalar(contextValue)) {
+            throw remoteRequestContextError(`${label} key ${JSON.stringify(key)} must contain a string, finite number, or boolean scalar`);
+        }
+        context[key] = contextValue;
+    }
+    return Object.freeze(context);
+}
+/**
+ * Merges captured context into framework request params without ambiguity.
+ * @template {Record<string, ReturnType<typeof JSON.parse>>} TParams
+ * @param {object} args - Merge arguments.
+ * @param {RemoteRequestContext} args.context - Captured context.
+ * @param {string} [args.label] - Context label used in errors.
+ * @param {TParams} args.params - Framework-owned request params.
+ * @returns {TParams & RemoteRequestContext} Merged params, or the original params when unscoped.
+ */
+export function mergeRemoteRequestContext({ context, label = "Remote request context", params }) {
+    const contextKeys = Object.keys(context);
+    if (contextKeys.length === 0)
+        return params;
+    for (const key of contextKeys) {
+        if (Object.hasOwn(params, key)) {
+            throw remoteRequestContextError(`${label} key ${JSON.stringify(key)} is reserved by the request payload`);
+        }
+    }
+    return { ...params, ...context };
+}
+/**
+ * Returns a stable identity for an immutable captured context.
+ * @param {RemoteRequestContext} context - Captured context.
+ * @returns {string} Stable serialized key.
+ */
+export function remoteRequestContextKey(context) {
+    return JSON.stringify(context);
+}
+/**
+ * Checks whether a value is a supported request-context scalar.
+ * @param {ReturnType<typeof JSON.parse>} value - Candidate scalar.
+ * @returns {value is string | number | boolean} Whether the value is supported.
+ */
+function remoteRequestContextScalar(value) {
+    if (["string", "boolean"].includes(typeof value))
+        return true;
+    return typeof value === "number" && Number.isFinite(value);
+}
+/**
+ * Builds a client-safe request-context validation error.
+ * @param {string} message - Safe validation message.
+ * @returns {VelociousError} Validation error.
+ */
+function remoteRequestContextError(message) {
+    return VelociousError.safe(message, { code: "remote-request-context-invalid", errorType: "validation_error" });
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoicmVtb3RlLXJlcXVlc3QtY29udGV4dC5qcyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbIi4uLy4uL3NyYy9yZW1vdGUtcmVxdWVzdC1jb250ZXh0LmpzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQUFBLFlBQVk7QUFFWixPQUFPLGNBQWMsTUFBTSxzQkFBc0IsQ0FBQTtBQUNqRCxPQUFPLGFBQWEsTUFBTSx5QkFBeUIsQ0FBQTtBQUVuRCwwRkFBMEY7QUFFMUYsTUFBTSxtQkFBbUIsR0FBRyxJQUFJLEdBQUcsQ0FBQyxDQUFDLFdBQVcsRUFBRSxhQUFhLEVBQUUsV0FBVyxDQUFDLENBQUMsQ0FBQTtBQUU5RTs7Ozs7OztHQU9HO0FBQ0gsTUFBTSxVQUFVLDJCQUEyQixDQUFDLEtBQUssRUFBRSxFQUFDLEtBQUssR0FBRyx3QkFBd0IsRUFBRSxZQUFZLEdBQUcsRUFBRSxFQUFDLEdBQUcsRUFBRTtJQUMzRyxJQUFJLEtBQUssS0FBSyxTQUFTLElBQUksS0FBSyxLQUFLLElBQUk7UUFBRSxPQUFPLE1BQU0sQ0FBQyxNQUFNLENBQUMsRUFBRSxDQUFDLENBQUE7SUFFbkUsSUFBSSxDQUFDLGFBQWEsQ0FBQyxLQUFLLENBQUMsRUFBRSxDQUFDO1FBQzFCLE1BQU0seUJBQXlCLENBQUMsR0FBRyxLQUFLLDBDQUEwQyxDQUFDLENBQUE7SUFDckYsQ0FBQztJQUVELE1BQU0sY0FBYyxHQUFHLElBQUksR0FBRyxDQUFDLFlBQVksQ0FBQyxDQUFBO0lBQzVDLHdEQUF3RDtJQUN4RCxNQUFNLE9BQU8sR0FBRyxFQUFFLENBQUE7SUFFbEIsS0FBSyxNQUFNLEdBQUcsSUFBSSxNQUFNLENBQUMsSUFBSSxDQUFDLEtBQUssQ0FBQyxDQUFDLElBQUksRUFBRSxFQUFFLENBQUM7UUFDNUMsSUFBSSxDQUFDLEdBQUcsQ0FBQyxJQUFJLEVBQUU7WUFBRSxNQUFNLHlCQUF5QixDQUFDLEdBQUcsS0FBSyxpQ0FBaUMsQ0FBQyxDQUFBO1FBQzNGLElBQUksbUJBQW1CLENBQUMsR0FBRyxDQUFDLEdBQUcsQ0FBQyxJQUFJLGNBQWMsQ0FBQyxHQUFHLENBQUMsR0FBRyxDQUFDLEVBQUUsQ0FBQztZQUM1RCxNQUFNLHlCQUF5QixDQUFDLEdBQUcsS0FBSyxRQUFRLElBQUksQ0FBQyxTQUFTLENBQUMsR0FBRyxDQUFDLCtCQUErQixDQUFDLENBQUE7UUFDckcsQ0FBQztRQUVELE1BQU0sWUFBWSxHQUFHLEtBQUssQ0FBQyxHQUFHLENBQUMsQ0FBQTtRQUUvQixJQUFJLENBQUMsMEJBQTBCLENBQUMsWUFBWSxDQUFDLEVBQUUsQ0FBQztZQUM5QyxNQUFNLHlCQUF5QixDQUFDLEdBQUcsS0FBSyxRQUFRLElBQUksQ0FBQyxTQUFTLENBQUMsR0FBRyxDQUFDLDBEQUEwRCxDQUFDLENBQUE7UUFDaEksQ0FBQztRQUVELE9BQU8sQ0FBQyxHQUFHLENBQUMsR0FBRyxZQUFZLENBQUE7SUFDN0IsQ0FBQztJQUVELE9BQU8sTUFBTSxDQUFDLE1BQU0sQ0FBQyxPQUFPLENBQUMsQ0FBQTtBQUMvQixDQUFDO0FBRUQ7Ozs7Ozs7O0dBUUc7QUFDSCxNQUFNLFVBQVUseUJBQXlCLENBQUMsRUFBQyxPQUFPLEVBQUUsS0FBSyxHQUFHLHdCQUF3QixFQUFFLE1BQU0sRUFBQztJQUMzRixNQUFNLFdBQVcsR0FBRyxNQUFNLENBQUMsSUFBSSxDQUFDLE9BQU8sQ0FBQyxDQUFBO0lBRXhDLElBQUksV0FBVyxDQUFDLE1BQU0sS0FBSyxDQUFDO1FBQUUsT0FBTyxNQUFNLENBQUE7SUFFM0MsS0FBSyxNQUFNLEdBQUcsSUFBSSxXQUFXLEVBQUUsQ0FBQztRQUM5QixJQUFJLE1BQU0sQ0FBQyxNQUFNLENBQUMsTUFBTSxFQUFFLEdBQUcsQ0FBQyxFQUFFLENBQUM7WUFDL0IsTUFBTSx5QkFBeUIsQ0FBQyxHQUFHLEtBQUssUUFBUSxJQUFJLENBQUMsU0FBUyxDQUFDLEdBQUcsQ0FBQyxxQ0FBcUMsQ0FBQyxDQUFBO1FBQzNHLENBQUM7SUFDSCxDQUFDO0lBRUQsT0FBTyxFQUFDLEdBQUcsTUFBTSxFQUFFLEdBQUcsT0FBTyxFQUFDLENBQUE7QUFDaEMsQ0FBQztBQUVEOzs7O0dBSUc7QUFDSCxNQUFNLFVBQVUsdUJBQXVCLENBQUMsT0FBTztJQUM3QyxPQUFPLElBQUksQ0FBQyxTQUFTLENBQUMsT0FBTyxDQUFDLENBQUE7QUFDaEMsQ0FBQztBQUVEOzs7O0dBSUc7QUFDSCxTQUFTLDBCQUEwQixDQUFDLEtBQUs7SUFDdkMsSUFBSSxDQUFDLFFBQVEsRUFBRSxTQUFTLENBQUMsQ0FBQyxRQUFRLENBQUMsT0FBTyxLQUFLLENBQUM7UUFBRSxPQUFPLElBQUksQ0FBQTtJQUU3RCxPQUFPLE9BQU8sS0FBSyxLQUFLLFFBQVEsSUFBSSxNQUFNLENBQUMsUUFBUSxDQUFDLEtBQUssQ0FBQyxDQUFBO0FBQzVELENBQUM7QUFFRDs7OztHQUlHO0FBQ0gsU0FBUyx5QkFBeUIsQ0FBQyxPQUFPO0lBQ3hDLE9BQU8sY0FBYyxDQUFDLElBQUksQ0FBQyxPQUFPLEVBQUUsRUFBQyxJQUFJLEVBQUUsZ0NBQWdDLEVBQUUsU0FBUyxFQUFFLGtCQUFrQixFQUFDLENBQUMsQ0FBQTtBQUM5RyxDQUFDIiwic291cmNlc0NvbnRlbnQiOlsiLy8gQHRzLWNoZWNrXG5cbmltcG9ydCBWZWxvY2lvdXNFcnJvciBmcm9tIFwiLi92ZWxvY2lvdXMtZXJyb3IuanNcIlxuaW1wb3J0IGlzUGxhaW5PYmplY3QgZnJvbSBcIi4vdXRpbHMvcGxhaW4tb2JqZWN0LmpzXCJcblxuLyoqIEB0eXBlZGVmIHtSZWFkb25seTxSZWNvcmQ8c3RyaW5nLCBzdHJpbmcgfCBudW1iZXIgfCBib29sZWFuPj59IFJlbW90ZVJlcXVlc3RDb250ZXh0ICovXG5cbmNvbnN0IFVOU0FGRV9DT05URVhUX0tFWVMgPSBuZXcgU2V0KFtcIl9fcHJvdG9fX1wiLCBcImNvbnN0cnVjdG9yXCIsIFwicHJvdG90eXBlXCJdKVxuXG4vKipcbiAqIENhcHR1cmVzIGFuZCB2YWxpZGF0ZXMgaW1tdXRhYmxlIHNjYWxhciBjb250ZXh0IGZvciBvbmUgcmVtb3RlIG9wZXJhdGlvbi5cbiAqIEBwYXJhbSB7UmV0dXJuVHlwZTx0eXBlb2YgSlNPTi5wYXJzZT4gfCB1bmRlZmluZWR9IHZhbHVlIC0gQ29uZmlndXJlZCBjb250ZXh0IHZhbHVlLlxuICogQHBhcmFtIHtvYmplY3R9IFthcmdzXSAtIFZhbGlkYXRpb24gb3B0aW9ucy5cbiAqIEBwYXJhbSB7c3RyaW5nfSBbYXJncy5sYWJlbF0gLSBDb250ZXh0IGxhYmVsIHVzZWQgaW4gZXJyb3JzLlxuICogQHBhcmFtIHtJdGVyYWJsZTxzdHJpbmc+fSBbYXJncy5yZXNlcnZlZEtleXNdIC0gRnJhbWV3b3JrLW93bmVkIGtleXMgdW5hdmFpbGFibGUgdG8gY29udGV4dC5cbiAqIEByZXR1cm5zIHtSZW1vdGVSZXF1ZXN0Q29udGV4dH0gRnJvemVuIGNvbnRleHQgc25hcHNob3QuXG4gKi9cbmV4cG9ydCBmdW5jdGlvbiBjYXB0dXJlUmVtb3RlUmVxdWVzdENvbnRleHQodmFsdWUsIHtsYWJlbCA9IFwiUmVtb3RlIHJlcXVlc3QgY29udGV4dFwiLCByZXNlcnZlZEtleXMgPSBbXX0gPSB7fSkge1xuICBpZiAodmFsdWUgPT09IHVuZGVmaW5lZCB8fCB2YWx1ZSA9PT0gbnVsbCkgcmV0dXJuIE9iamVjdC5mcmVlemUoe30pXG5cbiAgaWYgKCFpc1BsYWluT2JqZWN0KHZhbHVlKSkge1xuICAgIHRocm93IHJlbW90ZVJlcXVlc3RDb250ZXh0RXJyb3IoYCR7bGFiZWx9IG11c3QgYmUgYSBwbGFpbiBvYmplY3Qgb2Ygc2NhbGFyIHZhbHVlc2ApXG4gIH1cblxuICBjb25zdCByZXNlcnZlZEtleVNldCA9IG5ldyBTZXQocmVzZXJ2ZWRLZXlzKVxuICAvKiogQHR5cGUge1JlY29yZDxzdHJpbmcsIHN0cmluZyB8IG51bWJlciB8IGJvb2xlYW4+fSAqL1xuICBjb25zdCBjb250ZXh0ID0ge31cblxuICBmb3IgKGNvbnN0IGtleSBvZiBPYmplY3Qua2V5cyh2YWx1ZSkuc29ydCgpKSB7XG4gICAgaWYgKCFrZXkudHJpbSgpKSB0aHJvdyByZW1vdGVSZXF1ZXN0Q29udGV4dEVycm9yKGAke2xhYmVsfSBrZXlzIG11c3QgYmUgbm9uLWJsYW5rIHN0cmluZ3NgKVxuICAgIGlmIChVTlNBRkVfQ09OVEVYVF9LRVlTLmhhcyhrZXkpIHx8IHJlc2VydmVkS2V5U2V0LmhhcyhrZXkpKSB7XG4gICAgICB0aHJvdyByZW1vdGVSZXF1ZXN0Q29udGV4dEVycm9yKGAke2xhYmVsfSBrZXkgJHtKU09OLnN0cmluZ2lmeShrZXkpfSBpcyByZXNlcnZlZCBieSB0aGUgZnJhbWV3b3JrYClcbiAgICB9XG5cbiAgICBjb25zdCBjb250ZXh0VmFsdWUgPSB2YWx1ZVtrZXldXG5cbiAgICBpZiAoIXJlbW90ZVJlcXVlc3RDb250ZXh0U2NhbGFyKGNvbnRleHRWYWx1ZSkpIHtcbiAgICAgIHRocm93IHJlbW90ZVJlcXVlc3RDb250ZXh0RXJyb3IoYCR7bGFiZWx9IGtleSAke0pTT04uc3RyaW5naWZ5KGtleSl9IG11c3QgY29udGFpbiBhIHN0cmluZywgZmluaXRlIG51bWJlciwgb3IgYm9vbGVhbiBzY2FsYXJgKVxuICAgIH1cblxuICAgIGNvbnRleHRba2V5XSA9IGNvbnRleHRWYWx1ZVxuICB9XG5cbiAgcmV0dXJuIE9iamVjdC5mcmVlemUoY29udGV4dClcbn1cblxuLyoqXG4gKiBNZXJnZXMgY2FwdHVyZWQgY29udGV4dCBpbnRvIGZyYW1ld29yayByZXF1ZXN0IHBhcmFtcyB3aXRob3V0IGFtYmlndWl0eS5cbiAqIEB0ZW1wbGF0ZSB7UmVjb3JkPHN0cmluZywgUmV0dXJuVHlwZTx0eXBlb2YgSlNPTi5wYXJzZT4+fSBUUGFyYW1zXG4gKiBAcGFyYW0ge29iamVjdH0gYXJncyAtIE1lcmdlIGFyZ3VtZW50cy5cbiAqIEBwYXJhbSB7UmVtb3RlUmVxdWVzdENvbnRleHR9IGFyZ3MuY29udGV4dCAtIENhcHR1cmVkIGNvbnRleHQuXG4gKiBAcGFyYW0ge3N0cmluZ30gW2FyZ3MubGFiZWxdIC0gQ29udGV4dCBsYWJlbCB1c2VkIGluIGVycm9ycy5cbiAqIEBwYXJhbSB7VFBhcmFtc30gYXJncy5wYXJhbXMgLSBGcmFtZXdvcmstb3duZWQgcmVxdWVzdCBwYXJhbXMuXG4gKiBAcmV0dXJucyB7VFBhcmFtcyAmIFJlbW90ZVJlcXVlc3RDb250ZXh0fSBNZXJnZWQgcGFyYW1zLCBvciB0aGUgb3JpZ2luYWwgcGFyYW1zIHdoZW4gdW5zY29wZWQuXG4gKi9cbmV4cG9ydCBmdW5jdGlvbiBtZXJnZVJlbW90ZVJlcXVlc3RDb250ZXh0KHtjb250ZXh0LCBsYWJlbCA9IFwiUmVtb3RlIHJlcXVlc3QgY29udGV4dFwiLCBwYXJhbXN9KSB7XG4gIGNvbnN0IGNvbnRleHRLZXlzID0gT2JqZWN0LmtleXMoY29udGV4dClcblxuICBpZiAoY29udGV4dEtleXMubGVuZ3RoID09PSAwKSByZXR1cm4gcGFyYW1zXG5cbiAgZm9yIChjb25zdCBrZXkgb2YgY29udGV4dEtleXMpIHtcbiAgICBpZiAoT2JqZWN0Lmhhc093bihwYXJhbXMsIGtleSkpIHtcbiAgICAgIHRocm93IHJlbW90ZVJlcXVlc3RDb250ZXh0RXJyb3IoYCR7bGFiZWx9IGtleSAke0pTT04uc3RyaW5naWZ5KGtleSl9IGlzIHJlc2VydmVkIGJ5IHRoZSByZXF1ZXN0IHBheWxvYWRgKVxuICAgIH1cbiAgfVxuXG4gIHJldHVybiB7Li4ucGFyYW1zLCAuLi5jb250ZXh0fVxufVxuXG4vKipcbiAqIFJldHVybnMgYSBzdGFibGUgaWRlbnRpdHkgZm9yIGFuIGltbXV0YWJsZSBjYXB0dXJlZCBjb250ZXh0LlxuICogQHBhcmFtIHtSZW1vdGVSZXF1ZXN0Q29udGV4dH0gY29udGV4dCAtIENhcHR1cmVkIGNvbnRleHQuXG4gKiBAcmV0dXJucyB7c3RyaW5nfSBTdGFibGUgc2VyaWFsaXplZCBrZXkuXG4gKi9cbmV4cG9ydCBmdW5jdGlvbiByZW1vdGVSZXF1ZXN0Q29udGV4dEtleShjb250ZXh0KSB7XG4gIHJldHVybiBKU09OLnN0cmluZ2lmeShjb250ZXh0KVxufVxuXG4vKipcbiAqIENoZWNrcyB3aGV0aGVyIGEgdmFsdWUgaXMgYSBzdXBwb3J0ZWQgcmVxdWVzdC1jb250ZXh0IHNjYWxhci5cbiAqIEBwYXJhbSB7UmV0dXJuVHlwZTx0eXBlb2YgSlNPTi5wYXJzZT59IHZhbHVlIC0gQ2FuZGlkYXRlIHNjYWxhci5cbiAqIEByZXR1cm5zIHt2YWx1ZSBpcyBzdHJpbmcgfCBudW1iZXIgfCBib29sZWFufSBXaGV0aGVyIHRoZSB2YWx1ZSBpcyBzdXBwb3J0ZWQuXG4gKi9cbmZ1bmN0aW9uIHJlbW90ZVJlcXVlc3RDb250ZXh0U2NhbGFyKHZhbHVlKSB7XG4gIGlmIChbXCJzdHJpbmdcIiwgXCJib29sZWFuXCJdLmluY2x1ZGVzKHR5cGVvZiB2YWx1ZSkpIHJldHVybiB0cnVlXG5cbiAgcmV0dXJuIHR5cGVvZiB2YWx1ZSA9PT0gXCJudW1iZXJcIiAmJiBOdW1iZXIuaXNGaW5pdGUodmFsdWUpXG59XG5cbi8qKlxuICogQnVpbGRzIGEgY2xpZW50LXNhZmUgcmVxdWVzdC1jb250ZXh0IHZhbGlkYXRpb24gZXJyb3IuXG4gKiBAcGFyYW0ge3N0cmluZ30gbWVzc2FnZSAtIFNhZmUgdmFsaWRhdGlvbiBtZXNzYWdlLlxuICogQHJldHVybnMge1ZlbG9jaW91c0Vycm9yfSBWYWxpZGF0aW9uIGVycm9yLlxuICovXG5mdW5jdGlvbiByZW1vdGVSZXF1ZXN0Q29udGV4dEVycm9yKG1lc3NhZ2UpIHtcbiAgcmV0dXJuIFZlbG9jaW91c0Vycm9yLnNhZmUobWVzc2FnZSwge2NvZGU6IFwicmVtb3RlLXJlcXVlc3QtY29udGV4dC1pbnZhbGlkXCIsIGVycm9yVHlwZTogXCJ2YWxpZGF0aW9uX2Vycm9yXCJ9KVxufVxuIl19

@@ -1,0 +1,12 @@
+import BaseCommand from "../base-command.js";
+/** CLI command for loading and running a user-provided script file. */
+export default class RunScriptCommand extends BaseCommand {
+    /**
+     * Runs execute.
+     * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
+     */
+    async execute() {
+        return await this.getConfiguration().getEnvironmentHandler().cliCommandsRunScript(this);
+    }
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoicnVuLXNjcmlwdC5qcyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbIi4uLy4uLy4uLy4uL3NyYy9jbGkvY29tbWFuZHMvcnVuLXNjcmlwdC5qcyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQSxPQUFPLFdBQVcsTUFBTSxvQkFBb0IsQ0FBQTtBQUU1Qyx1RUFBdUU7QUFDdkUsTUFBTSxDQUFDLE9BQU8sT0FBTyxnQkFBaUIsU0FBUSxXQUFXO0lBQ3ZEOzs7T0FHRztJQUNILEtBQUssQ0FBQyxPQUFPO1FBQ1gsT0FBTyxNQUFNLElBQUksQ0FBQyxnQkFBZ0IsRUFBRSxDQUFDLHFCQUFxQixFQUFFLENBQUMsb0JBQW9CLENBQUMsSUFBSSxDQUFDLENBQUE7SUFDekYsQ0FBQztDQUNGIiwic291cmNlc0NvbnRlbnQiOlsiaW1wb3J0IEJhc2VDb21tYW5kIGZyb20gXCIuLi9iYXNlLWNvbW1hbmQuanNcIlxuXG4vKiogQ0xJIGNvbW1hbmQgZm9yIGxvYWRpbmcgYW5kIHJ1bm5pbmcgYSB1c2VyLXByb3ZpZGVkIHNjcmlwdCBmaWxlLiAqL1xuZXhwb3J0IGRlZmF1bHQgY2xhc3MgUnVuU2NyaXB0Q29tbWFuZCBleHRlbmRzIEJhc2VDb21tYW5kIHtcbiAgLyoqXG4gICAqIFJ1bnMgZXhlY3V0ZS5cbiAgICogQHJldHVybnMge1Byb21pc2U8UmV0dXJuVHlwZTx0eXBlb2YgSlNPTi5wYXJzZT4+fSAtIFJlc29sdmVzIHdpdGggdGhlIGNvbW1hbmQgcmVzdWx0LlxuICAgKi9cbiAgYXN5bmMgZXhlY3V0ZSgpIHtcbiAgICByZXR1cm4gYXdhaXQgdGhpcy5nZXRDb25maWd1cmF0aW9uKCkuZ2V0RW52aXJvbm1lbnRIYW5kbGVyKCkuY2xpQ29tbWFuZHNSdW5TY3JpcHQodGhpcylcbiAgfVxufVxuIl19

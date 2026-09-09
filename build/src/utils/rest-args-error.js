@@ -1,0 +1,13 @@
+// @ts-check
+/**
+ * Runs rest args error.
+ * @param {object} restArgs - Rest args.
+ * @returns {void} - No return value.
+ */
+export default function restArgsError(restArgs) {
+    const restArgsKeys = Object.keys(restArgs);
+    if (restArgsKeys.length > 0) {
+        throw new Error(`Unknown arguments: ${restArgsKeys.join(", ")}`);
+    }
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoicmVzdC1hcmdzLWVycm9yLmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiLi4vLi4vLi4vc3JjL3V0aWxzL3Jlc3QtYXJncy1lcnJvci5qcyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQSxZQUFZO0FBRVo7Ozs7R0FJRztBQUNILE1BQU0sQ0FBQyxPQUFPLFVBQVUsYUFBYSxDQUFDLFFBQVE7SUFDNUMsTUFBTSxZQUFZLEdBQUcsTUFBTSxDQUFDLElBQUksQ0FBQyxRQUFRLENBQUMsQ0FBQTtJQUUxQyxJQUFJLFlBQVksQ0FBQyxNQUFNLEdBQUcsQ0FBQyxFQUFFLENBQUM7UUFDNUIsTUFBTSxJQUFJLEtBQUssQ0FBQyxzQkFBc0IsWUFBWSxDQUFDLElBQUksQ0FBQyxJQUFJLENBQUMsRUFBRSxDQUFDLENBQUE7SUFDbEUsQ0FBQztBQUNILENBQUMiLCJzb3VyY2VzQ29udGVudCI6WyIvLyBAdHMtY2hlY2tcblxuLyoqXG4gKiBSdW5zIHJlc3QgYXJncyBlcnJvci5cbiAqIEBwYXJhbSB7b2JqZWN0fSByZXN0QXJncyAtIFJlc3QgYXJncy5cbiAqIEByZXR1cm5zIHt2b2lkfSAtIE5vIHJldHVybiB2YWx1ZS5cbiAqL1xuZXhwb3J0IGRlZmF1bHQgZnVuY3Rpb24gcmVzdEFyZ3NFcnJvcihyZXN0QXJncykge1xuICBjb25zdCByZXN0QXJnc0tleXMgPSBPYmplY3Qua2V5cyhyZXN0QXJncylcblxuICBpZiAocmVzdEFyZ3NLZXlzLmxlbmd0aCA+IDApIHtcbiAgICB0aHJvdyBuZXcgRXJyb3IoYFVua25vd24gYXJndW1lbnRzOiAke3Jlc3RBcmdzS2V5cy5qb2luKFwiLCBcIil9YClcbiAgfVxufVxuIl19

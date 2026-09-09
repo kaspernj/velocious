@@ -4,7 +4,6 @@ import Configuration from "../../src/configuration.js"
 import EnvironmentHandlerNode from "../../src/environment-handlers/node.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 import TestRunner from "../../src/testing/test-runner.js"
-import {resolveSlowTestCount} from "../../src/environment-handlers/node/cli/commands/test.js"
 
 function buildConfiguration() {
   return new Configuration({
@@ -19,7 +18,7 @@ function buildConfiguration() {
   })
 }
 
-describe("TestRunner slowest tests", {databaseCleaning: {transaction: true}}, () => {
+describe("TestRunner slowest tests", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("returns recorded tests sorted slowest-first and limited", () => {
     const testRunner = new TestRunner({configuration: buildConfiguration(), testFiles: []})
 
@@ -80,25 +79,5 @@ describe("TestRunner slowest tests", {databaseCleaning: {transaction: true}}, ()
     expect(recorded.map((test) => test.fullDescription).sort()).toEqual(["first recorded test", "second recorded test"])
     expect(recorded.every((test) => typeof test.durationMs === "number" && test.durationMs >= 0)).toEqual(true)
     expect(recorded.every((test) => test.filePath === "integration.js")).toEqual(true)
-  })
-})
-
-describe("resolveSlowTestCount", () => {
-  it("defaults to 10 when the env value is unset", () => {
-    expect(resolveSlowTestCount(undefined)).toEqual(10)
-  })
-
-  it("uses a provided positive count", () => {
-    expect(resolveSlowTestCount("20")).toEqual(20)
-  })
-
-  it("disables the report for 0", () => {
-    expect(resolveSlowTestCount("0")).toEqual(0)
-  })
-
-  it("floors positive values, and clamps negatives/unparseable values to 0 (disabled)", () => {
-    expect(resolveSlowTestCount("4.9")).toEqual(4)
-    expect(resolveSlowTestCount("-3")).toEqual(0)
-    expect(resolveSlowTestCount("abc")).toEqual(0)
   })
 })

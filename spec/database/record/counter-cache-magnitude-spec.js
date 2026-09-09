@@ -1,9 +1,14 @@
 // @ts-check
 
 import {registerMagnitudeCounterCache} from "../../../src/database/record/counter-cache-magnitude.js"
+import {registerCounterCacheParentUpdateListener} from "../../../src/database/record/counter-cache-parent-updates.js"
 
 /** The mock DB the parent counter UPDATEs are recorded against, set per test. */
 let currentMockDb = /** @type {ReturnType<typeof createMockDb> | null} */ (null)
+/** The parent returned by the mock source-owned query after commit. */
+let currentReloadedParent = /** @type {ReturnType<typeof createReloadedParent> | undefined} */ (undefined)
+/** Parent lookup conditions observed by the mock query. */
+let currentParentFindConditions = /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */ ([])
 
 /** Mock parent model (the belongsTo target that holds the counter column). */
 class MockParent {
@@ -12,6 +17,9 @@ class MockParent {
 
   /** @returns {ReturnType<typeof createMockDb>} */
   static connection() { return /** @type {ReturnType<typeof createMockDb>} */ (currentMockDb) }
+
+  /** @returns {typeof MockParent} */
+  static canonicalRecordMetadataModelClass() { return this }
 }
 
 /** Mock belongsTo relationship pointing at {@link MockParent}. */
@@ -28,6 +36,8 @@ function createMockDb() {
 
   return {
     queries,
+    /** @param {() => void | Promise<void>} callback */
+    afterCommit: async (callback) => await callback(),
     /** @param {string} sql */
     query: async (sql) => { queries.push(sql.replace(/\s+/g, " ").trim()) },
     /** @param {string} table */
@@ -36,6 +46,14 @@ function createMockDb() {
     quoteColumn: (column) => `\`${column}\``,
     /** @param {ReturnType<typeof JSON.parse>} value */
     quote: (value) => `'${value}'`
+  }
+}
+
+/** @returns {{_getConfiguration: () => never, attributes: () => {id: string, runningBuildsCount: number}}} */
+function createReloadedParent() {
+  return {
+    _getConfiguration: () => { throw new Error("No error reporting expected") },
+    attributes: () => ({id: "srv1", runningBuildsCount: 1})
   }
 }
 
@@ -52,7 +70,7 @@ class MockBuildBase {
   /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
   _changes = {}
 
-  /** @type {{forModel: (ModelClass: typeof MockParent) => {driver: ReturnType<typeof createMockDb>}} | undefined} */
+  /** @type {{forModel: (ModelClass: typeof MockParent) => ReturnType<MockBuildBase["queryForModel"]>} | undefined} */
   _databaseOperation = undefined
 
   /** @type {Array<{callback: Function, name: string}>} */
@@ -70,15 +88,25 @@ class MockBuildBase {
   /**
    * Resolves a parent query through operation ownership when present.
    * @param {typeof MockParent} ModelClass - Parent model class.
-   * @returns {{driver: ReturnType<typeof createMockDb>}} - Fake parent query.
+   * @returns {{driver: ReturnType<typeof createMockDb>, findBy: (conditions: Record<string, ReturnType<typeof JSON.parse>>) => Promise<ReturnType<typeof createReloadedParent> | undefined>}} - Fake parent query.
    */
   queryForModel(ModelClass) {
     const databaseOperation = this.databaseOperation()
 
     if (databaseOperation) return databaseOperation.forModel(ModelClass)
 
-    return {driver: ModelClass.connection()}
+    return {
+      driver: ModelClass.connection(),
+      findBy: async (conditions) => {
+        currentParentFindConditions.push(conditions)
+
+        return currentReloadedParent
+      }
+    }
   }
+
+  /** @returns {ReturnType<typeof createMockDb>} */
+  connection() { return /** @type {ReturnType<typeof createMockDb>} */ (currentMockDb) }
 
   /** @returns {string} */
   static getModelName() { return "Build" }
@@ -163,6 +191,8 @@ function registeredModelClass(options = {}) {
   TestBuild._registeredCallbacks = []
   TestBuild._booleanColumns = new Set(options.booleanColumns || [])
   currentMockDb = createMockDb()
+  currentReloadedParent = undefined
+  currentParentFindConditions = []
 
   registerMagnitudeCounterCache(/** @type {ReturnType<typeof JSON.parse>} */ (TestBuild), {
     belongsTo: "dockerServer",
@@ -276,7 +306,10 @@ describe("magnitudeCounterCache", {databaseCleaning: {transaction: true}}, () =>
       forModel: (ModelClass) => {
         operationModelClasses.push(ModelClass)
 
-        return {driver: ModelClass.connection()}
+        return {
+          driver: ModelClass.connection(),
+          findBy: async () => undefined
+        }
       }
     }
 
@@ -286,5 +319,29 @@ describe("magnitudeCounterCache", {databaseCleaning: {transaction: true}}, () =>
     expect(currentMockDb?.queries).toEqual([
       "UPDATE `docker_servers` SET `running_builds_count` = COALESCE(`running_builds_count`, 0) + 1 WHERE `id` = 'srv1'"
     ])
+  })
+
+  it("notifies listeners with a reloaded parent after a magnitude update", async () => {
+    const TestBuild = registeredModelClass()
+    const deliveredParents = []
+    const removeListener = registerCounterCacheParentUpdateListener(
+      /** @type {typeof import("../../../src/database/record/index.js").default} */ (MockParent),
+      (parent) => deliveredParents.push(parent)
+    )
+    const build = buildRecord(TestBuild, {
+      attributes: {docker_server_id: "srv1", id: "b1", status: "queued"},
+      changes: {status: "running"}
+    })
+
+    currentReloadedParent = createReloadedParent()
+
+    try {
+      await build.save()
+    } finally {
+      removeListener()
+    }
+
+    expect(currentParentFindConditions).toEqual([{id: "srv1"}, {id: "srv1"}])
+    expect(deliveredParents).toEqual([currentReloadedParent])
   })
 })

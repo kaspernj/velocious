@@ -119,6 +119,14 @@ function messageSequence(message) {
 }
 
 /**
+ * @param {Error} error - Error diagnostic.
+ * @returns {{message: string, name: string}} - Stable diagnostic fields.
+ */
+function errorDiagnostic(error) {
+  return {message: error.message, name: error.name}
+}
+
+/**
  * @param {number} sequence - Connection-message sequence.
  * @returns {Buffer} - Encoded connection-message frame.
  */
@@ -376,10 +384,12 @@ describe("WebsocketSession inbound message backlog", {databaseCleaning: {transac
     expect(wrapperCalls).toEqual(3)
     expect(session.getMetadata()).toEqual({sequence: 2})
     expect([frameworkErrors.length, allErrors.length]).toEqual([1, 1])
-    expect(frameworkErrors[0].error).toEqual(dispatchError)
+    expect(errorDiagnostic(frameworkErrors[0].error)).toEqual(errorDiagnostic(dispatchError))
+    expect(frameworkErrors[0].error.stack).toContain("websocket-inbound-backlog-spec.js")
     expect(frameworkErrors[0].context).toMatchObject({stage: "websocket-message-dispatch"})
     expect(frameworkErrors[0].request).toEqual(upgradeRequest)
-    expect(allErrors[0].error).toEqual(dispatchError)
+    expect(errorDiagnostic(allErrors[0].error)).toEqual(errorDiagnostic(dispatchError))
+    expect(allErrors[0].error.stack).toContain("websocket-inbound-backlog-spec.js")
     expect(allErrors[0].context).toMatchObject({stage: "websocket-message-dispatch"})
     expect(allErrors[0].errorType).toEqual("framework-error")
     expect(allErrors[0].request).toEqual(upgradeRequest)
@@ -432,7 +442,7 @@ describe("WebsocketSession inbound message backlog", {databaseCleaning: {transac
     expect(allErrors).toEqual([])
   })
 
-  it("reports raw message and error-handler failures separately while preserving recovery", async () => {
+  it("reports message and error-handler failures separately while preserving recovery", async () => {
     const configuration = buildConfiguration({
       maxPendingBytes: 1024 * 1024,
       maxPendingMessages: 8
@@ -490,26 +500,26 @@ describe("WebsocketSession inbound message backlog", {databaseCleaning: {transac
     expect(handledErrors[0]).toBe(messageError)
     expect({
       allErrors: allErrors.map((payload) => ({
-        error: payload.error,
+        error: errorDiagnostic(payload.error),
         errorType: payload.errorType,
         request: payload.request,
         stage: payload.context.stage
       })),
       frameworkErrors: frameworkErrors.map((payload) => ({
-        error: payload.error,
+        error: errorDiagnostic(payload.error),
         request: payload.request,
         stage: payload.context.stage
       }))
     }).toEqual({
       allErrors: [
         {
-          error: messageError,
+          error: errorDiagnostic(messageError),
           errorType: "framework-error",
           request: upgradeRequest,
           stage: "websocket-message-handler"
         },
         {
-          error: errorHandlerError,
+          error: errorDiagnostic(errorHandlerError),
           errorType: "framework-error",
           request: upgradeRequest,
           stage: "websocket-message-handler-error"
@@ -517,21 +527,21 @@ describe("WebsocketSession inbound message backlog", {databaseCleaning: {transac
       ],
       frameworkErrors: [
         {
-          error: messageError,
+          error: errorDiagnostic(messageError),
           request: upgradeRequest,
           stage: "websocket-message-handler"
         },
         {
-          error: errorHandlerError,
+          error: errorDiagnostic(errorHandlerError),
           request: upgradeRequest,
           stage: "websocket-message-handler-error"
         }
       ]
     })
-    expect(frameworkErrors[0].error).toBe(messageError)
-    expect(allErrors[0].error).toBe(messageError)
-    expect(frameworkErrors[1].error).toBe(errorHandlerError)
-    expect(allErrors[1].error).toBe(errorHandlerError)
+    expect(frameworkErrors[0].error.stack).toContain("websocket-inbound-backlog-spec.js")
+    expect(allErrors[0].error.stack).toContain("websocket-inbound-backlog-spec.js")
+    expect(frameworkErrors[1].error.stack).toContain("websocket-inbound-backlog-spec.js")
+    expect(allErrors[1].error.stack).toContain("websocket-inbound-backlog-spec.js")
     expect(frameworkErrors[0].request).toBe(upgradeRequest)
     expect(allErrors[0].request).toBe(upgradeRequest)
     expect(frameworkErrors[1].request).toBe(upgradeRequest)
@@ -611,10 +621,12 @@ describe("WebsocketSession inbound message backlog", {databaseCleaning: {transac
     ])
     expect(received).toEqual([0, 1])
     expect([frameworkErrors.length, allErrors.length]).toEqual([1, 1])
-    expect(frameworkErrors[0].error).toEqual(connectionError)
+    expect(errorDiagnostic(frameworkErrors[0].error)).toEqual(errorDiagnostic(connectionError))
+    expect(frameworkErrors[0].error.stack).toContain("websocket-inbound-backlog-spec.js")
     expect(frameworkErrors[0].context).toMatchObject({stage: "websocket-connection-message"})
     expect(frameworkErrors[0].request).toEqual(upgradeRequest)
-    expect(allErrors[0].error).toEqual(connectionError)
+    expect(errorDiagnostic(allErrors[0].error)).toEqual(errorDiagnostic(connectionError))
+    expect(allErrors[0].error.stack).toContain("websocket-inbound-backlog-spec.js")
     expect(allErrors[0].context).toMatchObject({stage: "websocket-connection-message"})
     expect(allErrors[0].errorType).toEqual("framework-error")
     expect(allErrors[0].request).toEqual(upgradeRequest)

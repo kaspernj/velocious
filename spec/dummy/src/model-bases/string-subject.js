@@ -66,29 +66,29 @@ export default class StringSubjectBase extends DatabaseRecord {
   hasUpdatedAt() { return this._hasAttribute(this.updatedAt()) }
 
   /**
-   * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/string-subject.js").default, typeof import("../../../../src/database/record/index.js").default>}
+   * @returns {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/string-subject.js").default, typeof import("../models/string-subject-interaction.js").default>}
    */
-  stringSubjectInteractions() { return /** @type {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/string-subject.js").default, typeof import("../../../../src/database/record/index.js").default>} */ (this.getRelationshipByName("stringSubjectInteractions")) }
+  stringSubjectInteractions() { return /** @type {import("../../../../src/database/record/instance-relationships/has-many.js").default<typeof import("../models/string-subject.js").default, typeof import("../models/string-subject-interaction.js").default>} */ (this.getRelationshipByName("stringSubjectInteractions")) }
 
   /**
-   * @returns {Array<import("../../../../src/database/record/index.js").default>}
+   * @returns {Array<import("../models/string-subject-interaction.js").default>}
    */
-  stringSubjectInteractionsLoaded() { return /** @type {Array<import("../../../../src/database/record/index.js").default>} */ (this.getRelationshipByName("stringSubjectInteractions").loaded()) }
+  stringSubjectInteractionsLoaded() { return /** @type {Array<import("../models/string-subject-interaction.js").default>} */ (this.getRelationshipByName("stringSubjectInteractions").loaded()) }
 
   /**
    * @abstract
-   * @returns {Promise<Array<import("../../../../src/database/record/index.js").default>>}
+   * @returns {Promise<Array<import("../models/string-subject-interaction.js").default>>}
    */
   loadStringSubjectInteractions() { throw new Error("Not implemented") }
 
   /**
-   * @returns {Promise<Array<import("../../../../src/database/record/index.js").default>>}
+   * @returns {Promise<Array<import("../models/string-subject-interaction.js").default>>}
    */
-  stringSubjectInteractionsOrLoad() { return /** @type {Promise<Array<import("../../../../src/database/record/index.js").default>>} */ (this.relationshipOrLoad("stringSubjectInteractions")) }
+  stringSubjectInteractionsOrLoad() { return /** @type {Promise<Array<import("../models/string-subject-interaction.js").default>>} */ (this.relationshipOrLoad("stringSubjectInteractions")) }
 
   /**
    * @abstract
-   * @param {Array<import("../../../../src/database/record/index.js").default>} newModels
+   * @param {Array<import("../models/string-subject-interaction.js").default>} newModels
    * @returns {void}
    */
   setStringSubjectInteractions(newModels) { void newModels; throw new Error("Not implemented") }

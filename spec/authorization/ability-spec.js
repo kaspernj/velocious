@@ -1,8 +1,16 @@
 import Ability from "../../src/authorization/ability.js"
 import BaseResource from "../../src/authorization/base-resource.js"
 import FrontendModelBaseResource from "../../src/frontend-model-resource/base-resource.js"
+import Project from "../dummy/src/models/project.js"
+import Record from "../../src/database/record/index.js"
 import User from "../dummy/src/models/user.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
+
+/** Composite-key view of the dummy tasks table for authorization coverage. */
+class CompositeTask extends Record {}
+
+CompositeTask.setTableName("tasks")
+CompositeTask.setPrimaryKey(["name", "project_id"])
 
 /**
  * @param {string} email - Email.
@@ -62,6 +70,29 @@ describe("Authorization - ability", {tags: ["dummy"], databaseCleaning: {transac
     const foundUsers = await User.accessible(ability).where({id: [userOne.id(), userTwo.id()]}).order("id").toArray()
 
     expect(foundUsers.map((user) => user.id())).toEqual([userOne.id()])
+  })
+
+  it("applies conditional allow and deny rules to composite-key records", async () => {
+    const allowedProject = await Project.create({name: "Allowed composite authorization project"})
+    const blockedProject = await Project.create({name: "Blocked composite authorization project"})
+
+    await CompositeTask.create({name: "Allowed composite authorization task", project_id: allowedProject.id()})
+    await CompositeTask.create({name: "Denied composite authorization task", project_id: allowedProject.id()})
+    await CompositeTask.create({name: "Other composite authorization task", project_id: blockedProject.id()})
+
+    class CompositeTaskResource extends BaseResource {
+      static ModelClass = CompositeTask
+
+      abilities() {
+        this.can("read", {project_id: allowedProject.id()})
+        this.cannot("read", {name: "Denied composite authorization task"})
+      }
+    }
+
+    const ability = new Ability({resources: [CompositeTaskResource]})
+    const foundTasks = await CompositeTask.accessible(ability).order("name").toArray()
+
+    expect(foundTasks.map((task) => task.readAttribute("name"))).toEqual(["Allowed composite authorization task"])
   })
 
   it("uses ability from configuration context when available", async () => {

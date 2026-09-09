@@ -2,13 +2,14 @@
 
 import BackgroundJobsMain from "../../src/background-jobs/main.js"
 import BackgroundJobsStore from "../../src/background-jobs/store.js"
-import {outputPathFor, startBackgroundJobs, startBackgroundJobsMain, waitForOutputJson} from "../helpers/background-jobs-helper.js"
+import {createBackgroundJobUpdateObserver, outputPathFor, startBackgroundJobsMain, withBackgroundJobs} from "../helpers/background-jobs-helper.js"
+import fs from "fs/promises"
 import PruneTerminalBackgroundJobsJob from "../../src/jobs/prune-terminal-background-jobs.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import QueuedTestJob from "../dummy/src/jobs/queued-test-job.js"
 import TestJob from "../dummy/src/jobs/test-job.js"
 
-describe("Background jobs - dispatch strategy", {databaseCleaning: {truncate: true}}, () => {
+describe("Background jobs - dispatch strategy", () => {
   it("does not start a polling interval in the default (beacon) mode", async () => {
     const {main} = await startBackgroundJobsMain()
 
@@ -33,24 +34,24 @@ describe("Background jobs - dispatch strategy", {databaseCleaning: {truncate: tr
   })
 
   it("dispatches enqueued jobs without polling in beacon mode", async () => {
-    const {main, worker} = await startBackgroundJobs()
-    const outputPath = await outputPathFor("beacon-dispatch")
+    await withBackgroundJobs(async ({main, store}) => {
+      const outputPath = await outputPathFor("beacon-dispatch")
+      const updates = createBackgroundJobUpdateObserver({store})
+      main.onJobUpdated = updates.onJobUpdated
 
-    try {
-      // Confirm no poll timer is active.
       expect(main._pollTimer).toBeUndefined()
 
-      await TestJob.performLaterWithOptions({
+      const jobId = await TestJob.performLaterWithOptions({
         args: ["beacon-dispatched", outputPath],
         options: {executionMode: "inline"}
       })
 
-      const result = await waitForOutputJson({outputPath})
+      const update = await updates.waitForUpdate(jobId)
+      expect(update).toEqual({accepted: true, jobId, status: "completed"})
+
+      const result = JSON.parse(await fs.readFile(outputPath, "utf8"))
       expect(result).toEqual({message: "beacon-dispatched"})
-    } finally {
-      await worker.stop()
-      await main.stop()
-    }
+    })
   })
 
   it("arms a scheduled-job timer for future-scheduled work in beacon mode", async () => {
@@ -65,7 +66,7 @@ describe("Background jobs - dispatch strategy", {databaseCleaning: {truncate: tr
     if (!handoff) throw new Error("Expected the future job to be handed off")
     await store.markFailed({jobId: futureJobId, error: "transient", workerId: "worker-z", ...handoff})
 
-    const main = new BackgroundJobsMain({configuration: dummyConfiguration, host: "127.0.0.1", port: 0})
+    const main = new BackgroundJobsMain({closeDatabaseConnectionsOnStop: false, configuration: dummyConfiguration, host: "127.0.0.1", port: 0})
     await main.start()
 
     try {

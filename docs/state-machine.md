@@ -103,7 +103,10 @@ states: {
 ```
 
 - `beforeEnter` fires during the Velocious `beforeSave` lifecycle, before the record is persisted. Good for setting timestamps, validating preconditions, or modifying attributes.
-- `afterEnter` fires during the Velocious `afterSave` lifecycle, after the record is persisted. Good for side effects like sending notifications, queuing jobs, or pushing status updates.
+- `afterEnter` fires during the Velocious `afterSave` lifecycle, after the record is persisted but before its transaction commits. Use `afterCommit` for notifications, queued jobs, status pushes, and other irreversible effects that must only happen after durability.
+
+See [Record lifecycle callbacks](lifecycle-callbacks.md) for the full transaction
+and side-effect boundary.
 
 ## Events
 
@@ -129,7 +132,7 @@ events: {
 | `to` | Yes | Target state. |
 | `guard` | No | Predicate function. If it returns `false`, the transition is rejected. |
 | `before` | No | Runs during `beforeSave`, after the guard passes. |
-| `after` | No | Runs during `afterSave`, after the record is persisted. |
+| `after` | No | Runs during `afterSave`, after persistence but before commit. |
 
 ### Multiple source states
 

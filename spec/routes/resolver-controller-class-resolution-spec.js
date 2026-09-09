@@ -30,12 +30,16 @@ function buildConfiguration() {
 
 /**
  * @param {Configuration} configuration - Configuration.
- * @returns {RoutesResolver} - Resolver instance.
+ * @returns {Promise<RoutesResolver>} - Parsed-request resolver instance.
  */
-function buildResolver(configuration) {
+async function buildResolver(configuration) {
   const client = {remoteAddress: "127.0.0.1"}
   const request = new Request({client, configuration})
   const response = new Response({configuration})
+  const parsed = new Promise((resolve) => request.requestParser.events.on("done", resolve))
+
+  request.feed(Buffer.from("GET / HTTP/1.1\r\nHost: example.com\r\n\r\n", "utf8"))
+  await parsed
 
   return new RoutesResolver({configuration, request, response})
 }
@@ -43,7 +47,7 @@ function buildResolver(configuration) {
 describe("routes - resolver controller class resolution", {databaseCleaning: {transaction: true}}, () => {
   it("uses the route hook controller class without importing a conflicting app controller", async () => {
     const configuration = buildConfiguration()
-    const resolver = buildResolver(configuration)
+    const resolver = await buildResolver(configuration)
     const tempDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-resolver-controller-class-"))
     const controllerPath = path.join(tempDirectory, "controller.js")
 
@@ -62,7 +66,7 @@ describe("routes - resolver controller class resolution", {databaseCleaning: {tr
 
   it("uses the route hook controller class when the app controller file is missing", async () => {
     const configuration = buildConfiguration()
-    const resolver = buildResolver(configuration)
+    const resolver = await buildResolver(configuration)
 
     resolver.routeHookControllerClass = FrontendModelController
 
@@ -75,7 +79,7 @@ describe("routes - resolver controller class resolution", {databaseCleaning: {tr
 
   it("raises when local controller import fails because a nested dependency is missing", async () => {
     const configuration = buildConfiguration()
-    const resolver = buildResolver(configuration)
+    const resolver = await buildResolver(configuration)
     const tempDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-resolver-controller-class-"))
     const controllerPath = path.join(tempDirectory, "controller.js")
 

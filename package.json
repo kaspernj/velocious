@@ -3,7 +3,7 @@
     "velocious": "build/bin/velocious.js"
   },
   "name": "velocious",
-  "version": "1.0.626",
+  "version": "1.0.656",
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "files": [
@@ -30,7 +30,7 @@
     "benchmark:test-mode-diagnostics": "node --expose-gc benchmark/test-mode-diagnostics.js",
     "benchmark:factory-esm-reload-retention": "node benchmark/factory-esm-reload-retention.js",
     "build": "node scripts/clean-build.js && npm run compile",
-    "compile": "tsc -b && npm run copy:js && npm run copy:ejs && npm run copy:templates && node scripts/ensure-bin-executable.js",
+    "compile": "tsc && npm run copy:js && npm run copy:ejs && npm run copy:templates && node scripts/ensure-bin-executable.js",
     "copy:js": "cpy \"index.js\" build && cpy \"bin/**/*.js\" build/bin && cpy \"src/**/*.js\" build --parents",
     "copy:ejs": "cpy \"src/routes/**/*.ejs\" build/src/routes",
     "copy:templates": "cpy \"src/templates/**/*.js\" build/src/templates",
@@ -64,7 +64,6 @@
   "description": "",
   "dependencies": {
     "@js-temporal/polyfill": "^0.5.1",
-    "@velocious/testing": "0.0.0",
     "awaitery": "^1.0.19",
     "bcryptjs": "^3.0.2",
     "better-localstorage": "^1.0.7",
@@ -84,7 +83,7 @@
     "pure-uuid": "^2.0.0",
     "require-context": "^1.1.0",
     "set-state-compare": "^1.0.61",
-    "snapreq": "^0.0.13",
+    "snapreq": "^0.0.15",
     "sql-escape-string": "^1.1.0",
     "sql.js": "^1.12.0",
     "strftime": "^0.10.2",
@@ -92,10 +91,11 @@
     "ws": "^8.21.3"
   },
   "peerDependencies": {
+    "@velocious/testing": "^0.0.12",
     "react": ">=18",
+    "smtp-connection": "^4.0.2",
     "sqlite": "^5.1.1",
-    "sqlite3": "^6.0.1",
-    "smtp-connection": "^4.0.2"
+    "sqlite3": "^6.0.1"
   },
   "peerDependenciesMeta": {
     "react": {
@@ -121,6 +121,7 @@
     "@types/react-dom": "^19.2.3",
     "@types/strftime": "^0.9.8",
     "@types/ws": "^8.18.1",
+    "@velocious/testing": "0.0.12",
     "chokidar-cli": "^3.0.0",
     "cpy-cli": "^7.0.0",
     "esbuild": "^0.28.0",
@@ -141,7 +142,7 @@
     "selenium-webdriver": "^4.39.0",
     "sqlite": "^5.1.1",
     "sqlite3": "^6.0.1",
-    "system-testing": "^1.0.108",
+    "system-testing": "^1.0.137",
     "tedious": "^20.0.0",
     "typescript": "^7.0.2",
     "uniqunize": "^1.0.3"

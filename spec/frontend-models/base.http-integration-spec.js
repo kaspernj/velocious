@@ -8,6 +8,7 @@ import WebsocketClient from "../../src/http-client/websocket-client.js"
 import Dummy from "../dummy/index.js"
 import CommentRecord from "../dummy/src/models/comment.js"
 import ProjectRecord from "../dummy/src/models/project.js"
+import {configureNodeTransport, configureNodeTransportWithTimeZone, configureWebsocketSharedTransport, resetFrontendModelTransport} from "../helpers/frontend-model-http-transport.js"
 import runWithProcessTimezone from "../helpers/process-timezone.js"
 import TaskRecord from "../dummy/src/models/task.js"
 import UserRecord from "../dummy/src/models/user.js"
@@ -283,41 +284,6 @@ class Project extends FrontendModelBase {
 
 FrontendModelBase.registerModel(Project)
 
-/** @returns {void} */
-function resetFrontendModelTransport() {
-  FrontendModelBase.configureTransport({
-    timeZone: undefined,
-    url: undefined,
-    websocketClient: undefined
-  })
-}
-
-/** @returns {void} */
-function configureNodeTransport() {
-  FrontendModelBase.configureTransport({
-    url: "http://127.0.0.1:3006"
-  })
-}
-
-/** @returns {void} */
-function configureNodeTransportWithTimeZone() {
-  FrontendModelBase.configureTransport({
-    timeZone: () => "Europe/Berlin",
-    url: "http://127.0.0.1:3006"
-  })
-}
-
-/**
- * @param {WebsocketClient} websocketClient - Websocket client.
- * @returns {void}
- */
-function configureWebsocketSharedTransport(websocketClient) {
-  FrontendModelBase.configureTransport({
-    shared: true,
-    websocketClient
-  })
-}
-
 /**
  * @returns {Promise<{jane: UserRecord, john: UserRecord}>}
  */
@@ -567,7 +533,7 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
     })
   })
 
-  it("delivers Phase 3 model lifecycle events via onCreate/onUpdate/onDestroy", async () => {
+  it("delivers Phase 3 model lifecycle events across a transport reconnect", async () => {
     await Dummy.run(async () => {
       const websocketClient = new WebsocketClient()
       const project = await ProjectRecord.create({name: "Phase 3 project"})
@@ -592,6 +558,13 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
           if (creates.length < 1) throw new Error(`Expected onCreate but got ${creates.length}`)
         })
         expect(creates[0].model.name()).toEqual("Phase 3 task")
+
+        await websocketClient.dropConnection()
+        await waitFor(() => {
+          if (!websocketClient.isOpen() || !websocketClient.isSessionReady()) {
+            throw new Error("Expected websocket session to reconnect")
+          }
+        })
 
         task.setName("Phase 3 task renamed")
         await task.save()
@@ -1202,10 +1175,10 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
       try {
         const {task} = await seedHttpAttachmentModels()
         const descriptionAttachments = await VelociousAttachment
-          .where({recordType: "Task", recordId: String(task.id()), name: "descriptionFile"})
+          .where({recordType: "Task", recordId: String(task.id()), resourceName: "Task", name: "descriptionFile"})
           .toArray()
         const fileAttachments = await VelociousAttachment
-          .where({recordType: "Task", recordId: String(task.id()), name: "files"})
+          .where({recordType: "Task", recordId: String(task.id()), resourceName: "Task", name: "files"})
           .order([["position", "asc"]])
           .toArray()
         const loadedTask = await Task.find(task.id())
@@ -1244,7 +1217,7 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
 
       try {
         const {task} = await seedHttpAttachmentModels()
-        const ownerWhere = {recordType: "Task", recordId: String(task.id()), name: "descriptionFile"}
+        const ownerWhere = {recordType: "Task", recordId: String(task.id()), resourceName: "Task", name: "descriptionFile"}
 
         await expect(async () => {
           await VelociousAttachment

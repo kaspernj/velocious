@@ -1,0 +1,18 @@
+// @ts-check
+export default class Header {
+    /**
+     * Runs constructor.
+     * @param {string} name - Name.
+     * @param {string} value - Value to use.
+     */
+    constructor(name, value) {
+        this.formattedName = name.toLowerCase().trim();
+        this.name = name;
+        this.value = value;
+    }
+    getName() { return this.name; }
+    getFormattedName() { return this.formattedName; }
+    getValue() { return this.value; }
+    toString() { return `${this.getName()}: ${this.getValue()}`; }
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiaGVhZGVyLmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiLi4vLi4vLi4vLi4vLi4vc3JjL2h0dHAtc2VydmVyL2NsaWVudC9yZXF1ZXN0LWJ1ZmZlci9oZWFkZXIuanMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBQUEsWUFBWTtBQUVaLE1BQU0sQ0FBQyxPQUFPLE9BQU8sTUFBTTtJQUN6Qjs7OztPQUlHO0lBQ0gsWUFBWSxJQUFJLEVBQUUsS0FBSztRQUNyQixJQUFJLENBQUMsYUFBYSxHQUFHLElBQUksQ0FBQyxXQUFXLEVBQUUsQ0FBQyxJQUFJLEVBQUUsQ0FBQTtRQUM5QyxJQUFJLENBQUMsSUFBSSxHQUFHLElBQUksQ0FBQTtRQUNoQixJQUFJLENBQUMsS0FBSyxHQUFHLEtBQUssQ0FBQTtJQUNwQixDQUFDO0lBRUQsT0FBTyxLQUFLLE9BQU8sSUFBSSxDQUFDLElBQUksQ0FBQSxDQUFDLENBQUM7SUFDOUIsZ0JBQWdCLEtBQUssT0FBTyxJQUFJLENBQUMsYUFBYSxDQUFBLENBQUMsQ0FBQztJQUNoRCxRQUFRLEtBQUssT0FBTyxJQUFJLENBQUMsS0FBSyxDQUFBLENBQUMsQ0FBQztJQUNoQyxRQUFRLEtBQUssT0FBTyxHQUFHLElBQUksQ0FBQyxPQUFPLEVBQUUsS0FBSyxJQUFJLENBQUMsUUFBUSxFQUFFLEVBQUUsQ0FBQSxDQUFDLENBQUM7Q0FDOUQiLCJzb3VyY2VzQ29udGVudCI6WyIvLyBAdHMtY2hlY2tcblxuZXhwb3J0IGRlZmF1bHQgY2xhc3MgSGVhZGVyIHtcbiAgLyoqXG4gICAqIFJ1bnMgY29uc3RydWN0b3IuXG4gICAqIEBwYXJhbSB7c3RyaW5nfSBuYW1lIC0gTmFtZS5cbiAgICogQHBhcmFtIHtzdHJpbmd9IHZhbHVlIC0gVmFsdWUgdG8gdXNlLlxuICAgKi9cbiAgY29uc3RydWN0b3IobmFtZSwgdmFsdWUpIHtcbiAgICB0aGlzLmZvcm1hdHRlZE5hbWUgPSBuYW1lLnRvTG93ZXJDYXNlKCkudHJpbSgpXG4gICAgdGhpcy5uYW1lID0gbmFtZVxuICAgIHRoaXMudmFsdWUgPSB2YWx1ZVxuICB9XG5cbiAgZ2V0TmFtZSgpIHsgcmV0dXJuIHRoaXMubmFtZSB9XG4gIGdldEZvcm1hdHRlZE5hbWUoKSB7IHJldHVybiB0aGlzLmZvcm1hdHRlZE5hbWUgfVxuICBnZXRWYWx1ZSgpIHsgcmV0dXJuIHRoaXMudmFsdWUgfVxuICB0b1N0cmluZygpIHsgcmV0dXJuIGAke3RoaXMuZ2V0TmFtZSgpfTogJHt0aGlzLmdldFZhbHVlKCl9YCB9XG59XG4iXX0=

@@ -1,0 +1,13 @@
+// @ts-check
+/**
+ * Whether the value is a Date, including Dates created in another JS realm (e.g. the velocious
+ * console REPL context or a node:vm context), where `instanceof Date` is false because the other
+ * realm has its own Date constructor. Without this, such a Date bypasses date normalization and SQL
+ * value conversion and ends up as an empty value in the generated SQL.
+ * @param {ReturnType<typeof JSON.parse>} value - Value to test.
+ * @returns {value is Date} - Whether the value is a Date from any realm.
+ */
+export default function isDate(value) {
+    return value instanceof Date || Object.prototype.toString.call(value) === "[object Date]";
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiaXMtZGF0ZS5qcyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbIi4uLy4uLy4uL3NyYy91dGlscy9pcy1kYXRlLmpzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQUFBLFlBQVk7QUFFWjs7Ozs7OztHQU9HO0FBQ0gsTUFBTSxDQUFDLE9BQU8sVUFBVSxNQUFNLENBQUMsS0FBSztJQUNsQyxPQUFPLEtBQUssWUFBWSxJQUFJLElBQUksTUFBTSxDQUFDLFNBQVMsQ0FBQyxRQUFRLENBQUMsSUFBSSxDQUFDLEtBQUssQ0FBQyxLQUFLLGVBQWUsQ0FBQTtBQUMzRixDQUFDIiwic291cmNlc0NvbnRlbnQiOlsiLy8gQHRzLWNoZWNrXG5cbi8qKlxuICogV2hldGhlciB0aGUgdmFsdWUgaXMgYSBEYXRlLCBpbmNsdWRpbmcgRGF0ZXMgY3JlYXRlZCBpbiBhbm90aGVyIEpTIHJlYWxtIChlLmcuIHRoZSB2ZWxvY2lvdXNcbiAqIGNvbnNvbGUgUkVQTCBjb250ZXh0IG9yIGEgbm9kZTp2bSBjb250ZXh0KSwgd2hlcmUgYGluc3RhbmNlb2YgRGF0ZWAgaXMgZmFsc2UgYmVjYXVzZSB0aGUgb3RoZXJcbiAqIHJlYWxtIGhhcyBpdHMgb3duIERhdGUgY29uc3RydWN0b3IuIFdpdGhvdXQgdGhpcywgc3VjaCBhIERhdGUgYnlwYXNzZXMgZGF0ZSBub3JtYWxpemF0aW9uIGFuZCBTUUxcbiAqIHZhbHVlIGNvbnZlcnNpb24gYW5kIGVuZHMgdXAgYXMgYW4gZW1wdHkgdmFsdWUgaW4gdGhlIGdlbmVyYXRlZCBTUUwuXG4gKiBAcGFyYW0ge1JldHVyblR5cGU8dHlwZW9mIEpTT04ucGFyc2U+fSB2YWx1ZSAtIFZhbHVlIHRvIHRlc3QuXG4gKiBAcmV0dXJucyB7dmFsdWUgaXMgRGF0ZX0gLSBXaGV0aGVyIHRoZSB2YWx1ZSBpcyBhIERhdGUgZnJvbSBhbnkgcmVhbG0uXG4gKi9cbmV4cG9ydCBkZWZhdWx0IGZ1bmN0aW9uIGlzRGF0ZSh2YWx1ZSkge1xuICByZXR1cm4gdmFsdWUgaW5zdGFuY2VvZiBEYXRlIHx8IE9iamVjdC5wcm90b3R5cGUudG9TdHJpbmcuY2FsbCh2YWx1ZSkgPT09IFwiW29iamVjdCBEYXRlXVwiXG59XG4iXX0=

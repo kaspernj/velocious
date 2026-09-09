@@ -59,6 +59,8 @@ await Project.create({
 })
 ```
 
+Backend relationship `build(...)` and `create(...)` arguments with a concrete target use that model's generated write-attribute type. This accepts model-valued relationship attributes while type checking rejects unknown attributes and values that do not match the related model contract. Targetless polymorphic `belongsTo` builders remain generic because no single target write contract exists.
+
 ## Two-layer opt-in
 
 ### 1. Model — `acceptsNestedAttributesFor` (Rails-style)

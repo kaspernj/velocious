@@ -2,11 +2,32 @@
 
 import {describe, expect, it} from "../../src/testing/test.js"
 import FrontendModelBaseResource from "../../src/frontend-model-resource/base-resource.js"
+import FrontendModelBase from "../../src/frontend-models/base.js"
 import DatabaseRecord from "../../src/database/record/index.js"
 import Project from "../dummy/src/models/project.js"
 import Task from "../dummy/src/models/task.js"
 
 describe("FrontendModelBaseResource", {databaseCleaning: {transaction: true}}, () => {
+  it("normalizes implicit composite primary keys to frontend attribute names", {databaseCleaning: {transaction: false, truncate: false}}, () => {
+    class LegacyCompositeRecord extends DatabaseRecord {
+      /** @returns {string[]} - Database-column primary key. */
+      static primaryKey() { return ["tenant_id", "external_id"] }
+
+      /** @param {string} name - Attribute or column name. @returns {string | null} - Frontend attribute name. */
+      static resolveAttributeName(name) {
+        return {external_id: "externalId", tenant_id: "tenantId"}[name] || null
+      }
+    }
+
+    class LegacyCompositeResource extends FrontendModelBaseResource {
+      static ModelClass = LegacyCompositeRecord
+    }
+
+    const resource = new LegacyCompositeResource({modelName: "LegacyCompositeRecord", params: {}})
+
+    expect(resource.primaryKey()).toEqual(["tenantId", "externalId"])
+  })
+
   it("falls back to shared resource static config when environment resource omits it", () => {
     class SharedProjectResource extends FrontendModelBaseResource {
       static attributes = ["id", "name"]
@@ -39,6 +60,66 @@ describe("FrontendModelBaseResource", {databaseCleaning: {transaction: true}}, (
     expect(ProjectResource.resourceConfig()).toEqual({
       abilities: ["approve"],
       attributes: ["id", "title"]
+    })
+  })
+
+  it("derives client-safe attachment config from the model declaration", () => {
+    class User extends DatabaseRecord {}
+    User.hasOneAttachment("profilePicture", {
+      driver: "privateUploads",
+      sync: {
+        fetch: "eager",
+        offlineRequirement: "optional",
+        retention: "evictable"
+      }
+    })
+
+    class UserResource extends FrontendModelBaseResource {
+      static ModelClass = User
+    }
+
+    expect(UserResource.resourceConfig()).toEqual({
+      attachments: {
+        profilePicture: {
+          sync: {
+            fetch: "eager",
+            offlineRequirement: "optional",
+            retention: "evictable"
+          },
+          type: "hasOne"
+        }
+      },
+      attributes: []
+    })
+  })
+
+  it("derives attachment config from a frontend model class", {databaseCleaning: {transaction: false, truncate: false}}, () => {
+    class LocalUser extends FrontendModelBase {
+      /** @returns {import("../../src/frontend-models/base.js").FrontendModelResourceConfig} - Resource config. */
+      static resourceConfig() {
+        return {
+          attachments: {
+            profilePicture: {
+              sync: {
+                fetch: "eager",
+                offlineRequirement: "optional",
+                retention: "evictable"
+              },
+              type: "hasOne"
+            }
+          },
+          modelName: "User"
+        }
+      }
+    }
+
+    class LocalUserResource extends FrontendModelBaseResource {
+      static ModelClass = LocalUser
+    }
+
+    expect(LocalUserResource.resourceConfig()).toEqual({
+      attachments: LocalUser.resourceConfig().attachments,
+      attributes: []
     })
   })
 
@@ -267,6 +348,20 @@ describe("FrontendModelBaseResource", {databaseCleaning: {transaction: true}}, (
       offlineGrant,
       taskModel: Task
     })
+  })
+
+  it("keeps the database model available in offline policy contexts", {databaseCleaning: {transaction: false, truncate: false}}, () => {
+    class ProjectResource extends FrontendModelBaseResource {
+      static ModelClass = Project
+    }
+
+    const resource = new ProjectResource({
+      context: {resourceRuntime: "offline"},
+      modelName: "Project",
+      params: {}
+    })
+
+    expect(resource.databaseModelClass()).toEqual(Project)
   })
 
   it("applies shared virtual setters", async () => {

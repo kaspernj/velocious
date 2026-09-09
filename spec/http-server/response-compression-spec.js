@@ -1,10 +1,12 @@
 // @ts-check
 
 import zlib from "node:zlib"
+import fs from "node:fs/promises"
 import {promisify} from "node:util"
+import Client from "../../src/http-server/client/index.js"
 import {parseAcceptEncoding} from "../../src/http-server/client/response-compression.js"
 import {describe, expect, it} from "../../src/testing/test.js"
-import {bodyBuffer, buildConfiguration, buildRequest, buildResponse, deliverResponse, headerText} from "../helpers/http-response-compression-test-helper.js"
+import {bodyBuffer, buildConfiguration, buildRequest, buildRequestRunner, buildResponse, deliverResponse, headerText, repositoryPackageJsonPath} from "../helpers/http-response-compression-test-helper.js"
 
 const gzipAsync = promisify(zlib.gzip)
 const gunzipAsync = promisify(zlib.gunzip)
@@ -39,6 +41,8 @@ describe("http server - response compression", {databaseCleaning: {transaction: 
     const {outputs} = await deliverResponse({configuration, request, response})
 
     expect(headerText(outputs)).not.toContain("Content-Encoding")
+    // With compression disabled the server never selects a representation,
+    // so there is no framework Vary dimension.
     expect(headerText(outputs)).not.toContain("Vary")
     expect(bodyBuffer(outputs).toString("utf8")).toEqual(body)
   })
@@ -50,8 +54,10 @@ describe("http server - response compression", {databaseCleaning: {transaction: 
     const headers = headerText(outputs)
 
     expect(headers).toContain("Content-Encoding: gzip\r\n")
-    expect(headers).toContain(`Content-Length: ${expectedCompressed.length}\r\n`)
+    // Framework-owned dimension: emitted for every selected representation,
+    // header-present or absent, so caches key on Accept-Encoding.
     expect(headers).toContain("Vary: Accept-Encoding\r\n")
+    expect(headers).toContain(`Content-Length: ${expectedCompressed.length}\r\n`)
 
     const actualBody = bodyBuffer(outputs)
 
@@ -111,6 +117,25 @@ describe("http server - response compression", {databaseCleaning: {transaction: 
     expect(parseAcceptEncoding("gzip;q=1").get("gzip")).toEqual(1)
     expect(parseAcceptEncoding("gzip;q=1.000").get("gzip")).toEqual(1)
     expect(parseAcceptEncoding("gzip").get("gzip")).toEqual(1)
+  })
+
+  it("accepts the qvalue boundary forms 0. and 1. as valid", () => {
+    expect(parseAcceptEncoding("gzip;q=0.").get("gzip")).toEqual(0)
+    expect(parseAcceptEncoding("gzip;q=1.").get("gzip")).toEqual(1)
+    expect(parseAcceptEncoding("gzip;q=1.0").get("gzip")).toEqual(1)
+    expect(parseAcceptEncoding("gzip;q=0.000").get("gzip")).toEqual(0)
+    expect(parseAcceptEncoding("gzip;q=1.01").get("gzip")).toEqual(0)
+  })
+
+  it("negotiates with the qvalue boundary forms 0. and 1.", async () => {
+    const oneBoundary = await deliverCompressed({acceptEncoding: "gzip;q=1."})
+    const tieBoundary = await deliverCompressed({acceptEncoding: "br;q=1., gzip;q=0."})
+    const zeroBoundary = await deliverCompressed({acceptEncoding: "gzip;q=0."})
+
+    expect(headerText(oneBoundary.outputs)).toContain("Content-Encoding: gzip\r\n")
+    expect(headerText(tieBoundary.outputs)).toContain("Content-Encoding: br\r\n")
+    expect(headerText(zeroBoundary.outputs)).not.toContain("Content-Encoding")
+    expect(headerText(zeroBoundary.outputs)).toContain("Vary: Accept-Encoding\r\n")
   })
 
   it("treats malformed q-values as not acceptable during negotiation", async () => {
@@ -266,5 +291,385 @@ describe("http server - response compression", {databaseCleaning: {transaction: 
     const contentLengthLines = headerText(outputs).split("\r\n").filter((line) => line.toLowerCase().startsWith("content-length:"))
 
     expect(contentLengthLines).toEqual(["Content-Length: 0"])
+  })
+
+  it("carries Vary on an identity response when the Accept-Encoding header is missing", async () => {
+    const {outputs} = await deliverCompressed()
+
+    expect(headerText(outputs)).toContain("Vary: Accept-Encoding\r\n")
+  })
+
+  it("carries Vary when identity wins the negotiation", async () => {
+    const {outputs} = await deliverCompressed({acceptEncoding: "gzip;q=0.5, identity;q=1"})
+
+    expect(headerText(outputs)).toContain("Vary: Accept-Encoding\r\n")
+    expect(headerText(outputs)).not.toContain("Content-Encoding")
+  })
+
+  it("carries Vary when the body is below the threshold and identity is acceptable", async () => {
+    const {outputs} = await deliverCompressed({acceptEncoding: "gzip", body: "small-body-below-threshold"})
+
+    expect(headerText(outputs)).toContain("Vary: Accept-Encoding\r\n")
+    expect(headerText(outputs)).not.toContain("Content-Encoding")
+  })
+
+  it("carries Vary on an empty 406", async () => {
+    const {outputs} = await deliverCompressed({acceptEncoding: "identity;q=0"})
+
+    expect(headerText(outputs)).toContain("HTTP/1.1 406 Not Acceptable\r\n")
+    expect(headerText(outputs)).toContain("Vary: Accept-Encoding\r\n")
+  })
+
+  it("carries Vary on a normal successful sendFile response", async () => {
+    const configuration = buildConfiguration({compression: true})
+    const filePath = repositoryPackageJsonPath()
+    const stats = await fs.stat(filePath)
+    const request = buildRequest({headers: {"Accept-Encoding": "gzip"}})
+    const response = buildResponse({body: "", configuration})
+
+    response.setFilePath(filePath)
+
+    const client = new Client({clientCount: 1, configuration})
+
+    /** @type {Array<string | Uint8Array>} */
+    const outputs = []
+
+    client.events.on("output", (data) => {
+      outputs.push(data)
+    })
+    client.events.on("file", ({sendBody, settle}) => {
+      expect(sendBody).toBeTrue()
+      void settle("completed")
+    })
+
+    await client.sendResponse(buildRequestRunner({request, response}))
+    const headers = headerText(outputs)
+
+    expect(headers).toContain(`Content-Length: ${stats.size}\r\n`)
+    expect(headers).toContain("Vary: Accept-Encoding\r\n")
+    expect(headers).not.toContain("Content-Encoding")
+  })
+
+  it("answers 406 for a sendFile response when identity is forbidden without streaming the file", async () => {
+    const configuration = buildConfiguration({compression: true})
+    const filePath = repositoryPackageJsonPath()
+    const request = buildRequest({headers: {"Accept-Encoding": "identity;q=0"}})
+    const response = buildResponse({body: "", configuration})
+
+    /** @type {string[]} */
+    const finishedResults = []
+
+    response.setFilePath(filePath, (result) => {
+      finishedResults.push(result)
+    })
+
+    const client = new Client({clientCount: 1, configuration})
+
+    /** @type {Array<string | Uint8Array>} */
+    const outputs = []
+
+    /** @type {Array<boolean>} */
+    const fileSendBodies = []
+
+    client.events.on("output", (data) => {
+      outputs.push(data)
+    })
+    client.events.on("file", ({sendBody, settle}) => {
+      fileSendBodies.push(sendBody)
+      void settle("aborted")
+    })
+
+    await client.sendResponse(buildRequestRunner({request, response}))
+    const headers = headerText(outputs)
+
+    expect(headers).toContain("HTTP/1.1 406 Not Acceptable\r\n")
+    expect(headers).toContain("Content-Length: 0\r\n")
+    expect(headers).toContain("Vary: Accept-Encoding\r\n")
+    expect(headers).not.toContain("Content-Encoding")
+    expect(fileSendBodies).toEqual([])
+    expect(finishedResults.length).toEqual(1)
+    expect(finishedResults[0]).toEqual("completed")
+    expect(bodyBuffer(outputs).length).toEqual(0)
+  })
+
+  it("emits the sendFile 406 headers before settling onFinished so delivery is not delayed or blocked", async () => {
+    const configuration = buildConfiguration({compression: true})
+    const filePath = repositoryPackageJsonPath()
+    const request = buildRequest({headers: {"Accept-Encoding": "identity;q=0"}})
+    const response = buildResponse({body: "", configuration})
+
+    /** @type {string[]} */
+    const finishedResults = []
+
+    /** @type {Array<boolean>} */
+    const finishedWhenHeadersEmitted = []
+
+    /** @type {boolean} */
+    let headersEmitted = false
+
+    // onFinished must not run until the 406 response headers have been emitted;
+    // record whether that ordering held the moment the callback fires. A slow or
+    // app-stopping callback must not be able to delay or prevent delivery of an
+    // already-committed response.
+    response.setFilePath(filePath, (result) => {
+      finishedResults.push(result)
+      finishedWhenHeadersEmitted.push(headersEmitted)
+    })
+
+    const client = new Client({clientCount: 1, configuration})
+
+    /** @type {Array<string | Uint8Array>} */
+    const outputs = []
+
+    /** @type {Array<boolean>} */
+    const fileSendBodies = []
+
+    client.events.on("output", (data) => {
+      outputs.push(data)
+      if (typeof data === "string" && data.startsWith("HTTP/")) headersEmitted = true
+    })
+    client.events.on("file", ({sendBody, settle}) => {
+      fileSendBodies.push(sendBody)
+      void settle("completed")
+    })
+
+    await client.sendResponse(buildRequestRunner({request, response}))
+    const headers = headerText(outputs)
+
+    expect(headers).toContain("HTTP/1.1 406 Not Acceptable\r\n")
+    expect(headers).toContain("Content-Length: 0\r\n")
+    expect(headers).toContain("Vary: Accept-Encoding\r\n")
+    expect(headers).not.toContain("Content-Encoding")
+    // The 406 is a committed empty body: no file event is emitted and onFinished
+    // settles exactly once as "completed".
+    expect(fileSendBodies).toEqual([])
+    expect(finishedResults.length).toEqual(1)
+    expect(finishedResults[0]).toEqual("completed")
+    expect(bodyBuffer(outputs).length).toEqual(0)
+    // The callback ran only after the 406 headers were emitted, so a slow or
+    // app-stopping callback cannot delay or block the committed response.
+    expect(finishedWhenHeadersEmitted).toEqual([true])
+  })
+
+  it("answers 406 for a HEAD sendFile response when identity is forbidden without streaming or double-settling", async () => {
+    const configuration = buildConfiguration({compression: true})
+    const filePath = repositoryPackageJsonPath()
+    const request = buildRequest({headers: {"Accept-Encoding": "identity;q=0"}, httpMethod: "HEAD"})
+    const response = buildResponse({body: "", configuration})
+
+    /** @type {string[]} */
+    const finishedResults = []
+
+    response.setFilePath(filePath, (result) => {
+      finishedResults.push(result)
+    })
+
+    const client = new Client({clientCount: 1, configuration})
+
+    /** @type {Array<string | Uint8Array>} */
+    const outputs = []
+
+    /** @type {Array<boolean>} */
+    const fileSendBodies = []
+
+    client.events.on("output", (data) => {
+      outputs.push(data)
+    })
+    client.events.on("file", ({sendBody, settle}) => {
+      fileSendBodies.push(sendBody)
+      void settle("aborted")
+    })
+
+    await client.sendResponse(buildRequestRunner({request, response}))
+    const headers = headerText(outputs)
+
+    expect(headers).toContain("HTTP/1.1 406 Not Acceptable\r\n")
+    expect(headers).toContain("Content-Length: 0\r\n")
+    expect(headers).toContain("Vary: Accept-Encoding\r\n")
+    expect(headers).not.toContain("Content-Encoding")
+    // The negotiated 406 must not emit a file event or stream the file.
+    expect(fileSendBodies).toEqual([])
+    // onFinished settles exactly once, as "completed".
+    expect(finishedResults.length).toEqual(1)
+    expect(finishedResults[0]).toEqual("completed")
+    expect(bodyBuffer(outputs).length).toEqual(0)
+  })
+
+  it("passes an application-encoded sendFile response through unchanged when identity is forbidden", async () => {
+    const configuration = buildConfiguration({compression: true})
+    const filePath = repositoryPackageJsonPath()
+    const stats = await fs.stat(filePath)
+    const request = buildRequest({headers: {"Accept-Encoding": "identity;q=0"}})
+    const response = buildResponse({body: "", configuration, headers: {"Content-Encoding": "br"}})
+
+    /** @type {string[]} */
+    const finishedResults = []
+
+    response.setFilePath(filePath, (result) => {
+      finishedResults.push(result)
+    })
+
+    const client = new Client({clientCount: 1, configuration})
+
+    /** @type {Array<string | Uint8Array>} */
+    const outputs = []
+
+    /** @type {Array<boolean>} */
+    const fileSendBodies = []
+
+    client.events.on("output", (data) => {
+      outputs.push(data)
+    })
+    client.events.on("file", ({sendBody, settle}) => {
+      fileSendBodies.push(sendBody)
+      void settle("completed")
+    })
+
+    await client.sendResponse(buildRequestRunner({request, response}))
+    const headers = headerText(outputs)
+
+    // The application-supplied Content-Encoding is an application-owned fixed
+    // representation: it is passed through unchanged (200, not 406) and the
+    // framework adds no Vary dimension of its own.
+    expect(headers).toContain("HTTP/1.1 200 OK\r\n")
+    expect(headers).toContain("Content-Encoding: br\r\n")
+    expect(headers).toContain(`Content-Length: ${stats.size}\r\n`)
+    expect(headers).not.toContain("Vary")
+    // The normal file body path is taken.
+    expect(fileSendBodies).toEqual([true])
+    expect(finishedResults.length).toEqual(1)
+    expect(finishedResults[0]).toEqual("completed")
+  })
+
+  it("settles onFinished once for a bodyless sendFile status when the client forbids identity", async () => {
+    const configuration = buildConfiguration({compression: true})
+    const filePath = repositoryPackageJsonPath()
+    const request = buildRequest({headers: {"Accept-Encoding": "identity;q=0"}})
+    const response = buildResponse({body: "", configuration, status: 304})
+
+    /** @type {string[]} */
+    const finishedResults = []
+
+    response.setFilePath(filePath, (result) => {
+      finishedResults.push(result)
+    })
+
+    const client = new Client({clientCount: 1, configuration})
+
+    /** @type {Array<string | Uint8Array>} */
+    const outputs = []
+
+    /** @type {Array<boolean>} */
+    const fileSendBodies = []
+
+    client.events.on("output", (data) => {
+      outputs.push(data)
+    })
+    client.events.on("file", ({sendBody, settle}) => {
+      fileSendBodies.push(sendBody)
+      void settle("completed")
+    })
+
+    await client.sendResponse(buildRequestRunner({request, response}))
+    const headers = headerText(outputs)
+
+    // The bodyless status is preserved: no body, no Content-Length, and no
+    // framework Vary dimension (a bodyless response selects no representation).
+    expect(headers).toContain("HTTP/1.1 304 Not Modified\r\n")
+    expect(headers).not.toContain("Content-Length")
+    expect(headers).not.toContain("Content-Encoding")
+    expect(headers).not.toContain("Vary")
+    // The pre-change file-ownership path still settles onFinished exactly once,
+    // as "completed" — the forbidden representations must not drop the callback.
+    expect(fileSendBodies).toEqual([false])
+    expect(finishedResults.length).toEqual(1)
+    expect(finishedResults[0]).toEqual("completed")
+    expect(bodyBuffer(outputs).length).toEqual(0)
+  })
+
+  it("answers 406 for a sendFile response when identity is forbidden but a coding is acceptable", async () => {
+    const configuration = buildConfiguration({compression: true})
+    const filePath = repositoryPackageJsonPath()
+    const request = buildRequest({headers: {"Accept-Encoding": "br;q=1, identity;q=0"}})
+    const response = buildResponse({body: "", configuration})
+
+    /** @type {string[]} */
+    const finishedResults = []
+
+    response.setFilePath(filePath, (result) => {
+      finishedResults.push(result)
+    })
+
+    const client = new Client({clientCount: 1, configuration})
+
+    /** @type {Array<string | Uint8Array>} */
+    const outputs = []
+
+    /** @type {Array<boolean>} */
+    const fileSendBodies = []
+
+    client.events.on("output", (data) => {
+      outputs.push(data)
+    })
+    client.events.on("file", ({sendBody, settle}) => {
+      fileSendBodies.push(sendBody)
+      void settle("aborted")
+    })
+
+    await client.sendResponse(buildRequestRunner({request, response}))
+    const headers = headerText(outputs)
+
+    // The file path only owns the identity representation: when the client
+    // forbids identity (even though a coding is acceptable) the file is never
+    // sent, so the same empty 406 is used and the Vary dimension is retained.
+    expect(headers).toContain("HTTP/1.1 406 Not Acceptable\r\n")
+    expect(headers).toContain("Content-Length: 0\r\n")
+    expect(headers).toContain("Vary: Accept-Encoding\r\n")
+    expect(headers).not.toContain("Content-Encoding")
+    expect(fileSendBodies).toEqual([])
+    expect(finishedResults.length).toEqual(1)
+    expect(finishedResults[0]).toEqual("completed")
+    expect(bodyBuffer(outputs).length).toEqual(0)
+  })
+
+  it("keeps Vary stable for negotiated requests across pipelined responses on one connection", async () => {
+    const configuration = buildConfiguration({compression: true})
+    const client = new Client({clientCount: 1, configuration})
+    const body = "compressible-body-content ".repeat(128)
+    const firstRunner = buildRequestRunner({
+      request: buildRequest({headers: {"Accept-Encoding": "gzip"}}),
+      response: buildResponse({body, configuration})
+    })
+    const secondRunner = buildRequestRunner({
+      request: buildRequest({headers: {}}),
+      response: buildResponse({body, configuration})
+    })
+
+    /** @type {Array<string | Uint8Array>} */
+    const outputs = []
+
+    client.events.on("output", (data) => {
+      outputs.push(data)
+    })
+
+    client.requestRunners.push(firstRunner, secondRunner)
+    await Promise.all([client.requestDone(), client.requestDone()])
+
+    const firstHeaders = headerText(outputs)
+    const secondHeaders = /** @type {string} */ (outputs[2])
+    const firstVary = firstHeaders.split("\r\n").filter((line) => line.toLowerCase().startsWith("vary:"))
+    const secondVary = secondHeaders.split("\r\n").filter((line) => line.toLowerCase().startsWith("vary:"))
+
+    // The Vary dimension is request-independent: it is emitted identically on the
+    // negotiated first response and on the second response, which sent no
+    // Accept-Encoding header at all.
+    expect(firstVary).toEqual(["Vary: Accept-Encoding"])
+    expect(secondVary).toEqual(["Vary: Accept-Encoding"])
+    // The same dimension header must not depend on which representation won:
+    // the first response selected gzip, the second (header-absent) stays identity.
+    expect(firstHeaders).toContain("Content-Encoding: gzip\r\n")
+    expect(secondHeaders).not.toContain("Content-Encoding")
+    // The identity body is the full original bytes, framing intact.
+    expect(outputs[3]).toEqual(body)
   })
 })

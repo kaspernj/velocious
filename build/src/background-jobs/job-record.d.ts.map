@@ -1,0 +1,1 @@
+{"version":3,"file":"job-record.d.ts","sourceRoot":"","sources":["../../../src/background-jobs/job-record.js"],"names":[],"mappings":"AAEA,OAAO,cAAc,MAAM,6BAA6B,CAAA;AAExD,MAAM,CAAC,OAAO,OAAO,mBAAoB,SAAQ,cAAc;IAC7D,MAAM,CAAC,SAAS,WAEf;IAED,MAAM,CAAC,UAAU,WAEhB;CACF"}

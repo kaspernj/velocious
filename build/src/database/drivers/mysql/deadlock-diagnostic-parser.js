@@ -1,0 +1,196 @@
+// @ts-check
+/**
+ * InnodbDeadlockLockNode type.
+ * @typedef {object} InnodbDeadlockLockNode
+ * @property {string} indexFingerprint - Opaque index identity.
+ * @property {string} lockMode - Allowlisted lock mode.
+ * @property {"conflicting" | "held" | "waiting"} state - Lock relationship to its transaction.
+ * @property {string} tableFingerprint - Opaque table identity.
+ */
+/**
+ * InnodbDeadlockTransactionNode type.
+ * @typedef {object} InnodbDeadlockTransactionNode
+ * @property {InnodbDeadlockLockNode[]} conflictingLocks - Bounded counterparty conflict edges whose owner is unavailable.
+ * @property {InnodbDeadlockLockNode[]} locks - Bounded locks owned or awaited by this transaction.
+ * @property {number} ordinal - Report-local transaction ordinal.
+ */
+/**
+ * InnodbDeadlockParserState type.
+ * @typedef {object} InnodbDeadlockParserState
+ * @property {InnodbDeadlockTransactionNode | undefined} currentTransaction - Current bounded transaction node.
+ * @property {"conflicting" | "held" | "waiting" | undefined} currentLockState - Current lock section state.
+ * @property {number} lockRecordCount - Total emitted lock nodes.
+ * @property {boolean} lockRecordsTruncated - Whether a lock-node bound was reached.
+ * @property {InnodbDeadlockTransactionNode[]} transactionNodes - Bounded transaction nodes.
+ * @property {boolean} transactionNodesTruncated - Whether the transaction-node bound was reached.
+ * @property {number} transactions - Transaction headers observed in the bounded section.
+ * @property {number | null} victimTransaction - Victim ordinal.
+ */
+import sha256Hex from "../../../utils/sha256-hex.js";
+const INNODB_STATUS_SCAN_MAX_CHARS = 65536;
+const INNODB_DEADLOCK_SECTION_MAX_CHARS = 16384;
+const INNODB_DEADLOCK_TRANSACTION_MAX = 8;
+const INNODB_DEADLOCK_LOCKS_PER_TRANSACTION_MAX = 8;
+const INNODB_DEADLOCK_LOCK_RECORD_MAX = 32;
+const INNODB_DEADLOCK_LINE_MAX_CHARS = 1024;
+/**
+ * Parses a bounded InnoDB latest-deadlock section into safe structural context.
+ * @param {string} status - SHOW ENGINE INNODB STATUS text.
+ * @returns {{lockRecordsTruncated: boolean, sectionTruncated: boolean, transactionNodes: InnodbDeadlockTransactionNode[], transactionNodesTruncated: boolean, transactions: number, victimTransaction: number | null}} - Structural deadlock summary.
+ */
+export default function parseInnodbDeadlockSummary(status) {
+    const { candidate, sectionTruncated } = boundedDeadlockSection(status);
+    /** @type {InnodbDeadlockParserState} */
+    const state = {
+        currentTransaction: undefined,
+        currentLockState: undefined,
+        lockRecordCount: 0,
+        lockRecordsTruncated: false,
+        transactionNodes: [],
+        transactionNodesTruncated: false,
+        transactions: 0,
+        victimTransaction: null
+    };
+    for (const line of candidate.split(/\r?\n/)) {
+        const trimmed = line.slice(0, INNODB_DEADLOCK_LINE_MAX_CHARS).trim();
+        const transactionOrdinal = transactionHeaderOrdinal(trimmed);
+        if (transactionOrdinal !== undefined) {
+            startTransactionNode(state, transactionOrdinal);
+            continue;
+        }
+        const lockStateMarker = transactionLockStateMarker(trimmed, state.currentTransaction);
+        if (lockStateMarker.matched) {
+            state.currentLockState = lockStateMarker.state;
+            continue;
+        }
+        const victimOrdinal = victimTransactionOrdinal(trimmed);
+        if (victimOrdinal !== undefined)
+            state.victimTransaction = victimOrdinal;
+        appendLockNode(state, trimmed);
+    }
+    return {
+        lockRecordsTruncated: state.lockRecordsTruncated,
+        sectionTruncated,
+        transactionNodes: state.transactionNodes,
+        transactionNodesTruncated: state.transactionNodesTruncated,
+        transactions: state.transactions,
+        victimTransaction: state.victimTransaction
+    };
+}
+/**
+ * Extracts and caps the latest-deadlock section.
+ * @param {string} status - Raw server status.
+ * @returns {{candidate: string, sectionTruncated: boolean}} - Bounded candidate and truncation state.
+ */
+function boundedDeadlockSection(status) {
+    const scannedStatus = status.slice(0, INNODB_STATUS_SCAN_MAX_CHARS);
+    const deadlockStart = scannedStatus.indexOf("LATEST DETECTED DEADLOCK");
+    const availableSection = deadlockStart >= 0 ? scannedStatus.slice(deadlockStart) : "";
+    const boundedSection = availableSection.slice(0, INNODB_DEADLOCK_SECTION_MAX_CHARS);
+    const sectionEndMatch = /\n-{10,}\r?\nTRANSACTIONS\r?\n-{10,}/.exec(boundedSection);
+    const scannedStatusTruncated = status.length > scannedStatus.length;
+    return {
+        candidate: sectionEndMatch ? boundedSection.slice(0, sectionEndMatch.index) : boundedSection,
+        sectionTruncated: !sectionEndMatch && deadlockStart >= 0 && (availableSection.length > boundedSection.length || scannedStatusTruncated)
+    };
+}
+/**
+ * Returns a fixed-format transaction header ordinal.
+ * @param {string} line - Bounded status line.
+ * @returns {number | undefined} - Transaction ordinal.
+ */
+function transactionHeaderOrdinal(line) {
+    const match = /^\*\*\* \((\d{1,6})\) TRANSACTION:$/.exec(line);
+    return match ? Number(match[1]) : undefined;
+}
+/**
+ * Starts a bounded transaction node.
+ * @param {InnodbDeadlockParserState} state - Parser state.
+ * @param {number} ordinal - Transaction ordinal.
+ * @returns {void}
+ */
+function startTransactionNode(state, ordinal) {
+    state.transactions++;
+    state.currentLockState = undefined;
+    if (state.transactionNodes.length >= INNODB_DEADLOCK_TRANSACTION_MAX) {
+        state.currentTransaction = undefined;
+        state.transactionNodesTruncated = true;
+        return;
+    }
+    state.currentTransaction = { conflictingLocks: [], locks: [], ordinal };
+    state.transactionNodes.push(state.currentTransaction);
+}
+/**
+ * Parses a fixed-format held/waiting marker for the current transaction.
+ * @param {string} line - Bounded status line.
+ * @param {InnodbDeadlockTransactionNode | undefined} currentTransaction - Current transaction.
+ * @returns {{matched: boolean, state: "conflicting" | "held" | "waiting" | undefined}} - Marker result.
+ */
+function transactionLockStateMarker(line, currentTransaction) {
+    const numberedMatch = /^\*\*\* \((\d{1,6})\) (HOLDS THE LOCK\(S\)|WAITING FOR THIS LOCK TO BE GRANTED):$/.exec(line);
+    if (numberedMatch) {
+        if (!currentTransaction || currentTransaction.ordinal != Number(numberedMatch[1]))
+            return { matched: true, state: undefined };
+        return { matched: true, state: numberedMatch[2] == "HOLDS THE LOCK(S)" ? "held" : "waiting" };
+    }
+    const unnumberedMatch = /^\*\*\* (WAITING FOR THIS LOCK TO BE GRANTED|CONFLICTING WITH):$/.exec(line);
+    if (!unnumberedMatch)
+        return { matched: false, state: undefined };
+    if (!currentTransaction)
+        return { matched: true, state: undefined };
+    return { matched: true, state: unnumberedMatch[1] == "CONFLICTING WITH" ? "conflicting" : "waiting" };
+}
+/**
+ * Returns a fixed-format victim ordinal.
+ * @param {string} line - Bounded status line.
+ * @returns {number | undefined} - Victim ordinal.
+ */
+function victimTransactionOrdinal(line) {
+    const match = /^\*\*\* WE ROLL BACK TRANSACTION \((\d{1,6})\)$/.exec(line);
+    return match ? Number(match[1]) : undefined;
+}
+/**
+ * Appends one bounded, fixed-format lock node when the line is eligible.
+ * @param {InnodbDeadlockParserState} state - Parser state.
+ * @param {string} line - Bounded status line.
+ * @returns {void}
+ */
+function appendLockNode(state, line) {
+    if (!state.currentTransaction || !state.currentLockState || !line.startsWith("RECORD LOCKS "))
+        return;
+    if (state.lockRecordCount >= INNODB_DEADLOCK_LOCK_RECORD_MAX ||
+        state.currentTransaction.locks.length + state.currentTransaction.conflictingLocks.length >= INNODB_DEADLOCK_LOCKS_PER_TRANSACTION_MAX) {
+        state.lockRecordsTruncated = true;
+        return;
+    }
+    const lock = deadlockLockNode(line, state.currentLockState);
+    if (!lock)
+        return;
+    if (state.currentLockState == "conflicting") {
+        state.currentTransaction.conflictingLocks.push(lock);
+    }
+    else {
+        state.currentTransaction.locks.push(lock);
+    }
+    state.lockRecordCount++;
+}
+/**
+ * Parses one fixed-format RECORD LOCKS line into safe structural fields.
+ * @param {string} line - One bounded InnoDB status line.
+ * @param {"conflicting" | "held" | "waiting"} state - Lock relationship to its transaction.
+ * @returns {InnodbDeadlockLockNode | undefined} - Safe lock node.
+ */
+function deadlockLockNode(line, state) {
+    const identifier = "(?:`(?:``|[^`\\r\\n]){1,128}`|[A-Za-z0-9_$-]{1,128})";
+    const tableIdentifier = `(?:${identifier}\\.)?${identifier}`;
+    const lockMatch = new RegExp(`^RECORD LOCKS .{1,512}? index (${identifier}) of table (${tableIdentifier}) trx id \\S{1,64}(?: \\S{1,64})? lock_mode (X|S|IX|IS|AUTO_INC)(?:\\s|$)`).exec(line);
+    if (!lockMatch)
+        return undefined;
+    return {
+        indexFingerprint: `sha256:${sha256Hex(`innodb-index:v1\0${lockMatch[1]}`)}`,
+        lockMode: lockMatch[3],
+        state,
+        tableFingerprint: `sha256:${sha256Hex(`innodb-table:v1\0${lockMatch[2]}`)}`
+    };
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZGVhZGxvY2stZGlhZ25vc3RpYy1wYXJzZXIuanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuLi8uLi8uLi8uLi8uLi9zcmMvZGF0YWJhc2UvZHJpdmVycy9teXNxbC9kZWFkbG9jay1kaWFnbm9zdGljLXBhcnNlci5qcyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQSxZQUFZO0FBRVo7Ozs7Ozs7R0FPRztBQUVIOzs7Ozs7R0FNRztBQUVIOzs7Ozs7Ozs7OztHQVdHO0FBRUgsT0FBTyxTQUFTLE1BQU0sOEJBQThCLENBQUE7QUFFcEQsTUFBTSw0QkFBNEIsR0FBRyxLQUFLLENBQUE7QUFDMUMsTUFBTSxpQ0FBaUMsR0FBRyxLQUFLLENBQUE7QUFDL0MsTUFBTSwrQkFBK0IsR0FBRyxDQUFDLENBQUE7QUFDekMsTUFBTSx5Q0FBeUMsR0FBRyxDQUFDLENBQUE7QUFDbkQsTUFBTSwrQkFBK0IsR0FBRyxFQUFFLENBQUE7QUFDMUMsTUFBTSw4QkFBOEIsR0FBRyxJQUFJLENBQUE7QUFFM0M7Ozs7R0FJRztBQUNILE1BQU0sQ0FBQyxPQUFPLFVBQVUsMEJBQTBCLENBQUMsTUFBTTtJQUN2RCxNQUFNLEVBQUMsU0FBUyxFQUFFLGdCQUFnQixFQUFDLEdBQUcsc0JBQXNCLENBQUMsTUFBTSxDQUFDLENBQUE7SUFDcEUsd0NBQXdDO0lBQ3hDLE1BQU0sS0FBSyxHQUFHO1FBQ1osa0JBQWtCLEVBQUUsU0FBUztRQUM3QixnQkFBZ0IsRUFBRSxTQUFTO1FBQzNCLGVBQWUsRUFBRSxDQUFDO1FBQ2xCLG9CQUFvQixFQUFFLEtBQUs7UUFDM0IsZ0JBQWdCLEVBQUUsRUFBRTtRQUNwQix5QkFBeUIsRUFBRSxLQUFLO1FBQ2hDLFlBQVksRUFBRSxDQUFDO1FBQ2YsaUJBQWlCLEVBQUUsSUFBSTtLQUN4QixDQUFBO0lBRUQsS0FBSyxNQUFNLElBQUksSUFBSSxTQUFTLENBQUMsS0FBSyxDQUFDLE9BQU8sQ0FBQyxFQUFFLENBQUM7UUFDNUMsTUFBTSxPQUFPLEdB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SUFBSSxhQUFhLEVBQUUsQ0FBQztRQUM1QyxLQUFLLENBQUMsa0JBQWtCLENBQUMsZ0JBQWdCLENBQUMsSUFBSSxDQUFDLElBQUksQ0FBQyxDQUFBO0lBQ3RELENBQUM7U0FBTSxDQUFDO1FBQ04sS0FBSyxDQUFDLGtCQUFrQixDQUFDLEtBQUssQ0FBQyxJQUFJLENBQUMsSUFBSSxDQUFDLENBQUE7SUFDM0MsQ0FBQztJQUNELEtBQUssQ0FBQyxlQUFlLEVBQUUsQ0FBQTtBQUN6QixDQUFDO0FBRUQ7Ozs7O0dBS0c7QUFDSCxTQUFTLGdCQUFnQixDQUFDLElBQUksRUFBRSxLQUFLO0lBQ25DLE1BQU0sVUFBVSxHQUFHLHNEQUFzRCxDQUFBO0lBQ3pFLE1BQU0sZUFBZSxHQUFHLE1BQU0sVUFBVSxRQUFRLFVBQVUsRUFBRSxDQUFBO0lBQzVELE1BQU0sU0FBUyxHQUFHLElBQUksTUFBTSxDQUFDLGtDQUFrQyxVQUFVLGVBQWUsZUFBZSwyRUFBMkUsQ0FBQyxDQUFDLElBQUksQ0FBQyxJQUFJLENBQUMsQ0FBQTtJQUU5TCxJQUFJLENBQUMsU0FBUztRQUFFLE9BQU8sU0FBUyxDQUFBO0lBRWhDLE9BQU87UUFDTCxnQkFBZ0IsRUFBRSxVQUFVLFNBQVMsQ0FBQyxvQkFBb0IsU0FBUyxDQUFDLENBQUMsQ0FBQyxFQUFFLENBQUMsRUFBRTtRQUMzRSxRQUFRLEVBQUUsU0FBUyxDQUFDLENBQUMsQ0FBQztRQUN0QixLQUFLO1FBQ0wsZ0JBQWdCLEVBQUUsVUFBVSxTQUFTLENBQUMsb0JBQW9CLFNBQVMsQ0FBQyxDQUFDLENBQUMsRUFBRSxDQUFDLEVBQUU7S0FDNUUsQ0FBQTtBQUNILENBQUMiLCJzb3VyY2VzQ29udGVudCI6WyIvLyBAdHMtY2hlY2tcblxuLyoqXG4gKiBJbm5vZGJEZWFkbG9ja0xvY2tOb2RlIHR5cGUuXG4gKiBAdHlwZWRlZiB7b2JqZWN0fSBJbm5vZGJEZWFkbG9ja0xvY2tOb2RlXG4gKiBAcHJvcGVydHkge3N0cmluZ30gaW5kZXhGaW5nZXJwcmludCAtIE9wYXF1ZSBpbmRleCBpZGVudGl0eS5cbiAqIEBwcm9wZXJ0eSB7c3RyaW5nfSBsb2NrTW9kZSAtIEFsbG93bGlzdGVkIGxvY2sgbW9kZS5cbiAqIEBwcm9wZXJ0eSB7XCJjb25mbGljdGluZ1wiIHwgXCJoZWxkXCIgfCBcIndhaXRpbmdcIn0gc3RhdGUgLSBMb2NrIHJlbGF0aW9uc2hpcCB0byBpdHMgdHJhbnNhY3Rpb24uXG4gKiBAcHJvcGVydHkge3N0cmluZ30gdGFibGVGaW5nZXJwcmludCAtIE9wYXF1ZSB0YWJsZSBpZGVudGl0eS5cbiAqL1xuXG4vKipcbiAqIElubm9kYkRlYWRsb2NrVHJhbnNhY3Rpb25Ob2RlIHR5cGUuXG4gKiBAdHlwZWRlZiB7b2JqZWN0fSBJbm5vZGJEZWFkbG9ja1RyYW5zYWN0aW9uTm9kZVxuICogQHByb3BlcnR5IHtJbm5vZGJEZWFkbG9ja0xvY2tOb2RlW119IGNvbmZsaWN0aW5nTG9ja3MgLSBCb3VuZGVkIGNvdW50ZXJwYXJ0eSBjb25mbGljdCBlZGdlcyB3aG9zZSBvd25lciBpcyB1bmF2YWlsYWJsZS5cbiAqIEBwcm9wZXJ0eSB7SW5ub2RiRGVhZGxvY2tMb2NrTm9kZVtdfSBsb2NrcyAtIEJvdW5kZWQgbG9ja3Mgb3duZWQgb3IgYXdhaXRlZCBieSB0aGlzIHRyYW5zYWN0aW9uLlxuICogQHByb3BlcnR5IHtudW1iZXJ9IG9yZGluYWwgLSBSZXBvcnQtbG9jYWwgdHJhbnNhY3Rpb24gb3JkaW5hbC5cbiAqL1xuXG4vKipcbiAqIElubm9kYkRlYWRsb2NrUGFyc2VyU3RhdGUgdHlwZS5cbiAqIEB0eXBlZGVmIHtvYmplY3R9IElubm9kYkRlYWRsb2NrUGFyc2VyU3RhdGVcbiAqIEBwcm9wZXJ0eSB7SW5ub2RiRGVhZGxvY2tUcmFuc2FjdGlvbk5vZGUgfCB1bmRlZmluZWR9IGN1cnJlbnRUcmFuc2FjdGlvbiAtIEN1cnJlbnQgYm91bmRlZCB0cmFuc2FjdGlvbiBub2RlLlxuICogQHByb3BlcnR5IHtcImNvbmZsaWN0aW5nXCIgfCBcImhlbGRcIiB8IFwid2FpdGluZ1wiIHwgdW5kZWZpbmVkfSBjdXJyZW50TG9ja1N0YXRlIC0gQ3VycmVudCBsb2NrIHNlY3Rpb24gc3RhdGUuXG4gKiBAcHJvcGVydHkge251bWJlcn0gbG9ja1JlY29yZENvdW50IC0gVG90YWwgZW1pdHRlZCBsb2NrIG5vZGVzLlxuICogQHByb3BlcnR5IHtib29sZWFufSBsb2NrUmVjb3Jkc1RydW5jYXRlZCAtIFdoZXRoZXIgYSBsb2NrLW5vZGUgYm91bmQgd2FzIHJlYWNoZWQuXG4gKiBAcHJvcGVydHkge0lubm9kYkRlYWRsb2NrVHJhbnNhY3Rpb25Ob2RlW119IHRyYW5zYWN0aW9uTm9kZXMgLSBCb3VuZGVkIHRyYW5zYWN0aW9uIG5vZGVzLlxuICogQHByb3BlcnR5IHtib29sZWFufSB0cmFuc2FjdGlvbk5vZGVzVHJ1bmNhdGVkIC0gV2hldGhlciB0aGUgdHJhbnNhY3Rpb24tbm9kZSBib3VuZCB3YXMgcmVhY2hlZC5cbiAqIEBwcm9wZXJ0eSB7bnVtYmVyfSB0cmFuc2FjdGlvbnMgLSBUcmFuc2FjdGlvbiBoZWFkZXJzIG9ic2VydmVkIGluIHRoZSBib3VuZGVkIHNlY3Rpb24uXG4gKiBAcHJvcGVydHkge251bWJlciB8IG51bGx9IHZpY3RpbVRyYW5zYWN0aW9uIC0gVmljdGltIG9yZGluYWwuXG4gKi9cblxuaW1wb3J0IHNoYTI1NkhleCBmcm9tIFwiLi4vLi4vLi4vdXRpbHMvc2hhMjU2LWhleC5qc1wiXG5cbmNvbnN0IElOTk9EQl9TVEFUVVNfU0NBTl9NQVhfQ0hBUlMgPSA2NTUzNlxuY29uc3QgSU5OT0RCX0RFQURMT0NLX1NFQ1RJT05fTUFYX0NIQVJTID0gMTYzODRcbmNvbnN0IElOTk9EQl9ERUFETE9DS19UUkFOU0FDVElPTl9NQVggPSA4XG5jb25zdCBJTk5PREJfREVBRExPQ0tfTE9DS1NfUEVSX1RSQU5TQUNUSU9OX01BWCA9IDhcbmNvbnN0IElOTk9EQl9ERUFETE9DS19MT0NLX1JFQ09SRF9NQVggPSAzMlxuY29uc3QgSU5OT0RCX0RFQURMT0NLX0xJTkVfTUFYX0NIQVJTID0gMTAyNFxuXG4vKipcbiAqIFBhcnNlcyBhIGJvdW5kZWQgSW5ub0RCIGxhdGVzdC1kZWFkbG9jayBzZWN0aW9uIGludG8gc2FmZSBzdHJ1Y3R1cmFsIGNvbnRleHQuXG4gKiBAcGFyYW0ge3N0cmluZ30gc3RhdHVzIC0gU0hPVyBFTkdJTkUgSU5OT0RCIFNUQVRVUyB0ZXh0LlxuICogQHJldHVybnMge3tsb2NrUmVjb3Jkc1RydW5jYXRlZDogYm9vbGVhbiwgc2VjdGlvblRydW5jYXRlZDogYm9vbGVhbiwgdHJhbnNhY3Rpb25Ob2RlczogSW5ub2RiRGVhZGxvY2tUcmFuc2FjdGlvbk5vZGVbXSwgdHJhbnNhY3Rpb25Ob2Rlc1RydW5jYXRlZDogYm9vbGVhbiwgdHJhbnNhY3Rpb25zOiBudW1iZXIsIHZpY3RpbVRyYW5zYWN0aW9uOiBudW1iZXIgfCBudWxsfX0gLSBTdHJ1Y3R1cmFsIGRlYWRsb2NrIHN1bW1hcnkuXG4gKi9cbmV4cG9ydCBkZWZhdWx0IGZ1bmN0aW9uIHBhcnNlSW5ub2RiRGVhZGxvY2tTdW1tYXJ5KHN0YXR1cykge1xuICBjb25zdCB7Y2FuZGlkYXRlLCBzZWN0aW9uVHJ1bmNhdGVkfSA9IGJvdW5kZWREZWFkbG9ja1NlY3Rpb24oc3RhdHVzKVxuICAvKiogQHR5cGUge0lubm9kYkRlYWRsb2NrUGFyc2VyU3RhdGV9ICovXG4gIGNvbnN0IHN0YXRlID0ge1xuICAgIGN1cnJlbnRUcmFuc2FjdGlvbjogdW5kZWZpbmVkLFxuICAgIGN1cnJlbnRMb2NrU3RhdGU6IHVuZGVmaW5lZCxcbiAgICBsb2NrUmVjb3JkQ291bnQ6IDAsXG4gICAgbG9ja1JlY29yZHNUcnVuY2F0ZWQ6IGZhbHNlLFxuICAgIHRyYW5zYWN0aW9uTm9kZXM6IFtdLFxuICAgIHRyYW5zYWN0aW9uTm9kZXNUcnVuY2F0ZWQ6IGZhbHNlLFxuICAgIHRyYW5zYWN0aW9uczogMCxcbiAgICB2aWN0aW1UcmFuc2FjdGlvbjogbnVsbFxuICB9XG5cbiAgZm9yIChjb25zdCBsaW5lIG9mIGNhbmRpZGF0ZS5zcGxpdCgvXFxyP1xcbi8pKSB7XG4gICAgY29uc3QgdHJpbW1lZCA9IGxpbmUuc2xpY2UoMCwgSU5OT0RCX0RFQURMT0NLX0xJTkVfTUFYX0NIQVJTKS50cmltKClcbiAgICBjb25zdCB0cmFuc2FjdGlvbk9yZGluYWwgPSB0cmFuc2FjdGlvbkhlYWRlck9yZGluYWwodHJpbW1lZClcblxuICAgIGlmICh0cmFuc2FjdGlvbk9yZGluYWwgIT09IHVuZGVmaW5lZCkge1xuICAgICAgc3RhcnRUcmFuc2FjdGlvbk5vZGUoc3RhdGUsIHRyYW5zYWN0aW9uT3JkaW5hbClcbiAgICAgIGNvbnRpbnVlXG4gICAgfVxuXG4gICAgY29uc3QgbG9ja1N0YXRlTWFya2VyID0gdHJhbnNhY3Rpb25Mb2NrU3RhdGVNYXJrZXIodHJpbW1lZCwgc3RhdGUuY3VycmVudFRyYW5zYWN0aW9uKVxuXG4gICAgaWYgKGxvY2tTdGF0ZU1hcmtlci5tYXRjaGVkKSB7XG4gICAgICBzdGF0ZS5jdXJyZW50TG9ja1N0YXRlID0gbG9ja1N0YXRlTWFya2VyLnN0YXRlXG4gICAgICBjb250aW51ZVxuICAgIH1cblxuICAgIGNvbnN0IHZpY3RpbU9yZGluYWwgPSB2aWN0aW1UcmFuc2FjdGlvbk9yZGluYWwodHJpbW1lZClcblxuICAgIGlmICh2aWN0aW1PcmRpbmFsICE9PSB1bmRlZmluZWQpIHN0YXRlLnZpY3RpbVRyYW5zYWN0aW9uID0gdmljdGltT3JkaW5hbFxuICAgIGFwcGVuZExvY2tOb2RlKHN0YXRlLCB0cmltbWVkKVxuICB9XG5cbiAgcmV0dXJuIHtcbiAgICBsb2NrUmVjb3Jkc1RydW5jYXRlZDogc3RhdGUubG9ja1JlY29yZHNUcnVuY2F0ZWQsXG4gICAgc2VjdGlvblRydW5jYXRlZCxcbiAgICB0cmFuc2FjdGlvbk5vZGVzOiBzdGF0ZS50cmFuc2FjdGlvbk5vZGVzLFxuICAgIHRyYW5zYWN0aW9uTm9kZXNUcnVuY2F0ZWQ6IHN0YXRlLnRyYW5zYWN0aW9uTm9kZXNUcnVuY2F0ZWQsXG4gICAgdHJhbnNhY3Rpb25zOiBzdGF0ZS50cmFuc2FjdGlvbnMsXG4gICAgdmljdGltVHJhbnNhY3Rpb246IHN0YXRlLnZpY3RpbVRyYW5zYWN0aW9uXG4gIH1cbn1cblxuLyoqXG4gKiBFeHRyYWN0cyBhbmQgY2FwcyB0aGUgbGF0ZXN0LWRlYWRsb2NrIHNlY3Rpb24uXG4gKiBAcGFyYW0ge3N0cmluZ30gc3RhdHVzIC0gUmF3IHNlcnZlciBzdGF0dXMuXG4gKiBAcmV0dXJucyB7e2NhbmRpZGF0ZTogc3RyaW5nLCBzZWN0aW9uVHJ1bmNhdGVkOiBib29sZWFufX0gLSBCb3VuZGVkIGNhbmRpZGF0ZSBhbmQgdHJ1bmNhdGlvbiBzdGF0ZS5cbiAqL1xuZnVuY3Rpb24gYm91bmRlZERlYWRsb2NrU2VjdGlvbihzdGF0dXMpIHtcbiAgY29uc3Qgc2Nhbm5lZFN0YXR1cyA9IHN0YXR1cy5zbGljZSgwLCBJTk5PREJfU1RBVFVTX1NDQU5fTUFYX0NIQVJTKVxuICBjb25zdCBkZWFkbG9ja1N0YXJ0ID0gc2Nhbm5lZFN0YXR1cy5pbmRleE9mKFwiTEFURVNUIERFVEVDVEVEIERFQURMT0NLXCIpXG4gIGNvbnN0IGF2YWlsYWJsZVNlY3Rpb24gPSBkZWFkbG9ja1N0YXJ0ID49IDAgPyBzY2FubmVkU3RhdHVzLnNsaWNlKGRlYWRsb2NrU3RhcnQpIDogXCJcIlxuICBjb25zdCBib3VuZGVkU2VjdGlvbiA9IGF2YWlsYWJsZVNlY3Rpb24uc2xpY2UoMCwgSU5OT0RCX0RFQURMT0NLX1NFQ1RJT05fTUFYX0NIQVJTKVxuICBjb25zdCBzZWN0aW9uRW5kTWF0Y2ggPSAvXFxuLXsxMCx9XFxyP1xcblRSQU5TQUNUSU9OU1xccj9cXG4tezEwLH0vLmV4ZWMoYm91bmRlZFNlY3Rpb24pXG4gIGNvbnN0IHNjYW5uZWRTdGF0dXNUcnVuY2F0ZWQgPSBzdGF0dXMubGVuZ3RoID4gc2Nhbm5lZFN0YXR1cy5sZW5ndGhcblxuICByZXR1cm4ge1xuICAgIGNhbmRpZGF0ZTogc2VjdGlvbkVuZE1hdGNoID8gYm91bmRlZFNlY3Rpb24uc2xpY2UoMCwgc2VjdGlvbkVuZE1hdGNoLmluZGV4KSA6IGJvdW5kZWRTZWN0aW9uLFxuICAgIHNlY3Rpb25UcnVuY2F0ZWQ6ICFzZWN0aW9uRW5kTWF0Y2ggJiYgZGVhZGxvY2tTdGFydCA+PSAwICYmIChcbiAgICAgIGF2YWlsYWJsZVNlY3Rpb24ubGVuZ3RoID4gYm91bmRlZFNlY3Rpb24ubGVuZ3RoIHx8IHNjYW5uZWRTdGF0dXNUcnVuY2F0ZWRcbiAgICApXG4gIH1cbn1cblxuLyoqXG4gKiBSZXR1cm5zIGEgZml4ZWQtZm9ybWF0IHRyYW5zYWN0aW9uIGhlYWRlciBvcmRpbmFsLlxuICogQHBhcmFtIHtzdHJpbmd9IGxpbmUgLSBCb3VuZGVkIHN0YXR1cyBsaW5lLlxuICogQHJldHVybnMge251bWJlciB8IHVuZGVmaW5lZH0gLSBUcmFuc2FjdGlvbiBvcmRpbmFsLlxuICovXG5mdW5jdGlvbiB0cmFuc2FjdGlvbkhlYWRlck9yZGluYWwobGluZSkge1xuICBjb25zdCBtYXRjaCA9IC9eXFwqXFwqXFwqIFxcKChcXGR7MSw2fSlcXCkgVFJBTlNBQ1RJT046JC8uZXhlYyhsaW5lKVxuXG4gIHJldHVybiBtYXRjaCA/IE51bWJlcihtYXRjaFsxXSkgOiB1bmRlZmluZWRcbn1cblxuLyoqXG4gKiBTdGFydHMgYSBib3VuZGVkIHRyYW5zYWN0aW9uIG5vZGUuXG4gKiBAcGFyYW0ge0lubm9kYkRlYWRsb2NrUGFyc2VyU3RhdGV9IHN0YXRlIC0gUGFyc2VyIHN0YXRlLlxuICogQHBhcmFtIHtudW1iZXJ9IG9yZGluYWwgLSBUcmFuc2FjdGlvbiBvcmRpbmFsLlxuICogQHJldHVybnMge3ZvaWR9XG4gKi9cbmZ1bmN0aW9uIHN0YXJ0VHJhbnNhY3Rpb25Ob2RlKHN0YXRlLCBvcmRpbmFsKSB7XG4gIHN0YXRlLnRyYW5zYWN0aW9ucysrXG4gIHN0YXRlLmN1cnJlbnRMb2NrU3RhdGUgPSB1bmRlZmluZWRcblxuICBpZiAoc3RhdGUudHJhbnNhY3Rpb25Ob2Rlcy5sZW5ndGggPj0gSU5OT0RCX0RFQURMT0NLX1RSQU5TQUNUSU9OX01BWCkge1xuICAgIHN0YXRlLmN1cnJlbnRUcmFuc2FjdGlvbiA9IHVuZGVmaW5lZFxuICAgIHN0YXRlLnRyYW5zYWN0aW9uTm9kZXNUcnVuY2F0ZWQgPSB0cnVlXG4gICAgcmV0dXJuXG4gIH1cblxuICBzdGF0ZS5jdXJyZW50VHJhbnNhY3Rpb24gPSB7Y29uZmxpY3RpbmdMb2NrczogW10sIGxvY2tzOiBbXSwgb3JkaW5hbH1cbiAgc3RhdGUudHJhbnNhY3Rpb25Ob2Rlcy5wdXNoKHN0YXRlLmN1cnJlbnRUcmFuc2FjdGlvbilcbn1cblxuLyoqXG4gKiBQYXJzZXMgYSBmaXhlZC1mb3JtYXQgaGVsZC93YWl0aW5nIG1hcmtlciBmb3IgdGhlIGN1cnJlbnQgdHJhbnNhY3Rpb24uXG4gKiBAcGFyYW0ge3N0cmluZ30gbGluZSAtIEJvdW5kZWQgc3RhdHVzIGxpbmUuXG4gKiBAcGFyYW0ge0lubm9kYkRlYWRsb2NrVHJhbnNhY3Rpb25Ob2RlIHwgdW5kZWZpbmVkfSBjdXJyZW50VHJhbnNhY3Rpb24gLSBDdXJyZW50IHRyYW5zYWN0aW9uLlxuICogQHJldHVybnMge3ttYXRjaGVkOiBib29sZWFuLCBzdGF0ZTogXCJjb25mbGljdGluZ1wiIHwgXCJoZWxkXCIgfCBcIndhaXRpbmdcIiB8IHVuZGVmaW5lZH19IC0gTWFya2VyIHJlc3VsdC5cbiAqL1xuZnVuY3Rpb24gdHJhbnNhY3Rpb25Mb2NrU3RhdGVNYXJrZXIobGluZSwgY3VycmVudFRyYW5zYWN0aW9uKSB7XG4gIGNvbnN0IG51bWJlcmVkTWF0Y2ggPSAvXlxcKlxcKlxcKiBcXCgoXFxkezEsNn0pXFwpIChIT0xEUyBUSEUgTE9DS1xcKFNcXCl8V0FJVElORyBGT1IgVEhJUyBMT0NLIFRPIEJFIEdSQU5URUQpOiQvLmV4ZWMobGluZSlcblxuICBpZiAobnVtYmVyZWRNYXRjaCkge1xuICAgIGlmICghY3VycmVudFRyYW5zYWN0aW9uIHx8IGN1cnJlbnRUcmFuc2FjdGlvbi5vcmRpbmFsICE9IE51bWJlcihudW1iZXJlZE1hdGNoWzFdKSkgcmV0dXJuIHttYXRjaGVkOiB0cnVlLCBzdGF0ZTogdW5kZWZpbmVkfVxuXG4gICAgcmV0dXJuIHttYXRjaGVkOiB0cnVlLCBzdGF0ZTogbnVtYmVyZWRNYXRjaFsyXSA9PSBcIkhPTERTIFRIRSBMT0NLKFMpXCIgPyBcImhlbGRcIiA6IFwid2FpdGluZ1wifVxuICB9XG5cbiAgY29uc3QgdW5udW1iZXJlZE1hdGNoID0gL15cXCpcXCpcXCogKFdBSVRJTkcgRk9SIFRISVMgTE9DSyBUTyBCRSBHUkFOVEVEfENPTkZMSUNUSU5HIFdJVEgpOiQvLmV4ZWMobGluZSlcblxuICBpZiAoIXVubnVtYmVyZWRNYXRjaCkgcmV0dXJuIHttYXRjaGVkOiBmYWxzZSwgc3RhdGU6IHVuZGVmaW5lZH1cbiAgaWYgKCFjdXJyZW50VHJhbnNhY3Rpb24pIHJldHVybiB7bWF0Y2hlZDogdHJ1ZSwgc3RhdGU6IHVuZGVmaW5lZH1cblxuICByZXR1cm4ge21hdGNoZWQ6IHRydWUsIHN0YXRlOiB1bm51bWJlcmVkTWF0Y2hbMV0gPT0gXCJDT05GTElDVElORyBXSVRIXCIgPyBcImNvbmZsaWN0aW5nXCIgOiBcIndhaXRpbmdcIn1cbn1cblxuLyoqXG4gKiBSZXR1cm5zIGEgZml4ZWQtZm9ybWF0IHZpY3RpbSBvcmRpbmFsLlxuICogQHBhcmFtIHtzdHJpbmd9IGxpbmUgLSBCb3VuZGVkIHN0YXR1cyBsaW5lLlxuICogQHJldHVybnMge251bWJlciB8IHVuZGVmaW5lZH0gLSBWaWN0aW0gb3JkaW5hbC5cbiAqL1xuZnVuY3Rpb24gdmljdGltVHJhbnNhY3Rpb25PcmRpbmFsKGxpbmUpIHtcbiAgY29uc3QgbWF0Y2ggPSAvXlxcKlxcKlxcKiBXRSBST0xMIEJBQ0sgVFJBTlNBQ1RJT04gXFwoKFxcZHsxLDZ9KVxcKSQvLmV4ZWMobGluZSlcblxuICByZXR1cm4gbWF0Y2ggPyBOdW1iZXIobWF0Y2hbMV0pIDogdW5kZWZpbmVkXG59XG5cbi8qKlxuICogQXBwZW5kcyBvbmUgYm91bmRlZCwgZml4ZWQtZm9ybWF0IGxvY2sgbm9kZSB3aGVuIHRoZSBsaW5lIGlzIGVsaWdpYmxlLlxuICogQHBhcmFtIHtJbm5vZGJEZWFkbG9ja1BhcnNlclN0YXRlfSBzdGF0ZSAtIFBhcnNlciBzdGF0ZS5cbiAqIEBwYXJhbSB7c3RyaW5nfSBsaW5lIC0gQm91bmRlZCBzdGF0dXMgbGluZS5cbiAqIEByZXR1cm5zIHt2b2lkfVxuICovXG5mdW5jdGlvbiBhcHBlbmRMb2NrTm9kZShzdGF0ZSwgbGluZSkge1xuICBpZiAoIXN0YXRlLmN1cnJlbnRUcmFuc2FjdGlvbiB8fCAhc3RhdGUuY3VycmVudExvY2tTdGF0ZSB8fCAhbGluZS5zdGFydHNXaXRoKFwiUkVDT1JEIExPQ0tTIFwiKSkgcmV0dXJuXG5cbiAgaWYgKFxuICAgIHN0YXRlLmxvY2tSZWNvcmRDb3VudCA+PSBJTk5PREJfREVBRExPQ0tfTE9DS19SRUNPUkRfTUFYIHx8XG4gICAgc3RhdGUuY3VycmVudFRyYW5zYWN0aW9uLmxvY2tzLmxlbmd0aCArIHN0YXRlLmN1cnJlbnRUcmFuc2FjdGlvbi5jb25mbGljdGluZ0xvY2tzLmxlbmd0aCA+PSBJTk5PREJfREVBRExPQ0tfTE9DS1NfUEVSX1RSQU5TQUNUSU9OX01BWFxuICApIHtcbiAgICBzdGF0ZS5sb2NrUmVjb3Jkc1RydW5jYXRlZCA9IHRydWVcbiAgICByZXR1cm5cbiAgfVxuXG4gIGNvbnN0IGxvY2sgPSBkZWFkbG9ja0xvY2tOb2RlKGxpbmUsIHN0YXRlLmN1cnJlbnRMb2NrU3RhdGUpXG5cbiAgaWYgKCFsb2NrKSByZXR1cm5cblxuICBpZiAoc3RhdGUuY3VycmVudExvY2tTdGF0ZSA9PSBcImNvbmZsaWN0aW5nXCIpIHtcbiAgICBzdGF0ZS5jdXJyZW50VHJhbnNhY3Rpb24uY29uZmxpY3RpbmdMb2Nrcy5wdXNoKGxvY2spXG4gIH0gZWxzZSB7XG4gICAgc3RhdGUuY3VycmVudFRyYW5zYWN0aW9uLmxvY2tzLnB1c2gobG9jaylcbiAgfVxuICBzdGF0ZS5sb2NrUmVjb3JkQ291bnQrK1xufVxuXG4vKipcbiAqIFBhcnNlcyBvbmUgZml4ZWQtZm9ybWF0IFJFQ09SRCBMT0NLUyBsaW5lIGludG8gc2FmZSBzdHJ1Y3R1cmFsIGZpZWxkcy5cbiAqIEBwYXJhbSB7c3RyaW5nfSBsaW5lIC0gT25lIGJvdW5kZWQgSW5ub0RCIHN0YXR1cyBsaW5lLlxuICogQHBhcmFtIHtcImNvbmZsaWN0aW5nXCIgfCBcImhlbGRcIiB8IFwid2FpdGluZ1wifSBzdGF0ZSAtIExvY2sgcmVsYXRpb25zaGlwIHRvIGl0cyB0cmFuc2FjdGlvbi5cbiAqIEByZXR1cm5zIHtJbm5vZGJEZWFkbG9ja0xvY2tOb2RlIHwgdW5kZWZpbmVkfSAtIFNhZmUgbG9jayBub2RlLlxuICovXG5mdW5jdGlvbiBkZWFkbG9ja0xvY2tOb2RlKGxpbmUsIHN0YXRlKSB7XG4gIGNvbnN0IGlkZW50aWZpZXIgPSBcIig/OmAoPzpgYHxbXmBcXFxcclxcXFxuXSl7MSwxMjh9YHxbQS1aYS16MC05XyQtXXsxLDEyOH0pXCJcbiAgY29uc3QgdGFibGVJZGVudGlmaWVyID0gYCg/OiR7aWRlbnRpZmllcn1cXFxcLik/JHtpZGVudGlmaWVyfWBcbiAgY29uc3QgbG9ja01hdGNoID0gbmV3IFJlZ0V4cChgXlJFQ09SRCBMT0NLUyAuezEsNTEyfT8gaW5kZXggKCR7aWRlbnRpZmllcn0pIG9mIHRhYmxlICgke3RhYmxlSWRlbnRpZmllcn0pIHRyeCBpZCBcXFxcU3sxLDY0fSg/OiBcXFxcU3sxLDY0fSk/IGxvY2tfbW9kZSAoWHxTfElYfElTfEFVVE9fSU5DKSg/OlxcXFxzfCQpYCkuZXhlYyhsaW5lKVxuXG4gIGlmICghbG9ja01hdGNoKSByZXR1cm4gdW5kZWZpbmVkXG5cbiAgcmV0dXJuIHtcbiAgICBpbmRleEZpbmdlcnByaW50OiBgc2hhMjU2OiR7c2hhMjU2SGV4KGBpbm5vZGItaW5kZXg6djFcXDAke2xvY2tNYXRjaFsxXX1gKX1gLFxuICAgIGxvY2tNb2RlOiBsb2NrTWF0Y2hbM10sXG4gICAgc3RhdGUsXG4gICAgdGFibGVGaW5nZXJwcmludDogYHNoYTI1Njoke3NoYTI1NkhleChgaW5ub2RiLXRhYmxlOnYxXFwwJHtsb2NrTWF0Y2hbMl19YCl9YFxuICB9XG59XG4iXX0=

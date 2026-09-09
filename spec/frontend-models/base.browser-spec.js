@@ -589,10 +589,10 @@ describe("Frontend models - base browser integration", {databaseCleaning: {trans
     try {
       const {task} = await seedBrowserAttachmentModels()
       const descriptionAttachments = await VelociousAttachment
-        .where({recordType: "Task", recordId: String(task.id()), name: "descriptionFile"})
+        .where({recordType: "Task", recordId: String(task.id()), resourceName: "Task", name: "descriptionFile"})
         .toArray()
       const fileAttachments = await VelociousAttachment
-        .where({recordType: "Task", recordId: String(task.id()), name: "files"})
+        .where({recordType: "Task", recordId: String(task.id()), resourceName: "Task", name: "files"})
         .order([["position", "asc"]])
         .toArray()
 

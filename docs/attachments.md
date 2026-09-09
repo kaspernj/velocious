@@ -15,11 +15,64 @@ await task.descriptionFile().attach({
 })
 ```
 
+## Synchronized client policy
+
+Declare per-attachment client policy on the model attachment itself. A resource
+backed by that model automatically exposes the client-safe policy to API
+manifests and generated frontend models, so the resource does not repeat an
+`attachments` block:
+
+```js
+User.hasOneAttachment("profilePicture", {
+  driver: "s3",
+  sync: {
+    fetch: "eager",
+    offlineRequirement: "optional",
+    retention: "evictable"
+  }
+})
+```
+
+- `fetch` is `"eager"` when a client should prefetch bytes or `"on-demand"`
+  when it should wait for access.
+- `retention` is `"evictable"` for replaceable cache data or `"durable"` for
+  bytes that storage-pressure cleanup must retain.
+- `offlineRequirement` is `"optional"` when an offline-ready scope can work
+  without the bytes or `"required"` when it cannot. Required assets must use
+  durable retention; Velocious rejects `required` plus `evictable`.
+
+The generated metadata includes only `type` and `sync`. Storage drivers and
+their credentials remain backend-only. This policy is the contract for client
+asset-cache adapters; binary content still travels through the attachment
+download endpoint rather than normal record sync payloads.
+
+The platform-neutral descriptor, verification, retry, deduplication, account
+isolation, and eviction lifecycle is documented in
+[Synchronized asset cache](synchronized-assets.md).
+
+Backend records and frontend model classes expose this metadata through the
+common static `attachmentDefinitions()` contract. This lets the same resource
+configuration code work in backend and frontend/local shared-resource wrappers.
+
+Resource-level `static attachments` remains available as a fallback for a
+frontend-only resource without a backing model. When a backing model declares
+an attachment with the same name, the model declaration is authoritative.
+
 The backend accepts Buffer, string, `Uint8Array`, `ArrayBuffer`, browser-style
 `arrayBuffer()` values, `UploadedFile`, `{content, filename?, contentType?}`,
 `{contentBase64, filename?, contentType?}`, and the Node-only
 `{path, filename?, contentType?}` shape. Frontend-model attachment input remains
 transport-safe and rejects `{path: ...}`.
+
+`db:migrate` creates and updates the framework-owned `velocious_attachments`
+table on each migrated database through the same idempotent schema owner used
+at runtime. This keeps schema DDL outside application and test transactions and
+includes the table in generated structure SQL before the first attachment is
+written. Attachment owner identities use unbounded text so the complete
+canonical tuple for a composite primary key is retained even when it exceeds
+the former 255-character scalar-id column. Owner lookups also store an indexed,
+bounded SHA-256 digest beside that canonical value; queries use the digest for
+the index and the full identity as a collision check.
 
 ## Node path input
 
@@ -120,6 +173,11 @@ the selected driver's `delete` operation when it has one; simultaneous
 finalization and cleanup failures are reported together. Once `db.insert()`
 completes, the new object is referenced and is retained even if later connection
 check-in fails.
+
+When an update changes an attachment owner's primary key, Velocious migrates
+the attachment rows on the record transaction's own connection. A later
+reload, lifecycle callback, attachment flush, or save failure therefore rolls
+both the record key and its attachment ownership back together.
 
 Current attachment schemas keep `content_base64` nullable and store `null` for
 driver-backed content. An older schema where that column is non-null preserves

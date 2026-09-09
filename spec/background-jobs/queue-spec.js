@@ -5,50 +5,18 @@ import {deferred} from "awaitery"
 import timeout from "awaitery/build/timeout.js"
 import wait from "awaitery/build/wait.js"
 import BackgroundJobsMain from "../../src/background-jobs/main.js"
-import BackgroundJobsStore from "../../src/background-jobs/store.js"
 import createBackgroundJobsSocketBarrier from "../helpers/background-jobs-socket-barrier.js"
 import {outputPathFor, startBackgroundJobs, waitForOutputJson, withBackgroundJobs} from "../helpers/background-jobs-helper.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import AppendJob from "../dummy/src/jobs/append-job.js"
-import DelayedJob from "../dummy/src/jobs/delayed-job.js"
 import FailingJob from "../dummy/src/jobs/failing-job.js"
 import SocketBarrierTestJob from "../dummy/src/jobs/socket-barrier-test-job.js"
 import SlowTestJob from "../dummy/src/jobs/slow-test-job.js"
-
-class QueuedOrphanStore extends BackgroundJobsStore {
-  /** @returns {Promise<import("../../src/background-jobs/types.js").BackgroundJobRow[]>} - Reclaimed orphan rows. */
-  async markOrphanedJobs() {
-    return [{
-      args: ["stale build"],
-      attempts: 1,
-      completedAtMs: null,
-      concurrencyKey: null,
-      createdAtMs: 1,
-      executionMode: "inline",
-      failedAtMs: null,
-      handedOffAtMs: null,
-      handoffId: null,
-      id: "orphaned-job",
-      jobName: FailingJob.jobName(),
-      lastError: "Worker heartbeat expired",
-      maxConcurrency: null,
-      maxRetries: 2,
-      orphanedAtMs: 2,
-      queue: "default",
-      scheduledAtMs: 2,
-      scheduleKey: null,
-      status: "queued",
-      timeoutMs: null,
-      workerId: null
-    }]
-  }
-}
 
 class MainWithBlockedDrain extends BackgroundJobsMain {
   /** @param {ConstructorParameters<typeof BackgroundJobsMain>[0]} args - Main options. */
   constructor(args) {
     super(args)
-    this.store = new QueuedOrphanStore({configuration: args.configuration})
     this.drainStarted = deferred()
     this.drainCanFinish = deferred()
   }
@@ -83,7 +51,32 @@ describe("Background jobs - queue", {databaseCleaning: {truncate: true}}, () => 
     const orphanEvents = []
     const onOrphan = (/** @type {ReturnType<typeof JSON.parse>} */ payload) => orphanEvents.push(payload)
     errorEvents.on("background-job-orphaned", onOrphan)
-    const sweep = main._sweepOrphans()
+    const sweep = main._handleOrphanedJobs({
+      jobs: [{
+        args: ["stale build"],
+        attempts: 1,
+        completedAtMs: null,
+        concurrencyKey: null,
+        createdAtMs: 1,
+        executionMode: "inline",
+        failedAtMs: null,
+        handedOffAtMs: null,
+        handoffId: null,
+        id: "orphaned-job",
+        jobName: FailingJob.jobName(),
+        lastError: "Worker heartbeat expired",
+        maxConcurrency: null,
+        maxRetries: 2,
+        orphanedAtMs: 2,
+        queue: "default",
+        scheduledAtMs: 2,
+        scheduleKey: null,
+        status: "queued",
+        timeoutMs: null,
+        workerId: null
+      }],
+      warning: "Marked orphaned background jobs"
+    })
 
     try {
       await main.drainStarted.promise
@@ -121,34 +114,31 @@ describe("Background jobs - queue", {databaseCleaning: {truncate: true}}, () => 
 
   it("does not block the worker when running forked jobs", async () => {
     const {main, worker} = await startBackgroundJobs()
-    const forkedPath = await outputPathFor("forked")
+    const barrier = await createBackgroundJobsSocketBarrier(1)
     const inlinePath = await outputPathFor("inline")
 
-    await DelayedJob.performLater("forked", forkedPath)
-    const inlineResult = await appendInlineAndWait(inlinePath)
-
-    expect(inlineResult).toEqual(["inline"])
-
-    let forkedExists = true
-
     try {
-      await fs.readFile(forkedPath, "utf8")
-    } catch {
-      forkedExists = false
+      await SocketBarrierTestJob.performLaterWithOptions({
+        args: [barrier.port],
+        options: {executionMode: "forked"}
+      })
+      await barrier.waiting
+      expect(worker.inflightProcessJobs.size).toEqual(1)
+      const [forkedExecution] = worker.inflightProcessJobs
+      if (!forkedExecution) throw new Error("Expected a tracked forked execution")
+
+      const inlineResult = await appendInlineAndWait(inlinePath)
+
+      expect(inlineResult).toEqual(["inline"])
+      expect(worker.inflightProcessJobs.size).toEqual(1)
+
+      barrier.release()
+      await forkedExecution
+    } finally {
+      await barrier.close()
+      await worker.stop()
+      await main.stop()
     }
-
-    expect(forkedExists).toBeFalse()
-
-    const forkedResult = await waitForOutputJson({
-      outputPath: forkedPath,
-      predicate: (value) => value?.value === "forked",
-      timeoutSeconds: 6
-    })
-
-    expect(forkedResult).toEqual({value: "forked"})
-
-    await worker.stop()
-    await main.stop()
   })
 
   it("limits forked runner concurrency without blocking inline job capacity", async () => {
@@ -221,8 +211,10 @@ describe("Background jobs - queue", {databaseCleaning: {truncate: true}}, () => 
   it("emits background-job-failed after an accepted job failure report", async () => {
     const {main, worker} = await startBackgroundJobs()
     const failureEvents = []
+    const failureReceived = deferred()
     const onFailure = (payload) => {
       failureEvents.push(payload)
+      failureReceived.resolve(undefined)
     }
 
     dummyConfiguration.getErrorEvents().on("background-job-failed", onFailure)
@@ -233,13 +225,7 @@ describe("Background jobs - queue", {databaseCleaning: {truncate: true}}, () => 
         options: {executionMode: "inline", maxRetries: 0}
       })
 
-      await timeout({timeout: 2000}, async () => {
-        while (true) {
-          if (failureEvents.length >= 1) break
-
-          await wait(0.05)
-        }
-      })
+      await timeout({timeout: 2000}, async () => await failureReceived.promise)
 
       expect(failureEvents.length).toEqual(1)
       expect(failureEvents[0].context.jobId).toEqual(jobId)

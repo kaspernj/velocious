@@ -1,0 +1,18 @@
+// @ts-check
+/**
+ * Driver column types that store boolean values. Drivers report storage types,
+ * which diverge for booleans (Postgres/SQLite `boolean`, some drivers `bool`,
+ * MSSQL `bit`), so cross-driver consumers must match them uniformly.
+ * @type {Set<string>}
+ */
+const BOOLEAN_COLUMN_TYPES = new Set(["bit", "bool", "boolean"]);
+/**
+ * Whether a driver-reported (or cast) column type stores boolean values,
+ * uniformly across database drivers.
+ * @param {string} columnType - Driver-reported (or cast) column type.
+ * @returns {boolean} Whether the column type is boolean-backed.
+ */
+export function isBooleanColumnType(columnType) {
+    return BOOLEAN_COLUMN_TYPES.has(columnType.toLowerCase());
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiY29sdW1uLXR5cGVzLmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiLi4vLi4vLi4vc3JjL2RhdGFiYXNlL2NvbHVtbi10eXBlcy5qcyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQSxZQUFZO0FBRVo7Ozs7O0dBS0c7QUFDSCxNQUFNLG9CQUFvQixHQUFHLElBQUksR0FBRyxDQUFDLENBQUMsS0FBSyxFQUFFLE1BQU0sRUFBRSxTQUFTLENBQUMsQ0FBQyxDQUFBO0FBRWhFOzs7OztHQUtHO0FBQ0gsTUFBTSxVQUFVLG1CQUFtQixDQUFDLFVBQVU7SUFDNUMsT0FBTyxvQkFBb0IsQ0FBQyxHQUFHLENBQUMsVUFBVSxDQUFDLFdBQVcsRUFBRSxDQUFDLENBQUE7QUFDM0QsQ0FBQyIsInNvdXJjZXNDb250ZW50IjpbIi8vIEB0cy1jaGVja1xuXG4vKipcbiAqIERyaXZlciBjb2x1bW4gdHlwZXMgdGhhdCBzdG9yZSBib29sZWFuIHZhbHVlcy4gRHJpdmVycyByZXBvcnQgc3RvcmFnZSB0eXBlcyxcbiAqIHdoaWNoIGRpdmVyZ2UgZm9yIGJvb2xlYW5zIChQb3N0Z3Jlcy9TUUxpdGUgYGJvb2xlYW5gLCBzb21lIGRyaXZlcnMgYGJvb2xgLFxuICogTVNTUUwgYGJpdGApLCBzbyBjcm9zcy1kcml2ZXIgY29uc3VtZXJzIG11c3QgbWF0Y2ggdGhlbSB1bmlmb3JtbHkuXG4gKiBAdHlwZSB7U2V0PHN0cmluZz59XG4gKi9cbmNvbnN0IEJPT0xFQU5fQ09MVU1OX1RZUEVTID0gbmV3IFNldChbXCJiaXRcIiwgXCJib29sXCIsIFwiYm9vbGVhblwiXSlcblxuLyoqXG4gKiBXaGV0aGVyIGEgZHJpdmVyLXJlcG9ydGVkIChvciBjYXN0KSBjb2x1bW4gdHlwZSBzdG9yZXMgYm9vbGVhbiB2YWx1ZXMsXG4gKiB1bmlmb3JtbHkgYWNyb3NzIGRhdGFiYXNlIGRyaXZlcnMuXG4gKiBAcGFyYW0ge3N0cmluZ30gY29sdW1uVHlwZSAtIERyaXZlci1yZXBvcnRlZCAob3IgY2FzdCkgY29sdW1uIHR5cGUuXG4gKiBAcmV0dXJucyB7Ym9vbGVhbn0gV2hldGhlciB0aGUgY29sdW1uIHR5cGUgaXMgYm9vbGVhbi1iYWNrZWQuXG4gKi9cbmV4cG9ydCBmdW5jdGlvbiBpc0Jvb2xlYW5Db2x1bW5UeXBlKGNvbHVtblR5cGUpIHtcbiAgcmV0dXJuIEJPT0xFQU5fQ09MVU1OX1RZUEVTLmhhcyhjb2x1bW5UeXBlLnRvTG93ZXJDYXNlKCkpXG59XG4iXX0=

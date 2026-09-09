@@ -1,0 +1,21 @@
+// @ts-check
+import BaseForeignKey from "../base-foreign-key.js";
+import { digg } from "diggerize";
+export default class VelociousDatabaseDriversSqliteForeignKey extends BaseForeignKey {
+    /**
+     * Runs constructor.
+     * @param {Record<string, ReturnType<typeof JSON.parse>>} data - Data payload.
+     * @param {object} args - Options object.
+     * @param {string} args.tableName - Table name.
+     */
+    constructor(data, { tableName }) {
+        super(data);
+        this.tableName = tableName;
+    }
+    getColumnName() { return digg(this, "data", "from"); }
+    getName() { return `${this.getTableName()}_${this.getColumnName()}_${this.data.id}`; }
+    getTableName() { return digg(this, "tableName"); }
+    getReferencedColumnName() { return digg(this, "data", "to"); }
+    getReferencedTableName() { return digg(this, "data", "table"); }
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZm9yZWlnbi1rZXkuanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuLi8uLi8uLi8uLi8uLi9zcmMvZGF0YWJhc2UvZHJpdmVycy9zcWxpdGUvZm9yZWlnbi1rZXkuanMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBQUEsWUFBWTtBQUVaLE9BQU8sY0FBYyxNQUFNLHdCQUF3QixDQUFBO0FBQ25ELE9BQU8sRUFBQyxJQUFJLEVBQUMsTUFBTSxXQUFXLENBQUE7QUFFOUIsTUFBTSxDQUFDLE9BQU8sT0FBTyx3Q0FBeUMsU0FBUSxjQUFjO0lBQ2xGOzs7OztPQUtHO0lBQ0gsWUFBWSxJQUFJLEVBQUUsRUFBQyxTQUFTLEVBQUM7UUFDM0IsS0FBSyxDQUFDLElBQUksQ0FBQyxDQUFBO1FBQ1gsSUFBSSxDQUFDLFNBQVMsR0FBRyxTQUFTLENBQUE7SUFDNUIsQ0FBQztJQUVELGFBQWEsS0FBSyxPQUFPLElBQUksQ0FBQyxJQUFJLEVBQUUsTUFBTSxFQUFFLE1BQU0sQ0FBQyxDQUFBLENBQUMsQ0FBQztJQUNyRCxPQUFPLEtBQUssT0FBTyxHQUFHLElBQUksQ0FBQyxZQUFZLEVBQUUsSUFBSSxJQUFJLENBQUMsYUFBYSxFQUFFLElBQUksSUFBSSxDQUFDLElBQUksQ0FBQyxFQUFFLEVBQUUsQ0FBQSxDQUFDLENBQUM7SUFDckYsWUFBWSxLQUFLLE9BQU8sSUFBSSxDQUFDLElBQUksRUFBRSxXQUFXLENBQUMsQ0FBQSxDQUFDLENBQUM7SUFDakQsdUJBQXVCLEtBQUssT0FBTyxJQUFJLENBQUMsSUFBSSxFQUFFLE1BQU0sRUFBRSxJQUFJLENBQUMsQ0FBQSxDQUFDLENBQUM7SUFDN0Qsc0JBQXNCLEtBQUssT0FBTyxJQUFJLENBQUMsSUFBSSxFQUFFLE1BQU0sRUFBRSxPQUFPLENBQUMsQ0FBQSxDQUFDLENBQUM7Q0FDaEUiLCJzb3VyY2VzQ29udGVudCI6WyIvLyBAdHMtY2hlY2tcblxuaW1wb3J0IEJhc2VGb3JlaWduS2V5IGZyb20gXCIuLi9iYXNlLWZvcmVpZ24ta2V5LmpzXCJcbmltcG9ydCB7ZGlnZ30gZnJvbSBcImRpZ2dlcml6ZVwiXG5cbmV4cG9ydCBkZWZhdWx0IGNsYXNzIFZlbG9jaW91c0RhdGFiYXNlRHJpdmVyc1NxbGl0ZUZvcmVpZ25LZXkgZXh0ZW5kcyBCYXNlRm9yZWlnbktleSB7XG4gIC8qKlxuICAgKiBSdW5zIGNvbnN0cnVjdG9yLlxuICAgKiBAcGFyYW0ge1JlY29yZDxzdHJpbmcsIFJldHVyblR5cGU8dHlwZW9mIEpTT04ucGFyc2U+Pn0gZGF0YSAtIERhdGEgcGF5bG9hZC5cbiAgICogQHBhcmFtIHtvYmplY3R9IGFyZ3MgLSBPcHRpb25zIG9iamVjdC5cbiAgICogQHBhcmFtIHtzdHJpbmd9IGFyZ3MudGFibGVOYW1lIC0gVGFibGUgbmFtZS5cbiAgICovXG4gIGNvbnN0cnVjdG9yKGRhdGEsIHt0YWJsZU5hbWV9KSB7XG4gICAgc3VwZXIoZGF0YSlcbiAgICB0aGlzLnRhYmxlTmFtZSA9IHRhYmxlTmFtZVxuICB9XG5cbiAgZ2V0Q29sdW1uTmFtZSgpIHsgcmV0dXJuIGRpZ2codGhpcywgXCJkYXRhXCIsIFwiZnJvbVwiKSB9XG4gIGdldE5hbWUoKSB7IHJldHVybiBgJHt0aGlzLmdldFRhYmxlTmFtZSgpfV8ke3RoaXMuZ2V0Q29sdW1uTmFtZSgpfV8ke3RoaXMuZGF0YS5pZH1gIH1cbiAgZ2V0VGFibGVOYW1lKCkgeyByZXR1cm4gZGlnZyh0aGlzLCBcInRhYmxlTmFtZVwiKSB9XG4gIGdldFJlZmVyZW5jZWRDb2x1bW5OYW1lKCkgeyByZXR1cm4gZGlnZyh0aGlzLCBcImRhdGFcIiwgXCJ0b1wiKSB9XG4gIGdldFJlZmVyZW5jZWRUYWJsZU5hbWUoKSB7IHJldHVybiBkaWdnKHRoaXMsIFwiZGF0YVwiLCBcInRhYmxlXCIpIH1cbn1cblxuIl19

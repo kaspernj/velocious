@@ -1,0 +1,15 @@
+// @ts-check
+import { digg } from "diggerize";
+export default class VelociousRoutesAppRoutes {
+    /**
+     * Runs get routes.
+     * @param {import("../configuration.js").default} configuration - Configuration instance.
+     * @returns {Promise<import("./index.js").default>} - Resolves with the routes.
+     */
+    static async getRoutes(configuration) {
+        // Every client need to make their own routes because they probably can't be shared across different worker threads
+        const routesImport = await configuration.getEnvironmentHandler().importApplicationRoutes();
+        return digg(routesImport, "routes");
+    }
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiYXBwLXJvdXRlcy5qcyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbIi4uLy4uLy4uL3NyYy9yb3V0ZXMvYXBwLXJvdXRlcy5qcyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQSxZQUFZO0FBRVosT0FBTyxFQUFDLElBQUksRUFBQyxNQUFNLFdBQVcsQ0FBQTtBQUU5QixNQUFNLENBQUMsT0FBTyxPQUFPLHdCQUF3QjtJQUMzQzs7OztPQUlHO0lBQ0gsTUFBTSxDQUFDLEtBQUssQ0FBQyxTQUFTLENBQUMsYUFBYTtRQUNsQyxtSEFBbUg7UUFDbkgsTUFBTSxZQUFZLEdBQUcsTUFBTSxhQUFhLENBQUMscUJBQXFCLEVBQUUsQ0FBQyx1QkFBdUIsRUFBRSxDQUFBO1FBRTFGLE9BQU8sSUFBSSxDQUFDLFlBQVksRUFBRSxRQUFRLENBQUMsQ0FBQTtJQUNyQyxDQUFDO0NBQ0YiLCJzb3VyY2VzQ29udGVudCI6WyIvLyBAdHMtY2hlY2tcblxuaW1wb3J0IHtkaWdnfSBmcm9tIFwiZGlnZ2VyaXplXCJcblxuZXhwb3J0IGRlZmF1bHQgY2xhc3MgVmVsb2Npb3VzUm91dGVzQXBwUm91dGVzIHtcbiAgLyoqXG4gICAqIFJ1bnMgZ2V0IHJvdXRlcy5cbiAgICogQHBhcmFtIHtpbXBvcnQoXCIuLi9jb25maWd1cmF0aW9uLmpzXCIpLmRlZmF1bHR9IGNvbmZpZ3VyYXRpb24gLSBDb25maWd1cmF0aW9uIGluc3RhbmNlLlxuICAgKiBAcmV0dXJucyB7UHJvbWlzZTxpbXBvcnQoXCIuL2luZGV4LmpzXCIpLmRlZmF1bHQ+fSAtIFJlc29sdmVzIHdpdGggdGhlIHJvdXRlcy5cbiAgICovXG4gIHN0YXRpYyBhc3luYyBnZXRSb3V0ZXMoY29uZmlndXJhdGlvbikge1xuICAgIC8vIEV2ZXJ5IGNsaWVudCBuZWVkIHRvIG1ha2UgdGhlaXIgb3duIHJvdXRlcyBiZWNhdXNlIHRoZXkgcHJvYmFibHkgY2FuJ3QgYmUgc2hhcmVkIGFjcm9zcyBkaWZmZXJlbnQgd29ya2VyIHRocmVhZHNcbiAgICBjb25zdCByb3V0ZXNJbXBvcnQgPSBhd2FpdCBjb25maWd1cmF0aW9uLmdldEVudmlyb25tZW50SGFuZGxlcigpLmltcG9ydEFwcGxpY2F0aW9uUm91dGVzKClcblxuICAgIHJldHVybiBkaWdnKHJvdXRlc0ltcG9ydCwgXCJyb3V0ZXNcIilcbiAgfVxufVxuIl19

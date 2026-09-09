@@ -4,6 +4,17 @@
 - Prefer end-to-end/browser integration tests over stub-only tests for frontend-model behavior.
 - Validate actual browser-to-backend HTTP behavior using Velocious browser test runner.
 - Use the [Factory framework](factories.md) to build/create test data instead of repeating direct `Model.create(...)` setup; cover its persistence/association behavior with real dummy-app models in `*.browser-spec.js` files.
+- Database-cleaning metadata is transactional by default. Omit `databaseCleaning` for ordinary model and in-process request coverage so the configured testing hook keeps setup, application work, and cleanup on one rollback-owned connection.
+- Use `{transaction: false, truncate: true}` only when behavior genuinely requires independent committed sessions, DDL that auto-commits or cannot run inside the wrapper transaction, or lock contention. Truncation disables and restores constraints around every example and is substantially slower, especially on SQL Server; never use it as a timeout or isolation workaround.
+- Pool-lifecycle tests that restart or directly own their connections, and tests that never touch configured databases, can opt out without truncation using `{transaction: false, truncate: false}`. Transaction-disabled non-request tests own their checkouts; the runner does not pin or expose a shared connection for them.
+- Pure validation suites, such as timing-manifest path/duration checks, should explicitly use `{databaseCleaning: {transaction: false, truncate: false}}`. Otherwise the default transaction lifecycle checks out every configured database before a pure test body runs, creating an unnecessary dependency on database availability.
+- Node tests tagged `dummy`, and specs that invoke `Dummy.run()` directly, bootstrap the shared dummy application outside inherited database-connection contexts and the revocable test-attempt scope, then run the callback in its original scope. Transaction and truncation cleaning receive a runner-owned connection across hooks and the callback; explicit no-cleaning tests retain independent callback checkouts. Only transaction-cleaned and request tests expose dynamic shared connections to in-process work.
+- Browser tests tagged `dummy` follow the same cleaning metadata. Transaction-cleaned and explicit no-cleaning tests do not receive additional pre/post truncation from browser dummy setup.
+- If a timed-out browser database-cleaning lifecycle remains active after the cleanup grace period, the runner quarantines its connections and aborts the remaining run rather than sharing them with another test. This applies to transaction rollback and explicit truncation cleaning.
+- Database access inherited from a revoked attempt fails explicitly, so a callback that resumes after timeout cleanup cannot use an existing pool connection or check out a replacement.
+- Persistent framework-owned dispatcher and websocket publish queues start outside the caller's revocable test-attempt scope. Tests that trigger this work must await the owning idle/barrier API; ordinary detached test callbacks retain their attempt scope and still fail after revocation.
+- Transaction cleanup may invoke driver rollback to clear stale physical state even when logical transaction depth is already zero. This recovery never decrements the logical depth below zero, so the next transaction starts at the root instead of issuing an invalid savepoint.
+- Background-job tests that require a row to remain queued must insert it through the owned store without waking or draining the main; `performLater` schedules dispatcher work and therefore cannot establish a queued-state precondition. Failure-report gates must target one job id and use separate started, release, and completed signals so concurrent reports cannot overwrite a shared resolver.
 
 ## Browser test runner hardening
 - Ensure backend app startup/shutdown is guarded with `try/finally`.
@@ -14,6 +25,67 @@ removing it from the Node database matrix. When a suite is meaningful only in a
 real browser, add `tags: ["browser-only"]` to its metadata. The Node runner still
 discovers the definition but filters its tests before lifecycle hooks or callbacks
 run; the browser runner executes them normally.
+
+## Package runner and Velocious compatibility
+
+Velocious uses `@velocious/testing` `0.0.12` as its framework-neutral declaration
+registry and execution engine. The package owns focus/tag/example/line selection,
+suite traversal, retries, console capture, structured runner events, and result
+accounting. Velocious adapts each package attempt with application/request arguments,
+database and tenant cleanup, shared-transaction brokers, pending broadcasts, dummy
+handling, timeout quarantine, and framework profiler spans. Framework effects run
+once per package attempt and are never replayed by a second runner.
+
+For terminal shared-resource failures and their effect on later selected tests, see
+[Testing terminal resource lifecycle](testing-terminal-resource-lifecycle.md).
+
+The compatibility contract is covered by
+`spec/testing/testing-package-runner-parity-spec.js`,
+`spec/testing/testing-package-integration-spec.js`, and the focused runner specs:
+
+- include tags match any requested tag; focus bypasses inclusion tags but never
+  exclusion tags;
+- focused tests and the tests inherited from a focused suite exclude ordinary
+  tests;
+- a line filter selecting a suite includes its descendants, while a test line
+  selects only that test;
+- retries repeat `beforeEach`, the callback, and `afterEach`, while `beforeAll`
+  and `afterAll` run once; invalid, negative, or non-finite retry counts normalize
+  to zero retries, and only positive finite timeout values enable a deadline;
+- suite hooks receive `{configuration}`; per-test hooks receive
+  `{configuration, testArgs, testData}`; and the callback receives the same
+  `testArgs` object across retries;
+- a failed `beforeAll` prevents descendant callbacks, records every selected
+  descendant as a matched failure outcome even though it has no attempt, and
+  still runs `afterAll`; Velocious restores the package runner's serialized
+  setup error when its deadline fires before the adapter hook returns, so these
+  zero-attempt failures retain their message and stack; after-all failures reject
+  the Velocious run after same-scope cleanup continues in reverse order;
+- legacy attempt/retry/final-failure event listeners are awaited in order; and
+- cleanup aggregation retains falsy values thrown or rejected by the test body.
+
+The backward-compatible `velocious/build/src/testing/test.js` facade exports the
+package DSL and configuration functions, so facade-first and package-first imports
+declare into the same `defaultTestContext`. Its `tests` export is a deprecated,
+read-only inspection snapshot and never drives execution. Velocious keeps its
+legacy `expect` implementation and awaited `testEvents` in this migration slice.
+
+Under Velocious, an ordinary callback receives exactly one `testArgs` object. An
+`it.each` callback receives `(...rowArguments, testArgs)`. The same derived
+`testArgs` and compatibility `testData` identities are reused across retries.
+`beforeEach` and `afterEach` receive `{configuration, testArgs, testData}`;
+`beforeAll` and `afterAll` receive `{configuration}`. Standalone package execution
+continues to call table callbacks with only their row arguments and ordinary
+callbacks with no arguments.
+
+The package stores serializable errors in its results. Velocious separately retains
+the raw thrown value for awaited `testAttemptFailed`, `testRetrying`, `testRetried`,
+and `testFailed` payloads, including `undefined`, `null`, `false`, `0`, and an empty
+string. When a package-owned setup deadline prevents the adapter from retaining the
+raw value in time, the final failure uses the serialized package error instead of an
+undefined diagnostic. Compatible physical copies share protocol-1/schema-3
+declarations, matcher context, runner events, and real deadline primitives; schema-1
+copies fail at import in either order.
 
 ## Truncation cleanup
 
@@ -103,6 +175,24 @@ job's application writes and its background-job persistence rows. Only active
 non-tenant database connections are shared, and multiple databases are matched by
 their configured identifiers.
 
+When a transactional background-job spec has an out-of-band signal that the job
+body finished, await that signal before polling its durable status. The status read
+uses the same brokered physical connection as the child, so polling while the child
+still performs database work creates unnecessary cross-owner contention.
+
+For an owned in-process main, install `createBackgroundJobUpdateObserver({store})`
+from `spec/helpers/background-jobs-helper.js` on `main.onJobUpdated` before
+enqueueing. Await the returned job ID's durable update and assert accepted
+completion before reading an output file written by the job. The observer retains
+early updates and surfaces durable failure details. Read and parse the file
+directly after completion so I/O and JSON errors remain visible, rather than
+racing a short file-poll deadline against dispatch. Keep the normal test lifecycle
+deadline and transaction cleaning; `withBackgroundJobs` stops both owned services
+and propagates callback and cleanup failures.
+If a transactional example constructs a main directly, pass
+`closeDatabaseConnectionsOnStop: false`: the test runner, not that main, owns the
+shared connection and its final rollback.
+
 Reusable pooled runners receive broker mode and capability with every job dispatch,
 so a warm child can safely cross test-attempt boundaries. A capability change closes
 the child's retained proxy state before the next job; concurrent jobs for that same
@@ -124,9 +214,12 @@ session in a gap between transaction startup and broker activation. This keeps
 enqueue, handoff, and terminal job rows on the same parent-owned transaction on
 async-tracked database pools instead of checking out an independently committed
 connection. Parent store callbacks and child broker calls also share the broker's
-per-physical-connection queue, preventing overlapping driver requests while
-preserving root-savepoint leases. Inherited sibling work is drained before its broker
-queue entry is released. A delayed callback whose inherited owner has already ended
+per-physical-connection queue. Parent transactions retain that queue for their full
+start/callback/commit-or-rollback lifecycle, preventing sibling transactions from
+mistaking one another for nested savepoints. Captured operation leases enter the same
+queue before lease installation, preventing lease admission from blocking a transaction
+that already owns the queue. Inherited sibling work is drained before its broker queue
+entry is released. A delayed callback whose inherited owner has already ended
 must re-enter that queue. Each nested owned call receives a child FIFO that drains
 before its parent is released, so nested sibling queries remain serialized without
 deadlocking awaited nesting or coupling independent physical connections. The
@@ -214,8 +307,9 @@ signal or condition instead:
   filter})` from `velocious/build/src/testing/test.js` resolves the instant the event
   fires (optionally only when `filter` matches the emitted arguments) and rejects on
   timeout. It always removes its listener. The stable Velocious import remains the
-  facade shown above; the generic primitive comes from `@velocious/testing`, while
-  Velocious continues to own the keyed testing DSL and framework runner. Use it for a
+  facade shown above or directly from `@velocious/testing`. Velocious consumes the
+  public package's shared default declaration registry and continues to own the
+  framework-aware runner behavior. Use it for a
   background job finishing, a model lifecycle event, a websocket message, etc.
 - **Condition polling (no discrete event):** awaitery's `waitFor(callback, {timeout,
   wait})` retries `callback` until it stops throwing (default 5s timeout, 50ms

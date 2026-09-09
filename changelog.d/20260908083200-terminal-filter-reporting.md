@@ -1,0 +1,1 @@
+- Preserve unmatched-filter diagnostics and `no-tests` profile status while keeping terminal setup failures unsuccessful with distinct not-run accounting.

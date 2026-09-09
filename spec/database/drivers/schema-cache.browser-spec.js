@@ -83,7 +83,7 @@ describe("database - drivers - schema cache", {tags: ["dummy"]}, () => {
     })
   })
 
-  it("invalidates cached table metadata after schema changes", async () => {
+  it("invalidates cached table metadata after schema changes", {databaseCleaning: {transaction: false, truncate: true}}, async () => {
     const configuration = Configuration.current()
     const tableName = "schema_cache_probe"
 
@@ -110,7 +110,7 @@ describe("database - drivers - schema cache", {tags: ["dummy"]}, () => {
     })
   })
 
-  it("reuses cached structure sql until schema changes", async () => {
+  it("reuses cached structure sql until schema changes", {databaseCleaning: {transaction: false, truncate: true}}, async () => {
     const configuration = Configuration.current()
     const tableName = "schema_cache_structure_probe"
 

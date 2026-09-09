@@ -153,6 +153,39 @@ async function enqueuePooledJob(adapter) {
 }
 
 describe("Background jobs - main handoff admission recovery", {databaseCleaning: {truncate: true}}, () => {
+  it("dispatches the queue policy reconciled during handoff", async () => {
+    const {adapter, main} = await startRecoveryMain()
+    const worker = addReadyPooledWorker(main, "queue-policy-worker")
+
+    try {
+      dummyConfiguration.setBackgroundJobsConfig({queues: {builds: {maxConcurrent: 3}}})
+      const jobId = await adapter.enqueue({
+        args: [],
+        jobName: "TestJob",
+        options: {executionMode: "pooled", queue: "builds"}
+      })
+
+      dummyConfiguration.setBackgroundJobsConfig({queues: {builds: {maxConcurrent: 1}}})
+      await main._drain()
+
+      expect(await adapter.getJob(jobId)).toMatchObject({
+        concurrencyKey: "queue:builds",
+        maxConcurrency: 1,
+        status: "handed_off"
+      })
+      expect(worker.receivedJobs).toMatchObject([{
+        id: jobId,
+        options: {
+          concurrencyKey: "queue:builds",
+          maxConcurrency: 1
+        }
+      }])
+    } finally {
+      dummyConfiguration.setBackgroundJobsConfig({queues: {}})
+      await main.stop()
+    }
+  })
+
   it("restores worker admission when persistence throws before commit", async () => {
     const {adapter, main} = await startRecoveryMain()
     const worker = addReadyPooledWorker(main, "before-commit-worker")

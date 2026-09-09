@@ -1,0 +1,1 @@
+{"version":3,"file":"columns-index.d.ts","sourceRoot":"","sources":["../../../../../src/database/drivers/sqlite/columns-index.js"],"names":[],"mappings":"AAEA,OAAO,gBAAgB,MAAM,0BAA0B,CAAA;AAEvD,OAAO,UAAU,MAAM,iCAAiC,CAAA;AAExD,MAAM,CAAC,OAAO,OAAO,0CAA2C,SAAQ,gBAAgB;IACtF,cAAc,QAEb;IAED,OAAO,QAEN;IAED,iBAAiB,eAKhB;IAED,YAAY,YAEX;IAED,QAAQ,YAEP;CACF"}

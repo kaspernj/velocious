@@ -78,10 +78,11 @@ The current main/worker architecture requires these adapter operations:
 - lifecycle/readiness: `ensureReady`, `health`, and `close`;
 - enqueue and stable schedules: `enqueue`, `replaceScheduled`, and
   `cancelScheduled`;
-- dequeue and timing: `nextAvailableJob`, `nextScheduledJob`, and
-  `reconcileQueueConcurrency`;
-- start/handoff state: `markHandedOff`, `markReturnedToQueue`, and
-  `handedOffJobsForWorker`;
+- dequeue and timing: `nextAvailableJob`, `nextScheduledJob`,
+  `reconcileQueueConcurrency`, and `reconcileActiveConcurrency`;
+- start/handoff state: `markHandedOff`, `markReturnedToQueue`,
+  `handedOffJobsForWorker`, `snapshotHandedOffJobs`, and
+  `markOrphanedHandoffs`;
 - success/failure state: `markCompleted`, `markRescheduled`, `markFailed`, and
   `markOrphanedJobs`;
 - built-in maintenance: `getJob` and `pruneTerminalJobs`.
@@ -89,6 +90,9 @@ The current main/worker architecture requires these adapter operations:
 Methods that accept worker reports must preserve the existing lease-fencing and
 at-least-once semantics. `health()` returns `{ready: boolean}`; the mounted health
 endpoint reports `503` when an adapter explicitly reports `ready: false`.
+`reconcileActiveConcurrency()` returns checked/candidate/repaired counts plus a
+bounded repair sample. The base adapter returns an empty result for adapters
+that do not duplicate active counts outside their job rows.
 
 `background-jobs-main` calls
 `markHandedOff({jobId, handoffId, workerId})` with a caller-generated
@@ -101,7 +105,21 @@ the claim never committed or a newer lease now owns the job. The built-in SQL
 and local adapters still generate an id when legacy direct callers omit it, but
 a custom adapter used by the main must honor a supplied id. Upgrade that adapter
 implementation together with the Velocious main; the worker wire protocol is
-unchanged.
+unchanged. If the claim changes data used for dispatch, the adapter also returns
+the exact committed row as `BackgroundJobHandoff.job`; the built-in SQL adapter
+uses this for queue-policy reconciliation. Lease-only results remain supported
+for adapters that do not change dispatch data during the claim.
+
+Main-generation recovery uses `snapshotHandedOffJobs()` before the new TCP
+listener accepts worker reconnects. A custom adapter that persists worker leases
+must return only complete exact identities (`jobId`, `handoffId`, `workerId`, and
+`handedOffAtMs`) and implement `markOrphanedHandoffs({handoffs, error})` as an
+atomic fenced orphan/failure transition. That transition must preserve normal
+retry attempts, terminal orphan status, count updates, concurrency release, and
+schedule ownership. The base implementations return no snapshots and perform no
+transitions, which preserves compatibility for adapters that do not persist
+worker handoffs; overriding snapshot collection without its matching fenced
+transition is invalid.
 
 The built-in adapter is available at
 `velocious/build/src/background-jobs/sql-adapter.js`. It subclasses the existing
@@ -190,7 +208,25 @@ The declaration applies to inline, forked, spawned, and pooled execution. Use `[
 
 Pass `concurrencyKey` and `maxConcurrency` together in `jobOptions` (or in `performLaterWithOptions`). The key is an opaque, non-empty string shared by jobs that use the same limit, and the cap is a positive integer. Omitting both preserves unlimited behavior. Once a key is registered, every enqueue for that key must use the same cap; a conflicting cap is rejected.
 
-Limits are enforced by durable database reservations shared by every main/worker process. Saturated keys do not prevent unrelated queued jobs from being dispatched. Reservations are released when work completes, fails terminally, is requeued for retry, is cancelled, or is recovered as orphaned; startup reconciliation repairs reservation counts after an unclean scheduler stop.
+A job may instead derive its key from its hydrated instance context. Override the synchronous, non-static `concurrencyKey()` method and read `this.backgroundJobContext()`, which exposes `jobClass`, `jobName`, serialized `args`, resolved `options`, and (while performing) the complete persisted `payload`. Constructors receive no context arguments.
+
+```js
+export default class RefreshDiskJob extends VelociousJob {
+  concurrencyKey() {
+    const [serverId] = this.backgroundJobContext().args
+    return `docker-server-available-disk-refresh:${serverId}`
+  }
+}
+
+await RefreshDiskJob.performLaterWithOptions({
+  args: [serverId],
+  options: {maxConcurrency: 1}
+})
+```
+
+The method is resolved before admission/persistence and its result uses the existing durable limiter. A derived key must therefore still be paired with `maxConcurrency`. An explicit enqueue `concurrencyKey` overrides the derived key (and skips the method); explicit `queue` likewise overrides `static queue`.
+
+Limits are enforced by durable database reservations shared by every main/worker process. Saturated keys do not prevent unrelated queued jobs from being dispatched. Reservations are released when work completes, fails terminally, is requeued for retry, is cancelled, or is recovered as orphaned. Startup reconciliation rebuilds reservation counts after an unclean scheduler stop, and the active main rechecks them on its one-minute maintenance cadence so drift cannot keep work queued until another restart. Healthy checks use two aggregate reads and no counter writes; suspected mismatches are re-counted under their per-key locks in fresh transactions, and actual repairs emit a structured warning with a bounded key sample before dispatch is retried.
 
 ## Queues (per-queue concurrency caps)
 
@@ -210,7 +246,7 @@ backgroundJobs: {
 Each capped queue is enforced through the same durable per-key concurrency mechanism described above: a job on the queue is given the reserved concurrency key `queue:<name>`, so `queues[name].maxConcurrent` bounds how many jobs from that queue run in flight across every main/worker process, regardless of how many processes run. A queue with no configured cap is unlimited.
 
 - The `queue:` concurrency-key prefix is reserved — an explicit `concurrencyKey` may not start with it.
-- Caps are config-driven and tunable. Adding, removing, or changing `queues[name].maxConcurrent` is reconciled against the existing backlog when the main process starts: persisted jobs adopt or release the queue key to match the current config, and durable active counts are rebuilt from handed-off jobs, so a changed cap takes effect without waiting for the queue to drain. Startup reconciliation is serialized across processes with a database advisory lock and logs its database identifier and duration. Schema/tenant checks (`db:migrate`, `db:tenants:*`) and routine store/connection initialization with an intact jobs table never adopt jobs or rebuild global concurrency counts, so repeated checks cannot issue the broad concurrency UPDATEs that deadlock against active job processes. If schema repair recreates a physically missing `background_jobs` table while the migration marker and concurrency table survive, it resets the surviving active counts against the newly empty jobs table so stale capacity cannot block future dispatch.
+- Caps are config-driven and tunable. Adding, removing, or changing `queues[name].maxConcurrent` is reconciled against queued backlog rows when the main process starts. Already handed-off jobs keep the concurrency policy and reservation recorded when they started, then release that reservation through their normal terminal/requeue transition. A retired generation never rewrites shared queue policy while reporting returned, rescheduled, or retrying work; the active generation applies its current cap or removal immediately before the next handoff, while explicit concurrency remains unchanged. This prevents a startup policy update from racing an in-flight handoff or report without allowing obsolete release-local policy to replace active policy. New handoffs fence the concurrency key they selected, so a concurrent policy update wins cleanly and the job is selected again under its new policy. Startup reconciliation is serialized across processes with a database advisory lock and logs its database identifier and duration. The active main shares that lock for its lightweight one-minute active-count repair. Schema/tenant checks (`db:migrate`, `db:tenants:*`) and routine store/connection initialization with an intact jobs table never adopt jobs or rebuild global concurrency counts, so repeated checks cannot issue the broad concurrency UPDATEs that deadlock against active job processes. If schema repair recreates a physically missing `background_jobs` table while the migration marker and concurrency table survive, it resets the surviving active counts against the newly empty jobs table so stale capacity cannot block future dispatch.
 - Scheduled jobs (`scheduledBackgroundJobs`) honor a job class's `static queue` as well.
 - Graceful `background-jobs-main` shutdown drains scheduled enqueues that have already fired before it closes database connections. Once shutdown resolves, that scheduler can no longer add rows during a subsequent application or test lifecycle.
 
@@ -285,7 +321,15 @@ Deletion is batched by id (`SELECT` a page, then `DELETE ... WHERE id IN (...)`)
 
 ## Worker Disconnect Recovery
 
-Each durable worker handoff has a unique lease id. If a worker socket disconnects unexpectedly, `background-jobs-main` immediately returns only the jobs handed to that exact socket to the queue and makes them available to another connected worker. Two connections that advertise the same worker id remain isolated from each other.
+Each durable worker handoff has a unique lease id. In legacy mode, if a worker
+socket disconnects unexpectedly, `background-jobs-main` immediately returns
+only the jobs handed to that exact socket to the queue. In release-generation
+mode, the main retains those exact leases for the configured reconnect grace and
+accepts only the same generation-qualified worker identity back on its old
+endpoint. Grace expiry returns the exact leases to the global queue. A late
+report is fenced by generation-qualified worker id, handoff id, and handoff
+timestamp, so it cannot mutate a newer attempt. Two legacy connections that
+advertise the same worker id remain isolated from each other.
 
 The main chooses the lease id before persistence. If `markHandedOff` throws, it
 conditionally returns only that id, including when the database committed but
@@ -299,11 +343,29 @@ authoritative, so pooled capacity is not double-credited.
 
 Disconnect recovery provides at-least-once delivery: a disconnected worker may already have started external side effects before the replacement attempt begins. Completion and failure reports carry the lease id and update the database only while that exact handoff is still active, so a late report from the disconnected attempt cannot complete or fail a newer attempt.
 
-Graceful draining is unchanged. A worker that announces `draining` keeps its socket open while its in-flight jobs finish, and those jobs are not reclaimed unless that socket is subsequently lost before their reports are accepted.
+An explicitly stopped legacy worker preserves the established terminating-stop
+behavior. Release-generation retirement instead revokes readiness immediately
+while keeping the worker heartbeat and old endpoint connection alive until its
+accepted jobs, child runners, durable report retries, and acknowledgements have
+settled. If that connection is lost during the drain, only the same qualified
+worker identity may reconnect to the unchanged old endpoint during reconnect
+grace; a retiring or recovered retired main reasserts `retire`, grants no
+readiness, and keeps the exact handoffs owned. A new or mismatched worker is
+rejected. The worker finally stops heartbeat/reconnect only after the exact
+drain completes.
 
 The fenced protocol uses an explicit worker handshake capability. A main process that creates lease ids dispatches new jobs only to workers advertising handoff-id reporting; older workers remain connected so they can report legacy handoffs that have no lease id. During a rolling upgrade, upgrade workers before the main process to avoid pausing new dispatch while only legacy workers are connected.
 
-Restarting the **main** (every deploy) is handled by adopting handoffs on reconnect. A fresh main holds no in-memory leases, so from its perspective every pre-existing `handed_off` row is unowned — and disconnect recovery only fires on a worker socket `close`, which the old main's sockets do on it, not the new one. When a worker reconnects with its stable id (its `hello`), the new main queries the store for that worker's still-active handoffs and adopts them into the reconnected socket's lease map. If that worker later disconnects, those adopted leases are released like any other; while it keeps running, its in-flight jobs are untouched. The main deliberately does **not** time-reclaim handoffs whose worker hasn't reconnected: a gracefully-draining worker from the old release keeps executing its jobs (and reports them over the status-reporter's own connection) without ever reconnecting its control socket, so requeuing on a timer would double-run it. Handoffs of a worker that never returns (a crash) are left to the age-based orphan sweep, which is long enough to be sure the worker is truly gone.
+An unexpected **main** restart can use a bounded worker-reconnect recovery. Before listening, the replacement main snapshots only complete lease-aware `handed_off` rows. A surviving worker reconnects with its stable id (`hello`), and the main queries and adopts its still-active handoffs into the new socket's lease map. When reconnect grace expires, reclaim first waits for the fixed set of adoption queries already in flight at that deadline. That wait is capped at one additional reconnect-grace interval, so an ordinary slow query can finish without racing reclaim while a stuck adapter query cannot block startup cleanup forever. The worker id is excluded from startup reclaim only after its adoption query succeeds while the same socket is still connected. A rejected query, a socket lost during the query, or a query still stuck after the bounded wait remains eligible for the startup reclaim pass. If a successfully adopted worker later disconnects, those leases are released like any other; while it remains connected, they are untouched.
+
+This adoption path is crash/legacy recovery, not normal deployment draining. A
+normal release deploy must keep the old main alive on its old endpoint with the
+workers and handoffs it already owns. Old workers must not reconnect to or be
+handed over to the candidate main. An integration that restarts jobs-main on
+every deploy and relies on this adoption path does not implement the required
+release-generation contract below.
+
+After a 30-second reconnect grace, the main passes only snapshots belonging to worker ids that did not successfully adopt through a still-live connection to the store's orphan transition. Every update is fenced on the exact startup `jobId`, `handoffId`, `workerId`, and `handedOffAtMs`. A lease completed or returned during the grace, re-handed-off under a newer lease, created after startup, or owned by any worker that successfully adopted cannot be reclaimed. Accepted rows use the ordinary orphan failure lifecycle: attempts and status counts update, retries keep their configured backoff, terminal rows become `orphaned`, concurrency reservations and schedule ownership are released correctly, `background-job-orphaned` events fire, and the queue is awakened so newly unblocked work can dispatch. Legacy rows without a complete exact lease identity remain under the two-hour age sweep. This is at-least-once recovery: a worker process that stayed alive but could not reconnect before the grace may still have performed external side effects, so jobs requiring exactly-once effects must use application-level idempotency.
 
 ## Worker Liveness
 
@@ -313,7 +375,12 @@ Disconnect recovery above depends on the worker's control socket firing a `close
 - **Decoupled, durable reporting.** Freeing a worker's job slot never waits on reporting the result to the main. When a job (inline or forked) finishes, its slot is released immediately and the completion/failure report is sent in the background and retried durably until it lands. A transient main/DB outage therefore can neither leak worker slots (which previously drove the worker to stop accepting jobs) nor lose a terminal report and re-run already-completed work. A graceful `stop()` drains in-flight reports before closing the socket.
 - **Readiness re-announcement.** Pooled workers advertise an exact available-slot count, which the main consumes once per durable handoff so a single readiness message can fill the configured concurrent pool without waiting for an earlier job to finish. The worker refreshes that count on every completion and immediately after an initialized child exits, even while its failure reports retry. Forked, spawned, and inline readiness remains edge-driven: the main removes a worker from its ready set on dispatch and the worker re-announces every freed slot. These advertisements correspond only to real capacity, so no polling timer or speculative handoff is required.
 
-Heartbeat interval, stale timeout, and sweep interval are overridable via the worker/main constructors for tests and tuning.
+Heartbeat interval, stale timeout, liveness sweep interval, and the startup
+`workerReconnectGraceMs` are overridable via the worker/main constructors for
+tests and tuning. The reconnect grace defaults to 30 seconds and must be an
+integer from 0 through Node's maximum timer delay of 2,147,483,647 ms; the main
+constructor throws for invalid values instead of allowing an overflowing timer
+to fire immediately. Its timer is unrefed and is cleared during main shutdown.
 
 ## Process titles
 
@@ -375,6 +442,21 @@ The `background-job-failed` payload has:
 - `context.terminal`: whether this failure ended the job.
 - `context.willRetry`: whether this failure returned the job to the queue.
 - `context.workerId`: the worker id included in the accepted report.
+- `context.runnerFailure`: present when a pooled runner process failure affected
+  this job. Every job lost with the same child receives the same snapshot. It
+  contains `activeJobs` (job, handoff, timestamp, and worker identities), the
+  runner and worker PIDs, release generation, runner/worker lifecycle states,
+  runner age and completed-job count, process-group ownership through
+  `runnerDetached`, failure `origin`, expected `terminationReason`, timeout job
+  id, exit code, signal, and `oomKilled`.
+
+`oomKilled` is `false` when Velocious initiated or observed a termination that
+rules OOM out. It is `null` for an unexplained `SIGKILL`, because Node cannot
+distinguish an operator/supervisor kill from the kernel OOM killer; correlate the
+snapshot with supervisor and kernel logs before classifying it. Pooled runners
+are attached children (`runnerDetached: false`) and therefore remain in the
+worker-owned process group rather than creating an independently supervised
+group.
 
 The mirrored `all-error` payload includes the same `error` and `context` plus `errorType: "background-job-failed"`.
 
@@ -393,7 +475,178 @@ configuration.getErrorEvents().on("background-job-orphaned", ({error, context}) 
 
 The `background-job-orphaned` payload mirrors `background-job-failed`: `error` (the orphan reason as an `Error`) and `context` with `attempts`, `jobArgs`, `jobId`, `jobName`, `maxRetries`, `status`, `terminal`, `willRetry`, and `stage: "background-job-orphaned"`. `willRetry` is `true` when the reclaim returned the job to the queue for another attempt (retries remaining) and `false` when it was exhausted into a terminal `orphaned` state.
 
-## Worker Shutdown And Process-Job Draining
+An unexpected live concurrency-reconciliation failure is emitted as
+`framework-error` and mirrored to `all-error` with
+`context.stage: "background-job-concurrency-reconciliation"`. It does not
+suppress orphan processing on the same maintenance pass.
+
+## Release-generation draining
+
+In a release-directory production topology, a runtime generation consists of one
+release-scoped `background-jobs-main` plus its worker pool. This behavior is
+required:
+
+1. Start the complete candidate jobs generation before candidate activation in a
+   pre-activation quiescent state. Its main and workers may initialize, connect,
+   and prove health, but the candidate main does not own recurring schedules,
+   dispatch queued work, or issue handoffs, and its workers do not accept
+   handoffs.
+2. As part of the fenced activation transition, revoke the old main’s recurring
+   schedule ownership, queued-work dispatch, and new handoffs before the
+   candidate main acquires those responsibilities. Only the active generation
+   may own scheduling and dispatch. The old workers stop accepting handoffs in
+   the same transition.
+3. After activation, retire the old main and workers as one unit. Keep the old
+   main running on its old endpoint with its old workers. It
+   continues owning worker connections and heartbeats, lease fencing, terminal-
+   report acceptance and acknowledgement, and durable store transitions for
+   every handoff it made.
+4. Keep the old workers and their reporting paths bound to that endpoint. They
+   continue owning durable terminal-report retry and report-promise draining,
+   per-job timeout execution, and child-runner reaping until their work settles.
+5. Work returned or retried to the shared queue becomes eligible for the new
+   active generation; the retired main never dispatches it again. Old workers do
+   not reconnect or transfer handoffs to the new main.
+6. Exit the old main only after all of its handoffs settle and all of its workers
+   drain and exit. The supervisor may then reap the generation and release the
+   old release's cleanup pin.
+
+Generations may overlap for hours and use different jobs-main endpoints while
+sharing durable queue storage and, optionally, Beacon. Multiple retired
+generations may drain concurrently. The process supervisor must durably preserve
+their identities, endpoints, owned processes, and release references across
+later deploys and supervisor/host recovery.
+
+Deployment succeeds after the candidate release is activated and healthy. The
+deploy command and deploy lock do not wait for retired jobs generations, jobs,
+workers, HTTP/WebSocket connections, or other retained services. HTTP/WebSocket
+drain is independent: completing or timing it out must never kill a still-
+draining jobs generation. Runtime-owner/version replacement likewise preserves
+or transfers durable supervision and returns after the replacement is healthy;
+it is not a full synchronous shutdown.
+
+Velocious now supplies this opt-in jobs-generation protocol and lifecycle. It
+does not by itself make a production deploy topology compliant: Rollbridge (or
+another supervisor) must still start and retain each release-local main/worker
+unit, preserve it through later deploys and runtime-owner recovery, order old
+retirement before candidate activation, and pin every draining release. Rampway
+must treat healthy candidate activation as deploy success and release its lock
+without waiting for retired generations. Do not claim end-to-end production
+compliance until those supervisor and deployment prerequisites are installed.
+
+Within the Velocious worker/main protocol, jobs-main owns worker connections,
+lease fencing, report acceptance/acknowledgement, and durable store transitions;
+the worker/reporting side owns durable terminal-report retry, report-promise
+draining, per-job timeout execution, and child-runner reaping. The supervisor
+supplies generation process/endpoint ownership and durable recovery. The
+deployment tool supplies activation, deploy locking, and release cleanup pins.
+
+### Enabling generation mode
+
+Generation mode is explicit and fail-loud. The id must match
+`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`; config, environment, API, and CLI values
+must either be absent or identical. Empty, malformed, or conflicting values
+abort before the generation main listens. When the id is unset, the established
+legacy endpoint, worker ids, handshake, immediate disconnect recovery, and
+third-party adapter behavior remain unchanged.
+
+An ID without an explicit initial state defaults to `candidate`. That derived
+default is not an explicit source: an API or CLI recovery start may supply
+`active` or `retired`. Actual config, environment, API, and CLI state values are
+still fail-loud and must agree when more than one is supplied.
+
+```js
+backgroundJobs: {
+  generationId: "release-20260828.1",
+  initialGenerationState: "candidate",
+  host: "127.0.0.1",
+  port: 17431,
+  lifecycleSocketPath: "/srv/my-app/releases/20260828.1/run/background-jobs.sock"
+}
+```
+
+The equivalent process environment is:
+
+```sh
+VELOCIOUS_BACKGROUND_JOBS_GENERATION_ID=release-20260828.1
+VELOCIOUS_BACKGROUND_JOBS_INITIAL_GENERATION_STATE=candidate
+VELOCIOUS_BACKGROUND_JOBS_HOST=127.0.0.1
+VELOCIOUS_BACKGROUND_JOBS_PORT=17431
+VELOCIOUS_BACKGROUND_JOBS_LIFECYCLE_SOCKET_PATH=/srv/my-app/releases/20260828.1/run/background-jobs.sock
+```
+
+The main command also accepts `--generation`, `--initial-generation-state`, and
+`--lifecycle-socket`; the worker accepts `--generation`. Spawned, forked, and
+pooled runners inherit the exact endpoint and generation from their worker.
+Generation-aware workers, clients, and status reporters require the hello
+acknowledgement before readiness or mutation and destroy an unacknowledged
+connection after 4000ms by default. The initiating APIs accept
+`generationHandshakeTimeoutMs` for a shorter operational deadline or focused
+testing; each connection sends exactly one hello.
+
+`candidate` is quiescent: it performs no schedule ownership, concurrency
+reconciliation, dispatch, reclaim, or orphan sweep. Activation transitions it
+to `active`. If an operational recovery retires the candidate while activation
+is still reconciling durable queue state, that retirement fence wins and the
+in-flight activation cannot restore active ownership or return a successful
+lifecycle acknowledgement. Retirement installs its admission fence
+synchronously, stops new schedules/dispatch/admission/handoffs, then transitions
+through `retiring` to `retired` while preserving accepted workers, reports,
+acknowledgements, timeouts, child reaping, and durable transitions. A restarted
+`retired` main recovers only exact durable handoffs for its own generation and
+never dispatches global queue work. It reaches `stopped` only after its exact
+workers, handoffs, reports, worker connections, and lifecycle acknowledgements
+drain.
+
+Worker ownership is stored as `<generationId>:<workerUuid>` (maximum 165
+characters). The built-in SQL schema already gives `worker_id` 255 characters
+on SQLite, MariaDB/MySQL, PostgreSQL, and MSSQL, so enabling this feature needs
+no migration. Generation mode requires an adapter whose
+`supportsReleaseScopedGenerations()` returns `true`; the built-in SQL adapter
+does. Unsupported third-party adapters are rejected before listening, while
+legacy mode remains compatible with them.
+
+The built-in SQL adapter bounds activation-time queue reconciliation to
+queue-derived concurrency keys plus counters that are active or stale. It does
+not execute a job-table count query for every historical concurrency key. Its
+internal schema migration also repairs missing single-column job indexes from
+older `queue`, `schedule_key`, and `concurrency_key` add-column upgrades before
+activation uses them. SQLite emits conflict-safe index creation for that repair,
+so independent generation processes remain safe even if both observed a missing
+index before database serialization.
+
+### Lifecycle control socket
+
+The release supervisor controls a candidate through the package-owned local
+Unix socket with exactly one acknowledged request:
+
+```sh
+npx velocious background-jobs:activate \
+  --generation release-20260828.1 \
+  --socket /srv/my-app/releases/20260828.1/run/background-jobs.sock \
+  --timeout-ms 10000
+
+npx velocious background-jobs:retire \
+  --generation release-20260828.1 \
+  --socket /srv/my-app/releases/20260828.1/run/background-jobs.sock \
+  --timeout-ms 10000
+```
+
+There is no polling, retry, PID guessing, marker file, or remote control
+endpoint. The socket must be an absolute portable-length path inside the release
+directory, under a real directory owned by the process user. Velocious creates
+it mode `0600`, refuses symlink/non-socket/foreign-owner/active collisions,
+removes only a same-owner stale socket whose inode did not change during the
+check, and removes its own path on shutdown only if the inode is still the one
+it created. Requests and acknowledgements carry the exact generation and a UUID;
+server errors preserve their name/message/stack and are also emitted on
+`framework-error` and `all-error` for supervisors whose hooks ignore stdio.
+The client issues one request with no retry and defaults to a hard 10000ms
+deadline (configurable from 1 through 60000ms so supervised lifecycle transitions
+can use a full-minute deadline); timeout destroys the socket and exits the CLI
+nonzero.
+
+## Worker shutdown and process-job draining
 
 When a `background-jobs-worker` receives `SIGTERM`/`SIGINT` it stops accepting new
 work, drains in-flight jobs, and exits. Out-of-process jobs include
@@ -406,26 +659,42 @@ then `SIGKILL` after a short grace) so they are not orphaned across a deploy —
 an orphaned runner keeps running against deleted release code and holds its
 database connections open.
 
-After a forked or spawned one-shot runner receives the main process's durable
-status acknowledgement, it exits without waiting for graceful Beacon/database
-teardown; the operating system closes those process-owned resources. This keeps
-a completed runner from lingering when a graceful socket close stalls. Inline
-and long-lived worker shutdown still performs graceful framework cleanup. If
-the acknowledgement is missing or rejected through `job-update-error`, the
-one-shot runner exits as failed and does not reinterpret the transport failure
-as a failed job-performance report.
+After a forked runner receives the main process's durable status
+acknowledgement, it invokes application initializer teardown and bounded
+Beacon/database cleanup before exit. Cleanup failure remains visible but does
+not reinterpret the already acknowledged durable job outcome. SIGTERM, SIGINT,
+and parent disconnect use that same cleanup path. The compatible direct spawned
+one-shot command retains its established exit behavior and
+`background-jobs-runner` process type. If acknowledgement is missing or rejected
+through `job-update-error`, the one-shot runner exits as failed and does not
+reinterpret the acknowledgement-delivery failure as a failed job-performance report.
+
+A pooled child initializes once as `background-jobs-pooled-runner`, reuses the
+same application process context across admitted jobs, and never tears
+initializers down per job. Framework connection rotation remains framework-only.
+Final signal/disconnect teardown runs once; a replacement child receives a new
+opaque lifecycle `instanceId`. Forked children use
+`background-jobs-forked-runner`. See
+[application process lifecycle](application-process-lifecycle.md).
 
 `BackgroundJobsMain` and `BackgroundJobsWorker` normally own their configuration
 lifetimes and close its database pools on `stop()`. An embedded process or test
 harness that passes a configuration whose pools are owned by its caller must
 construct either service with `closeDatabaseConnectionsOnStop: false`; shutdown
 still disconnects Beacon and closes the service sockets without invalidating
-the caller's active database connections. Embedded lifecycle coordinators can
+the caller's active database connections or application initializer lifecycle.
+The embedding owner must later call `configuration.shutdown()` and its framework
+cleanup. Embedded lifecycle coordinators can
 also pass an async `onStopped` hook; it runs after service-owned shutdown work
 finishes, without replacing or narrowing either service's `stop()` contract.
 Concurrent and repeated `stop()` calls share one lifecycle and invoke the hook
 once. If shutdown and the hook both fail, `stop()` rejects with an
 `AggregateError` whose errors contain the shutdown failure first.
+
+When the main or worker owns cleanup, initializer teardown runs only after its
+accepted work, durable reports, child runners, and generation-specific drain
+settle, immediately before framework cleanup. Retirement and activation do not
+tear down or transfer the old generation's application lifecycle.
 
 The drain window is controlled by `VELOCIOUS_BACKGROUND_JOBS_WORKER_SHUTDOWN_TIMEOUT_MS`:
 
@@ -440,6 +709,11 @@ window, set this timeout shorter than that window so the worker reaps its proces
 runners itself before the supervisor's `SIGKILL` (which would orphan them). With
 the indefinite default, give the supervisor a graceful-stop window at least as
 long as your longest job instead.
+
+This worker-local setting does not bound deployment completion. Normal deploy
+retirement is asynchronous, and an hours-long legitimate job makes an hours-long
+generation drain valid. Use per-job timeout for a genuinely hung job; do not set
+a short normal shutdown timeout merely to make deploy return.
 
 ## Job Timeout (hung-runner backstop)
 

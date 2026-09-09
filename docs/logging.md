@@ -18,6 +18,71 @@ The source arrow is included only when Velocious can identify application code. 
 
 Query logs use the same configured logger outputs as other Velocious logs and are skipped when no output emits `info`. Disable them with `logging: {queryLogging: false}` or by removing `info` from your configured levels. Enable them in tests with `logging: {queryLogging: true}` and choose the output you want, such as `console: true` for local debugging or `file: true` for a test log file.
 
+## Credential redaction
+
+Velocious redacts sensitive request data at the request, SQL, and error log
+producers before a message is formatted or sent to console, file, or custom
+outputs. No application configuration is required for the default policy.
+
+Names are matched case-insensitively across camel-case, underscore, and header
+separator variants. The defaults cover authorization and authentication values,
+credentials, passwords, secrets, tokens (including session and service tokens),
+API keys, credential-bearing cookie/session names, and base64 request content.
+The policy applies recursively to headers, parsed body/params, nested arrays,
+URL query values, WebSocket request and channel-subscription params, request
+metadata, and structured error context.
+
+Applications can add domain-specific names with checked configuration:
+
+```js
+const configuration = new Configuration({
+  // ...
+  logging: {
+    sensitiveNames: ["integrationPin", "partnerSignature"]
+  }
+})
+```
+
+Entries must be non-blank strings. Extensions are additive and are normalized
+the same way as defaults, so `integrationPin`, `integration_pin`, and
+`Integration-Pin` match. Caller-owned arrays are copied into the redaction
+policy and are not mutated.
+
+The deterministic replacement marker is exported for custom diagnostics and
+tests:
+
+```js
+import {LOG_REDACTION_MARKER} from "velocious/build/src/log-redactor.js"
+```
+
+Request-scoped sensitive values are registered on the request's existing async
+timing context. SQL diagnostics replace only those exact known values (including
+common URL, bearer-token, cookie-value, and SQL-escaped representations), rather
+than regex-parsing rendered SQL. To keep ordinary numbers, short path segments,
+timings, and stack locations intact, exact replacement in unstructured text is
+limited to sensitive values of at least eight characters. Structured fields
+whose names match the policy are always replaced, including shorter strings and
+numbers. Successful and failed query logs retain the SQL
+operation/table/shape, safe values, elapsed time, query name, and application
+source line. Failed queries add `FAILED <ErrorClass>: <safe message>` and still
+throw the original database error.
+
+Request and frontend-model error logs retain the error class, redacted message,
+redacted backtrace, and safe correlation/context metadata. Unexpected errors are
+still emitted through `framework-error` and `all-error`; redaction never
+suppresses them. The raw request object remains available on framework events for
+application code that intentionally needs it, while the event's error, context,
+and bounded `requestDetails` are safe diagnostic copies.
+
+The request-local registry is created and discarded for each HTTP request or
+decoded WebSocket message, so concurrent requests cannot inherit one another's
+values. All configured outputs receive the same already-redacted payload.
+
+Existing applications need no configuration change. `requestDetails` previously
+used the unexported lowercase marker `[redacted]`; code that compared that
+implementation detail should import `LOG_REDACTION_MARKER` instead. Safe fields,
+safe values, timing, query sources, and correlation identifiers remain visible.
+
 ## Deadlock retry diagnostics
 
 When a MySQL/MariaDB deadlock or lock-wait timeout causes another outer transaction attempt,

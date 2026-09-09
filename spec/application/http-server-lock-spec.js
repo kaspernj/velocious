@@ -12,6 +12,7 @@ class HttpServerLockTestConfiguration {
   httpServer = {}
   websocketEvents = null
   connectBeaconCalls = 0
+  shutdownCalls = 0
 
   /** @param {string} directory - Application directory. */
   constructor(directory) {
@@ -46,6 +47,11 @@ class HttpServerLockTestConfiguration {
 
   /** @returns {Promise<void>} - Resolves after fake DB cleanup. */
   async closeDatabaseConnections() {}
+
+  /** @returns {Promise<void>} - Resolves after fake application cleanup. */
+  async shutdown() {
+    this.shutdownCalls++
+  }
 }
 
 class FakeHttpServerEvents {
@@ -166,6 +172,8 @@ describe("Application HTTP server lock", {databaseCleaning: {transaction: true}}
     try {
       await first.application.startHttpServer()
       await first.application.stop()
+
+      expect(first.configuration.shutdownCalls).toEqual(1)
 
       await second.application.startHttpServer()
 

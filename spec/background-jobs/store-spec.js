@@ -133,14 +133,14 @@ class FlakyCountRebuildStore extends BackgroundJobsStore {
     this.adoptionRan = true
   }
 
-  /** @param {import("../../src/database/drivers/base.js").default} db - Database connection. @returns {Promise<void>} - Resolves when rebuilt. */
+  /** @param {import("../../src/database/drivers/base.js").default} db - Database connection. @returns {Promise<import("../../src/background-jobs/types.js").BackgroundJobConcurrencyReconciliation>} - Reconciliation summary. */
   async _reconcileConcurrency(db) {
     if (this.adoptionRan && !this.rebuildFailureThrown) {
       this.rebuildFailureThrown = true
       throw new Error("Simulated count rebuild failure")
     }
 
-    await super._reconcileConcurrency(db)
+    return await super._reconcileConcurrency(db)
   }
 }
 
@@ -152,7 +152,7 @@ class RejectFirstRecoveryReconciliationStore extends BackgroundJobsStore {
     this.reconciliationFailureThrown = false
   }
 
-  /** @param {import("../../src/database/drivers/base.js").default} db - Database connection. @returns {Promise<void>} - Resolves when reconciled. */
+  /** @param {import("../../src/database/drivers/base.js").default} db - Database connection. @returns {Promise<import("../../src/background-jobs/types.js").BackgroundJobConcurrencyReconciliation>} - Reconciliation summary. */
   async _reconcileConcurrency(db) {
     if (this.reconciliationFailureThrown) return await super._reconcileConcurrency(db)
     if (!(await db.tableExists("background_jobs"))) throw new Error("Expected the repaired jobs table to be visible")
@@ -603,14 +603,19 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     dummyConfiguration.setBackgroundJobsConfig({queues: {}})
     const store = await createClearedStore()
     const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {queue: "builds"}})
-    const handoff = await store.markHandedOff({jobId, workerId: "w1"})
+    const activeJobId = await store.enqueue({
+      jobName: "TestJob",
+      args: [],
+      options: {concurrencyKey: "existing-active", maxConcurrency: 2}
+    })
+    const handoff = await store.markHandedOff({jobId: activeJobId, workerId: "w1"})
 
-    if (!handoff) throw new Error("Expected the job to be handed off")
+    if (!handoff) throw new Error("Expected the explicitly capped job to be handed off")
+    await writeActiveCount({store, concurrencyKey: "existing-active", activeCount: 0})
 
     try {
-      // The handed-off job was enqueued before the cap existed, so adoption
-      // moves it onto the new `queue:builds` key; the count rebuild afterward
-      // is what charges the key for it.
+      // The queued build predates the cap and is adopted onto `queue:builds`.
+      // An unrelated active counter also needs the count-rebuild phase.
       dummyConfiguration.setBackgroundJobsConfig({queues: {builds: {maxConcurrent: 2}}})
       const flakyStore = new FlakyCountRebuildStore({configuration: dummyConfiguration})
       let firstError = /** @type {Error | null} */ (null)
@@ -623,14 +628,17 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
 
       expect(firstError?.message).toEqual("Simulated count rebuild failure")
       expect(flakyStore.adoptionRan).toEqual(true)
+      expect((await flakyStore.getJob(jobId))?.concurrencyKey).toEqual("queue:builds")
 
-      // Adoption seeded the key with a zero count and the failed rebuild never
-      // charged it; the memo must not latch, so this retry repairs the count.
+      // Adoption succeeded, but the failed rebuild left the active key stale.
+      // The memo must not latch, so the retry repairs that count.
       expect(await readActiveCount({store, concurrencyKey: "queue:builds"})).toEqual(0)
+      expect(await readActiveCount({store, concurrencyKey: "existing-active"})).toEqual(0)
 
       await flakyStore.reconcileQueueConcurrency()
 
-      expect(await readActiveCount({store, concurrencyKey: "queue:builds"})).toEqual(1)
+      expect(await readActiveCount({store, concurrencyKey: "queue:builds"})).toEqual(0)
+      expect(await readActiveCount({store, concurrencyKey: "existing-active"})).toEqual(1)
     } finally {
       dummyConfiguration.setBackgroundJobsConfig({queues: {}})
     }

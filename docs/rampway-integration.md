@@ -10,6 +10,46 @@ database scopes, and framework error events.
 This integration does not add a `Configuration.rampway` setting or restore the
 former Velocious-owned deployment controllers and stores.
 
+For background jobs, the ownership boundary extends beyond API mounting:
+Velocious owns the jobs-main/worker protocol and handoff durability, Rollbridge
+owns release-scoped generation processes and their asynchronous supervision, and
+Rampway owns activation, the deploy lock, release-retention metadata, and cleanup
+pins. A successful deployment must return after candidate activation and health,
+without waiting for retired jobs generations or HTTP/WebSocket connections.
+See [release-generation draining](background-jobs.md#release-generation-draining).
+
+Velocious now provides the opt-in generation identity, fenced main/worker/report
+protocol, candidate/active/retiring/retired lifecycle, retired-main recovery,
+and acknowledged release-local Unix lifecycle commands. This is the framework
+half of the contract, not a claim that current production orchestration is
+already end-to-end compliant. Rollbridge must consume those commands in its
+quiet/activation hooks, allocate a distinct jobs-main endpoint per release,
+retain old mains and workers under durable supervision across later deploys and
+runtime-owner recovery, and pin their releases. Rampway must order retirement
+before activation and return deploy success/release its lock after healthy
+candidate activation without waiting for any retired generation. TensorBuzz (or
+another application integration) must pass one identical generation id,
+endpoint, and release-local socket to the complete main/worker pool. Until those
+downstream pieces land, do not describe the production stack as fully compliant.
+
+Lifecycle commands make one acknowledged request, default to a hard 10-second
+timeout, and accept an integer timeout from 1 through 60000ms. The process
+supervisor that launches the command owns a separate outer hook deadline, which
+must be greater than the selected lifecycle request timeout so the supervisor
+cannot kill the CLI before its one-shot request settles. For Rollbridge,
+`lifecycle.activateCommand` is bounded by its activation-hook deadline, while
+`lifecycle.quietCommand` is bounded by the process's `gracefulStopMs` hook
+deadline (or 30 seconds when that window is `"indefinite"`).
+`rollbridge@0.1.39` fixes activation hooks at 30 seconds, so an activation command
+under that version must keep `--timeout-ms` below 30000 (for example, 25000); a
+60000ms request requires a Rollbridge contract whose activation-hook deadline is
+greater than 60000ms. Rampway's external-owner handoff timeout and deploy lock,
+plus Rollbridge's health and process-drain timeouts, are different bounds and do
+not extend the Rollbridge lifecycle hook. During a retained generation's drain,
+a transient jobs TCP disconnect is recovered only by that exact
+generation-qualified worker on the unchanged release endpoint; this does not
+permit discovery of or handoff to the candidate endpoint.
+
 ## Install and mount
 
 Install Rampway in the consuming application. Rampway 0.4.0 declares Velocious

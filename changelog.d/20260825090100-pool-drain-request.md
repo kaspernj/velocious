@@ -1,0 +1,1 @@
+Prevent a matching connection check-in from being lost when it requests another pending-checkout drain during an active drain's completion window, with matching-idle and drain-state diagnostics. Pool checkout timeouts now expose `DatabasePoolCheckoutTimeoutError` and the stable `VELOCIOUS_DATABASE_POOL_CHECKOUT_TIMEOUT` code.

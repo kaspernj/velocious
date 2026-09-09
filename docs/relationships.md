@@ -44,6 +44,20 @@ await task.save()
 
 After `setProject(project)`, `task.projectId()`, `task.changes().project_id`, lifecycle callbacks, and scoped model features such as `actsAsList` see the new foreign key before the record is saved. Generated backend write attributes also accept belongs-to relationship names, so `Task.create({project})` and `task.update({project})` typecheck the same way as the generated setter. Relationships with a custom `primaryKey` option use that configured target key when writing the foreign key, including after autosaving an assigned new or dirty related record.
 
+## Building related records
+
+Backend relationship helpers with a concrete target build records from that model's generated write-attribute type:
+
+```js
+const project = await Project.find(1)
+const reviewProject = await Project.find(2)
+const task = project.tasks().build({name: "Design", reviewProject})
+const persistedTask = await project.tasks().create({name: "Implement", reviewProject})
+const replacementProject = task.buildProject({name: "Launch"})
+```
+
+Model-valued relationship attributes such as `reviewProject` are accepted. Type checking rejects unknown attributes and values that do not match the related model contract for collection `build(...)` / `create(...)` and generated singular builders such as `buildProject(...)`. Targetless polymorphic `belongsTo` builders remain generic because no single target write contract exists.
+
 ### Common options
 
 | Option | Description |

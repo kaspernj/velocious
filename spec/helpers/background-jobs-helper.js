@@ -10,7 +10,55 @@ import BackgroundJobsWorker from "../../src/background-jobs/worker.js"
 import AsyncTrackedMultiConnectionPool from "../../src/database/pool/async-tracked-multi-connection.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 
+/** @typedef {{accepted: boolean, jobId: string, status: "completed" | "failed" | "rescheduled"}} BackgroundJobUpdate */
+
 const defaultBackgroundJobsConfig = dummyConfiguration.getBackgroundJobsConfig()
+const generationConfigKeys = new Set(["generationId", "initialGenerationState", "lifecycleSocketPath"])
+const legacyDefaultBackgroundJobsConfig = Object.fromEntries(
+  Object.entries(defaultBackgroundJobsConfig).filter(([key]) => !generationConfigKeys.has(key))
+)
+
+/**
+ * Observes durable background-job updates without using polling deadlines.
+ * @param {object} args - Observer options.
+ * @param {BackgroundJobsStore} args.store - Durable job store used to surface failure details.
+ * @returns {{onJobUpdated: (update: BackgroundJobUpdate) => void, waitForUpdate: (jobId: string) => Promise<BackgroundJobUpdate>}} - Update observer.
+ */
+export function createBackgroundJobUpdateObserver({store}) {
+  /** @type {Map<string, BackgroundJobUpdate>} */
+  const updates = new Map()
+  /** @type {Map<string, (update: BackgroundJobUpdate) => void>} */
+  const waiters = new Map()
+
+  return {
+    onJobUpdated: (update) => {
+      const waiter = waiters.get(update.jobId)
+      if (waiter) {
+        waiters.delete(update.jobId)
+        waiter(update)
+      } else {
+        updates.set(update.jobId, update)
+      }
+    },
+    waitForUpdate: async (jobId) => {
+      let update = updates.get(jobId)
+      if (update) updates.delete(jobId)
+      else {
+        if (waiters.has(jobId)) throw new Error(`Already waiting for background job update: ${jobId}`)
+        update = await new Promise((resolve) => { waiters.set(jobId, resolve) })
+      }
+
+      if (update.status === "failed") {
+        const failedJob = await store.getJob(jobId)
+
+        if (!failedJob) throw new Error(`Background job ${jobId} reported failure without a durable row`)
+        throw new Error(`Background job ${jobId} failed: ${failedJob.lastError}`)
+      }
+
+      return update
+    }
+  }
+}
 
 /**
  * Clears only framework background-job persistence.
@@ -40,6 +88,15 @@ export async function startBackgroundJobs({backgroundJobsConfig, workerOptions =
   })
 
   const {onStopped, ...resolvedWorkerOptions} = workerOptions
+  const previousOnWorkerReady = main.onWorkerReady
+  let resolveWorkerReady
+  const workerReady = new Promise((resolve) => {
+    resolveWorkerReady = resolve
+  })
+  main.onWorkerReady = (readyWorker) => {
+    previousOnWorkerReady?.(readyWorker)
+    resolveWorkerReady()
+  }
   const worker = new BackgroundJobsWorker({
     closeDatabaseConnectionsOnStop: false,
     configuration: dummyConfiguration,
@@ -53,6 +110,8 @@ export async function startBackgroundJobs({backgroundJobsConfig, workerOptions =
     ...resolvedWorkerOptions
   })
   await worker.start()
+  await workerReady
+  main.onWorkerReady = previousOnWorkerReady
 
   return {main, store, worker}
 }
@@ -122,11 +181,14 @@ export async function withBackgroundJobs(callback, args) {
 export async function startBackgroundJobsMain({backgroundJobsConfig, waitForWorkerStop = false} = {}) {
   await dummyConfiguration.closeBackgroundJobsAdapter()
   dummyConfiguration.setBackgroundJobsConfig({
-    ...defaultBackgroundJobsConfig,
+    ...legacyDefaultBackgroundJobsConfig,
     adapter: undefined,
-    jobClasses: [...defaultBackgroundJobsConfig.jobClasses],
-    queues: {...defaultBackgroundJobsConfig.queues},
-    retention: {...defaultBackgroundJobsConfig.retention},
+    generationId: undefined,
+    initialGenerationState: undefined,
+    jobClasses: [...legacyDefaultBackgroundJobsConfig.jobClasses],
+    lifecycleSocketPath: undefined,
+    queues: {...legacyDefaultBackgroundJobsConfig.queues},
+    retention: {...legacyDefaultBackgroundJobsConfig.retention},
     ...backgroundJobsConfig
   })
 

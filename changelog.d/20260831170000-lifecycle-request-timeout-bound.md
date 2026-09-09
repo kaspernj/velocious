@@ -1,0 +1,1 @@
+Increase the client-side maximum background-jobs lifecycle request timeout to 60000ms. Supervisor integrations must configure their outer lifecycle-hook deadline above the selected one-shot request timeout.

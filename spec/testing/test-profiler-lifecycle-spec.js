@@ -6,7 +6,7 @@ import { describe, expect, it } from "../../src/testing/test.js"
 import TestProfiler from "../../src/testing/test-profiler.js"
 import TestRunner from "../../src/testing/test-runner.js"
 
-describe("test profiler lifecycle", () => {
+describe("test profiler lifecycle", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("records nested hook invocations, retry attempts, custom activity, and detached late work", async () => {
     const environmentHandler = new EnvironmentHandlerNode()
     const configuration = new Configuration({

@@ -99,7 +99,7 @@ export default class ActsAsListItemBase extends DatabaseRecord {
 
   /**
    * @abstract
-   * @param {Record<string, ReturnType<typeof JSON.parse>>} [attributes]
+   * @param {ConstructorParameters<typeof import("../models/project.js").default>[0]} [attributes]
    * @returns {import("../models/project.js").default}
    */
   buildProject(attributes) { void attributes; throw new Error("Not implemented") }

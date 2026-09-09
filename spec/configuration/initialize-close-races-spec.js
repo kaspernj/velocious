@@ -119,7 +119,9 @@ describe("Configuration - initialize close races", () => {
 
       expect(configuration.isInitialized()).toBe(true)
       expect(modelPhases).toEqual(2)
-      expect(initializerPhases).toEqual(2)
+      // Database close invalidates framework model state without ending the
+      // application process lifecycle or re-running its initializers.
+      expect(initializerPhases).toEqual(1)
       expect(maximumActiveInitializers).toEqual(1)
     } finally {
       releaseFirstInitializer()

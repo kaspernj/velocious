@@ -1,0 +1,11 @@
+// @ts-check
+import DatabaseRecord from "../database/record/index.js";
+export default class BackgroundJobRecord extends DatabaseRecord {
+    static tableName() {
+        return "background_jobs";
+    }
+    static primaryKey() {
+        return "id";
+    }
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiam9iLXJlY29yZC5qcyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbIi4uLy4uLy4uL3NyYy9iYWNrZ3JvdW5kLWpvYnMvam9iLXJlY29yZC5qcyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQSxZQUFZO0FBRVosT0FBTyxjQUFjLE1BQU0sNkJBQTZCLENBQUE7QUFFeEQsTUFBTSxDQUFDLE9BQU8sT0FBTyxtQkFBb0IsU0FBUSxjQUFjO0lBQzdELE1BQU0sQ0FBQyxTQUFTO1FBQ2QsT0FBTyxpQkFBaUIsQ0FBQTtJQUMxQixDQUFDO0lBRUQsTUFBTSxDQUFDLFVBQVU7UUFDZixPQUFPLElBQUksQ0FBQTtJQUNiLENBQUM7Q0FDRiIsInNvdXJjZXNDb250ZW50IjpbIi8vIEB0cy1jaGVja1xuXG5pbXBvcnQgRGF0YWJhc2VSZWNvcmQgZnJvbSBcIi4uL2RhdGFiYXNlL3JlY29yZC9pbmRleC5qc1wiXG5cbmV4cG9ydCBkZWZhdWx0IGNsYXNzIEJhY2tncm91bmRKb2JSZWNvcmQgZXh0ZW5kcyBEYXRhYmFzZVJlY29yZCB7XG4gIHN0YXRpYyB0YWJsZU5hbWUoKSB7XG4gICAgcmV0dXJuIFwiYmFja2dyb3VuZF9qb2JzXCJcbiAgfVxuXG4gIHN0YXRpYyBwcmltYXJ5S2V5KCkge1xuICAgIHJldHVybiBcImlkXCJcbiAgfVxufVxuIl19

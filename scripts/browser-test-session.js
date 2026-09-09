@@ -7,6 +7,7 @@ import { createRequire } from "node:module"
 import path from "node:path"
 import { promisify } from "node:util"
 import timeout from "awaitery/build/timeout.js"
+import { resolveChromeRuntime } from "system-testing/build/chrome-runtime-manager.js"
 import SystemTest from "system-testing/build/system-test.js"
 
 /**
@@ -33,13 +34,12 @@ import SystemTest from "system-testing/build/system-test.js"
 /**
  * @typedef {object} BrowserTestSystemTestConfig
  * @property {boolean} debug - Whether SystemTest should emit debug output.
- * @property {{type: "selenium", options: {chromeArguments: string[], chromeBinaryPath: string}}} driver - Selenium driver config.
+ * @property {{type: "selenium", options: {chromeArguments: string[], chromeBinaryPath: string, chromedriverPath: string}}} driver - Selenium driver config.
  * @property {string} httpHost - HTTP host for the browser-test app.
  * @property {number} httpPort - HTTP port for the browser-test app.
  */
 
 const require = createRequire(import.meta.url)
-const { binaryPaths } = require("selenium-webdriver/common/seleniumManager.js")
 const { CancellationError, waitForServer } = require("selenium-webdriver/http/util.js")
 const { findFreePort } = require("selenium-webdriver/net/portprober.js")
 const execFileAsync = promisify(execFile)
@@ -97,30 +97,24 @@ async function assertExecutable(executablePath, description) {
 }
 
 /**
- * Resolves, validates, and persists the exact Chrome/ChromeDriver pair.
+ * Resolves, validates, and persists the exact Chrome-for-Testing runtime pair.
  * @param {object} [args] - Prewarm options.
- * @param {() => {browserPath?: string, driverPath?: string}} [args.binaryPathsResolver] - Selenium path resolver.
  * @param {string} [args.manifestPath] - Runtime manifest path.
+ * @param {() => Promise<{chromeBinaryPath: string, chromedriverPath: string} | undefined>} [args.runtimeResolver] - System-testing runtime resolver.
  * @param {(executablePath: string) => Promise<string>} [args.versionReader] - Executable version reader.
  * @returns {Promise<BrowserTestChromeRuntime>} - Prewarmed runtime.
  */
 export async function prewarmBrowserTestChromeRuntime({
-  binaryPathsResolver = () => binaryPaths([
-    "--browser",
-    "chrome",
-    "--language-binding",
-    "javascript",
-    "--output",
-    "json",
-    "--avoid-browser-download"
-  ]),
   manifestPath = defaultManifestPath(),
+  runtimeResolver = resolveChromeRuntime,
   versionReader = readExecutableVersion
 } = {}) {
-  const { browserPath, driverPath } = binaryPathsResolver()
+  const chromeRuntime = await runtimeResolver()
+  const browserPath = chromeRuntime?.chromeBinaryPath
+  const driverPath = chromeRuntime?.chromedriverPath
 
-  if (!browserPath) throw new Error("Selenium Manager did not resolve a Chrome executable")
-  if (!driverPath) throw new Error("Selenium Manager did not resolve a ChromeDriver executable")
+  if (!browserPath) throw new Error("System-testing did not resolve a Chrome executable")
+  if (!driverPath) throw new Error("System-testing did not resolve a ChromeDriver executable")
 
   await assertExecutable(browserPath, "Chrome")
   await assertExecutable(driverPath, "ChromeDriver")
@@ -143,7 +137,7 @@ export async function prewarmBrowserTestChromeRuntime({
   const browserVersion = parseExecutableVersion(browserVersionOutput, "Chrome")
   const driverVersion = parseExecutableVersion(driverVersionOutput, "ChromeDriver")
 
-  if (browserVersion.split(".")[0] !== driverVersion.split(".")[0]) {
+  if (browserVersion !== driverVersion) {
     throw new Error(`Chrome ${browserVersion} is incompatible with ChromeDriver ${driverVersion}`)
   }
 
@@ -218,14 +212,14 @@ function browserTestChromeArguments() {
 
 /**
  * Builds the SystemTest factory used by BrowserTestSession so the Selenium builder path
- * receives the pinned Chrome binary and the required headless container Chrome arguments.
+ * receives the pinned Chrome runtime and the required headless container Chrome arguments.
  * @param {object} [args] - Factory options.
  * @param {string[]} [args.chromeArguments] - Chrome launch arguments.
  * @param {boolean} [args.debug] - Whether SystemTest should emit debug output.
  * @param {string} [args.httpHost] - HTTP host for the browser-test app.
  * @param {number} [args.httpPort] - HTTP port for the browser-test app.
  * @param {(config: BrowserTestSystemTestConfig) => BrowserTestSystemTest} [args.systemTestCurrent] - SystemTest factory.
- * @returns {(args: {browserPath: string, remoteUrl: string}) => BrowserTestSystemTest} - SystemTest factory.
+ * @returns {(args: {browserPath: string, driverPath: string, remoteUrl: string}) => BrowserTestSystemTest} - SystemTest factory.
  */
 export function buildBrowserTestSystemTestFactory({
   chromeArguments = browserTestChromeArguments(),
@@ -234,11 +228,11 @@ export function buildBrowserTestSystemTestFactory({
   httpPort = 1984,
   systemTestCurrent = SystemTest.current
 } = {}) {
-  return ({browserPath}) => systemTestCurrent({
+  return ({browserPath, driverPath}) => systemTestCurrent({
     debug,
     driver: {
       type: "selenium",
-      options: {chromeArguments, chromeBinaryPath: browserPath}
+      options: {chromeArguments, chromeBinaryPath: browserPath, chromedriverPath: driverPath}
     },
     httpHost,
     httpPort
@@ -428,7 +422,7 @@ export class BrowserTestSession {
    * @param {(runtime: BrowserTestChromeRuntime) => Promise<BrowserTestChromeDriverService>} [args.chromeDriverServiceFactory] - Driver service factory.
    * @param {(phase: string) => Promise<string>} [args.processSnapshot] - Process snapshot callback.
    * @param {BrowserTestChromeRuntime} args.runtime - Chrome runtime.
-   * @param {(args: {browserPath: string, remoteUrl: string}) => BrowserTestSystemTest} args.systemTestFactory - SystemTest factory.
+   * @param {(args: {browserPath: string, driverPath: string, remoteUrl: string}) => BrowserTestSystemTest} args.systemTestFactory - SystemTest factory.
    */
   constructor({
     chromeDriverServiceFactory = async (runtime) => new ManagedChromeDriverProcess(runtime),
@@ -463,7 +457,11 @@ export class BrowserTestSession {
       this.startupPhase = "starting ChromeDriver service"
       this.remoteUrl = await this.chromeDriverService.start()
       process.env.SELENIUM_REMOTE_URL = this.remoteUrl
-      this.systemTest = this.systemTestFactory({browserPath: this.runtime.browserPath, remoteUrl: this.remoteUrl})
+      this.systemTest = this.systemTestFactory({
+        browserPath: this.runtime.browserPath,
+        driverPath: this.runtime.driverPath,
+        remoteUrl: this.remoteUrl
+      })
       this.startupPhase = "creating Selenium WebDriver session"
       await this.systemTest.start()
 

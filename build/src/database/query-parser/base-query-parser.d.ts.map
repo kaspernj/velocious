@@ -1,0 +1,1 @@
+{"version":3,"file":"base-query-parser.d.ts","sourceRoot":"","sources":["../../../../src/database/query-parser/base-query-parser.js"],"names":[],"mappings":"AAUA,MAAM,CAAC,OAAO,OAAO,gCAAgC;IAU5C,MAAM;IACN,KAAK;IAVZ;;;;;OAKG;IACH,YAAY,EAAC,MAAc,EAAE,KAAK,EAAC,EAHhC;QAAuB,MAAM,AAA7B,CACA,EADQ,OAAO,CACf;QAAkD,KAAK,EAA/C,OAAO,mBAAmB,EAAE,OAAO,CAC7C;KACkC,EAKlC;IAED,KAAK,WAcJ;CACF"}

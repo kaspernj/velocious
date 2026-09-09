@@ -1,0 +1,1 @@
+{"version":3,"file":"query-scope.d.ts","sourceRoot":"","sources":["../../../src/sync/query-scope.js"],"names":[],"mappings":"AAIA;;;;;;;;;GASG;AACH,wBAAgB,wBAAwB,CAAC,KAAK,EAHnC,OAAO,wCAAwC,EAAE,OAAO,CAAC,UAAU,CAAC,OAAO,IAAI,CAAC,KAAK,CAAC,CAGnD,GAFjC,OAAO,wBAAwB,EAAE,mBAAmB,CA+BhE;AAED;;;;;;;;;;;;;;GAcG;AACH,wBAAgB,QAAQ,CAAC,KAAK,EAHnB,OAAO,wBAAwB,EAAE,mBAGd,GAFjB,MAAM,CAMlB"}

@@ -8,6 +8,7 @@ import {expectRejectsWithMessage, expectSingleFakeDriverClosed} from "../../../h
 class FakeCreateDriver {
   static instances = []
   static failConnect = false
+  static queries = []
 
   constructor() {
     this.closed = false
@@ -24,10 +25,12 @@ class FakeCreateDriver {
   async close() { this.closed = true }
   createDatabaseSql() { return ["CREATE DATABASE fake"] }
   async createTableSql() { return ["CREATE TABLE fake"] }
+  async query(sql, options = {}) { FakeCreateDriver.queries.push({options, sql}) }
 
   static reset() {
     this.failConnect = false
     this.instances = []
+    this.queries = []
   }
 }
 
@@ -114,6 +117,23 @@ describe("Cli - Commands - db:create", () => {
     await command.execute()
 
     expectSingleFakeDriverClosed(FakeCreateDriver)
+  })
+
+  it("runs database creation without the driver's ordinary request deadline", async () => {
+    FakeCreateDriver.reset()
+    const command = new DbCreate({
+      args: {
+        configuration: /** @type {import("../../../../src/configuration.js").default} */ (fakeMssqlCreateConfiguration())
+      },
+      cli: /** @type {import("../../../../src/cli/index.js").default} */ ({})
+    })
+
+    await command.execute()
+
+    expect(FakeCreateDriver.queries).toEqual([
+      {options: {requestTimeoutMs: 0}, sql: "CREATE DATABASE fake"},
+      {options: {}, sql: "CREATE TABLE fake"}
+    ])
   })
 
   it("closes direct MSSQL connections when connect fails", async () => {

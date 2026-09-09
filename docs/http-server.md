@@ -1,8 +1,25 @@
 # HTTP Server
 
-Velocious serves HTTP requests through worker handlers. The default is one
-worker, which keeps development and small deployments predictable. Applications
-that need more request or websocket throughput can opt into multiple workers.
+Velocious serves HTTP requests through worker handlers. A normal threaded server
+defaults to `os.availableParallelism()` workers, so it uses the CPU capacity Node
+reports as available to the process. An explicit `workers` value still overrides
+that default. In-process mode keeps one effective handler by default because it
+shares the caller's runtime state; an explicit in-process worker count is honored.
+
+## Application lifecycle ownership
+
+The `velocious server` process initializes application hooks with type `server`.
+Each threaded request worker owns a separate configuration lifecycle with type
+`worker-handler`; in-process handlers share the server lifecycle. SIGTERM and
+SIGINT ownership is installed before the CLI announces readiness.
+
+Graceful stop drains the HTTP server and worker handlers, invokes initializer
+teardown once for each owned lifecycle, then disconnects Beacon and closes
+database connections. Application teardown precedes framework cleanup, but every
+close is attempted. Multiple failures are returned as an ordered
+`AggregateError`; a single failure is returned unchanged. See
+[application process lifecycle](application-process-lifecycle.md) for the hook
+and process-context API.
 
 ## File Responses
 
@@ -95,12 +112,27 @@ application-supplied `Content-Encoding` are always passed through unchanged, and
 a globally disabled compression configuration never negotiates (backward
 compatible).
 
+File responses (`sendFile`) are only ever sent identity, so when the client
+forbids identity the server answers with the same empty `406 Not Acceptable`
+without opening or streaming the file. The `onFinished` callback still settles
+exactly once as `"completed"` so application cleanup runs as expected.
+
 Compressed responses carry `Content-Encoding` and the exact compressed
 `Content-Length`, and `Accept-Encoding` is merged into `Vary`
 case-insensitively without duplicates (an existing `Vary: *` is preserved).
 Bodies below `threshold` are sent as identity when identity is acceptable.
 Compression uses only asynchronous `node:zlib` APIs, so event-loop ordering of
 pipelined responses is preserved.
+
+The `Vary: Accept-Encoding` dimension is framework-owned: whenever compression
+is enabled and a representation is selected (transformed, identity, `406`, or
+file), the header is emitted identically for every request on the same
+connection so intermediate caches key on it correctly. It is never added when
+compression is disabled, the response is truly bodyless, or the application
+supplied its own `Content-Encoding` (which keeps the representation contract
+application-owned). Repeated `Accept-Encoding` request header fields are
+combined in wire order (RFC 9110 §5.3) before negotiation; all other repeated
+headers keep last-wins behavior.
 
 ### Exclusions
 
@@ -174,10 +206,15 @@ Start a server with a fixed worker count:
 npx velocious server --host 127.0.0.1 --port 3006 --workers 4
 ```
 
-`--workers` must be a positive integer. Each incoming socket is assigned to the
-next worker in round-robin order. Websocket broadcasts still use the configured
-cross-worker broadcast bus, so channels can publish from one worker and deliver
-to subscribers hosted by another worker.
+`--workers` must be a positive integer. Ordinary incoming sockets are assigned to
+the next worker in round-robin order, including when every connection has the
+same reverse-proxy source address. Resumable WebSocket upgrades carry their
+session identity and return to the worker that owns that session. WebSocket
+broadcasts still use the configured cross-worker broadcast bus, so channels can
+publish from one worker and deliver to subscribers hosted by another worker.
+Only requests carrying the resumable-session query wait for the upgrade headers
+needed to choose an owner; ordinary and malformed requests reach their assigned
+worker immediately, preserving normal parser errors and responses.
 
 CLI arguments override `configuration.httpServer` values. When neither the CLI
 nor the configuration supplies a value, the CLI defaults to `127.0.0.1:3006`.
@@ -219,6 +256,14 @@ const application = new Application({
 `maxWorkers` remains accepted as a compatibility alias when `workers` is not
 provided, but new code should use `workers` because it describes the actual
 number of handlers started.
+
+Each worker loads its own application configuration and owns its own database
+pools. Consequently, per-worker resources multiply with the effective worker
+count: for example, `workers: 4` and `pool.max: 10` permit up to 40 connections
+for that pool across the server process. Size database and other worker-local
+limits with that aggregate in mind. The server debug snapshot reports both
+`configuredWorkerCount` and `effectiveWorkerCount`; they differ for the default
+in-process test/runtime contract.
 
 ## Server Lock
 

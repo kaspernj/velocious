@@ -1,11 +1,13 @@
 // @ts-check
 
+import {AsyncLocalStorage} from "node:async_hooks"
 import BaseDriver from "../../src/database/drivers/base.js"
 import Configuration from "../../src/configuration.js"
+import BrowserEnvironmentHandler from "../../src/environment-handlers/browser.js"
 import SharedTransactionBroker from "../../src/testing/shared-transaction-broker.js"
 import SharedTransactionBrokerClient from "../../src/testing/shared-transaction-broker-client.js"
-import { coordinateSharedTransactionConnection } from "../../src/testing/shared-transaction-connection-coordinator.js"
-import { describe, expect, it } from "../../src/testing/test.js"
+import {coordinateSharedTransactionConnection} from "../../src/testing/shared-transaction-connection-coordinator.js"
+import {describe, expect, it} from "../../src/testing/test.js"
 
 class SingleRequestDriver extends BaseDriver {
   activeRequests = 0
@@ -50,7 +52,265 @@ class SingleRequestDriver extends BaseDriver {
   }
 }
 
+class TransactionLifecycleDriver extends BaseDriver {
+  /** @type {string[]} */
+  events = []
+  physicalTransactionActive = false
+
+  constructor() {
+    super({}, Configuration.current())
+  }
+
+  async _startTransactionAction() {
+    if (this.physicalTransactionActive) throw new Error("A transaction is already running")
+
+    this.events.push("start")
+    this.physicalTransactionActive = true
+  }
+
+  async _commitTransactionAction() {
+    if (!this.physicalTransactionActive) throw new Error("A transaction isn't running")
+
+    this.events.push("commit")
+    this.physicalTransactionActive = false
+  }
+
+  async _rollbackTransactionAction() {
+    this.events.push("rollback")
+    this.physicalTransactionActive = false
+  }
+
+  async _startSavePointAction() {
+    if (!this.physicalTransactionActive) throw new Error("Cannot issue SAVE TRANSACTION when there is no active transaction.")
+
+    this.events.push("savepoint")
+  }
+
+  async _releaseSavePointAction() {
+    if (!this.physicalTransactionActive) throw new Error("Cannot release a savepoint when there is no active transaction.")
+
+    this.events.push("release savepoint")
+  }
+
+  async _rollbackSavePointAction() {
+    if (!this.physicalTransactionActive) throw new Error("Cannot roll back a savepoint when there is no active transaction.")
+
+    this.events.push("rollback savepoint")
+  }
+}
+
+class QueryBackedTransactionLifecycleDriver extends BaseDriver {
+  /** @type {string[]} */
+  queries = []
+
+  /** @param {Configuration} configuration - Browser-style configuration. */
+  constructor(configuration) {
+    super({}, configuration)
+  }
+
+  /**
+   * @param {string} sql - SQL string.
+   * @returns {Promise<[]>} - Empty rows.
+   */
+  async _queryActual(sql) {
+    this.queries.push(sql)
+    return []
+  }
+}
+
 describe("Shared transaction parent connection coordination", {databaseCleaning: {transaction: false, truncate: false}}, () => {
+  it("inherits coordinator ownership through retained transaction lifecycle work", async () => {
+    const environmentHandler = new BrowserEnvironmentHandler()
+
+    environmentHandler.installSharedTransactionCoordinatorOwnerStorage(new AsyncLocalStorage())
+    const configuration = new Configuration({
+      database: {test: {}},
+      environmentHandler
+    })
+    const connection = new QueryBackedTransactionLifecycleDriver(configuration)
+
+    await connection.startTransaction()
+    const broker = await SharedTransactionBroker.start({connections: {default: connection}})
+
+    await broker.close()
+
+    await connection.rollbackTransaction()
+    await connection.transaction(async () => {
+      await connection.query("SELECT nested", {logQuery: false})
+    })
+
+    expect(connection.queries).toEqual([
+      "BEGIN TRANSACTION",
+      "ROLLBACK",
+      "BEGIN TRANSACTION",
+      "SELECT nested",
+      "COMMIT"
+    ])
+  })
+
+  it("serializes concurrent transaction callbacks on one coordinated physical connection", async () => {
+    const connection = new TransactionLifecycleDriver()
+    const broker = await SharedTransactionBroker.start({connections: {default: connection}})
+    /** @type {() => void} */
+    let releaseFirst = () => {}
+    const firstGate = new Promise((resolve) => { releaseFirst = resolve })
+    /** @type {() => void} */
+    let resolveFirstStarted = () => {}
+    const firstStarted = new Promise((resolve) => { resolveFirstStarted = resolve })
+    let secondStarted = false
+    const firstTransaction = connection.transaction(async () => {
+      resolveFirstStarted()
+      await firstGate
+    })
+    let secondTransaction = Promise.resolve()
+
+    try {
+      await firstStarted
+      secondTransaction = connection.transaction(async () => { secondStarted = true })
+      await new Promise((resolve) => setImmediate(resolve))
+
+      expect(secondStarted).toEqual(false)
+
+      releaseFirst()
+      await Promise.all([firstTransaction, secondTransaction])
+
+      expect(connection.events).toEqual(["start", "commit", "start", "commit"])
+    } finally {
+      releaseFirst()
+      await Promise.allSettled([firstTransaction, secondTransaction])
+      await broker.close()
+    }
+  })
+
+  it("serializes direct transaction startup behind a coordinated transaction", async () => {
+    const connection = new TransactionLifecycleDriver()
+    const broker = await SharedTransactionBroker.start({connections: {default: connection}})
+    /** @type {() => void} */
+    let releaseTransaction = () => {}
+    const transactionGate = new Promise((resolve) => { releaseTransaction = resolve })
+    /** @type {() => void} */
+    let resolveTransactionStarted = () => {}
+    const transactionStarted = new Promise((resolve) => { resolveTransactionStarted = resolve })
+    const transaction = connection.transaction(async () => {
+      resolveTransactionStarted()
+      await transactionGate
+    })
+    /** @type {Promise<void>} */
+    let directStart = Promise.resolve()
+
+    try {
+      await transactionStarted
+      directStart = connection.startTransaction()
+      void directStart.catch(() => undefined)
+      await new Promise((resolve) => setImmediate(resolve))
+
+      expect(connection.events).toEqual(["start"])
+
+      releaseTransaction()
+      await Promise.all([transaction, directStart])
+
+      expect(connection.events).toEqual(["start", "commit", "start"])
+      await connection.rollbackTransaction()
+      expect(connection.events).toEqual(["start", "commit", "start", "rollback"])
+    } finally {
+      releaseTransaction()
+      await Promise.allSettled([transaction, directStart])
+      if (connection.insideTransaction()) await connection.rollbackTransaction()
+      await broker.close()
+    }
+  })
+
+  it("serializes direct transaction completion behind coordinated nested transaction work", async () => {
+    for (const completionAction of ["commit", "rollback"]) {
+      const connection = new TransactionLifecycleDriver()
+      const broker = await SharedTransactionBroker.start({connections: {default: connection}})
+      /** @type {() => void} */
+      let releaseNestedTransaction = () => {}
+      const nestedTransactionGate = new Promise((resolve) => { releaseNestedTransaction = resolve })
+      /** @type {() => void} */
+      let resolveNestedTransactionStarted = () => {}
+      const nestedTransactionStarted = new Promise((resolve) => { resolveNestedTransactionStarted = resolve })
+      /** @type {Promise<void>} */
+      let nestedTransaction = Promise.resolve()
+      /** @type {Promise<void>} */
+      let directCompletion = Promise.resolve()
+
+      try {
+        await connection.startTransaction()
+        nestedTransaction = connection.transaction(async () => {
+          resolveNestedTransactionStarted()
+          await nestedTransactionGate
+        })
+        await nestedTransactionStarted
+        directCompletion = completionAction === "commit"
+          ? connection.commitTransaction()
+          : connection.rollbackTransaction()
+        void directCompletion.catch(() => undefined)
+        await new Promise((resolve) => setImmediate(resolve))
+
+        expect(connection.events).toEqual(["start", "savepoint"])
+
+        releaseNestedTransaction()
+        await Promise.all([nestedTransaction, directCompletion])
+
+        expect(connection.events).toEqual(["start", "savepoint", "release savepoint", completionAction])
+      } finally {
+        releaseNestedTransaction()
+        await Promise.allSettled([nestedTransaction, directCompletion])
+        if (connection.insideTransaction()) await connection.rollbackTransaction()
+        await broker.close()
+      }
+    }
+  })
+
+  it("serializes direct savepoint actions behind coordinated nested transaction work", async () => {
+    for (const action of ["start", "release", "rollback"]) {
+      const connection = new TransactionLifecycleDriver()
+      const broker = await SharedTransactionBroker.start({connections: {default: connection}})
+      /** @type {() => void} */
+      let releaseNestedTransaction = () => {}
+      const nestedTransactionGate = new Promise((resolve) => { releaseNestedTransaction = resolve })
+      /** @type {() => void} */
+      let resolveNestedTransactionStarted = () => {}
+      const nestedTransactionStarted = new Promise((resolve) => { resolveNestedTransactionStarted = resolve })
+      /** @type {Promise<void>} */
+      let nestedTransaction = Promise.resolve()
+      /** @type {Promise<void>} */
+      let directSavePointAction = Promise.resolve()
+
+      try {
+        await connection.startTransaction()
+        nestedTransaction = connection.transaction(async () => {
+          resolveNestedTransactionStarted()
+          await nestedTransactionGate
+        })
+        await nestedTransactionStarted
+        if (action === "start") directSavePointAction = connection.startSavePoint("direct")
+        if (action === "release") directSavePointAction = connection.releaseSavePoint("direct")
+        if (action === "rollback") directSavePointAction = connection.rollbackSavePoint("direct")
+        void directSavePointAction.catch(() => undefined)
+        await new Promise((resolve) => setImmediate(resolve))
+
+        expect(connection.events).toEqual(["start", "savepoint"])
+
+        releaseNestedTransaction()
+        await Promise.all([nestedTransaction, directSavePointAction])
+
+        expect(connection.events).toEqual([
+          "start",
+          "savepoint",
+          "release savepoint",
+          action === "start" ? "savepoint" : `${action} savepoint`
+        ])
+      } finally {
+        releaseNestedTransaction()
+        await Promise.allSettled([nestedTransaction, directSavePointAction])
+        if (connection.insideTransaction()) await connection.rollbackTransaction()
+        await broker.close()
+      }
+    }
+  })
+
   it("serializes a parent query behind child broker work on the same physical connection", async () => {
     const connection = new SingleRequestDriver()
     const broker = await SharedTransactionBroker.start({connections: {default: connection}})

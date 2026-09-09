@@ -1,5 +1,10 @@
 # Frontend Model Resources
 
+Custom `authorizedQuery(action, options)` overrides that build on the default
+ability query must pass `options` to `super.authorizedQuery(action, options)`.
+Velocious uses these options to evaluate destroy lifecycle authorization against
+the captured pre-delete record instead of the already-deleted backing row.
+
 ## Resource recipe requirement
 Frontend model usage should require explicit backend resource recipes.
 
@@ -7,7 +12,7 @@ A backend project should declare resources with static resource properties:
 - `static attributes`
 - optional `abilities` for additional per-record `record.can(action)` checks
 - optional `commands`
-- optional `attachments`
+- optional `attachments` only for a frontend-only resource without a backing model
 - optional server behavior (`records`, `serialize`, `beforeAction`)
 
 Backend resource classes must not override `static resourceConfig()`; Velocious throws during resource normalization. Use declarative static fields instead so resource config stays easy to scan and shared-resource fallback has one config path.
@@ -18,7 +23,9 @@ Without a resource definition, frontend models should not silently work.
 
 ## Attachment command mapping
 - Resource `commands` can map `attach`, `download`, and `url` in addition to CRUD/index commands.
-- Resource `attachments` defines attachment helpers generated on frontend models.
+- A backing model's `hasOneAttachment` / `hasManyAttachments` declarations define attachment helpers generated on frontend models. Their optional client-safe `sync` policy is copied into resource config and API manifests; backend storage drivers are not.
+- Resource `static attachments` is the fallback for frontend-only resources. A backing model declaration with the same attachment name is authoritative.
+- See [Backend record attachments](attachments.md#synchronized-client-policy) for the fetch, retention, and offline-requirement policy.
 
 ## Shared resource fallback
 - See the [shared-resource sync developer guide](shared-resource-sync-guide.md) for a complete shared recipe, backend/local wrappers, security boundaries, and migration gates.
@@ -58,6 +65,7 @@ Without a resource definition, frontend models should not silently work.
 
 ## Custom commands
 - Declare custom commands on the resource with `collectionCommands` (class-level, e.g. `Model.refreshAll()`) and `memberCommands` (instance-level, e.g. `record.refresh()`), as arrays. The generator emits a method per command and the runtime derives each command's kebab-case route slug from the camelCase method name.
+- `onDestroy` is reserved for the generated class-level lifecycle hook and cannot be declared as a collection command.
 - Each array entry is **either** a plain camelCase method-name string **or** a `{name, args?, returnType?}` object that also declares the command's contract:
   - `args` is an array of `{name, type}` objects. Each becomes a named, typed method parameter, mapped positionally into the command payload. `type` is a JSDoc type string (for example `"number"`, `"string | null"`).
   - `returnType` is a JSDoc type string for the command response. When set, the generated method is typed `Promise<returnType>` instead of the generic `Promise<Record<string, FrontendModelAttributeValue>>` (a command result is a deserialized transport payload, so its values are `FrontendModelAttributeValue` — the closed transport-value union). The type is emitted verbatim into the generated frontend model, so it must resolve there (a self-contained inline type or a name the model can import).

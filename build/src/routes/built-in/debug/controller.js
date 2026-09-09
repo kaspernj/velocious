@@ -1,0 +1,12 @@
+import Controller from "../../../controller.js";
+export default class BuiltInDebugController extends Controller {
+    /**
+     * Runs show.
+     * @returns {Promise<void>} - Resolves when the debug snapshot has been rendered.
+     */
+    async show() {
+        this._response.setHeader("Content-Type", "application/json; charset=UTF-8");
+        this._response.setBody(`${JSON.stringify(await this.getConfiguration().getDebugSnapshot(), null, 2)}\n`);
+    }
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiY29udHJvbGxlci5qcyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbIi4uLy4uLy4uLy4uLy4uL3NyYy9yb3V0ZXMvYnVpbHQtaW4vZGVidWcvY29udHJvbGxlci5qcyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQSxPQUFPLFVBQVUsTUFBTSx3QkFBd0IsQ0FBQTtBQUUvQyxNQUFNLENBQUMsT0FBTyxPQUFPLHNCQUF1QixTQUFRLFVBQVU7SUFDNUQ7OztPQUdHO0lBQ0gsS0FBSyxDQUFDLElBQUk7UUFDUixJQUFJLENBQUMsU0FBUyxDQUFDLFNBQVMsQ0FBQyxjQUFjLEVBQUUsaUNBQWlDLENBQUMsQ0FBQTtRQUMzRSxJQUFJLENBQUMsU0FBUyxDQUFDLE9BQU8sQ0FBQyxHQUFHLElBQUksQ0FBQyxTQUFTLENBQUMsTUFBTSxJQUFJLENBQUMsZ0JBQWdCLEVBQUUsQ0FBQyxnQkFBZ0IsRUFBRSxFQUFFLElBQUksRUFBRSxDQUFDLENBQUMsSUFBSSxDQUFDLENBQUE7SUFDMUcsQ0FBQztDQUNGIiwic291cmNlc0NvbnRlbnQiOlsiaW1wb3J0IENvbnRyb2xsZXIgZnJvbSBcIi4uLy4uLy4uL2NvbnRyb2xsZXIuanNcIlxuXG5leHBvcnQgZGVmYXVsdCBjbGFzcyBCdWlsdEluRGVidWdDb250cm9sbGVyIGV4dGVuZHMgQ29udHJvbGxlciB7XG4gIC8qKlxuICAgKiBSdW5zIHNob3cuXG4gICAqIEByZXR1cm5zIHtQcm9taXNlPHZvaWQ+fSAtIFJlc29sdmVzIHdoZW4gdGhlIGRlYnVnIHNuYXBzaG90IGhhcyBiZWVuIHJlbmRlcmVkLlxuICAgKi9cbiAgYXN5bmMgc2hvdygpIHtcbiAgICB0aGlzLl9yZXNwb25zZS5zZXRIZWFkZXIoXCJDb250ZW50LVR5cGVcIiwgXCJhcHBsaWNhdGlvbi9qc29uOyBjaGFyc2V0PVVURi04XCIpXG4gICAgdGhpcy5fcmVzcG9uc2Uuc2V0Qm9keShgJHtKU09OLnN0cmluZ2lmeShhd2FpdCB0aGlzLmdldENvbmZpZ3VyYXRpb24oKS5nZXREZWJ1Z1NuYXBzaG90KCksIG51bGwsIDIpfVxcbmApXG4gIH1cbn1cbiJdfQ==

@@ -4,7 +4,7 @@ import Configuration from "../../../src/configuration.js"
 import {describe, expect, it} from "../../../src/testing/test.js"
 import Migration from "../../../src/database/migration/index.js"
 
-describe("database - migration - sqlite foreign-key rebuild", {tags: ["dummy"]}, () => {
+describe("database - migration - sqlite foreign-key rebuild", {databaseCleaning: {transaction: false, truncate: true}, tags: ["dummy"]}, () => {
   it("addForeignKey on SQLite registers a foreign key via table rebuild", async () => {
     const configuration = Configuration.current()
 

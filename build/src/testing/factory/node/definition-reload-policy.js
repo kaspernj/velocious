@@ -1,0 +1,133 @@
+// @ts-check
+/**
+ * Default maximum number of cache-busted factory definition import attempts a
+ * single Node process may perform. Chosen conservatively from the
+ * `factory-esm-reload-retention` benchmark evidence: each cache-busted import
+ * retains roughly 6 KB of heap in Node's ESM module map, so the default bounds
+ * retained definition modules to a few tens of MB before the owning process
+ * must be recycled. This module is intentionally Node-only; browser-safe factory
+ * code must never import it.
+ */
+export const DEFAULT_DEFINITION_RELOAD_BUDGET = 4096;
+/**
+ * Rejected when code tries to configure the process-global reload budget more
+ * than once or after any valid cache-busted import reservation was attempted.
+ * Retained ESM modules and their accounting live for the process lifetime, so
+ * changing the budget can never begin a new in-process policy epoch.
+ */
+export class DefinitionReloadConfigurationError extends Error {
+    /**
+     * Creates the error.
+     * @param {object} args - Details.
+     * @param {number} args.current - Cache-busted imports already reserved.
+     * @param {number} args.budget - Active process-global import budget.
+     * @param {number} args.requestedBudget - Rejected replacement budget.
+     * @param {boolean} args.configured - Whether an explicit budget was already configured.
+     */
+    constructor({ budget, configured, current, requestedBudget }) {
+        const reason = configured
+            ? "the process-global definition reload budget was already configured"
+            : "a definition reload reservation was already attempted";
+        super(`Cannot configure definition reload budget to ${requestedBudget}: ${reason} (current=${current}, budget=${budget}). Configuration is allowed exactly once before the first reservation; only process exit resets retained-module accounting.`);
+        this.name = "DefinitionReloadConfigurationError";
+        this.budget = budget;
+        this.configured = configured;
+        this.current = current;
+        this.requestedBudget = requestedBudget;
+    }
+}
+/**
+ * Rejected when a reload would push the process over its cache-busted import
+ * budget. The rejection happens synchronously before any registry reset or
+ * import, so the currently loaded registry stays usable. Node never evicts
+ * retained ESM module instances, so only recycling/restarting the owning Node
+ * process reclaims the memory and refreshes edited dependency modules.
+ */
+export class DefinitionRecycleRequiredError extends Error {
+    /**
+     * Creates the error.
+     * @param {object} args - Details.
+     * @param {number} args.current - Cache-busted import attempts already reserved in this process.
+     * @param {number} args.budget - Process-global import budget.
+     * @param {number} args.requested - Import attempts the rejected reload needed.
+     */
+    constructor({ current, budget, requested }) {
+        super(`Factory definition reload import budget exhausted (current=${current}, budget=${budget}, requested=${requested}). Recycle or restart the owning Node process: every reload imports a fresh cache-busted module instance and Node never evicts them, so process recycling is the only reclamation boundary.`);
+        this.name = "DefinitionRecycleRequiredError";
+        this.current = current;
+        this.budget = budget;
+        this.requested = requested;
+    }
+}
+/** @type {number} - The single process-global import budget. */
+let importBudget = DEFAULT_DEFINITION_RELOAD_BUDGET;
+/** @type {number} - Cache-busted import attempts reserved so far across every registry and target. */
+let reservedImports = 0;
+/** @type {boolean} - Whether the process-global budget was explicitly configured. */
+let budgetConfigured = false;
+/** @type {boolean} - Whether any valid complete reload batch reservation was attempted. */
+let reservationStarted = false;
+/**
+ * Returns the process-global cache-busted import budget.
+ * @returns {number} - The budget.
+ */
+export function getDefinitionReloadBudget() {
+    return importBudget;
+}
+/**
+ * Reads the cache-busted import attempts reserved so far in this process,
+ * across every registry and target. Combined with {@link getDefinitionReloadBudget}
+ * this is the deterministic process-global census for the recycle policy.
+ * @returns {number} - Reserved count.
+ */
+export function peekDefinitionReloadBudget() {
+    return reservedImports;
+}
+/**
+ * Configures the one process-global import budget exactly once and only before
+ * the first valid reservation attempt. There is exactly one budget for the whole
+ * process, so no combination of registries or targets can create independent
+ * budgets that defeat the global limit. Retained-import accounting is never
+ * reset in-process.
+ * @param {number} budget - New budget.
+ * @returns {void}
+ */
+export function setDefinitionReloadBudget(budget) {
+    if (!Number.isInteger(budget) || budget < 1) {
+        throw new TypeError(`Definition reload budget must be a positive integer, got ${JSON.stringify(budget)}`);
+    }
+    if (budgetConfigured || reservationStarted) {
+        throw new DefinitionReloadConfigurationError({
+            budget: importBudget,
+            configured: budgetConfigured,
+            current: reservedImports,
+            requestedBudget: budget
+        });
+    }
+    importBudget = budget;
+    budgetConfigured = true;
+}
+/**
+ * Preflights and reserves a whole reload batch synchronously. Malformed counts
+ * are rejected before configuration is sealed or accounting changes. Every valid
+ * request, including zero and a rejected over-budget request, seals configuration
+ * before capacity is evaluated. Throws {@link DefinitionRecycleRequiredError}
+ * when the requested batch would push the process over its budget. The check and
+ * reservation run in one synchronous step, so concurrent reloads cannot race past
+ * the budget. The reservation is deliberately conservative: it covers every
+ * import attempt in the batch, so a mid-batch import failure still counts its
+ * attempts as retained modules.
+ * @param {number} requested - Cache-busted import attempts the reload will perform.
+ * @returns {void}
+ */
+export function reserveDefinitionReloadBudget(requested) {
+    if (!Number.isInteger(requested) || requested < 0) {
+        throw new TypeError(`Definition reload reservation must be a non-negative integer, got ${typeof requested} ${String(requested)}`);
+    }
+    reservationStarted = true;
+    if (reservedImports + requested > importBudget) {
+        throw new DefinitionRecycleRequiredError({ current: reservedImports, budget: importBudget, requested });
+    }
+    reservedImports += requested;
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZGVmaW5pdGlvbi1yZWxvYWQtcG9saWN5LmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiLi4vLi4vLi4vLi4vLi4vc3JjL3Rlc3RpbmcvZmFjdG9yeS9ub2RlL2RlZmluaXRpb24tcmVsb2FkLXBvbGljeS5qcyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQSxZQUFZO0FBRVo7Ozs7Ozs7O0dBUUc7QUFDSCxNQUFNLENBQUMsTUFBTSxnQ0FBZ0MsR0FBRyxJQUFJLENBQUE7QUFFcEQ7Ozs7O0dBS0c7QUFDSCxNQUFNLE9BQU8sa0NBQW1DLFNBQVEsS0FBSztJQUMzRDs7Ozs7OztPQU9HO0lBQ0gsWUFBWSxFQUFDLE1BQU0sRUFBRSxVQUFVLEVBQUUsT0FBTyxFQUFFLGVBQWUsRUFBQztRQUN4RCxNQUFNLE1BQU0sR0FBRyxVQUFVO1lBQ3ZCLENBQUMsQ0FBQyxvRUFBb0U7WUFDdEUsQ0FBQyxDQUFDLHVEQUF1RCxDQUFBO1FBRTNELEtBQUssQ0FBQyxnREFBZ0QsZUFBZSxLQUFLLE1BQU0sYUFBYSxPQUFPLFlBQVksTUFBTSw2SEFBNkgsQ0FBQyxDQUFBO1FBQ3BQLElBQUksQ0FBQyxJQUFJLEdBQUcsb0NBQW9DLENBQUE7UUFDaEQsSUFBSSxDQUFDLE1BQU0sR0FBRyxNQUFNLENBQUE7UUFDcEIsSUFBSSxDQUFDLFVBQVUsR0FBRyxVQUFVLENBQUE7UUFDNUIsSUFBSSxDQUFDLE9BQU8sR0FBRyxPQUFPLENBQUE7UUFDdEIsSUFBSSxDQUFDLGVBQWUsR0FBRyxlQUFlLENBQUE7SUFDeEMsQ0FBQztDQUNGO0FBRUQ7Ozs7OztHQU1HO0FBQ0gsTUFBTSxPQUFPLDhCQUErQixTQUFRLEtBQUs7SUFDdkQ7Ozs7OztPQU1HO0lBQ0gsWUFBWSxFQUFDLE9BQU8sRUFBRSxNQUFNLEVBQUUsU0FBUyxFQUFDO1FBQ3RDLEtBQUssQ0FBQyw4REFBOEQsT0FBTyxZQUFZLE1BQU0sZUFBZSxTQUFTLDZMQUE2TCxDQUFDLENBQUE7UUFDblQsSUFBSSxDQUFDLElBQUksR0FBRyxnQ0FBZ0MsQ0FBQTtRQUM1QyxJQUFJLENBQUMsT0FBTyxHQUFHLE9BQU8sQ0FBQTtRQUN0QixJQUFJLENBQUMsTUFBTSxHQUFHLE1BQU0sQ0FBQTtRQUNwQixJQUFJLENBQUMsU0FBUyxHQUFHLFNBQVMsQ0FBQTtJQUM1QixDQUFDO0NBQ0Y7QUFFRCxnRUFBZ0U7QUFDaEUsSUFBSSxZQUFZLEdBQUcsZ0NBQWdDLENBQUE7QUFFbkQsc0dBQXNHO0FBQ3RHLElBQUksZUFBZSxHQUFHLENBQUMsQ0FBQTtBQUV2QixxRkFBcUY7QUFDckYsSUFBSSxnQkFBZ0IsR0FBRyxLQUFLLENBQUE7QUFFNUIsMkZBQTJGO0FBQzNGLElBQUksa0JBQWtCLEdBQUcsS0FBSyxDQUFBO0FBRTlCOzs7R0FHRztBQUNILE1BQU0sVUFBVSx5QkFBeUI7SUFDdkMsT0FBTyxZQUFZLENBQUE7QUFDckIsQ0FBQztBQUVEOzs7OztHQUtHO0FBQ0gsTUFBTSxVQUFVLDBCQUEwQjtJQUN4QyxPQUFPLGVBQWUsQ0FBQTtBQUN4QixDQUFDO0FBRUQ7Ozs7Ozs7O0dBUUc7QUFDSCxNQUFNLFVBQVUseUJBQXlCLENBQUMsTUFBTTtJQUM5QyxJQUFJLENBQUMsTUFBTSxDQUFDLFNBQVMsQ0FBQyxNQUFNLENBQUMsSUFBSSxNQUFNLEdBQUcsQ0FBQyxFQUFFLENBQUM7UUFDNUMsTUFBTSxJQUFJLFNBQVMsQ0FBQyw0REFBNEQsSUFBSSxDQUFDLFNBQVMsQ0FBQyxNQUFNLENBQUMsRUFBRSxDQUFDLENBQUE7SUFDM0csQ0FBQztJQUVELElBQUksZ0JBQWdCLElBQUksa0JBQWtCLEVBQUUsQ0FBQztRQUMzQyxNQUFNLElBQUksa0NBQWtDLENBQUM7WUFDM0MsTUFBTSxFQUFFLFlBQVk7WUFDcEIsVUFBVSxFQUFFLGdCQUFnQjtZQUM1QixPQUFPLEVBQUUsZUFBZTtZQUN4QixlQUFlLEVBQUUsTUFBTTtTQUN4QixDQUFDLENBQUE7SUFDSixDQUFDO0lBRUQsWUFBWSxHQUFHLE1BQU0sQ0FBQTtJQUNyQixnQkFBZ0IsR0FBRyxJQUFJLENBQUE7QUFDekIsQ0FBQztBQUVEOzs7Ozs7Ozs7Ozs7R0FZRztBQUNILE1BQU0sVUFBVSw2QkFBNkIsQ0FBQyxTQUFTO0lBQ3JELElBQUksQ0FBQyxNQUFNLENBQUMsU0FBUyxDQUFDLFNBQVMsQ0FBQyxJQUFJLFNBQVMsR0FBRyxDQUFDLEVBQUUsQ0FBQztRQUNsRCxNQUFNLElBQUksU0FBUyxDQUFDLHFFQUFxRSxPQUFPLFNBQVMsSUFBSSxNQUFNLENBQUMsU0FBUyxDQUFDLEVBQUUsQ0FBQyxDQUFBO0lBQ25JLENBQUM7SUFFRCxrQkFBa0IsR0FBRyxJQUFJLENBQUE7SUFFekIsSUFBSSxlQUFlLEdBQUcsU0FBUyxHQUFHLFlBQVksRUFBRSxDQUFDO1FBQy9DLE1BQU0sSUFBSSw4QkFBOEIsQ0FBQyxFQUFDLE9BQU8sRUFBRSxlQUFlLEVBQUUsTUFBTSxFQUFFLFlBQVksRUFBRSxTQUFTLEVBQUMsQ0FBQyxDQUFBO0lBQ3ZHLENBQUM7SUFFRCxlQUFlLElBQUksU0FBUyxDQUFBO0FBQzlCLENBQUMiLCJzb3VyY2VzQ29udGVudCI6WyIvLyBAdHMtY2hlY2tcblxuLyoqXG4gKiBEZWZhdWx0IG1heGltdW0gbnVtYmVyIG9mIGNhY2hlLWJ1c3RlZCBmYWN0b3J5IGRlZmluaXRpb24gaW1wb3J0IGF0dGVtcHRzIGFcbiAqIHNpbmdsZSBOb2RlIHByb2Nlc3MgbWF5IHBlcmZvcm0uIENob3NlbiBjb25zZXJ2YXRpdmVseSBmcm9tIHRoZVxuICogYGZhY3RvcnktZXNtLXJlbG9hZC1yZXRlbnRpb25gIGJlbmNobWFyayBldmlkZW5jZTogZWFjaCBjYWNoZS1idXN0ZWQgaW1wb3J0XG4gKiByZXRhaW5zIHJvdWdobHkgNiBLQiBvZiBoZWFwIGluIE5vZGUncyBFU00gbW9kdWxlIG1hcCwgc28gdGhlIGRlZmF1bHQgYm91bmRzXG4gKiByZXRhaW5lZCBkZWZpbml0aW9uIG1vZHVsZXMgdG8gYSBmZXcgdGVucyBvZiBNQiBiZWZvcmUgdGhlIG93bmluZyBwcm9jZXNzXG4gKiBtdXN0IGJlIHJlY3ljbGVkLiBUaGlzIG1vZHVsZSBpcyBpbnRlbnRpb25hbGx5IE5vZGUtb25seTsgYnJvd3Nlci1zYWZlIGZhY3RvcnlcbiAqIGNvZGUgbXVzdCBuZXZlciBpbXBvcnQgaXQuXG4gKi9cbmV4cG9ydCBjb25zdCBERUZBVUxUX0RFRklOSVRJT05fUkVMT0FEX0JVREdFVCA9IDQwOTZcblxuLyoqXG4gKiBSZWplY3RlZCB3aGVuIGNvZGUgdHJpZXMgdG8gY29uZmlndXJlIHRoZSBwcm9jZXNzLWdsb2JhbCByZWxvYWQgYnVkZ2V0IG1vcmVcbiAqIHRoYW4gb25jZSBvciBhZnRlciBhbnkgdmFsaWQgY2FjaGUtYnVzdGVkIGltcG9ydCByZXNlcnZhdGlvbiB3YXMgYXR0ZW1wdGVkLlxuICogUmV0YWluZWQgRVNNIG1vZHVsZXMgYW5kIHRoZWlyIGFjY291bnRpbmcgbGl2ZSBmb3IgdGhlIHByb2Nlc3MgbGlmZXRpbWUsIHNvXG4gKiBjaGFuZ2luZyB0aGUgYnVkZ2V0IGNhbiBuZXZlciBiZWdpbiBhIG5ldyBpbi1wcm9jZXNzIHBvbGljeSBlcG9jaC5cbiAqL1xuZXhwb3J0IGNsYXNzIERlZmluaXRpb25SZWxvYWRDb25maWd1cmF0aW9uRXJyb3IgZXh0ZW5kcyBFcnJvciB7XG4gIC8qKlxuICAgKiBDcmVhdGVzIHRoZSBlcnJvci5cbiAgICogQHBhcmFtIHtvYmplY3R9IGFyZ3MgLSBEZXRhaWxzLlxuICAgKiBAcGFyYW0ge251bWJlcn0gYXJncy5jdXJyZW50IC0gQ2FjaGUtYnVzdGVkIGltcG9ydHMgYWxyZWFkeSByZXNlcnZlZC5cbiAgICogQHBhcmFtIHtudW1iZXJ9IGFyZ3MuYnVkZ2V0IC0gQWN0aXZlIHByb2Nlc3MtZ2xvYmFsIGltcG9ydCBidWRnZXQuXG4gICAqIEBwYXJhbSB7bnVtYmVyfSBhcmdzLnJlcXVlc3RlZEJ1ZGdldCAtIFJlamVjdGVkIHJlcGxhY2VtZW50IGJ1ZGdldC5cbiAgICogQHBhcmFtIHtib29sZWFufSBhcmdzLmNvbmZpZ3VyZWQgLSBXaGV0aGVyIGFuIGV4cGxpY2l0IGJ1ZGdldCB3YXMgYWxyZWFkeSBjb25maWd1cmVkLlxuICAgKi9cbiAgY29uc3RydWN0b3Ioe2J1ZGdldCwgY29uZmlndXJlZCwgY3VycmVudCwgcmVxdWVzdGVkQnVkZ2V0fSkge1xuICAgIGNvbnN0IHJlYXNvbiA9IGNvbmZpZ3VyZWRcbiAgICAgID8gXCJ0aGUgcHJvY2Vzcy1nbG9iYWwgZGVmaW5pdGlvbiByZWxvYWQgYnVkZ2V0IHdhcyBhbHJlYWR5IGNvbmZpZ3VyZWRcIlxuICAgICAgOiBcImEgZGVmaW5pdGlvbiByZWxvYWQgcmVzZXJ2YXRpb24gd2FzIGFscmVhZHkgYXR0ZW1wdGVkXCJcblxuICAgIHN1cGVyKGBDYW5ub3QgY29uZmlndXJlIGRlZmluaXRpb24gcmVsb2FkIGJ1ZGdldCB0byAke3JlcXVlc3RlZEJ1ZGdldH06ICR7cmVhc29ufSAoY3VycmVudD0ke2N1cnJlbnR9LCBidWRnZXQ9JHtidWRnZXR9KS4gQ29uZmlndXJhdGlvbiBpcyBhbGxvd2VkIGV4YWN0bHkgb25jZSBiZWZvcmUgdGhlIGZpcnN0IHJlc2VydmF0aW9uOyBvbmx5IHByb2Nlc3MgZXhpdCByZXNldHMgcmV0YWluZWQtbW9kdWxlIGFjY291bnRpbmcuYClcbiAgICB0aGlzLm5hbWUgPSBcIkRlZmluaXRpb25SZWxvYWRDb25maWd1cmF0aW9uRXJyb3JcIlxuICAgIHRoaXMuYnVkZ2V0ID0gYnVkZ2V0XG4gICAgdGhpcy5jb25maWd1cmVkID0gY29uZmlndXJlZFxuICAgIHRoaXMuY3VycmVudCA9IGN1cnJlbnRcbiAgICB0aGlzLnJlcXVlc3RlZEJ1ZGdldCA9IHJlcXVlc3RlZEJ1ZGdldFxuICB9XG59XG5cbi8qKlxuICogUmVqZWN0ZWQgd2hlbiBhIHJlbG9hZCB3b3VsZCBwdXNoIHRoZSBwcm9jZXNzIG92ZXIgaXRzIGNhY2hlLWJ1c3RlZCBpbXBvcnRcbiAqIGJ1ZGdldC4gVGhlIHJlamVjdGlvbiBoYXBwZW5zIHN5bmNocm9ub3VzbHkgYmVmb3JlIGFueSByZWdpc3RyeSByZXNldCBvclxuICogaW1wb3J0LCBzbyB0aGUgY3VycmVudGx5IGxvYWRlZCByZWdpc3RyeSBzdGF5cyB1c2FibGUuIE5vZGUgbmV2ZXIgZXZpY3RzXG4gKiByZXRhaW5lZCBFU00gbW9kdWxlIGluc3RhbmNlcywgc28gb25seSByZWN5Y2xpbmcvcmVzdGFydGluZyB0aGUgb3duaW5nIE5vZGVcbiAqIHByb2Nlc3MgcmVjbGFpbXMgdGhlIG1lbW9yeSBhbmQgcmVmcmVzaGVzIGVkaXRlZCBkZXBlbmRlbmN5IG1vZHVsZXMuXG4gKi9cbmV4cG9ydCBjbGFzcyBEZWZpbml0aW9uUmVjeWNsZVJlcXVpcmVkRXJyb3IgZXh0ZW5kcyBFcnJvciB7XG4gIC8qKlxuICAgKiBDcmVhdGVzIHRoZSBlcnJvci5cbiAgICogQHBhcmFtIHtvYmplY3R9IGFyZ3MgLSBEZXRhaWxzLlxuICAgKiBAcGFyYW0ge251bWJlcn0gYXJncy5jdXJyZW50IC0gQ2FjaGUtYnVzdGVkIGltcG9ydCBhdHRlbXB0cyBhbHJlYWR5IHJlc2VydmVkIGluIHRoaXMgcHJvY2Vzcy5cbiAgICogQHBhcmFtIHtudW1iZXJ9IGFyZ3MuYnVkZ2V0IC0gUHJvY2Vzcy1nbG9iYWwgaW1wb3J0IGJ1ZGdldC5cbiAgICogQHBhcmFtIHtudW1iZXJ9IGFyZ3MucmVxdWVzdGVkIC0gSW1wb3J0IGF0dGVtcHRzIHRoZSByZWplY3RlZCByZWxvYWQgbmVlZGVkLlxuICAgKi9cbiAgY29uc3RydWN0b3Ioe2N1cnJlbnQsIGJ1ZGdldCwgcmVxdWVzdGVkfSkge1xuICAgIHN1cGVyKGBGYWN0b3J5IGRlZmluaXRpb24gcmVsb2FkIGltcG9ydCBidWRnZXQgZXhoYXVzdGVkIChjdXJyZW50PSR7Y3VycmVudH0sIGJ1ZGdldD0ke2J1ZGdldH0sIHJlcXVlc3RlZD0ke3JlcXVlc3RlZH0pLiBSZWN5Y2xlIG9yIHJlc3RhcnQgdGhlIG93bmluZyBOb2RlIHByb2Nlc3M6IGV2ZXJ5IHJlbG9hZCBpbXBvcnRzIGEgZnJlc2ggY2FjaGUtYnVzdGVkIG1vZHVsZSBpbnN0YW5jZSBhbmQgTm9kZSBuZXZlciBldmljdHMgdGhlbSwgc28gcHJvY2VzcyByZWN5Y2xpbmcgaXMgdGhlIG9ubHkgcmVjbGFtYXRpb24gYm91bmRhcnkuYClcbiAgICB0aGlzLm5hbWUgPSBcIkRlZmluaXRpb25SZWN5Y2xlUmVxdWlyZWRFcnJvclwiXG4gICAgdGhpcy5jdXJyZW50ID0gY3VycmVudFxuICAgIHRoaXMuYnVkZ2V0ID0gYnVkZ2V0XG4gICAgdGhpcy5yZXF1ZXN0ZWQgPSByZXF1ZXN0ZWRcbiAgfVxufVxuXG4vKiogQHR5cGUge251bWJlcn0gLSBUaGUgc2luZ2xlIHByb2Nlc3MtZ2xvYmFsIGltcG9ydCBidWRnZXQuICovXG5sZXQgaW1wb3J0QnVkZ2V0ID0gREVGQVVMVF9ERUZJTklUSU9OX1JFTE9BRF9CVURHRVRcblxuLyoqIEB0eXBlIHtudW1iZXJ9IC0gQ2FjaGUtYnVzdGVkIGltcG9ydCBhdHRlbXB0cyByZXNlcnZlZCBzbyBmYXIgYWNyb3NzIGV2ZXJ5IHJlZ2lzdHJ5IGFuZCB0YXJnZXQuICovXG5sZXQgcmVzZXJ2ZWRJbXBvcnRzID0gMFxuXG4vKiogQHR5cGUge2Jvb2xlYW59IC0gV2hldGhlciB0aGUgcHJvY2Vzcy1nbG9iYWwgYnVkZ2V0IHdhcyBleHBsaWNpdGx5IGNvbmZpZ3VyZWQuICovXG5sZXQgYnVkZ2V0Q29uZmlndXJlZCA9IGZhbHNlXG5cbi8qKiBAdHlwZSB7Ym9vbGVhbn0gLSBXaGV0aGVyIGFueSB2YWxpZCBjb21wbGV0ZSByZWxvYWQgYmF0Y2ggcmVzZXJ2YXRpb24gd2FzIGF0dGVtcHRlZC4gKi9cbmxldCByZXNlcnZhdGlvblN0YXJ0ZWQgPSBmYWxzZVxuXG4vKipcbiAqIFJldHVybnMgdGhlIHByb2Nlc3MtZ2xvYmFsIGNhY2hlLWJ1c3RlZCBpbXBvcnQgYnVkZ2V0LlxuICogQHJldHVybnMge251bWJlcn0gLSBUaGUgYnVkZ2V0LlxuICovXG5leHBvcnQgZnVuY3Rpb24gZ2V0RGVmaW5pdGlvblJlbG9hZEJ1ZGdldCgpIHtcbiAgcmV0dXJuIGltcG9ydEJ1ZGdldFxufVxuXG4vKipcbiAqIFJlYWRzIHRoZSBjYWNoZS1idXN0ZWQgaW1wb3J0IGF0dGVtcHRzIHJlc2VydmVkIHNvIGZhciBpbiB0aGlzIHByb2Nlc3MsXG4gKiBhY3Jvc3MgZXZlcnkgcmVnaXN0cnkgYW5kIHRhcmdldC4gQ29tYmluZWQgd2l0aCB7QGxpbmsgZ2V0RGVmaW5pdGlvblJlbG9hZEJ1ZGdldH1cbiAqIHRoaXMgaXMgdGhlIGRldGVybWluaXN0aWMgcHJvY2Vzcy1nbG9iYWwgY2Vuc3VzIGZvciB0aGUgcmVjeWNsZSBwb2xpY3kuXG4gKiBAcmV0dXJucyB7bnVtYmVyfSAtIFJlc2VydmVkIGNvdW50LlxuICovXG5leHBvcnQgZnVuY3Rpb24gcGVla0RlZmluaXRpb25SZWxvYWRCdWRnZXQoKSB7XG4gIHJldHVybiByZXNlcnZlZEltcG9ydHNcbn1cblxuLyoqXG4gKiBDb25maWd1cmVzIHRoZSBvbmUgcHJvY2Vzcy1nbG9iYWwgaW1wb3J0IGJ1ZGdldCBleGFjdGx5IG9uY2UgYW5kIG9ubHkgYmVmb3JlXG4gKiB0aGUgZmlyc3QgdmFsaWQgcmVzZXJ2YXRpb24gYXR0ZW1wdC4gVGhlcmUgaXMgZXhhY3RseSBvbmUgYnVkZ2V0IGZvciB0aGUgd2hvbGVcbiAqIHByb2Nlc3MsIHNvIG5vIGNvbWJpbmF0aW9uIG9mIHJlZ2lzdHJpZXMgb3IgdGFyZ2V0cyBjYW4gY3JlYXRlIGluZGVwZW5kZW50XG4gKiBidWRnZXRzIHRoYXQgZGVmZWF0IHRoZSBnbG9iYWwgbGltaXQuIFJldGFpbmVkLWltcG9ydCBhY2NvdW50aW5nIGlzIG5ldmVyXG4gKiByZXNldCBpbi1wcm9jZXNzLlxuICogQHBhcmFtIHtudW1iZXJ9IGJ1ZGdldCAtIE5ldyBidWRnZXQuXG4gKiBAcmV0dXJucyB7dm9pZH1cbiAqL1xuZXhwb3J0IGZ1bmN0aW9uIHNldERlZmluaXRpb25SZWxvYWRCdWRnZXQoYnVkZ2V0KSB7XG4gIGlmICghTnVtYmVyLmlzSW50ZWdlcihidWRnZXQpIHx8IGJ1ZGdldCA8IDEpIHtcbiAgICB0aHJvdyBuZXcgVHlwZUVycm9yKGBEZWZpbml0aW9uIHJlbG9hZCBidWRnZXQgbXVzdCBiZSBhIHBvc2l0aXZlIGludGVnZXIsIGdvdCAke0pTT04uc3RyaW5naWZ5KGJ1ZGdldCl9YClcbiAgfVxuXG4gIGlmIChidWRnZXRDb25maWd1cmVkIHx8IHJlc2VydmF0aW9uU3RhcnRlZCkge1xuICAgIHRocm93IG5ldyBEZWZpbml0aW9uUmVsb2FkQ29uZmlndXJhdGlvbkVycm9yKHtcbiAgICAgIGJ1ZGdldDogaW1wb3J0QnVkZ2V0LFxuICAgICAgY29uZmlndXJlZDogYnVkZ2V0Q29uZmlndXJlZCxcbiAgICAgIGN1cnJlbnQ6IHJlc2VydmVkSW1wb3J0cyxcbiAgICAgIHJlcXVlc3RlZEJ1ZGdldDogYnVkZ2V0XG4gICAgfSlcbiAgfVxuXG4gIGltcG9ydEJ1ZGdldCA9IGJ1ZGdldFxuICBidWRnZXRDb25maWd1cmVkID0gdHJ1ZVxufVxuXG4vKipcbiAqIFByZWZsaWdodHMgYW5kIHJlc2VydmVzIGEgd2hvbGUgcmVsb2FkIGJhdGNoIHN5bmNocm9ub3VzbHkuIE1hbGZvcm1lZCBjb3VudHNcbiAqIGFyZSByZWplY3RlZCBiZWZvcmUgY29uZmlndXJhdGlvbiBpcyBzZWFsZWQgb3IgYWNjb3VudGluZyBjaGFuZ2VzLiBFdmVyeSB2YWxpZFxuICogcmVxdWVzdCwgaW5jbHVkaW5nIHplcm8gYW5kIGEgcmVqZWN0ZWQgb3Zlci1idWRnZXQgcmVxdWVzdCwgc2VhbHMgY29uZmlndXJhdGlvblxuICogYmVmb3JlIGNhcGFjaXR5IGlzIGV2YWx1YXRlZC4gVGhyb3dzIHtAbGluayBEZWZpbml0aW9uUmVjeWNsZVJlcXVpcmVkRXJyb3J9XG4gKiB3aGVuIHRoZSByZXF1ZXN0ZWQgYmF0Y2ggd291bGQgcHVzaCB0aGUgcHJvY2VzcyBvdmVyIGl0cyBidWRnZXQuIFRoZSBjaGVjayBhbmRcbiAqIHJlc2VydmF0aW9uIHJ1biBpbiBvbmUgc3luY2hyb25vdXMgc3RlcCwgc28gY29uY3VycmVudCByZWxvYWRzIGNhbm5vdCByYWNlIHBhc3RcbiAqIHRoZSBidWRnZXQuIFRoZSByZXNlcnZhdGlvbiBpcyBkZWxpYmVyYXRlbHkgY29uc2VydmF0aXZlOiBpdCBjb3ZlcnMgZXZlcnlcbiAqIGltcG9ydCBhdHRlbXB0IGluIHRoZSBiYXRjaCwgc28gYSBtaWQtYmF0Y2ggaW1wb3J0IGZhaWx1cmUgc3RpbGwgY291bnRzIGl0c1xuICogYXR0ZW1wdHMgYXMgcmV0YWluZWQgbW9kdWxlcy5cbiAqIEBwYXJhbSB7bnVtYmVyfSByZXF1ZXN0ZWQgLSBDYWNoZS1idXN0ZWQgaW1wb3J0IGF0dGVtcHRzIHRoZSByZWxvYWQgd2lsbCBwZXJmb3JtLlxuICogQHJldHVybnMge3ZvaWR9XG4gKi9cbmV4cG9ydCBmdW5jdGlvbiByZXNlcnZlRGVmaW5pdGlvblJlbG9hZEJ1ZGdldChyZXF1ZXN0ZWQpIHtcbiAgaWYgKCFOdW1iZXIuaXNJbnRlZ2VyKHJlcXVlc3RlZCkgfHwgcmVxdWVzdGVkIDwgMCkge1xuICAgIHRocm93IG5ldyBUeXBlRXJyb3IoYERlZmluaXRpb24gcmVsb2FkIHJlc2VydmF0aW9uIG11c3QgYmUgYSBub24tbmVnYXRpdmUgaW50ZWdlciwgZ290ICR7dHlwZW9mIHJlcXVlc3RlZH0gJHtTdHJpbmcocmVxdWVzdGVkKX1gKVxuICB9XG5cbiAgcmVzZXJ2YXRpb25TdGFydGVkID0gdHJ1ZVxuXG4gIGlmIChyZXNlcnZlZEltcG9ydHMgKyByZXF1ZXN0ZWQgPiBpbXBvcnRCdWRnZXQpIHtcbiAgICB0aHJvdyBuZXcgRGVmaW5pdGlvblJlY3ljbGVSZXF1aXJlZEVycm9yKHtjdXJyZW50OiByZXNlcnZlZEltcG9ydHMsIGJ1ZGdldDogaW1wb3J0QnVkZ2V0LCByZXF1ZXN0ZWR9KVxuICB9XG5cbiAgcmVzZXJ2ZWRJbXBvcnRzICs9IHJlcXVlc3RlZFxufVxuIl19

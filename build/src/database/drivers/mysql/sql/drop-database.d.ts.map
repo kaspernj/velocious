@@ -1,0 +1,1 @@
+{"version":3,"file":"drop-database.d.ts","sourceRoot":"","sources":["../../../../../../src/database/drivers/mysql/sql/drop-database.js"],"names":[],"mappings":"AAEA,OAAO,gBAAgB,MAAM,sCAAsC,CAAA;AAEnE,MAAM,CAAC,OAAO,OAAO,sDAAuD,SAAQ,gBAAgB;CACnG"}

@@ -1,0 +1,1 @@
+Extract Velocious-owned test argument, one-attempt, suite-hook, and legacy reporting adapters while keeping selection, traversal, retries, database cleanup, timeout quarantine, and the old runner orchestration behavior intact.

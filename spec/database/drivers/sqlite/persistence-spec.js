@@ -113,7 +113,7 @@ describe("database - sqlite web driver - persistence", {databaseCleaning: {trans
       name: "browser-runner-truncate"
     }, Configuration.current())
 
-    driver.args = driver.getArgs()
+    await driver.connect()
 
     try {
       await driver.query("CREATE TABLE browser_items(id INTEGER PRIMARY KEY, name TEXT)")

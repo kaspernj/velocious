@@ -1,0 +1,21 @@
+// @ts-check
+import FactoryRegistry from "./factory-registry.js";
+/**
+ * The default, convenient factory registry singleton. Import it as `Factory` and
+ * call `Factory.define(...)`, `Factory.build(...)`, `Factory.create(...)`,
+ * `Factory.attributesFor(...)` and the list/pair helpers. This module is
+ * browser/Metro-safe: it contains no Node built-ins, filesystem discovery, or
+ * raw `import.meta`. Node-only definition loading lives in `./node/load-definitions.js`.
+ * @type {FactoryRegistry}
+ */
+const Factory = new FactoryRegistry();
+/**
+ * Creates a fresh, isolated factory registry independent of the default singleton
+ * (for libraries or spec groups that must not share global factory state).
+ * @returns {FactoryRegistry} - A new registry.
+ */
+export function createFactoryRegistry() {
+    return new FactoryRegistry();
+}
+export default Factory;
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiaW5kZXguanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuLi8uLi8uLi8uLi9zcmMvdGVzdGluZy9mYWN0b3J5L2luZGV4LmpzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQUFBLFlBQVk7QUFFWixPQUFPLGVBQWUsTUFBTSx1QkFBdUIsQ0FBQTtBQUVuRDs7Ozs7OztHQU9HO0FBQ0gsTUFBTSxPQUFPLEdBQUcsSUFBSSxlQUFlLEVBQUUsQ0FBQTtBQUVyQzs7OztHQUlHO0FBQ0gsTUFBTSxVQUFVLHFCQUFxQjtJQUNuQyxPQUFPLElBQUksZUFBZSxFQUFFLENBQUE7QUFDOUIsQ0FBQztBQUVELGVBQWUsT0FBTyxDQUFBIiwic291cmNlc0NvbnRlbnQiOlsiLy8gQHRzLWNoZWNrXG5cbmltcG9ydCBGYWN0b3J5UmVnaXN0cnkgZnJvbSBcIi4vZmFjdG9yeS1yZWdpc3RyeS5qc1wiXG5cbi8qKlxuICogVGhlIGRlZmF1bHQsIGNvbnZlbmllbnQgZmFjdG9yeSByZWdpc3RyeSBzaW5nbGV0b24uIEltcG9ydCBpdCBhcyBgRmFjdG9yeWAgYW5kXG4gKiBjYWxsIGBGYWN0b3J5LmRlZmluZSguLi4pYCwgYEZhY3RvcnkuYnVpbGQoLi4uKWAsIGBGYWN0b3J5LmNyZWF0ZSguLi4pYCxcbiAqIGBGYWN0b3J5LmF0dHJpYnV0ZXNGb3IoLi4uKWAgYW5kIHRoZSBsaXN0L3BhaXIgaGVscGVycy4gVGhpcyBtb2R1bGUgaXNcbiAqIGJyb3dzZXIvTWV0cm8tc2FmZTogaXQgY29udGFpbnMgbm8gTm9kZSBidWlsdC1pbnMsIGZpbGVzeXN0ZW0gZGlzY292ZXJ5LCBvclxuICogcmF3IGBpbXBvcnQubWV0YWAuIE5vZGUtb25seSBkZWZpbml0aW9uIGxvYWRpbmcgbGl2ZXMgaW4gYC4vbm9kZS9sb2FkLWRlZmluaXRpb25zLmpzYC5cbiAqIEB0eXBlIHtGYWN0b3J5UmVnaXN0cnl9XG4gKi9cbmNvbnN0IEZhY3RvcnkgPSBuZXcgRmFjdG9yeVJlZ2lzdHJ5KClcblxuLyoqXG4gKiBDcmVhdGVzIGEgZnJlc2gsIGlzb2xhdGVkIGZhY3RvcnkgcmVnaXN0cnkgaW5kZXBlbmRlbnQgb2YgdGhlIGRlZmF1bHQgc2luZ2xldG9uXG4gKiAoZm9yIGxpYnJhcmllcyBvciBzcGVjIGdyb3VwcyB0aGF0IG11c3Qgbm90IHNoYXJlIGdsb2JhbCBmYWN0b3J5IHN0YXRlKS5cbiAqIEByZXR1cm5zIHtGYWN0b3J5UmVnaXN0cnl9IC0gQSBuZXcgcmVnaXN0cnkuXG4gKi9cbmV4cG9ydCBmdW5jdGlvbiBjcmVhdGVGYWN0b3J5UmVnaXN0cnkoKSB7XG4gIHJldHVybiBuZXcgRmFjdG9yeVJlZ2lzdHJ5KClcbn1cblxuZXhwb3J0IGRlZmF1bHQgRmFjdG9yeVxuIl19

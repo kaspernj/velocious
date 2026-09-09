@@ -5,7 +5,8 @@ Projects sharing resource policy between backend and local/offline runtimes shou
 ## Core transport
 - Frontend models run over HTTP transport, not local database connections.
 - Transport should be configured once via `FrontendModelBase.configureTransport(...)` (or wrapper APIs built on top of it).
-- Remote tenant-routed applications can configure `requestContext` as a synchronous resolver. Velocious captures an immutable scalar snapshot per CRUD/custom operation and event subscription, retains independent context for entries in one batch, and reuses a subscription's captured context through reconnect. See [remote request context](remote-request-context.md).
+- Remote tenant-routed applications can configure `requestContext` as a synchronous resolver. Velocious captures an immutable scalar snapshot per CRUD/custom operation and event subscription, retains independent context for entries in one batch, and reuses a subscription's captured context through reconnect. A lifecycle method or React event hook can also pass a registration-local `requestContext`; that explicit context replaces the transport-wide resolver for that registration. See [remote request context](remote-request-context.md).
+- SnapReq preserves frontend-model event channels across transport reconnects. A channel that the server permanently closes or rejects is terminal and is not automatically reopened; register a new listener after changing the authorization or request context.
 - Browser transport sends the browser's IANA timezone automatically when it can be resolved. Use `FrontendModelBase.configureTransport({timeZone: "Europe/Berlin"})` or a function returning a timezone when an app needs to override it. Frontend-model datetime strings without an explicit timezone are interpreted in that request timezone before the backend stores or queries the UTC instant.
 - Bound each request with `FrontendModelBase.configureTransport({timeout: 10000})` (milliseconds, or a function resolving one). Built on awaitery's `timeout`, the deadline covers connection, response-header wait, and JSON/error response-body consumption; on expiry the live `fetch` — and any `websocketClient` adapter whose `post` forwards the provided `signal` — is aborted and awaitery's `TimeoutError` is thrown (classify via `error instanceof TimeoutError` from `awaitery/build/timeout.js`), so a stalled request can never hang forever. Pass `signal` (an `AbortSignal` or a function returning one) to compose a caller/session cancellation with the deadline; a caller abort stays distinguishable from a timeout. A `websocketClient` adapter receives the composed signal as `post(path, body, {headers, signal})` and should forward it into its transport so the deadline can abort the live request and its body read.
 - `FrontendModelBase.waitForIdle()` waits until queued, scheduled, and active frontend-model transport requests have resolved. Browser/system-test harnesses can call it during teardown before resetting app state.
@@ -78,6 +79,7 @@ throw VelociousError.safe("Task placement was rejected.", {
 - `findOrInitializeBy(conditions)` returns existing model or a new unsaved model.
 - `findOrCreateBy(conditions, callback)` returns existing model or creates a new model.
 - Date condition values are normalized through JSON serialization to align request and local matching semantics.
+- Resources may declare `primaryKey: ["tenantId", "externalId"]`; their generated frontend models use exact identity objects for `find`, online `save`/`update`, `destroy`, attachments, and lifecycle events. Generated scalar models retain their declared primary-key value type for methods such as `primaryKeyValue()`, while scalar lifecycle event `id` values use the transport's string identity. See [composite primary keys](composite-primary-keys.md) for the identity contract and scalar-only boundaries.
 
 ## Association counts
 - `query.withCount("tasks")` attaches a per-row has-many count to each loaded record, read via `record.readCount("tasksCount")`. Accepts a relationship name, an array of names, or an object form with custom attribute names and per-association `where` filters. Polymorphic has-many is supported. See [with-count.md](with-count.md) for full usage and semantics.
@@ -153,11 +155,14 @@ throw VelociousError.safe("Task placement was rejected.", {
 
 ## React event hooks
 - Use `useModelClassEvent(ModelClass, "create" | "update" | "destroy", callback)` to subscribe to frontend-model lifecycle broadcasts from React components.
+- Backend parent records updated by ordinary `counterCache` or `magnitudeCounterCache` SQL receive the same frontend-model `update` delivery as lifecycle-saved records. Delivery waits for the source record's outer transaction to commit, reloads the complete parent through that source operation's model and tenant context, and then applies the current frontend resource identity, authorization, and projection. If the counter column participates in a resource identity, the update also carries the `previousId` captured before the counter mutation so clients can re-key the record. Rolled-back writes and missing parents publish nothing. A post-commit reload or publisher failure is reported through `framework-error` and `all-error` without undoing or rejecting the already-committed source save.
 - Pass an array of event names to subscribe one callback to several class-level events, for example `useModelClassEvent(Subscription, ["create", "update"], reloadStatus)`.
 - Convenience wrappers are available as `useCreatedEvent(ModelClass, callback)`, `useUpdatedEvent(ModelClassOrModel, callback)`, and `useDestroyedEvent(ModelClassOrModel, callback)`.
 - `useUpdatedEvent` and `useDestroyedEvent` accept a model instance or array of model instances for instance-level subscriptions.
-- Hook options support `{active, debounce, onConnected}` plus event record projection options: `select`, `selectsExtra`, `preload`, `withCount`, `abilities`, and `queryData`. The hooks own subscribe/unsubscribe cleanup, so components do not need lifecycle methods just to remove event listeners.
+- Hook options support `{active, debounce, onConnected}` plus event record projection options: `select`, `selectsExtra`, `preload`, `withCount`, `abilities`, and `queryData`. They also accept a registration-local `requestContext` for tenant/routing isolation. Omitting it inherits the configured transport context; passing `{}` explicitly replaces that context with an unscoped registration. Mounted hooks resubscribe when switching between those states. The hooks own subscribe/unsubscribe cleanup, so components do not need lifecycle methods just to remove event listeners.
 - `onCreate` and `onUpdate` can receive a frontend-model query instead of a plain options object. React hooks can receive the same query through the `query` option. The query's `where`, `joins`, and `search` predicates narrow which create/update events reach that callback. The same query's `select`, `selectsExtra`, `preload`, `withCount`, `abilities`, and `queryData` control the event payload.
+- Generated model classes remain normal named and default class exports while carrying their concrete lifecycle types into `onCreate`, `onUpdate`, and `onDestroy`: imports stay constructible and usable as instance types, callback models retain the generated class type, scalar event ids are strings, and composite event ids are objects keyed by the configured primary-key attributes.
+- Lifecycle registrations are multiplexed by model class and the captured value of `requestContext`. Equal contexts share the normal deduplicated subscription; distinct contexts always open distinct server subscriptions, so filters for separate routing identities cannot be coalesced into one request. The context is sent as top-level subscription params for the backend tenant resolver, while the query remains independently responsible for event matching. Context is routing input, not authorization; the backend must still authenticate the caller and authorize the resolved tenant.
 - Event queries intentionally reject list-only options such as `limit`, `offset`, `page`, `perPage`, `sort`, `group`, and `distinct` because lifecycle events match one saved record at a time.
 - Destroy events carry only ids after the row is gone, so query-filtered destroy subscriptions are not supported. Use an unfiltered destroy listener and check local ids when a screen needs deletion cleanup.
 - An unfiltered destroy listener can share the same websocket subscription with query-filtered create/update listeners without widening create/update delivery. This keeps long-lived filtered screens from receiving unrelated update payloads just because they also need id-only destroy cleanup.
@@ -167,19 +172,29 @@ useUpdatedEvent(
   BuildGroup,
   onBuildGroupUpdated,
   {
+    requestContext: {workspaceId},
     query: BuildGroup
-      .where({projectId})
+      .where({workspaceId})
       .select({BuildGroup: ["id", "status", "rebuildableBuildsCount"]})
       .withCount("builds")
   }
 )
 ```
 
+The same option is available on direct lifecycle methods, including id-only destroy subscriptions:
+
+```js
+const unsubscribe = await BuildGroup.onDestroy(onBuildGroupDestroyed, {
+  requestContext: {workspaceId}
+})
+```
+
 ## Attachment support
-- Frontend models can define `resourceConfig().attachments` and use generated attachment handles:
+- Backend models declare attachment helpers once with `hasOneAttachment` / `hasManyAttachments`; generated frontend models receive the corresponding `resourceConfig().attachments` metadata and can use:
   - `await model.attachmentName().attach(fileLikeOrBase64Payload)`
   - `const attachment = await model.attachmentName().download()`
   - `const attachmentUrl = await model.attachmentName().url()`
+- A model attachment's optional `sync` policy is available in the generated resource config. It declares eager versus on-demand fetch, durable versus evictable retention, and optional versus required offline availability without exposing the backend storage driver.
 - Backend attachment command mapping supports `attach`, `download`, and `url` command names in resource `commands`.
 - Frontend attachment input supports `File`/`Blob` (`arrayBuffer()`), bytes, and `{contentBase64, filename?, contentType?}` payloads.
 - Frontend attachment input does not support `{path: ...}`.
@@ -190,7 +205,7 @@ useUpdatedEvent(
   import {VelociousAttachment} from "velocious/build/src/frontend-models/base.js"
 
   const attachments = await VelociousAttachment
-    .where({recordType: "Task", recordId: String(task.id()), name: "files"})
+    .where({resourceName: "Task", recordType: "Task", recordId: String(task.id()), name: "files"})
     .order([["position", "asc"]])
     .toArray()
 
@@ -198,7 +213,9 @@ useUpdatedEvent(
   const allFiles = await task.files().toArray()
   ```
 
-  `VelociousAttachment` exposes safe metadata fields: `id`, `recordType`, `recordId`, `name`, `position`, `filename`, `contentType`, `byteSize`, `createdAt`, and `updatedAt`. Storage internals such as `driver`, `storageKey`, and `contentBase64` are not exposed or queryable through frontend models. Attachment metadata reads require owner scope (`recordType`, `recordId`, and `name`) and authorize through the owning record's frontend-model resource. Binary content and storage URLs still use `download()` and `url()`.
+  `VelociousAttachment` exposes safe metadata fields: `id`, `recordType`, `recordId`, `name`, `position`, `filename`, `contentType`, `byteSize`, `createdAt`, and `updatedAt`. Storage internals such as `driver`, `storageKey`, and `contentBase64` are not exposed or queryable through frontend models. Attachment metadata collection reads require owner scope (`resourceName`, `recordType`, `recordId`, and `name`) and authorize through that frontend-model resource. `VelociousAttachment.find(id)` authorizes against every configured resource alias backed by the attachment owner type and declaring the attachment. Binary content and storage URLs still use `download()` and `url()`.
+
+  Attachment handles on server-loaded records and lifecycle callback models carry the canonical backing-record owner internally. This keeps `first()` and `toArray()` aligned with attachment storage when a frontend resource uses a different name or primary key from its backing model.
 
 ## Condition validation rules
 - Reject `undefined` condition values.

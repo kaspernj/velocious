@@ -1,0 +1,1 @@
+Consume `@velocious/testing` 0.0.1 declarations in the Velocious test runner so apps and plugins can import the public testing DSL without registering tests in an invisible package copy. The existing Velocious testing facade remains supported.

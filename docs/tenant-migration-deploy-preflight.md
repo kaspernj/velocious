@@ -6,6 +6,16 @@ Deploy tooling can ask whether any existing tenant database has pending migratio
 npx velocious db:tenants:migrations:pending projectTenant
 ```
 
+To inspect only one declared [migration execution phase](migration-execution-phases.md),
+pass the same selector used by tenant migration execution:
+
+```sh
+npx velocious db:tenants:migrations:pending projectTenant --phase post-publication
+```
+
+With `--phase`, `migrationCount` and pending state include only applicable
+migrations in that phase. Omitting it preserves the complete-catalog behavior.
+
 The command loads the normal app-and-package migration manifest, keeps migrations whose `onDatabases(...)` declaration includes the requested tenant-only database identifier, and compares those versions with every tenant's existing `schema_migrations` ledger. It emits exactly one JSON object on standard output after a successful scan:
 
 ```json

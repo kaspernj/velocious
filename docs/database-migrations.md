@@ -1,6 +1,13 @@
 # Database Migrations
 
+Migrations default to the `pre-runtime` execution phase and can opt into
+`post-publication`. Callers may select either declared set without changing
+normal discovery, timestamp ordering, database targeting, package composition,
+or ledger semantics. See [migration execution phases](migration-execution-phases.md).
+
 Velocious migration helpers default new tables to UUID primary keys:
+
+`npx velocious db:create` waits for database-creation DDL to finish. MS-SQL database creation can legitimately outlast node-mssql's ordinary request deadline while SQL Server initializes its data files, so that one administrative request runs without the driver deadline. Creating `schema_migrations` and subsequent migration or application queries retain the configured request timeout.
 
 ```js
 await this.createTable("tasks", (table) => {

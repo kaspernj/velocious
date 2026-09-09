@@ -1,8 +1,6 @@
 // @ts-check
 
 import SqlBackgroundJobsAdapter from "../../src/background-jobs/sql-adapter.js"
-import timeout from "awaitery/build/timeout.js"
-import wait from "awaitery/build/wait.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import TestJob from "../dummy/src/jobs/test-job.js"
 import {describe, expect, it} from "../../src/testing/test.js"
@@ -20,9 +18,6 @@ describe("Background jobs - custom adapter Node wake-up", {databaseCleaning: {tr
     const outputPath = await outputPathFor("custom-adapter-wake")
 
     try {
-      await timeout({timeout: 1000}, async () => {
-        while (main.readyWorkers.size !== 1 || main._draining) await wait(0.01)
-      })
       await main._drain()
 
       const jobId = await TestJob.performLater("custom-adapter", outputPath)

@@ -1,0 +1,1 @@
+{"version":3,"file":"console-output.d.ts","sourceRoot":"","sources":["../../../../src/logger/outputs/console-output.js"],"names":[],"mappings":"AAIG,YAAuE,oBAAoB,GAAjF,OAAO,8BAA8B,EAAE,oBAAoB,CAAsB;AAF9F;;iGAEiG;AAEjG,6BAA6B;AAC7B,MAAM,CAAC,OAAO,OAAO,mBAAmB;IACtC;;;OAGG;IACG,KAAK,CAAC,EAAC,KAAK,EAAE,OAAO,EAAC,EAFjB,oBAEiB,iBAkB3B;CACF"}

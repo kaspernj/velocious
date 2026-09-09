@@ -180,17 +180,26 @@ describe("Beacon configuration integration", {databaseCleaning: {transaction: fa
     await beacon.stop()
   })
 
-  it("broadcastToChannel falls back to local-only delivery when no Beacon client is connected", async () => {
+  it("broadcastToChannel falls back to local-only delivery when no Beacon client is connected", {databaseCleaning: {transaction: true}}, async () => {
     const configuration = buildConfiguration()
-    const subscription = makeSubscription()
+    /** @type {Array<Record<string, ReturnType<typeof JSON.parse>> | undefined>} */
+    const deliveredMetadata = []
+    const subscription = {
+      ...makeSubscription(),
+      deliverBroadcast: (/** @type {ReturnType<typeof JSON.parse>} */ body, /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ metadata) => {
+        subscription.received.push(body)
+        deliveredMetadata.push(metadata)
+      }
+    }
 
     configuration._registerWebsocketChannelSubscription("frontend-models", /** @type {any} */ (subscription))
 
-    configuration.broadcastToChannel("frontend-models", {}, {hello: "world"})
+    configuration.broadcastToChannel("frontend-models", {authorizationRecord: {secret: "server-only"}}, {hello: "world"})
 
     await wait(0.01)
 
     expect(subscription.received).toEqual([{hello: "world"}])
+    expect(deliveredMetadata).toEqual([{broadcastParams: {authorizationRecord: {secret: "server-only"}}}])
   })
 
   it("continues broadcasting when one subscriber throws synchronously during delivery", async () => {
@@ -213,7 +222,7 @@ describe("Beacon configuration integration", {databaseCleaning: {transaction: fa
     expect(receivingSubscription.received).toEqual([{hello: "after throw"}])
   })
 
-  it("does not settle the pending broadcast barrier until snapshotted local subscriber deliveries settle, while leaving later work unawaited", async () => {
+  it("serializes each local subscriber's deliveries without making other subscribers wait", async () => {
     const configuration = buildConfiguration()
     /** @type {Array<{body: Record<string, any>, release: (error?: Error) => void}>} */
     const gatedDeliveries = []
@@ -268,15 +277,19 @@ describe("Beacon configuration integration", {databaseCleaning: {transaction: fa
 
     for (let i = 0; i < 10; i++) await Promise.resolve()
 
-    // The second broadcast also reaches the slow in-flight subscriber again, so
-    // three deliveries gate: the snapshot's slow one and two enqueued after it.
-    expect(gatedDeliveries.length).toBe(3)
+    // The slow subscriber's second delivery stays queued behind its first,
+    // while the other slow and fast subscribers receive the second broadcast.
+    expect(gatedDeliveries.length).toBe(2)
+    expect(fastSubscription.received).toEqual([{first: true}, {after: true}])
     expect(slowAfterSnapshot.received.length).toBe(0)
 
     gatedDeliveries[0].release()
 
     await barrier
     expect(barrierSettled).toBe(true)
+    expect(gatedDeliveries.length).toBe(3)
+    expect(gatedDeliveries[1].body).toEqual({after: true})
+    expect(gatedDeliveries[2].body).toEqual({after: true})
     expect(slowAfterSnapshot.received.length).toBe(0)
 
     let secondBarrierSettled = false

@@ -1,0 +1,3 @@
+- Keep null-aware IN compatibility fixtures independent of case-insensitive matching of the legacy quoted string `null`; document that unchanged driver behavior.
+- Synchronize beacon-dispatch coverage on accepted durable job completion, retain transaction cleaning, and propagate output/cleanup errors without a file-poll deadline.
+- Run pure timing-manifest validation without unnecessary configured-database checkouts.

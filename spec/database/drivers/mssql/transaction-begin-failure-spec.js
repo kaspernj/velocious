@@ -58,4 +58,26 @@ describe("Database - drivers - mssql transaction", () => {
       mssql.Transaction = originalTransaction
     }
   })
+
+  it("clears a stale physical transaction without underflowing logical transaction depth", async () => {
+    class FakeTransaction {
+      rollbackCalls = 0
+
+      async rollback() {
+        this.rollbackCalls++
+      }
+    }
+
+    const driver = new MssqlDriver({sqlConfig: {}}, {debug: false})
+    const transaction = new FakeTransaction()
+
+    driver.connection = {}
+    driver._currentTransaction = /** @type {import("mssql").Transaction} */ (transaction)
+
+    await driver.rollbackTransaction()
+
+    expect(transaction.rollbackCalls).toEqual(1)
+    expect(driver._currentTransaction).toBeNull()
+    expect(driver._transactionsCount).toEqual(0)
+  })
 })

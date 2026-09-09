@@ -1,0 +1,44 @@
+/**
+ * BufferedOutgoingEvent type.
+ * @typedef {object} BufferedOutgoingEvent
+ * @property {string} customPath - Request path.
+ * @property {Record<string, ReturnType<typeof JSON.parse>>} payload - Command payload.
+ */
+// @ts-check
+const MAX_BUFFERED_OUTGOING_EVENTS = 50;
+/**
+ * Buffer.
+ * @type {BufferedOutgoingEvent[]} */
+let buffer = [];
+/**
+ * Adds an event to the outgoing buffer. Drops the oldest event when the buffer exceeds the max size.
+ * @param {BufferedOutgoingEvent} event - Event to buffer.
+ * @returns {void}
+ */
+export function bufferOutgoingEvent(event) {
+    buffer.push(event);
+    if (buffer.length > MAX_BUFFERED_OUTGOING_EVENTS) {
+        buffer.shift();
+    }
+}
+/**
+ * Returns and clears all buffered events in FIFO order.
+ * @returns {BufferedOutgoingEvent[]} - Drained events.
+ */
+export function drainBufferedOutgoingEvents() {
+    return buffer.splice(0, buffer.length);
+}
+/**
+ * Runs the clearBufferedOutgoingEvents helper.
+ * @returns {void} */
+export function clearBufferedOutgoingEvents() {
+    buffer = [];
+}
+/**
+ * Runs the bufferedOutgoingEventCount helper.
+ * @returns {number} - Current buffer size.
+ */
+export function bufferedOutgoingEventCount() {
+    return buffer.length;
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoib3V0Z29pbmctZXZlbnQtYnVmZmVyLmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiLi4vLi4vLi4vc3JjL2Zyb250ZW5kLW1vZGVscy9vdXRnb2luZy1ldmVudC1idWZmZXIuanMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBQUE7Ozs7O0dBS0c7QUFDSCxZQUFZO0FBRVosTUFBTSw0QkFBNEIsR0FBRyxFQUFFLENBQUE7QUFFdkM7O3FDQUVxQztBQUNyQyxJQUFJLE1BQU0sR0FBRyxFQUFFLENBQUE7QUFFZjs7OztHQUlHO0FBQ0gsTUFBTSxVQUFVLG1CQUFtQixDQUFDLEtBQUs7SUFDdkMsTUFBTSxDQUFDLElBQUksQ0FBQyxLQUFLLENBQUMsQ0FBQTtJQUVsQixJQUFJLE1BQU0sQ0FBQyxNQUFNLEdBQUcsNEJBQTRCLEVBQUUsQ0FBQztRQUNqRCxNQUFNLENBQUMsS0FBSyxFQUFFLENBQUE7SUFDaEIsQ0FBQztBQUNILENBQUM7QUFFRDs7O0dBR0c7QUFDSCxNQUFNLFVBQVUsMkJBQTJCO0lBQ3pDLE9BQU8sTUFBTSxDQUFDLE1BQU0sQ0FBQyxDQUFDLEVBQUUsTUFBTSxDQUFDLE1BQU0sQ0FBQyxDQUFBO0FBQ3hDLENBQUM7QUFFRDs7cUJBRXFCO0FBQ3JCLE1BQU0sVUFBVSwyQkFBMkI7SUFDekMsTUFBTSxHQUFHLEVBQUUsQ0FBQTtBQUNiLENBQUM7QUFFRDs7O0dBR0c7QUFDSCxNQUFNLFVBQVUsMEJBQTBCO0lBQ3hDLE9BQU8sTUFBTSxDQUFDLE1BQU0sQ0FBQTtBQUN0QixDQUFDIiwic291cmNlc0NvbnRlbnQiOlsiLyoqXG4gKiBCdWZmZXJlZE91dGdvaW5nRXZlbnQgdHlwZS5cbiAqIEB0eXBlZGVmIHtvYmplY3R9IEJ1ZmZlcmVkT3V0Z29pbmdFdmVudFxuICogQHByb3BlcnR5IHtzdHJpbmd9IGN1c3RvbVBhdGggLSBSZXF1ZXN0IHBhdGguXG4gKiBAcHJvcGVydHkge1JlY29yZDxzdHJpbmcsIFJldHVyblR5cGU8dHlwZW9mIEpTT04ucGFyc2U+Pn0gcGF5bG9hZCAtIENvbW1hbmQgcGF5bG9hZC5cbiAqL1xuLy8gQHRzLWNoZWNrXG5cbmNvbnN0IE1BWF9CVUZGRVJFRF9PVVRHT0lOR19FVkVOVFMgPSA1MFxuXG4vKipcbiAqIEJ1ZmZlci5cbiAqIEB0eXBlIHtCdWZmZXJlZE91dGdvaW5nRXZlbnRbXX0gKi9cbmxldCBidWZmZXIgPSBbXVxuXG4vKipcbiAqIEFkZHMgYW4gZXZlbnQgdG8gdGhlIG91dGdvaW5nIGJ1ZmZlci4gRHJvcHMgdGhlIG9sZGVzdCBldmVudCB3aGVuIHRoZSBidWZmZXIgZXhjZWVkcyB0aGUgbWF4IHNpemUuXG4gKiBAcGFyYW0ge0J1ZmZlcmVkT3V0Z29pbmdFdmVudH0gZXZlbnQgLSBFdmVudCB0byBidWZmZXIuXG4gKiBAcmV0dXJucyB7dm9pZH1cbiAqL1xuZXhwb3J0IGZ1bmN0aW9uIGJ1ZmZlck91dGdvaW5nRXZlbnQoZXZlbnQpIHtcbiAgYnVmZmVyLnB1c2goZXZlbnQpXG5cbiAgaWYgKGJ1ZmZlci5sZW5ndGggPiBNQVhfQlVGRkVSRURfT1VUR09JTkdfRVZFTlRTKSB7XG4gICAgYnVmZmVyLnNoaWZ0KClcbiAgfVxufVxuXG4vKipcbiAqIFJldHVybnMgYW5kIGNsZWFycyBhbGwgYnVmZmVyZWQgZXZlbnRzIGluIEZJRk8gb3JkZXIuXG4gKiBAcmV0dXJucyB7QnVmZmVyZWRPdXRnb2luZ0V2ZW50W119IC0gRHJhaW5lZCBldmVudHMuXG4gKi9cbmV4cG9ydCBmdW5jdGlvbiBkcmFpbkJ1ZmZlcmVkT3V0Z29pbmdFdmVudHMoKSB7XG4gIHJldHVybiBidWZmZXIuc3BsaWNlKDAsIGJ1ZmZlci5sZW5ndGgpXG59XG5cbi8qKlxuICogUnVucyB0aGUgY2xlYXJCdWZmZXJlZE91dGdvaW5nRXZlbnRzIGhlbHBlci5cbiAqIEByZXR1cm5zIHt2b2lkfSAqL1xuZXhwb3J0IGZ1bmN0aW9uIGNsZWFyQnVmZmVyZWRPdXRnb2luZ0V2ZW50cygpIHtcbiAgYnVmZmVyID0gW11cbn1cblxuLyoqXG4gKiBSdW5zIHRoZSBidWZmZXJlZE91dGdvaW5nRXZlbnRDb3VudCBoZWxwZXIuXG4gKiBAcmV0dXJucyB7bnVtYmVyfSAtIEN1cnJlbnQgYnVmZmVyIHNpemUuXG4gKi9cbmV4cG9ydCBmdW5jdGlvbiBidWZmZXJlZE91dGdvaW5nRXZlbnRDb3VudCgpIHtcbiAgcmV0dXJuIGJ1ZmZlci5sZW5ndGhcbn1cbiJdfQ==

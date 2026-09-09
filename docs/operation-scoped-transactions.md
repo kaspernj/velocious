@@ -62,6 +62,9 @@ Task.afterSave(async (task) => {
 })
 ```
 
+See [Record lifecycle callbacks](lifecycle-callbacks.md) for callback declaration
+forms, ordering, and why `afterSave` is still pre-commit.
+
 Do not switch back to static model calls for work that belongs to the operation:
 
 ```js

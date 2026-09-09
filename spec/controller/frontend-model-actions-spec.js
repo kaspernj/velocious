@@ -20,6 +20,7 @@ import Response from "../../src/http-server/client/response.js"
 import Task from "../dummy/src/models/task.js"
 import User from "../dummy/src/models/user.js"
 import VelociousError from "../../src/velocious-error.js"
+import { LOG_REDACTION_MARKER } from "../../src/log-redactor.js"
 
 const FRONTEND_MODEL_CLIENT_SAFE_ERROR_MESSAGE = "Request failed."
 
@@ -335,7 +336,7 @@ class AllColumnsPluckTaskFrontendResource extends FrontendModelBaseResource {
   static builtInCollectionCommands = ["index"]
 }
 
-describe("Controller frontend model actions", {databaseCleaning: {transaction: false, truncate: true}}, () => {
+describe("Controller frontend model actions", () => {
   it("does not override scoped distinct when distinct param is omitted", async () => {
     await withTaskReadDistinctAbilityScope(async () => {
       await Dummy.run(async () => {
@@ -413,14 +414,18 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
 
   it("checks shared frontend-model API controller action connections back in", async () => {
     await Dummy.run(async () => {
-      await createTask("Connection checkout release")
+      const defaultPool = dummyConfiguration.getDatabasePool("default")
+
+      // This assertion covers production-style pool checkout rather than the test transaction reuse path.
+      defaultPool.clearTestSharedConnection()
+      expect(defaultPool.testSharedConnection()).toBeUndefined()
 
       const successPayload = await postFrontendModel("/frontend-models", {
         requests: [
           {
             commandType: "index",
             model: "Task",
-            payload: {where: {name: "Connection checkout release"}},
+            payload: {where: {name: "Missing connection checkout record"}},
             requestId: "request-1"
           }
         ]
@@ -682,9 +687,9 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     expect(reporterContexts[0].requestId).toEqual("request-1")
     expect(reporterRequestDetails[0]?.httpMethod).toEqual("POST")
     expect(reporterRequestDetails[0]?.path).toEqual("/frontend-models")
-    expect(reporterRequestDetails[0]?.body?.requests?.[0]?.payload?.authorization).toEqual("[redacted]")
+    expect(reporterRequestDetails[0]?.body?.requests?.[0]?.payload?.authorization).toEqual(LOG_REDACTION_MARKER)
     expect(reporterRequestDetails[0]?.body?.requests?.[0]?.payload?.comments?.[0]).toContain("[truncated ")
-    expect(reporterRequestDetails[0]?.body?.requests?.[0]?.payload?.payload?.contentBase64).toEqual("[redacted]")
+    expect(reporterRequestDetails[0]?.body?.requests?.[0]?.payload?.payload?.contentBase64).toEqual(LOG_REDACTION_MARKER)
   })
 
   it("compacts oversized shared frontend-model request details for client error reporters", async () => {
@@ -1634,6 +1639,34 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
     })
   })
 
+  it("rejects non-scalar nested ids for scalar child primary keys", async () => {
+    await Dummy.run(async () => {
+      const project = await Project.create({name: "Scalar nested id project"})
+      const firstTask = await Task.create({name: "First scalar nested id task", projectId: project.id()})
+      const secondTask = await Task.create({name: "Second scalar nested id task", projectId: project.id()})
+      const arrayIdPayload = await postSharedProjectFrontendModelCommand("update", {
+        attributes: {
+          tasksAttributes: [{id: [firstTask.id(), secondTask.id()], name: "Incorrectly updated"}]
+        },
+        id: project.id()
+      })
+
+      expect(arrayIdPayload.status).toEqual("error")
+      expect((await Task.find(firstTask.id())).name()).toEqual("First scalar nested id task")
+      expect((await Task.find(secondTask.id())).name()).toEqual("Second scalar nested id task")
+
+      const nullIdPayload = await postSharedProjectFrontendModelCommand("update", {
+        attributes: {
+          tasksAttributes: [{id: null, name: "Incorrectly created"}]
+        },
+        id: project.id()
+      })
+
+      expect(nullIdPayload.status).toEqual("error")
+      expect(await Task.findBy({name: "Incorrectly created", projectId: project.id()})).toBeNull()
+    })
+  })
+
   it("creates and scopes polymorphic has-many nested attributes", async () => {
     await Dummy.run(async () => {
       const createPayload = await postSharedProjectFrontendModelCommand("create", {
@@ -1731,7 +1764,7 @@ describe("Controller frontend model actions", {databaseCleaning: {transaction: f
             commandType: "index",
             model: "VelociousAttachment",
             payload: {
-              where: {recordType: "Task", recordId: String(task.id()), name: "descriptionFile"}
+              where: {recordType: "Task", recordId: String(task.id()), resourceName: "Task", name: "descriptionFile"}
             },
             requestId: "request-1"
           }]

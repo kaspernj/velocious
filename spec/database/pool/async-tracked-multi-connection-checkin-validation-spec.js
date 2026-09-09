@@ -16,7 +16,7 @@ function getPool() {
 
 // Mutates `pool.connections` directly, so start from a freshly restarted Dummy
 // to avoid leaking that replacement into unrelated tests sharing the pool.
-describe("database - pool - checkin with open transaction", () => {
+describe("database - pool - checkin with open transaction", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("rolls back a transaction left open on check-in so the reused connection is not poisoned", async () => {
     await Dummy.run(async () => {
       const pool = getPool()

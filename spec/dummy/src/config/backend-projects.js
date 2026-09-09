@@ -19,11 +19,6 @@ class TaskFrontendResource extends FrontendModelBaseResource {
 
   static sync = {operations: ["index", "find", "create", "update"]}
 
-  static attachments = {
-        descriptionFile: {type: "hasOne"},
-        files: {type: "hasMany"}
-      }
-
   static builtInCollectionCommands = ["index"]
 
   static builtInMemberCommands = ["find", "update", "destroy"]
@@ -88,6 +83,37 @@ class TaskFrontendResource extends FrontendModelBaseResource {
       {commentsAttributes: ["id", "_destroy", "body"]},
       {projectAttributes: ["name"]}
     ]
+  }
+}
+
+class CompositeTaskFrontendResource extends FrontendModelBaseResource {
+  static ModelClass = Task
+
+  static attributes = ["name", "projectId", "description"]
+
+  static attachments = {
+    descriptionFile: {type: "hasOne"}
+  }
+
+  static builtInCollectionCommands = ["create", "index"]
+
+  static builtInMemberCommands = ["find", "update", "destroy"]
+
+  static primaryKey = ["name", "projectId"]
+
+  /**
+   * Preserves custom resource query behavior while forwarding framework query options.
+   * @param {import("../../../../src/frontend-model-resource/base-resource.js").FrontendModelResourceAction} action - Frontend-model action.
+   * @param {import("../../../../src/frontend-model-resource/base-resource.js").FrontendModelResourceAuthorizedQueryOptions} [options] - Authorization query options.
+   * @returns {import("../../../../src/database/query/model-class-query.js").default<typeof Task>} - Authorized task query.
+   */
+  authorizedQuery(action, options) {
+    return super.authorizedQuery(action, options)
+  }
+
+  /** @returns {Array<string>} - Permit spec for composite task writes. */
+  permittedParams() {
+    return ["name", "projectId", "description", "descriptionFile"]
   }
 }
 
@@ -322,6 +348,7 @@ const backendProjects = [
     path: "/tmp/example-backend",
     frontendModels: {
       Comment: SystemTestCommentFrontendResource,
+      CompositeTask: CompositeTaskFrontendResource,
       Interaction: InteractionFrontendResource,
       Project: ProjectFrontendResource,
       Task: TaskFrontendResource,

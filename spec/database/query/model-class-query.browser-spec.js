@@ -63,6 +63,23 @@ describe("Database - query - model class query", {databaseCleaning: {transaction
     expect(count).toEqual(4)
   })
 
+  it("matches numeric predicates against PostgreSQL character varying metadata across drivers", async () => {
+    class PostgreSqlStringTask extends Record {
+      static getColumnTypeByName(name) {
+        if (name === "name") return "character varying"
+
+        return super.getColumnTypeByName(name)
+      }
+    }
+
+    PostgreSqlStringTask.setTableName("tasks")
+    await PostgreSqlStringTask.ensureInitialized()
+    const project = await Project.create({nameEn: "String predicate", nameDe: "String-Prädikat"})
+    await Task.create({name: "1", project})
+
+    expect(await PostgreSqlStringTask.where({name: 1}).count()).toEqual(1)
+  })
+
   it("counts records after limit and offset are applied", async () => {
     const project = await Project.create({nameEn: "Paginated count", nameDe: "Seitennummerierte Anzahl"})
     await Task.create({name: "Paginated count task 1", project})

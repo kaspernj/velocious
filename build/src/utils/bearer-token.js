@@ -1,0 +1,29 @@
+// @ts-check
+import crypto from "node:crypto";
+/**
+ * Constant-time comparison so token checks don't leak length/contents through
+ * timing. Returns false for differing lengths before the timing-safe compare.
+ * @param {string} a - First value.
+ * @param {string} b - Second value.
+ * @returns {boolean} - Whether the values are equal.
+ */
+export function constantTimeEqual(a, b) {
+    const bufferA = Buffer.from(String(a));
+    const bufferB = Buffer.from(String(b));
+    if (bufferA.length !== bufferB.length)
+        return false;
+    return crypto.timingSafeEqual(bufferA, bufferB);
+}
+/**
+ * Extracts the bearer token from the Authorization header of a request.
+ * @param {import("../http-server/client/request.js").default | import("../http-server/client/websocket-request.js").default} request - Request object.
+ * @returns {string | null} - Bearer token from the Authorization header, if any.
+ */
+export function bearerToken(request) {
+    const header = request.header("authorization");
+    if (typeof header !== "string")
+        return null;
+    const match = header.match(/^Bearer\s+(.+)$/i);
+    return match ? match[1].trim() : null;
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiYmVhcmVyLXRva2VuLmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiLi4vLi4vLi4vc3JjL3V0aWxzL2JlYXJlci10b2tlbi5qcyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQSxZQUFZO0FBRVosT0FBTyxNQUFNLE1BQU0sYUFBYSxDQUFBO0FBRWhDOzs7Ozs7R0FNRztBQUNILE1BQU0sVUFBVSxpQkFBaUIsQ0FBQyxDQUFDLEVBQUUsQ0FBQztJQUNwQyxNQUFNLE9BQU8sR0FBRyxNQUFNLENBQUMsSUFBSSxDQUFDLE1BQU0sQ0FBQyxDQUFDLENBQUMsQ0FBQyxDQUFBO0lBQ3RDLE1BQU0sT0FBTyxHQUFHLE1BQU0sQ0FBQyxJQUFJLENBQUMsTUFBTSxDQUFDLENBQUMsQ0FBQyxDQUFDLENBQUE7SUFFdEMsSUFBSSxPQUFPLENBQUMsTUFBTSxLQUFLLE9BQU8sQ0FBQyxNQUFNO1FBQUUsT0FBTyxLQUFLLENBQUE7SUFFbkQsT0FBTyxNQUFNLENBQUMsZUFBZSxDQUFDLE9BQU8sRUFBRSxPQUFPLENBQUMsQ0FBQTtBQUNqRCxDQUFDO0FBRUQ7Ozs7R0FJRztBQUNILE1BQU0sVUFBVSxXQUFXLENBQUMsT0FBTztJQUNqQyxNQUFNLE1BQU0sR0FBRyxPQUFPLENBQUMsTUFBTSxDQUFDLGVBQWUsQ0FBQyxDQUFBO0lBRTlDLElBQUksT0FBTyxNQUFNLEtBQUssUUFBUTtRQUFFLE9BQU8sSUFBSSxDQUFBO0lBRTNDLE1BQU0sS0FBSyxHQUFHLE1BQU0sQ0FBQyxLQUFLLENBQUMsa0JBQWtCLENBQUMsQ0FBQTtJQUU5QyxPQUFPLEtBQUssQ0FBQyxDQUFDLENBQUMsS0FBSyxDQUFDLENBQUMsQ0FBQyxDQUFDLElBQUksRUFBRSxDQUFDLENBQUMsQ0FBQyxJQUFJLENBQUE7QUFDdkMsQ0FBQyIsInNvdXJjZXNDb250ZW50IjpbIi8vIEB0cy1jaGVja1xuXG5pbXBvcnQgY3J5cHRvIGZyb20gXCJub2RlOmNyeXB0b1wiXG5cbi8qKlxuICogQ29uc3RhbnQtdGltZSBjb21wYXJpc29uIHNvIHRva2VuIGNoZWNrcyBkb24ndCBsZWFrIGxlbmd0aC9jb250ZW50cyB0aHJvdWdoXG4gKiB0aW1pbmcuIFJldHVybnMgZmFsc2UgZm9yIGRpZmZlcmluZyBsZW5ndGhzIGJlZm9yZSB0aGUgdGltaW5nLXNhZmUgY29tcGFyZS5cbiAqIEBwYXJhbSB7c3RyaW5nfSBhIC0gRmlyc3QgdmFsdWUuXG4gKiBAcGFyYW0ge3N0cmluZ30gYiAtIFNlY29uZCB2YWx1ZS5cbiAqIEByZXR1cm5zIHtib29sZWFufSAtIFdoZXRoZXIgdGhlIHZhbHVlcyBhcmUgZXF1YWwuXG4gKi9cbmV4cG9ydCBmdW5jdGlvbiBjb25zdGFudFRpbWVFcXVhbChhLCBiKSB7XG4gIGNvbnN0IGJ1ZmZlckEgPSBCdWZmZXIuZnJvbShTdHJpbmcoYSkpXG4gIGNvbnN0IGJ1ZmZlckIgPSBCdWZmZXIuZnJvbShTdHJpbmcoYikpXG5cbiAgaWYgKGJ1ZmZlckEubGVuZ3RoICE9PSBidWZmZXJCLmxlbmd0aCkgcmV0dXJuIGZhbHNlXG5cbiAgcmV0dXJuIGNyeXB0by50aW1pbmdTYWZlRXF1YWwoYnVmZmVyQSwgYnVmZmVyQilcbn1cblxuLyoqXG4gKiBFeHRyYWN0cyB0aGUgYmVhcmVyIHRva2VuIGZyb20gdGhlIEF1dGhvcml6YXRpb24gaGVhZGVyIG9mIGEgcmVxdWVzdC5cbiAqIEBwYXJhbSB7aW1wb3J0KFwiLi4vaHR0cC1zZXJ2ZXIvY2xpZW50L3JlcXVlc3QuanNcIikuZGVmYXVsdCB8IGltcG9ydChcIi4uL2h0dHAtc2VydmVyL2NsaWVudC93ZWJzb2NrZXQtcmVxdWVzdC5qc1wiKS5kZWZhdWx0fSByZXF1ZXN0IC0gUmVxdWVzdCBvYmplY3QuXG4gKiBAcmV0dXJucyB7c3RyaW5nIHwgbnVsbH0gLSBCZWFyZXIgdG9rZW4gZnJvbSB0aGUgQXV0aG9yaXphdGlvbiBoZWFkZXIsIGlmIGFueS5cbiAqL1xuZXhwb3J0IGZ1bmN0aW9uIGJlYXJlclRva2VuKHJlcXVlc3QpIHtcbiAgY29uc3QgaGVhZGVyID0gcmVxdWVzdC5oZWFkZXIoXCJhdXRob3JpemF0aW9uXCIpXG5cbiAgaWYgKHR5cGVvZiBoZWFkZXIgIT09IFwic3RyaW5nXCIpIHJldHVybiBudWxsXG5cbiAgY29uc3QgbWF0Y2ggPSBoZWFkZXIubWF0Y2goL15CZWFyZXJcXHMrKC4rKSQvaSlcblxuICByZXR1cm4gbWF0Y2ggPyBtYXRjaFsxXS50cmltKCkgOiBudWxsXG59XG4iXX0=

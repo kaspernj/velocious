@@ -4,7 +4,7 @@ import Configuration from "../../../src/configuration.js"
 import {describe, expect, it} from "../../../src/testing/test.js"
 import Migration from "../../../src/database/migration/index.js"
 
-describe("database - migration - addColumn on referenced table", {tags: ["dummy"]}, () => {
+describe("database - migration - addColumn on referenced table", {databaseCleaning: {transaction: false, truncate: true}, tags: ["dummy"]}, () => {
   it("adds a column to a parent table that is already referenced by a child foreign key", async () => {
     const configuration = Configuration.current()
 
