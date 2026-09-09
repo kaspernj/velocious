@@ -392,6 +392,65 @@ describe("http server - response compression", {databaseCleaning: {transaction: 
     expect(bodyBuffer(outputs).length).toEqual(0)
   })
 
+  it("emits the sendFile 406 headers before settling onFinished so delivery is not delayed or blocked", async () => {
+    const configuration = buildConfiguration({compression: true})
+    const filePath = repositoryPackageJsonPath()
+    const request = buildRequest({headers: {"Accept-Encoding": "identity;q=0"}})
+    const response = buildResponse({body: "", configuration})
+
+    /** @type {string[]} */
+    const finishedResults = []
+
+    /** @type {Array<boolean>} */
+    const finishedWhenHeadersEmitted = []
+
+    /** @type {boolean} */
+    let headersEmitted = false
+
+    // onFinished must not run until the 406 response headers have been emitted;
+    // record whether that ordering held the moment the callback fires. A slow or
+    // app-stopping callback must not be able to delay or prevent delivery of an
+    // already-committed response.
+    response.setFilePath(filePath, (result) => {
+      finishedResults.push(result)
+      finishedWhenHeadersEmitted.push(headersEmitted)
+    })
+
+    const client = new Client({clientCount: 1, configuration})
+
+    /** @type {Array<string | Uint8Array>} */
+    const outputs = []
+
+    /** @type {Array<boolean>} */
+    const fileSendBodies = []
+
+    client.events.on("output", (data) => {
+      outputs.push(data)
+      if (typeof data === "string" && data.startsWith("HTTP/")) headersEmitted = true
+    })
+    client.events.on("file", ({sendBody, settle}) => {
+      fileSendBodies.push(sendBody)
+      void settle("completed")
+    })
+
+    await client.sendResponse(buildRequestRunner({request, response}))
+    const headers = headerText(outputs)
+
+    expect(headers).toContain("HTTP/1.1 406 Not Acceptable\r\n")
+    expect(headers).toContain("Content-Length: 0\r\n")
+    expect(headers).toContain("Vary: Accept-Encoding\r\n")
+    expect(headers).not.toContain("Content-Encoding")
+    // The 406 is a committed empty body: no file event is emitted and onFinished
+    // settles exactly once as "completed".
+    expect(fileSendBodies).toEqual([])
+    expect(finishedResults.length).toEqual(1)
+    expect(finishedResults[0]).toEqual("completed")
+    expect(bodyBuffer(outputs).length).toEqual(0)
+    // The callback ran only after the 406 headers were emitted, so a slow or
+    // app-stopping callback cannot delay or block the committed response.
+    expect(finishedWhenHeadersEmitted).toEqual([true])
+  })
+
   it("answers 406 for a HEAD sendFile response when identity is forbidden without streaming or double-settling", async () => {
     const configuration = buildConfiguration({compression: true})
     const filePath = repositoryPackageJsonPath()

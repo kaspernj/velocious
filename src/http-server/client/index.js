@@ -469,15 +469,12 @@ export default class VeoliciousHttpServerClient {
         if (isFileNotAcceptable) {
           // The client forbids identity and files are only ever sent identity:
           // answer with the same empty 406 every other representation path
-          // uses. The file is never opened or streamed; the committed 406
-          // still settles onFinished as "completed" so application cleanup runs
-          // exactly once.
+          // uses. The file is never opened or streamed; onFinished is settled
+          // below, after the committed 406 headers are emitted.
           response.setStatus(406)
           response.setBody("")
           bodyToEmit = ""
           contentLength = 0
-
-          await this.runFileOnFinished({filePath, onFinished: fileOnFinished, result: "completed"})
         } else {
           const stats = await fs.stat(filePath)
           contentLength = stats.size
@@ -544,12 +541,15 @@ export default class VeoliciousHttpServerClient {
     this.events.emit("output", headers)
     this.logger.debug(() => ["sendResponse headers emitted", {clientCount: this.clientCount, headersLength: headers.length}])
 
-    // A negotiated file 406 is fully committed above (status 406, empty body)
-    // and its onFinished already settled once as "completed": every file-output
-    // branch below is bypassed so no file event is emitted and the callback is
-    // never settled a second time. This holds for both GET and HEAD.
+    // A negotiated file 406 is committed above (status 406, empty body) and its
+    // headers were just emitted: settle onFinished now, so the callback runs
+    // after the response is committed — a slow or app-stopping callback cannot
+    // delay or block delivery of the already-emitted 406. The file is never
+    // opened, streamed, or reported (no file event), and the callback settles
+    // exactly once as "completed".
     if (isFileNotAcceptable) {
       this.logger.debug(() => ["sendResponse file body suppressed for 406", {clientCount: this.clientCount, filePath}])
+      await this.runFileOnFinished({filePath, onFinished: fileOnFinished, result: "completed"})
     } else if (isBodylessStatus) {
       this.logger.debug(() => ["sendResponse body suppressed for no-body status", {clientCount: this.clientCount, statusCode: response.getStatusCode()}])
       // A bodyless status (1xx/204/304) selects no representation, so no file
