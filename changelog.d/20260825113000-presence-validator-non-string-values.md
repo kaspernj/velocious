@@ -1,0 +1,1 @@
+- Fix the presence validator crashing with `rawValue?.trim is not a function` on non-string attribute values such as `Date` instances, and treat falsy non-string values like `0` and `false` as present; only `null`/`undefined` and trimmed-empty strings count as blank.
