@@ -11,6 +11,15 @@
 /** @typedef {"unexpected" | "job-timeout" | "worker-shutdown-timeout"} PooledRunnerTerminationReason */
 /** @typedef {"running" | "retiring" | "stopping"} BackgroundJobsWorkerLifecycleState */
 /**
+ * Exact durable handoff ownership carried by an executing job when it produces
+ * follow-up work.
+ * @typedef {object} BackgroundJobProducerProof
+ * @property {string} jobId - Producing job id.
+ * @property {string} handoffId - Producing handoff lease id.
+ * @property {string} workerId - Worker identity persisted with the handoff.
+ * @property {number} handedOffAtMs - Durable handoff timestamp.
+ */
+/**
  * @typedef {object} PooledRunnerActiveJob
  * @property {string | null} handoffId - Durable handoff lease id.
  * @property {number | null} handedOffAtMs - Durable handoff timestamp.
@@ -84,7 +93,7 @@
  */
 /**
  * @typedef {object} BackgroundJobsProducer
- * @property {(args: {jobName: string, args: Array<ReturnType<typeof JSON.parse>>, options?: BackgroundJobOptions}) => Promise<string>} enqueue - Enqueues a job.
+ * @property {(args: {jobName: string, args: Array<ReturnType<typeof JSON.parse>>, options?: BackgroundJobOptions, producerInvocationId?: string, producerProof?: BackgroundJobProducerProof}) => Promise<string>} enqueue - Enqueues a job.
  * @property {(args: {scheduleKey: string, jobName: string, args: Array<ReturnType<typeof JSON.parse>>, options?: BackgroundJobOptions}) => Promise<BackgroundJobReplacementResult>} replaceScheduled - Replaces a stable schedule.
  * @property {(args: {scheduleKey: string}) => Promise<BackgroundJobCancellationResult>} cancelScheduled - Cancels a stable schedule.
  */
@@ -200,7 +209,7 @@
  * @typedef {{type: "ready", acceptsForked?: boolean, acceptsInline?: boolean, acceptsPooled?: boolean, acceptsSpawned?: boolean, availablePooledSlots?: number}} BackgroundJobReadyMessage
  * @typedef {{type: "draining"}} BackgroundJobDrainingMessage
  * @typedef {{type: "heartbeat", workerId?: string}} BackgroundJobHeartbeatMessage
- * @typedef {{type: "enqueue", jobName: string, args?: Array<ReturnType<typeof JSON.parse>>, options?: BackgroundJobOptions}} BackgroundJobEnqueueMessage
+ * @typedef {{type: "enqueue", jobName: string, args?: Array<ReturnType<typeof JSON.parse>>, options?: BackgroundJobOptions, producerInvocationId?: string, producerProof?: BackgroundJobProducerProof}} BackgroundJobEnqueueMessage
  * @typedef {{type: "enqueued", jobId: string}} BackgroundJobEnqueuedMessage
  * @typedef {{type: "enqueue-error", error?: string}} BackgroundJobEnqueueErrorMessage
  * @typedef {{type: "replace-scheduled", scheduleKey: string, jobName: string, args?: Array<ReturnType<typeof JSON.parse>>, options?: BackgroundJobOptions}} BackgroundJobReplaceScheduledMessage

@@ -201,7 +201,7 @@ export default class BackgroundJobsMain {
     this._pollTimer = undefined
     /**
      * Narrows the runtime value to the documented type.
-     * @type {ReturnType<typeof setTimeout> | undefined} */
+     * @type {ReturnType<typeof setTimeout> | number | undefined} */
     this._scheduledTimer = undefined
     /**
      * Narrows the runtime value to the documented type.
@@ -290,6 +290,9 @@ export default class BackgroundJobsMain {
       }
       if (this.generationId && !this.adapter.supportsReleaseScopedGenerations()) {
         throw new Error("The configured background jobs adapter does not support release-scoped generations")
+      }
+      if (this.generationId && !this.adapter.supportsOwnedEnqueueFromHandoff()) {
+        throw new Error("The configured background jobs adapter does not support atomic owned-handoff enqueue")
       }
 
       if (!this.generationId || this.initialGenerationState !== "candidate") {
@@ -411,7 +414,7 @@ export default class BackgroundJobsMain {
    * @returns {void} */
   _clearTimers() {
     if (this._pollTimer) clearInterval(this._pollTimer)
-    if (this._scheduledTimer) clearTimeout(this._scheduledTimer)
+    if (this._scheduledTimer) this.clock.clearTimeout(this._scheduledTimer)
     if (this._errorRetryTimer) clearTimeout(this._errorRetryTimer)
     if (this._orphanTimer) clearInterval(this._orphanTimer)
     if (this._workerStaleTimer) clearInterval(this._workerStaleTimer)
@@ -670,7 +673,7 @@ export default class BackgroundJobsMain {
   /** Clears timers that can initiate new global dispatch or schedule work. */
   _clearDispatchTimers() {
     if (this._pollTimer) clearInterval(this._pollTimer)
-    if (this._scheduledTimer) clearTimeout(this._scheduledTimer)
+    if (this._scheduledTimer) this.clock.clearTimeout(this._scheduledTimer)
     if (this._errorRetryTimer) clearTimeout(this._errorRetryTimer)
     this._pollTimer = undefined
     this._scheduledTimer = undefined
@@ -1151,10 +1154,10 @@ export default class BackgroundJobsMain {
    */
   async _handleClientSocketMessage({jsonSocket, message}) {
     if (this.generationId && (this.lifecycleState === "retiring" || this.lifecycleState === "retired")) {
-      if (message?.type === "enqueue") jsonSocket.send({type: "enqueue-error", error: "Background jobs generation is retired"})
+      if (message?.type === "enqueue" && !message.producerProof) jsonSocket.send({type: "enqueue-error", error: "Background jobs generation is retired"})
       if (message?.type === "replace-scheduled") jsonSocket.send({type: "replace-scheduled-error", error: "Background jobs generation is retired"})
       if (message?.type === "cancel-scheduled") jsonSocket.send({type: "cancel-scheduled-error", error: "Background jobs generation is retired"})
-      return
+      if (message?.type !== "enqueue" || !message.producerProof) return
     }
 
     if (message?.type === "enqueue") {
@@ -1473,15 +1476,26 @@ export default class BackgroundJobsMain {
    */
   async _handleEnqueue({jsonSocket, message}) {
     try {
-      const jobId = await this.store.enqueue({
+      if (this.generationId
+        && typeof message.producerProof?.workerId === "string"
+        && !workerIdBelongsToGeneration({generationId: this.generationId, workerId: message.producerProof.workerId})) {
+        throw VelociousError.safe("Background job producer handoff belongs to another generation.", {
+          code: "background-job-producer-generation-mismatch"
+        })
+      }
+
+      const request = {
         jobName: message.jobName,
         args: message.args || [],
         options: message.options || {}
-      })
+      }
+      const jobId = this.generationId && message.producerProof
+        ? await this.store.enqueueFromOwnedHandoff({...request, producerInvocationId: message.producerInvocationId, producerProof: message.producerProof})
+        : await this.store.enqueue(request)
 
       jsonSocket.send({type: "enqueued", jobId})
       this._notifyEnqueued()
-      await this._drain()
+      if (this.lifecycleState === "active") await this._drain()
     } catch (error) {
       this._handleClientMutationError({
         context: {jobName: message.jobName, stage: "background-job-enqueue"},
@@ -2295,7 +2309,7 @@ export default class BackgroundJobsMain {
    */
   async _armScheduledTimer() {
     if (this._scheduledTimer) {
-      clearTimeout(this._scheduledTimer)
+      this.clock.clearTimeout(this._scheduledTimer)
       this._scheduledTimer = undefined
     }
 
@@ -2318,7 +2332,7 @@ export default class BackgroundJobsMain {
 
     if (typeof delay !== "number") return
 
-    this._scheduledTimer = setTimeout(() => {
+    this._scheduledTimer = this.clock.setTimeout(() => {
       this._scheduledTimer = undefined
       void this._drain()
     }, delay)

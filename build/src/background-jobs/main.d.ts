@@ -118,8 +118,8 @@ export default class BackgroundJobsMain {
     _pollTimer: ReturnType<typeof setTimeout> | undefined;
     /**
      * Narrows the runtime value to the documented type.
-     * @type {ReturnType<typeof setTimeout> | undefined} */
-    _scheduledTimer: ReturnType<typeof setTimeout> | undefined;
+     * @type {ReturnType<typeof setTimeout> | number | undefined} */
+    _scheduledTimer: ReturnType<typeof setTimeout> | number | undefined;
     /**
      * Narrows the runtime value to the documented type.
      * @type {ReturnType<typeof setTimeout> | undefined} */

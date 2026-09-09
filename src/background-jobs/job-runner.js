@@ -4,6 +4,7 @@ import configurationResolver from "../configuration-resolver.js"
 import BackgroundJobRegistry from "./job-registry.js"
 import BackgroundJobsStatusReporter from "./status-reporter.js"
 import BackgroundJobRescheduleSignal from "./reschedule-signal.js"
+import { runWithBackgroundJobPayload } from "./execution-context.js"
 import { closeRunnerConnections } from "./runner-graceful-shutdown.js"
 
 const BEACON_READY_TIMEOUT_MS = 5000
@@ -116,8 +117,10 @@ export default async function runJobPayload(payload, {closeConnections = true, m
 
   try {
     try {
-      await configuration.withConnections({databaseIdentifiers: JobClass.databaseIdentifiers, name: `Background job runner: ${payload.jobName}`}, async () => {
-        await perform.apply(jobInstance, jobArgs)
+      await runWithBackgroundJobPayload(payload, async () => {
+        await configuration.withConnections({databaseIdentifiers: JobClass.databaseIdentifiers, name: `Background job runner: ${payload.jobName}`}, async () => {
+          await perform.apply(jobInstance, jobArgs)
+        })
       })
     } catch (error) {
       if (error instanceof BackgroundJobRescheduleSignal) {

@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url"
 import shutdownLifecycle, { runShutdownSteps } from "../utils/shutdown-lifecycle.js"
 import BackgroundJobRescheduleSignal from "./reschedule-signal.js"
 import performBackgroundJob from "./perform-job.js"
+import { runWithBackgroundJobPayload } from "./execution-context.js"
 import { createGenerationWorkerId } from "./generation-identity.js"
 import BackgroundJobsGenerationHandshakeTimeoutError, { DEFAULT_GENERATION_HANDSHAKE_TIMEOUT_MS, validateGenerationHandshakeTimeoutMs } from "./generation-handshake-timeout-error.js"
 
@@ -1430,13 +1431,15 @@ export default class BackgroundJobsWorker {
     const registry = new BackgroundJobRegistry({configuration})
     await registry.load()
     const JobClass = registry.getJobByName(payload.jobName)
-    await performBackgroundJob({
-      configuration,
-      JobClass,
-      jobArgs: payload.args || [],
-      jobOptions: payload.options || {},
-      name: `Background job worker inline: ${payload.jobName}`,
-      payload
+    await runWithBackgroundJobPayload(payload, async () => {
+      await performBackgroundJob({
+        configuration,
+        JobClass,
+        jobArgs: payload.args || [],
+        jobOptions: payload.options || {},
+        name: `Background job worker inline: ${payload.jobName}`,
+        payload
+      })
     })
   }
 

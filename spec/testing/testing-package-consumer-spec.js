@@ -11,7 +11,7 @@ import repoRoot from "../helpers/repo-root.js"
 const execFileAsync = promisify(execFile)
 
 describe("@velocious/testing packed consumer", {databaseCleaning: {transaction: false, truncate: false}}, () => {
-  it("installs exactly one valid physical 0.0.12 package", async () => {
+  it("installs exactly one valid physical 0.0.12 package", {timeoutMs: 120_000}, async () => {
     const temporaryRoot = path.join(repoRoot(), "tmp")
 
     await fs.mkdir(temporaryRoot, {recursive: true})

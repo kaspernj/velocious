@@ -44,9 +44,11 @@ export default class BackgroundJobsClient {
    * @param {string} args.jobName - Job name.
    * @param {Array<ReturnType<typeof JSON.parse>>} args.args - Job args.
    * @param {import("./types.js").BackgroundJobOptions} [args.options] - Job options.
+   * @param {string} [args.producerInvocationId] - Stable identity for one owned enqueue invocation.
+   * @param {import("./types.js").BackgroundJobProducerProof} [args.producerProof] - Exact internal producer handoff.
    * @returns {Promise<string>} - Job id.
    */
-  async enqueue({jobName, args, options}) {
+  async enqueue({jobName, args, options, producerInvocationId, producerProof}) {
     const request = await this._request()
 
     return await timeout({
@@ -59,7 +61,9 @@ export default class BackgroundJobsClient {
           type: "enqueue",
           jobName,
           args,
-          options
+          options,
+          ...(producerInvocationId ? {producerInvocationId} : {}),
+          ...(producerProof ? {producerProof} : {})
         })
       },
       onMessage: ({message, resolve, reject}) => {

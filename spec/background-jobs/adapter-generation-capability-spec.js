@@ -13,6 +13,10 @@ class LegacyStartableAdapter extends BackgroundJobsTestAdapter {
   async markOrphanedJobs() { return [] }
 }
 
+class GenerationOnlyAdapter extends BackgroundJobsTestAdapter {
+  supportsReleaseScopedGenerations() { return true }
+}
+
 describe("Background jobs generation adapter capability", () => {
   it("rejects an unsupported adapter before listening in generation mode", async () => {
     dummyConfiguration.setBackgroundJobsConfig({generationId: undefined, initialGenerationState: undefined, lifecycleSocketPath: undefined})
@@ -43,12 +47,30 @@ describe("Background jobs generation adapter capability", () => {
     main.store = legacyAdapter
 
     expect(sqlAdapter.supportsReleaseScopedGenerations()).toEqual(true)
+    expect(sqlAdapter.supportsOwnedEnqueueFromHandoff()).toEqual(true)
     expect(legacyAdapter.supportsReleaseScopedGenerations()).toEqual(false)
+    expect(legacyAdapter.supportsOwnedEnqueueFromHandoff()).toEqual(false)
     try {
       await main.start()
       expect(main.server?.listening).toEqual(true)
     } finally {
       await main.stop()
     }
+  })
+
+  it("rejects a generation adapter without atomic owned-handoff enqueue", async () => {
+    dummyConfiguration.setBackgroundJobsConfig({generationId: undefined, initialGenerationState: undefined, lifecycleSocketPath: undefined})
+    const main = new BackgroundJobsMain({
+      closeDatabaseConnectionsOnStop: false,
+      configuration: dummyConfiguration,
+      generationId: "release-without-owned-enqueue",
+      host: "127.0.0.1",
+      initialGenerationState: "candidate",
+      port: 0
+    })
+    main.store = new GenerationOnlyAdapter()
+
+    await expect(async () => await main.start()).toThrow(/does not support atomic owned-handoff enqueue/)
+    expect(main.server).toEqual(undefined)
   })
 })

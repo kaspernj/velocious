@@ -150,11 +150,15 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
    * @param {object} args - Options.
    * @param {import("../configuration.js").default} args.configuration - Configuration.
    * @param {string} [args.databaseIdentifier] - Database identifier.
+   * @param {{now: () => number}} [args.clock] - Injectable persistence clock.
+   * @param {(producerProof: import("./types.js").BackgroundJobProducerProof) => void | Promise<void>} [args.afterOwnedProducerValidation] - Exact owned-enqueue validation hook.
    */
-  constructor({configuration, databaseIdentifier}) {
+  constructor({configuration, databaseIdentifier, clock, afterOwnedProducerValidation}) {
     super()
     this.configuration = configuration
     this.databaseIdentifier = databaseIdentifier
+    this.clock = clock || {now: () => Date.now()}
+    this.afterOwnedProducerValidation = afterOwnedProducerValidation
     this.logger = new Logger(this)
     this._readyPromise = null
     this._queueConcurrencyReconciled = false
@@ -321,23 +325,10 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
 
     await this._serializedCountMutation(async (db) => {
       if (options?.deduplicateWhileQueued) {
-        // Dedupe on the job's identity (name + args + queue), NOT its concurrency key, so a job
-        // keeps whatever concurrency it resolves to. Only an existing job scheduled no later than
-        // this enqueue can cover it; a retry backed off into the future must not suppress earlier
-        // work. Ordering returns the earliest covering job when several queued rows already exist.
-        const existing = await db
-          .newQuery()
-          .from(JOBS_TABLE)
-          .select("id")
-          .where({status: "queued", job_name: jobName, args_json: preparedJob.argsJson, queue: preparedJob.queue})
-          .where(`scheduled_at_ms <= ${db.quote(preparedJob.scheduledAtMs)}`)
-          .order("scheduled_at_ms ASC")
-          .limit(1)
-          .results()
+        const duplicateJobId = await this._deduplicatedQueuedJobId(db, preparedJob)
 
-        if (existing[0]) {
-          resultJobId = String(/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (existing[0]).id)
-
+        if (duplicateJobId) {
+          resultJobId = duplicateJobId
           return
         }
       }
@@ -350,6 +341,122 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
   }
 
   /**
+   * Atomically validates an exact producing handoff and enqueues its follow-up.
+   * Every exact request owns an internal durable replay identity, while queued
+   * deduplication can point several distinct producer events at one covering row.
+   * @param {object} args - Owned enqueue request.
+   * @param {string} args.jobName - Job name.
+   * @param {Array<ReturnType<typeof JSON.parse>>} args.args - Arguments.
+   * @param {import("./types.js").BackgroundJobOptions} [args.options] - Options.
+   * @param {string} [args.producerInvocationId] - Stable identity for one owned enqueue invocation.
+   * @param {import("./types.js").BackgroundJobProducerProof} args.producerProof - Exact producer lease.
+   * @returns {Promise<string>} - Durable follow-up id.
+   */
+  async enqueueFromOwnedHandoff({jobName, args, options, producerInvocationId, producerProof}) {
+    await this.ensureReady()
+
+    const normalizedProducerProof = this._normalizeProducerProof(producerProof)
+    const normalizedProducerInvocationId = this._normalizeProducerInvocationId(producerInvocationId)
+    const preparedJob = this._prepareJob({jobName, args, options})
+
+    return await this._serializedCountMutation(async (db) => {
+      await this._validateOwnedProducerProof(db, normalizedProducerProof)
+      if (this.afterOwnedProducerValidation) await this.afterOwnedProducerValidation(normalizedProducerProof)
+
+      if (options?.idempotencyKey !== undefined) {
+        return await this._enqueueIdempotentlyInTransaction({
+          args: args || [],
+          countRevisionLocked: true,
+          db,
+          options,
+          preparedJob
+        })
+      }
+
+      return await this._enqueueOwnedReplayInTransaction({
+        db,
+        options: options || {},
+        preparedJob,
+        producerInvocationId: normalizedProducerInvocationId,
+        producerProof: normalizedProducerProof
+      })
+    })
+  }
+
+  /**
+   * Finds the earliest queued job that covers this enqueue's identity and time.
+   * @param {import("../database/drivers/base.js").default} db - Transaction connection.
+   * @param {PreparedBackgroundJob} preparedJob - Normalized job.
+   * @returns {Promise<string | null>} - Covering job id.
+   */
+  async _deduplicatedQueuedJobId(db, preparedJob) {
+    // Dedupe on the job's identity (name + args + queue), NOT its concurrency key, so a job
+    // keeps whatever concurrency it resolves to. Only an existing job scheduled no later than
+    // this enqueue can cover it; a retry backed off into the future must not suppress earlier
+    // work. Ordering returns the earliest covering job when several queued rows already exist.
+    const existing = await db
+      .newQuery()
+      .from(JOBS_TABLE)
+      .select("id")
+      .where({status: "queued", job_name: preparedJob.jobName, args_json: preparedJob.argsJson, queue: preparedJob.queue})
+      .where(`scheduled_at_ms <= ${db.quote(preparedJob.scheduledAtMs)}`)
+      .order("scheduled_at_ms ASC")
+      .limit(1)
+      .results()
+    const row = existing[0]
+
+    return row ? String(/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (row).id) : null
+  }
+
+  /**
+   * Persists one internal exact-replay owner and its queued job in the caller's
+   * producer-validation transaction.
+   * @param {object} args - Transaction input.
+   * @param {import("../database/drivers/base.js").default} args.db - Transaction connection.
+   * @param {import("./types.js").BackgroundJobOptions} args.options - Enqueue options.
+   * @param {PreparedBackgroundJob} args.preparedJob - Normalized job.
+   * @param {string} args.producerInvocationId - Stable identity for one owned enqueue invocation.
+   * @param {import("./types.js").BackgroundJobProducerProof} args.producerProof - Exact producer lease.
+   * @returns {Promise<string>} - Stable replay job id.
+   */
+  async _enqueueOwnedReplayInTransaction({db, options, preparedJob, producerInvocationId, producerProof}) {
+    const requestDigest = this._ownedEnqueueRequestDigest({options, preparedJob})
+    const scopeDigest = this._ownedEnqueueScopeDigest({preparedJob, producerInvocationId, producerProof, requestDigest})
+    const idempotencyKey = `owned-handoff:${scopeDigest}`
+    const existing = await this._idempotencyOwnership(db, scopeDigest)
+    const baseOwnership = {
+      created_at_ms: preparedJob.createdAtMs,
+      idempotency_key: idempotencyKey,
+      job_name: preparedJob.jobName,
+      queue: preparedJob.queue,
+      request_digest: requestDigest,
+      scope_digest: scopeDigest
+    }
+
+    if (existing) {
+      this._validateIdempotencyOwnership({existing, ownership: {...baseOwnership, job_id: String(existing.job_id)}})
+      return String(existing.job_id)
+    }
+
+    const duplicateJobId = options.deduplicateWhileQueued
+      ? await this._deduplicatedQueuedJobId(db, preparedJob)
+      : null
+    const ownership = {...baseOwnership, job_id: duplicateJobId || preparedJob.jobId}
+    const claimed = await this._claimIdempotencyOwnership(db, ownership)
+
+    if (!claimed.created) {
+      this._validateIdempotencyOwnership({existing: claimed.row, ownership})
+      return String(claimed.row.job_id)
+    }
+    if (duplicateJobId) return duplicateJobId
+
+    await this._insertPreparedJob(db, {preparedJob, scheduleKey: null})
+    await this._recordCountDelta(db, {all: 1, queued: 1})
+
+    return preparedJob.jobId
+  }
+
+  /**
    * Atomically owns one durable idempotency scope and creates its job exactly once.
    * @param {object} args - Enqueue input.
    * @param {Array<ReturnType<typeof JSON.parse>>} args.args - Job arguments.
@@ -358,6 +465,25 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
    * @returns {Promise<string>} - Stable original job id.
    */
   async _enqueueIdempotently({args, options, preparedJob}) {
+    // Reuse ordinary enqueue transaction admission because this path changes
+    // the same durable count revision. The scope primary key remains the
+    // cross-process convergence owner.
+    return await this._idempotentEnqueueTransaction(async (db) => {
+      return await this._enqueueIdempotentlyInTransaction({args, db, options, preparedJob})
+    })
+  }
+
+  /**
+   * Owns or replays one public idempotency key inside the caller's transaction.
+   * @param {object} args - Transaction input.
+   * @param {Array<ReturnType<typeof JSON.parse>>} args.args - Job arguments.
+   * @param {boolean} [args.countRevisionLocked] - Whether the caller already owns count serialization.
+   * @param {import("../database/drivers/base.js").default} args.db - Transaction connection.
+   * @param {import("./types.js").BackgroundJobOptions} args.options - Job options.
+   * @param {PreparedBackgroundJob} args.preparedJob - Normalized job.
+   * @returns {Promise<string>} - Stable original job id.
+   */
+  async _enqueueIdempotentlyInTransaction({args, countRevisionLocked = false, db, options, preparedJob}) {
     const idempotencyKey = this._normalizeIdempotencyKey(options.idempotencyKey)
     const scopeDigest = this._idempotencyScopeDigest({idempotencyKey, jobName: preparedJob.jobName, queue: preparedJob.queue})
     const requestDigest = this._idempotencyRequestDigest({args, options, preparedJob})
@@ -378,33 +504,28 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       })
     }
 
-    // Reuse ordinary enqueue transaction admission because this path changes
-    // the same durable count revision. The scope primary key remains the
-    // cross-process convergence owner.
-    return await this._idempotentEnqueueTransaction(async (db) => {
-      const existing = await this._idempotencyOwnership(db, scopeDigest)
+    const existing = await this._idempotencyOwnership(db, scopeDigest)
 
-      if (existing) {
-        this._validateIdempotencyOwnership({existing, ownership})
-        await this._validateMailDeliveryOperation(db, {jobId: String(existing.job_id), mailOperationInput})
-        return String(existing.job_id)
-      }
+    if (existing) {
+      this._validateIdempotencyOwnership({existing, ownership})
+      await this._validateMailDeliveryOperation(db, {jobId: String(existing.job_id), mailOperationInput})
+      return String(existing.job_id)
+    }
 
-      const claimed = await this._claimIdempotencyOwnership(db, ownership)
+    const claimed = await this._claimIdempotencyOwnership(db, ownership)
 
-      if (!claimed.created) {
-        this._validateIdempotencyOwnership({existing: claimed.row, ownership})
-        await this._validateMailDeliveryOperation(db, {jobId: String(claimed.row.job_id), mailOperationInput})
-        return String(claimed.row.job_id)
-      }
+    if (!claimed.created) {
+      this._validateIdempotencyOwnership({existing: claimed.row, ownership})
+      await this._validateMailDeliveryOperation(db, {jobId: String(claimed.row.job_id), mailOperationInput})
+      return String(claimed.row.job_id)
+    }
 
-      await this._lockCountRevision(db)
-      await this._insertPreparedJob(db, {preparedJob, scheduleKey: null})
-      await this._persistMailDeliveryOperation(db, {jobId: preparedJob.jobId, mailOperationInput, createdAtMs: preparedJob.createdAtMs})
-      await this._recordCountDelta(db, {all: 1, queued: 1})
+    if (!countRevisionLocked) await this._lockCountRevision(db)
+    await this._insertPreparedJob(db, {preparedJob, scheduleKey: null})
+    await this._persistMailDeliveryOperation(db, {jobId: preparedJob.jobId, mailOperationInput, createdAtMs: preparedJob.createdAtMs})
+    await this._recordCountDelta(db, {all: 1, queued: 1})
 
-      return preparedJob.jobId
-    })
+    return preparedJob.jobId
   }
 
   /**
@@ -626,6 +747,126 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
   }
 
   /**
+   * Canonical request identity for an internal owned-handoff replay.
+   * Immediate enqueue wall time and generated job ids remain excluded.
+   * @param {object} args - Digest input.
+   * @param {import("./types.js").BackgroundJobOptions} args.options - Enqueue options.
+   * @param {PreparedBackgroundJob} args.preparedJob - Normalized job.
+   * @returns {string} - SHA-256 digest.
+   */
+  _ownedEnqueueRequestDigest({options, preparedJob}) {
+    const serialized = stableJsonStringify({
+      argsJson: preparedJob.argsJson,
+      concurrency: preparedJob.concurrency,
+      deduplicateWhileQueued: options.deduplicateWhileQueued === true,
+      executionMode: preparedJob.executionMode,
+      format: "velocious-background-job-owned-enqueue-v1",
+      jobName: preparedJob.jobName,
+      maxRetries: preparedJob.maxRetries,
+      queue: preparedJob.queue,
+      scheduledAtMs: options.scheduledAtMs === undefined ? null : preparedJob.scheduledAtMs,
+      scheduling: options.scheduledAtMs === undefined ? "immediate" : "scheduled",
+      ...(preparedJob.timeoutMs === null ? {} : {timeoutMs: preparedJob.timeoutMs})
+    })
+
+    return createHash("sha256").update(serialized).digest("hex")
+  }
+
+  /**
+   * Isolates internal producer replay ownership from caller idempotency scopes.
+   * @param {object} args - Scope input.
+   * @param {PreparedBackgroundJob} args.preparedJob - Normalized job.
+   * @param {string} args.producerInvocationId - Stable identity for one owned enqueue invocation.
+   * @param {import("./types.js").BackgroundJobProducerProof} args.producerProof - Exact producer lease.
+   * @param {string} args.requestDigest - Canonical request digest.
+   * @returns {string} - SHA-256 scope digest.
+   */
+  _ownedEnqueueScopeDigest({preparedJob, producerInvocationId, producerProof, requestDigest}) {
+    return createHash("sha256")
+      .update(stableJsonStringify({
+        format: "velocious-background-job-owned-enqueue-scope-v1",
+        jobName: preparedJob.jobName,
+        producerInvocationId,
+        producerProof,
+        queue: preparedJob.queue,
+        requestDigest
+      }))
+      .digest("hex")
+  }
+
+  /**
+   * Validates the untrusted identity of one producer-owned enqueue invocation.
+   * @param {string | undefined} producerInvocationId - Producer invocation identity.
+   * @returns {string} - Validated identity.
+   */
+  _normalizeProducerInvocationId(producerInvocationId) {
+    if (typeof producerInvocationId !== "string" || producerInvocationId.length === 0) {
+      throw VelociousError.safe("Background job producer invocation id is invalid.", {
+        code: "background-job-producer-invocation-id-invalid"
+      })
+    }
+
+    return producerInvocationId
+  }
+
+  /**
+   * Validates the untrusted transport shape before transaction admission.
+   * @param {import("./types.js").BackgroundJobProducerProof} producerProof - Producer proof.
+   * @returns {import("./types.js").BackgroundJobProducerProof} - Normalized immutable proof.
+   */
+  _normalizeProducerProof(producerProof) {
+    const exactKeys = ["handedOffAtMs", "handoffId", "jobId", "workerId"]
+    const keys = producerProof && typeof producerProof === "object" ? Object.keys(producerProof) : []
+    const valid = producerProof
+      && typeof producerProof === "object"
+      && keys.length === exactKeys.length
+      && keys.every((key) => exactKeys.includes(key))
+      && typeof producerProof.jobId === "string"
+      && producerProof.jobId.length > 0
+      && typeof producerProof.handoffId === "string"
+      && producerProof.handoffId.length > 0
+      && typeof producerProof.workerId === "string"
+      && producerProof.workerId.length > 0
+      && Number.isSafeInteger(producerProof.handedOffAtMs)
+      && producerProof.handedOffAtMs >= 0
+
+    if (!valid) {
+      throw VelociousError.safe("Background job producer proof is invalid.", {
+        code: "background-job-producer-proof-invalid"
+      })
+    }
+
+    return Object.freeze({
+      handedOffAtMs: producerProof.handedOffAtMs,
+      handoffId: producerProof.handoffId,
+      jobId: producerProof.jobId,
+      workerId: producerProof.workerId
+    })
+  }
+
+  /**
+   * Confirms exact active ownership while the enqueue transaction holds the
+   * shared mutation fence used by terminal producer transitions.
+   * @param {import("../database/drivers/base.js").default} db - Transaction connection.
+   * @param {import("./types.js").BackgroundJobProducerProof} producerProof - Exact producer lease.
+   * @returns {Promise<void>} - Resolves while ownership remains exact.
+   */
+  async _validateOwnedProducerProof(db, producerProof) {
+    const producer = await this._getJobRowById(db, producerProof.jobId)
+    const owned = producer
+      && producer.status === "handed_off"
+      && producer.handoffId === producerProof.handoffId
+      && producer.workerId === producerProof.workerId
+      && producer.handedOffAtMs === producerProof.handedOffAtMs
+
+    if (!owned) {
+      throw VelociousError.safe("Background job producer handoff is no longer owned.", {
+        code: "background-job-producer-handoff-not-owned"
+      })
+    }
+  }
+
+  /**
    * Replaces the queued owner of a stable schedule key with a new one-off job.
    * A handed-off owner is left running and reported truthfully.
    * @param {object} args - Options.
@@ -791,7 +1032,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
    * @returns {Promise<import("./types.js").BackgroundJobRow | null>} - Next matching queued job.
    */
   async _nextQueuedJob({db, scheduledAtOperator, executionMode}) {
-    const now = Date.now()
+    const now = this.clock.now()
     let query = db
       .newQuery()
       .from(JOBS_TABLE)
@@ -999,7 +1240,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
   async markHandedOff({jobId, handoffId = randomUUID(), workerId}) {
     await this.ensureReady()
 
-    const handedOffAtMs = Date.now()
+    const handedOffAtMs = this.clock.now()
 
     return await this._serializedCountMutation(async (db) => {
       const selectedJob = await this._getJobRowById(db, jobId)
@@ -1061,7 +1302,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
         tableName: JOBS_TABLE,
         data: {
           status: "completed",
-          completed_at_ms: Date.now()
+          completed_at_ms: this.clock.now()
         },
         conditions: this._activeHandoffConditions(job)
       })
@@ -1134,7 +1375,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
         tableName: JOBS_TABLE,
         data: {
           status: "queued",
-          scheduled_at_ms: Date.now(),
+          scheduled_at_ms: this.clock.now(),
           handed_off_at_ms: null,
           handoff_id: null,
           worker_id: null
@@ -1291,7 +1532,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
     await this.ensureReady()
 
     return await this._serializedCountMutation(async (db) => {
-      const cutoff = Date.now() - orphanedAfterMs
+      const cutoff = this.clock.now() - orphanedAfterMs
       const query = db
         .newQuery()
         .from(JOBS_TABLE)
@@ -1386,7 +1627,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
   async pruneTerminalJobs({completedTtlMs = null, failedTtlMs = null, batchSize = 1000} = {}) {
     await this.ensureReady()
 
-    const now = Date.now()
+    const now = this.clock.now()
     const size = batchSize > 0 ? batchSize : 1000
     let deleted = 0
 
@@ -1505,7 +1746,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
    * @returns {PreparedBackgroundJob} - Prepared job.
    */
   _prepareJob({args, jobName, options}) {
-    const createdAtMs = Date.now()
+    const createdAtMs = this.clock.now()
     const queue = this._normalizeQueue(options)
 
     return {
@@ -1612,7 +1853,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
    * @returns {number} - Future eligibility timestamp.
    */
   _rescheduledAtMs(delayMs) {
-    return rescheduledBackgroundJobAtMs(delayMs, Date.now())
+    return rescheduledBackgroundJobAtMs(delayMs, this.clock.now())
   }
 
   /**
@@ -2238,7 +2479,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
    * @returns {Promise<import("./types.js").BackgroundJobRow | null>} - Updated job row when the lease transition won.
    */
   async _applyFailure({db, job, error, markOrphaned, conditions}) {
-    const now = Date.now()
+    const now = this.clock.now()
     const nextAttempt = (job.attempts || 0) + 1
     const maxRetries = this._normalizeMaxRetries(job.maxRetries)
     const shouldRetry = nextAttempt <= maxRetries
