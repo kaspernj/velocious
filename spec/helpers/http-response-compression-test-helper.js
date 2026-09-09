@@ -27,12 +27,13 @@ export function repositoryPackageJsonPath() {
  * Builds a minimal client test configuration without database access.
  * @param {object} [args] - Options object.
  * @param {boolean | import("../../src/configuration-types.js").HttpCompressionConfiguration} [args.compression] - HTTP compression configuration.
+ * @param {string} [args.directory] - Application directory (defaults to the current working directory).
  * @returns {Configuration} - Minimal configuration.
  */
-export function buildConfiguration({compression} = {}) {
+export function buildConfiguration({compression, directory = process.cwd()} = {}) {
   return new Configuration({
     database: {test: {}},
-    directory: process.cwd(),
+    directory,
     environment: "test",
     environmentHandler: new EnvironmentHandlerNode(),
     httpServer: compression === undefined ? {} : {compression},

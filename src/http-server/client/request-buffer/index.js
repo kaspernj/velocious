@@ -9,6 +9,12 @@ import ParamsToObject from "../params-to-object.js"
 import querystring from "querystring"
 
 /**
+ * Request header fields whose repeated wire fields combine into one value
+ * (RFC 9110 §5.3) before the server consumes them.
+ * @type {Set<string>} */
+const COMBINING_HEADER_FIELDS = new Set(["accept-encoding"])
+
+/**
  * Runs truncate preview.
  * @param {string | undefined} input - Input string.
  * @param {number} [limit] - Max preview length.
@@ -367,8 +373,16 @@ export default class RequestBuffer {
    */
   addHeader(header) {
     const formattedName = header.getFormattedName()
+    const existingHeader = this.headersByName[formattedName]
 
-    this.headersByName[formattedName] = header
+    // RFC 9110 §5.3: a field may be repeated; its value is the concatenation of
+    // all field values separated by commas, in wire order. Only Accept-Encoding
+    // is consumed as a combined field by the server.
+    if (existingHeader && COMBINING_HEADER_FIELDS.has(formattedName)) {
+      existingHeader.value += `, ${header.getValue()}`
+    } else {
+      this.headersByName[formattedName] = header
+    }
 
     if (formattedName == "content-length") this.contentLength = parseInt(header.getValue())
   }

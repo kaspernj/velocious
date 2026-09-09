@@ -8,7 +8,7 @@ import EventEmitter from "../../utils/event-emitter.js"
 import Logger from "../../logger.js"
 import Request from "./request.js"
 import RequestRunner from "./request-runner.js"
-import {applyResponseCompression} from "./response-compression.js"
+import {addAcceptEncodingToVary, applyResponseCompression, negotiateContentEncoding} from "./response-compression.js"
 import WebsocketSession from "./websocket-session.js"
 
 /**
@@ -384,7 +384,15 @@ export default class VeoliciousHttpServerClient {
   }
 
   /**
-   * Runs send response.
+   * Sends a finished response to the client. Owns the framework-owned
+   * `Vary: Accept-Encoding` dimension (emitted for every selected
+   * representation — transformed, identity, 406, and file — and for
+   * header-present and header-absent requests alike, so it is stable across
+   * requests on the same connection; never added when compression is disabled,
+   * the response is truly bodyless, or the application supplied a fixed
+   * `Content-Encoding`) and the file 406 rule (a sendFile response whose
+   * client forbids identity is answered with the empty 406, the file is never
+   * opened or streamed, and `onFinished` settles once as "completed").
    * @param {RequestRunner} requestRunner - Request runner.
    * @returns {Promise<void>} - Resolves when complete.
    */
@@ -436,12 +444,44 @@ export default class VeoliciousHttpServerClient {
     /** @type {string | Uint8Array | null} */
     let bodyToEmit = body
 
+    // The response representation can depend on the client's Accept-Encoding:
+    // the same request is answered with an identity body (or a file) when
+    // identity is acceptable and with an empty 406 when it is forbidden.
+    const compression = this.configuration.getHttpServerCompression()
+    const negotiated = compression.enabled ? negotiateContentEncoding(request.header("accept-encoding")) : undefined
+    // An application-supplied Content-Encoding is an application-owned
+    // representation contract, captured before the framework may add its own.
+    // A file carrying one is a fixed, application-owned representation: the
+    // framework neither negotiates it nor re-advertises it, so it is never a
+    // candidate for the identity-only 406.
+    const hasApplicationContentEncoding = response.getHeader("Content-Encoding").length > 0
+    // A file response only ever serves the identity representation: whenever
+    // the client forbids identity (including the not-acceptable case where no
+    // coding applies) and the file does not carry an application-supplied
+    // Content-Encoding, the file is rejected with the empty 406. A truly
+    // bodyless status selects no representation, so it is never rejected here.
+    const isFileNotAcceptable = hasFilePath && !!negotiated && ("notAcceptable" in negotiated || negotiated.identityAcceptable === false) && hasApplicationContentEncoding === false && !isBodylessStatus
+
     if (!isBodylessStatus) {
       let contentLength
 
       if (hasFilePath) {
-        const stats = await fs.stat(filePath)
-        contentLength = stats.size
+        if (isFileNotAcceptable) {
+          // The client forbids identity and files are only ever sent identity:
+          // answer with the same empty 406 every other representation path
+          // uses. The file is never opened or streamed; the committed 406
+          // still settles onFinished as "completed" so application cleanup runs
+          // exactly once.
+          response.setStatus(406)
+          response.setBody("")
+          bodyToEmit = ""
+          contentLength = 0
+
+          await this.runFileOnFinished({filePath, onFinished: fileOnFinished, result: "completed"})
+        } else {
+          const stats = await fs.stat(filePath)
+          contentLength = stats.size
+        }
       } else {
         // String bodies are UTF-8 framed, so the buffered bytes are the UTF-8 encoding;
         // Uint8Array bodies are already the exact wire bytes.
@@ -474,6 +514,18 @@ export default class VeoliciousHttpServerClient {
       response.setHeader("Content-Length", contentLength)
     }
 
+    // Framework-owned Vary dimension: whenever compression is enabled and a
+    // representation was selected, the response depends on Accept-Encoding,
+    // so caches must key on it. Applied identically for every outcome
+    // (transformed, identity, 406, file) and for header-present and
+    // header-absent requests alike, so the header is stable across requests on
+    // the same connection. A truly bodyless response selects no representation
+    // and carries no dimension; an application-supplied Content-Encoding keeps
+    // the representation contract application-owned and is never re-advertised.
+    if (negotiated && !isBodylessStatus && hasApplicationContentEncoding === false) {
+      addAcceptEncodingToVary(response)
+    }
+
     response.setHeader("Date", date.toUTCString())
     response.setHeader("Server", "Velocious")
 
@@ -492,8 +544,18 @@ export default class VeoliciousHttpServerClient {
     this.events.emit("output", headers)
     this.logger.debug(() => ["sendResponse headers emitted", {clientCount: this.clientCount, headersLength: headers.length}])
 
-    if (isBodylessStatus) {
+    // A negotiated file 406 is fully committed above (status 406, empty body)
+    // and its onFinished already settled once as "completed": every file-output
+    // branch below is bypassed so no file event is emitted and the callback is
+    // never settled a second time. This holds for both GET and HEAD.
+    if (isFileNotAcceptable) {
+      this.logger.debug(() => ["sendResponse file body suppressed for 406", {clientCount: this.clientCount, filePath}])
+    } else if (isBodylessStatus) {
       this.logger.debug(() => ["sendResponse body suppressed for no-body status", {clientCount: this.clientCount, statusCode: response.getStatusCode()}])
+      // A bodyless status (1xx/204/304) selects no representation, so no file
+      // body or framework Vary is emitted. The file-ownership path still settles
+      // onFinished exactly once as "completed" (nothing was aborted) — even when
+      // the client forbids identity — preserving the pre-change settlement.
       if (hasFilePath) await this.sendFileOutput(filePath, false, fileOnFinished)
     } else if (isHeadRequest) {
       this.logger.debug(() => ["sendResponse body suppressed for HEAD request", {clientCount: this.clientCount}])

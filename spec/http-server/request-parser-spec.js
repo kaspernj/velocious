@@ -25,7 +25,7 @@ function buildConfiguration() {
   })
 }
 
-describe("HttpServer - request parser", {databaseCleaning: {transaction: true}}, async () => {
+describe("HttpServer - request parser", {databaseCleaning: {transaction: false, truncate: false}}, async () => {
   it("does not accept multiple requests in one parser", async () => {
     const configuration = buildConfiguration()
 
@@ -63,6 +63,48 @@ describe("HttpServer - request parser", {databaseCleaning: {transaction: true}},
 
     await expect(() => paramsToObject.toObject())
       .toThrow('Could not parse nested params key "task[]]" at rest "]"')
+  })
+
+  it("combines repeated Accept-Encoding header fields in wire order", async () => {
+    const configuration = buildConfiguration()
+
+    let previousConfiguration
+    try {
+      previousConfiguration = Configuration.current()
+    } catch {
+      // Ignore missing configuration
+    }
+
+    configuration.setCurrent()
+
+    const requestParser = new RequestParser({configuration})
+    const donePromise = new Promise((resolve) => requestParser.events.on("done", resolve))
+    const requestLines = [
+      "GET /ping HTTP/1.1",
+      "Host: example.com",
+      "Accept-Encoding: br",
+      "Accept-Encoding: gzip;q=0.5",
+      "X-Test: first",
+      "X-Test: second",
+      "",
+      ""
+    ].join("\r\n")
+
+    try {
+      requestParser.feed(Buffer.from(requestLines, "utf8"))
+      await donePromise
+
+      expect(requestParser.getHeader("accept-encoding")).toEqual("br, gzip;q=0.5")
+      // Headers without a defined combining rule keep last-wins behavior.
+      expect(requestParser.getHeader("x-test")).toEqual("second")
+      expect(requestParser.getHeaders()).toEqual({
+        "Host": "example.com",
+        "Accept-Encoding": "br, gzip;q=0.5",
+        "X-Test": "second"
+      })
+    } finally {
+      if (previousConfiguration) previousConfiguration.setCurrent()
+    }
   })
 
   it("parses a body-carrying request identically no matter how the bytes are chunked", async () => {

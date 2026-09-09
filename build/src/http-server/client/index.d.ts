@@ -84,7 +84,15 @@ export default class VeoliciousHttpServerClient {
     _drainDoneRequests(): Promise<void>;
     sendDoneRequests(): Promise<void>;
     /**
-     * Runs send response.
+     * Sends a finished response to the client. Owns the framework-owned
+     * `Vary: Accept-Encoding` dimension (emitted for every selected
+     * representation — transformed, identity, 406, and file — and for
+     * header-present and header-absent requests alike, so it is stable across
+     * requests on the same connection; never added when compression is disabled,
+     * the response is truly bodyless, or the application supplied a fixed
+     * `Content-Encoding`) and the file 406 rule (a sendFile response whose
+     * client forbids identity is answered with the empty 406, the file is never
+     * opened or streamed, and `onFinished` settles once as "completed").
      * @param {RequestRunner} requestRunner - Request runner.
      * @returns {Promise<void>} - Resolves when complete.
      */
