@@ -4,7 +4,7 @@ import SqlBackgroundJobsAdapter from "../../src/background-jobs/sql-adapter.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 
-describe("Background jobs - SQL adapter", {databaseCleaning: {truncate: true}}, () => {
+describe("Background jobs - SQL adapter", () => {
   it("preserves the store's durable handoff and fenced completion semantics", async () => {
     const adapter = new SqlBackgroundJobsAdapter({configuration: dummyConfiguration})
     await adapter.clearAll()
