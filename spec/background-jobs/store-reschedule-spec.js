@@ -29,7 +29,7 @@ async function createStore() {
   return store
 }
 
-describe("Background jobs - store reschedule", {databaseCleaning: {truncate: true}}, () => {
+describe("Background jobs - store reschedule", () => {
   it("reschedules the same active handoff without recording a failure and releases concurrency", async () => {
     const store = await createStore()
     const scheduled = await store.replaceScheduled({

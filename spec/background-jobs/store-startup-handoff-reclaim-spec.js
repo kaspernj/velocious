@@ -3,7 +3,7 @@
 import { clearBackgroundJobs } from "../helpers/background-jobs-helper.js"
 import { describe, expect, it } from "../../src/testing/test.js"
 
-describe("Background jobs - startup handoff store reclaim", {databaseCleaning: {truncate: true}}, () => {
+describe("Background jobs - startup handoff store reclaim", () => {
   it("reclaims an exact startup snapshot through orphan lifecycle semantics", async () => {
     const store = await clearBackgroundJobs()
     const concurrency = {concurrencyKey: "startup-planner", maxConcurrency: 1}
