@@ -179,13 +179,15 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
      * @param {string} args.jobName - Job name.
      * @param {Array<ReturnType<typeof JSON.parse>>} args.args - Arguments.
      * @param {import("./types.js").BackgroundJobOptions} [args.options] - Options.
+     * @param {string} [args.producerInvocationId] - Stable identity for one owned enqueue invocation.
      * @param {import("./types.js").BackgroundJobProducerProof} args.producerProof - Exact producer lease.
      * @returns {Promise<string>} - Durable follow-up id.
      */
-    enqueueFromOwnedHandoff({ jobName, args, options, producerProof }: {
+    enqueueFromOwnedHandoff({ jobName, args, options, producerInvocationId, producerProof }: {
         jobName: string;
         args: Array<ReturnType<typeof JSON.parse>>;
         options?: import("./types.js").BackgroundJobOptions;
+        producerInvocationId?: string;
         producerProof: import("./types.js").BackgroundJobProducerProof;
     }): Promise<string>;
     /**
@@ -202,13 +204,15 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
      * @param {import("../database/drivers/base.js").default} args.db - Transaction connection.
      * @param {import("./types.js").BackgroundJobOptions} args.options - Enqueue options.
      * @param {PreparedBackgroundJob} args.preparedJob - Normalized job.
+     * @param {string} args.producerInvocationId - Stable identity for one owned enqueue invocation.
      * @param {import("./types.js").BackgroundJobProducerProof} args.producerProof - Exact producer lease.
      * @returns {Promise<string>} - Stable replay job id.
      */
-    _enqueueOwnedReplayInTransaction({ db, options, preparedJob, producerProof }: {
+    _enqueueOwnedReplayInTransaction({ db, options, preparedJob, producerInvocationId, producerProof }: {
         db: import("../database/drivers/base.js").default;
         options: import("./types.js").BackgroundJobOptions;
         preparedJob: PreparedBackgroundJob;
+        producerInvocationId: string;
         producerProof: import("./types.js").BackgroundJobProducerProof;
     }): Promise<string>;
     /**
@@ -375,15 +379,23 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
      * Isolates internal producer replay ownership from caller idempotency scopes.
      * @param {object} args - Scope input.
      * @param {PreparedBackgroundJob} args.preparedJob - Normalized job.
+     * @param {string} args.producerInvocationId - Stable identity for one owned enqueue invocation.
      * @param {import("./types.js").BackgroundJobProducerProof} args.producerProof - Exact producer lease.
      * @param {string} args.requestDigest - Canonical request digest.
      * @returns {string} - SHA-256 scope digest.
      */
-    _ownedEnqueueScopeDigest({ preparedJob, producerProof, requestDigest }: {
+    _ownedEnqueueScopeDigest({ preparedJob, producerInvocationId, producerProof, requestDigest }: {
         preparedJob: PreparedBackgroundJob;
+        producerInvocationId: string;
         producerProof: import("./types.js").BackgroundJobProducerProof;
         requestDigest: string;
     }): string;
+    /**
+     * Validates the untrusted identity of one producer-owned enqueue invocation.
+     * @param {string | undefined} producerInvocationId - Producer invocation identity.
+     * @returns {string} - Validated identity.
+     */
+    _normalizeProducerInvocationId(producerInvocationId: string | undefined): string;
     /**
      * Validates the untrusted transport shape before transaction admission.
      * @param {import("./types.js").BackgroundJobProducerProof} producerProof - Producer proof.

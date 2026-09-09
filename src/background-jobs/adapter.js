@@ -74,7 +74,7 @@ export default class BackgroundJobsAdapter {
 
   /**
    * Atomically validates an exact producing handoff and enqueues its follow-up.
-   * @param {{jobName: string, args: Array<ReturnType<typeof JSON.parse>>, options?: import("./types.js").BackgroundJobOptions, producerProof: import("./types.js").BackgroundJobProducerProof}} _args - Owned enqueue request.
+   * @param {{jobName: string, args: Array<ReturnType<typeof JSON.parse>>, options?: import("./types.js").BackgroundJobOptions, producerInvocationId?: string, producerProof: import("./types.js").BackgroundJobProducerProof}} _args - Owned enqueue request.
    * @returns {Promise<string>} - Job id.
    */
   async enqueueFromOwnedHandoff(_args) { throw new Error("BackgroundJobsAdapter#enqueueFromOwnedHandoff is not implemented") }

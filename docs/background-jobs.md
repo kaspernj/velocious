@@ -521,9 +521,13 @@ owned, then atomically inserts or deduplicates the follow-up and acknowledges
 after commit. Ownership is checked even for a replay or a covering queued row.
 Ordinary retired enqueue, replace, and cancel requests remain rejected. The old
 main publishes a queue wake but cannot schedule or dispatch the row; only the
-active generation may do so. Exact replay while the producer lease is valid
-returns the original durable job identity, and a later event may create a new
-row after the earlier matching row is no longer queued.
+active generation may do so. Each `performLater()` or
+`performLaterWithOptions()` call owns an internal per-invocation replay identity:
+replaying that invocation while the producer lease is valid returns its original
+durable job identity, while a separate identical call creates a distinct row.
+`deduplicateWhileQueued` and explicit `idempotencyKey` options retain their
+requested convergence semantics, and a later queued-deduplication event may
+create a new row after the earlier matching row is no longer queued.
 
 Generations may overlap for hours and use different jobs-main endpoints while
 sharing durable queue storage and, optionally, Beacon. Multiple retired

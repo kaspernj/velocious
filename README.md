@@ -2444,9 +2444,11 @@ Jobs that remain owned by a retired generation may still use the unchanged
 `performLater()` / `performLaterWithOptions()` APIs to create follow-up work.
 Velocious carries the producer's exact handoff through its asynchronous
 execution context and atomically validates that lease with insertion or queued
-deduplication. The retired main commits and wakes the queue but never dispatches
-the follow-up; the active generation owns that work. Ordinary retired enqueue,
-replace, and cancel requests remain rejected.
+deduplication. Each call has its own internal replay identity, so two identical
+calls create distinct jobs unless the caller explicitly requests queued
+deduplication or durable idempotency. The retired main commits and wakes the
+queue but never dispatches the follow-up; the active generation owns that work.
+Ordinary retired enqueue, replace, and cancel requests remain rejected.
 
 Velocious provides the opt-in generation protocol; production still requires a
 supervisor that preserves old generation units and release pins, and a deploy

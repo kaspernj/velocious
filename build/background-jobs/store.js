@@ -348,13 +348,15 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
    * @param {string} args.jobName - Job name.
    * @param {Array<ReturnType<typeof JSON.parse>>} args.args - Arguments.
    * @param {import("./types.js").BackgroundJobOptions} [args.options] - Options.
+   * @param {string} [args.producerInvocationId] - Stable identity for one owned enqueue invocation.
    * @param {import("./types.js").BackgroundJobProducerProof} args.producerProof - Exact producer lease.
    * @returns {Promise<string>} - Durable follow-up id.
    */
-  async enqueueFromOwnedHandoff({jobName, args, options, producerProof}) {
+  async enqueueFromOwnedHandoff({jobName, args, options, producerInvocationId, producerProof}) {
     await this.ensureReady()
 
     const normalizedProducerProof = this._normalizeProducerProof(producerProof)
+    const normalizedProducerInvocationId = this._normalizeProducerInvocationId(producerInvocationId)
     const preparedJob = this._prepareJob({jobName, args, options})
 
     return await this._serializedCountMutation(async (db) => {
@@ -375,6 +377,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
         db,
         options: options || {},
         preparedJob,
+        producerInvocationId: normalizedProducerInvocationId,
         producerProof: normalizedProducerProof
       })
     })
@@ -412,12 +415,13 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
    * @param {import("../database/drivers/base.js").default} args.db - Transaction connection.
    * @param {import("./types.js").BackgroundJobOptions} args.options - Enqueue options.
    * @param {PreparedBackgroundJob} args.preparedJob - Normalized job.
+   * @param {string} args.producerInvocationId - Stable identity for one owned enqueue invocation.
    * @param {import("./types.js").BackgroundJobProducerProof} args.producerProof - Exact producer lease.
    * @returns {Promise<string>} - Stable replay job id.
    */
-  async _enqueueOwnedReplayInTransaction({db, options, preparedJob, producerProof}) {
+  async _enqueueOwnedReplayInTransaction({db, options, preparedJob, producerInvocationId, producerProof}) {
     const requestDigest = this._ownedEnqueueRequestDigest({options, preparedJob})
-    const scopeDigest = this._ownedEnqueueScopeDigest({preparedJob, producerProof, requestDigest})
+    const scopeDigest = this._ownedEnqueueScopeDigest({preparedJob, producerInvocationId, producerProof, requestDigest})
     const idempotencyKey = `owned-handoff:${scopeDigest}`
     const existing = await this._idempotencyOwnership(db, scopeDigest)
     const baseOwnership = {
@@ -772,20 +776,37 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
    * Isolates internal producer replay ownership from caller idempotency scopes.
    * @param {object} args - Scope input.
    * @param {PreparedBackgroundJob} args.preparedJob - Normalized job.
+   * @param {string} args.producerInvocationId - Stable identity for one owned enqueue invocation.
    * @param {import("./types.js").BackgroundJobProducerProof} args.producerProof - Exact producer lease.
    * @param {string} args.requestDigest - Canonical request digest.
    * @returns {string} - SHA-256 scope digest.
    */
-  _ownedEnqueueScopeDigest({preparedJob, producerProof, requestDigest}) {
+  _ownedEnqueueScopeDigest({preparedJob, producerInvocationId, producerProof, requestDigest}) {
     return createHash("sha256")
       .update(stableJsonStringify({
         format: "velocious-background-job-owned-enqueue-scope-v1",
         jobName: preparedJob.jobName,
+        producerInvocationId,
         producerProof,
         queue: preparedJob.queue,
         requestDigest
       }))
       .digest("hex")
+  }
+
+  /**
+   * Validates the untrusted identity of one producer-owned enqueue invocation.
+   * @param {string | undefined} producerInvocationId - Producer invocation identity.
+   * @returns {string} - Validated identity.
+   */
+  _normalizeProducerInvocationId(producerInvocationId) {
+    if (typeof producerInvocationId !== "string" || producerInvocationId.length === 0) {
+      throw VelociousError.safe("Background job producer invocation id is invalid.", {
+        code: "background-job-producer-invocation-id-invalid"
+      })
+    }
+
+    return producerInvocationId
   }
 
   /**

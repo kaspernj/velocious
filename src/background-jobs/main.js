@@ -1490,7 +1490,7 @@ export default class BackgroundJobsMain {
         options: message.options || {}
       }
       const jobId = this.generationId && message.producerProof
-        ? await this.store.enqueueFromOwnedHandoff({...request, producerProof: message.producerProof})
+        ? await this.store.enqueueFromOwnedHandoff({...request, producerInvocationId: message.producerInvocationId, producerProof: message.producerProof})
         : await this.store.enqueue(request)
 
       jsonSocket.send({type: "enqueued", jobId})

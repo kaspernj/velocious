@@ -1,5 +1,7 @@
 // @ts-check
 
+import { randomUUID } from "node:crypto"
+
 import configurationResolver from "../configuration-resolver.js"
 import { currentBackgroundJobProducerProof } from "./execution-context.js"
 import PlatformVelociousJob from "./platform-job.js"
@@ -25,13 +27,15 @@ export default class VelociousJob extends PlatformVelociousJob {
   static async performLater(...args) {
     const configuration = await configurationResolver()
     const {jobArgs, jobOptions} = this._splitArgsAndOptions(args)
+    const producerProof = currentBackgroundJobProducerProof()
 
     return await enqueueBackgroundJobForConfiguration({
       configuration,
       JobClass: this,
       jobArgs,
       jobOptions,
-      producerProof: currentBackgroundJobProducerProof()
+      producerProof,
+      producerInvocationId: producerProof ? randomUUID() : undefined
     })
   }
 
@@ -44,13 +48,15 @@ export default class VelociousJob extends PlatformVelociousJob {
    */
   static async performLaterWithOptions({args, options}) {
     const configuration = await configurationResolver()
+    const producerProof = currentBackgroundJobProducerProof()
 
     return await enqueueBackgroundJobForConfiguration({
       configuration,
       JobClass: this,
       jobArgs: args,
       jobOptions: options,
-      producerProof: currentBackgroundJobProducerProof()
+      producerProof,
+      producerInvocationId: producerProof ? randomUUID() : undefined
     })
   }
 

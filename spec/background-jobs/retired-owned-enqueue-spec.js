@@ -15,12 +15,15 @@ import { describe, expect, it } from "../../src/testing/test.js"
  * generation retirement.
  * @param {object} args - Lane input.
  * @param {import("../../src/background-jobs/types.js").BackgroundJobExecutionMode} args.executionMode - Parent execution lane.
+ * @param {number} [args.expectedChildCount] - Expected durable child rows.
+ * @param {boolean} [args.retireBeforeRelease] - Whether A retires while the parent is blocked.
+ * @param {Array<{args: Array<ReturnType<typeof JSON.parse>>, options?: import("../../src/background-jobs/types.js").BackgroundJobOptions}>} [args.requests] - Child enqueue requests.
  * @param {string} args.suffix - Unique generation suffix.
  * @param {boolean} [args.verifyRetiredBoundaries] - Whether to exercise retired client rejection boundaries.
  * @param {string} args.workerInstanceId - Stable worker UUID.
  * @returns {Promise<void>} - Resolves after the follow-up is verified.
  */
-async function verifyExecutionLane({executionMode, suffix, verifyRetiredBoundaries = false, workerInstanceId}) {
+async function verifyExecutionLane({executionMode, expectedChildCount = 1, retireBeforeRelease = true, requests, suffix, verifyRetiredBoundaries = false, workerInstanceId}) {
   const parentBarrier = await createBackgroundJobsSocketBarrier(1)
   const workerReady = promiseBarrier()
   /** @type {ReturnType<typeof createBackgroundJobUpdateObserver> | null} */
@@ -51,16 +54,18 @@ async function verifyExecutionLane({executionMode, suffix, verifyRetiredBoundari
     await workerA.start()
     await workerReady.waiting
     const parentJobId = await store.enqueue({
-      args: [parentBarrier.port],
+      args: requests ? [parentBarrier.port, requests] : [parentBarrier.port],
       jobName: "RetiredOwnedFollowUpTestJob",
       options: {executionMode}
     })
 
     await mainA._drain()
     await parentBarrier.waiting
-    await mainA.retire()
-    await mainA._retirementPromise
-    if (verifyRetiredBoundaries) {
+    if (retireBeforeRelease) {
+      await mainA.retire()
+      await mainA._retirementPromise
+    }
+    if (retireBeforeRelease && verifyRetiredBoundaries) {
       const retiredClient = new BackgroundJobsClient({configuration: dummyConfiguration, generationId: generationA})
 
       await expect(async () => await retiredClient.enqueue({args: [], jobName: "RetiredOrdinaryEnqueueJob"})).toThrow("Background jobs generation is retired")
@@ -74,8 +79,8 @@ async function verifyExecutionLane({executionMode, suffix, verifyRetiredBoundari
       expect(await store.countJobs({jobName: "RetiredOrdinaryEnqueueJob"})).toEqual(0)
       expect(await store.countJobs({jobName: "RetiredMalformedOwnedEnqueueJob"})).toEqual(0)
     }
-    await mainB.activate()
-    if (verifyRetiredBoundaries) {
+    if (retireBeforeRelease) await mainB.activate()
+    if (retireBeforeRelease && verifyRetiredBoundaries) {
       const foreignWorkerId = `${generationB}:a89fa5a0-0a13-405f-897e-6fb845de0390`
       const foreignProducerId = await store.enqueue({args: [], jobName: "ForeignGenerationProducerJob", options: {executionMode: "pooled"}})
       const foreignHandoff = await store.markHandedOff({jobId: foreignProducerId, workerId: foreignWorkerId})
@@ -100,8 +105,11 @@ async function verifyExecutionLane({executionMode, suffix, verifyRetiredBoundari
 
     const childJobs = await store.listJobs({jobName: "RetiredOwnedFollowUpTestChildJob", limit: 10})
 
-    expect(childJobs).toHaveLength(1)
-    expect(childJobs[0]).toMatchObject({status: "queued", workerId: null})
+    expect(childJobs).toHaveLength(expectedChildCount)
+    expect(new Set(childJobs.map(({id}) => id)).size).toEqual(expectedChildCount)
+    if (retireBeforeRelease) {
+      for (const childJob of childJobs) expect(childJob).toMatchObject({status: "queued", workerId: null})
+    }
   } finally {
     parentBarrier.release()
     await workerA.stop()
@@ -112,6 +120,27 @@ async function verifyExecutionLane({executionMode, suffix, verifyRetiredBoundari
 }
 
 describe("Background jobs retired owned enqueue", {databaseCleaning: {transaction: true}}, () => {
+  it("keeps identical active-generation performLater invocations distinct", async () => {
+    await verifyExecutionLane({
+      executionMode: "pooled",
+      expectedChildCount: 2,
+      requests: [{args: ["repeated follow-up"]}, {args: ["repeated follow-up"]}],
+      retireBeforeRelease: false,
+      suffix: "repeated-active",
+      workerInstanceId: "16b8153c-0c13-465a-a188-e49157b882b5"
+    })
+  })
+
+  it("keeps identical retired-generation performLater invocations distinct", async () => {
+    await verifyExecutionLane({
+      executionMode: "pooled",
+      expectedChildCount: 2,
+      requests: [{args: ["repeated follow-up"]}, {args: ["repeated follow-up"]}],
+      suffix: "repeated-retired",
+      workerInstanceId: "418fb56e-d0a5-4b32-8a7a-bbd3f36cb02e"
+    })
+  })
+
   it("accepts a pooled parent's follow-up after its generation retires without dispatching it", async () => {
     await verifyExecutionLane({
       executionMode: "pooled",

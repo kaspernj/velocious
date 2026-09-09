@@ -53,7 +53,7 @@ async function ownedEnqueueFixture({afterOwnedProducerValidation} = {}) {
 }
 
 describe("Background jobs owned enqueue store", {databaseCleaning: {transaction: true}}, () => {
-  it("preserves enqueue options and gives exact replay one durable identity", async () => {
+  it("preserves options, replays one invocation, and keeps identical invocations distinct", async () => {
     const {producerProof, store} = await ownedEnqueueFixture()
     const request = {
       args: [{event: "terminal", projectId: 42}],
@@ -67,12 +67,15 @@ describe("Background jobs owned enqueue store", {databaseCleaning: {transaction:
         scheduledAtMs: 9_000,
         timeoutMs: 12_000
       },
-      producerProof
+      producerProof,
+      producerInvocationId: "owned-options-invocation-1"
     }
     const firstJobId = await store.enqueueFromOwnedHandoff(request)
     const replayedJobId = await store.enqueueFromOwnedHandoff(request)
+    const secondJobId = await store.enqueueFromOwnedHandoff({...request, producerInvocationId: "owned-options-invocation-2"})
 
     expect(replayedJobId).toEqual(firstJobId)
+    expect(secondJobId).not.toEqual(firstJobId)
     expect(await store.getJob(firstJobId)).toMatchObject({
       args: [{event: "terminal", projectId: 42}],
       concurrencyKey: "project:42",
@@ -84,7 +87,7 @@ describe("Background jobs owned enqueue store", {databaseCleaning: {transaction:
       status: "queued",
       timeoutMs: 12_000
     })
-    expect(await store.countJobs({jobName: "OwnedEnqueueChildJob"})).toEqual(1)
+    expect(await store.countJobs({jobName: "OwnedEnqueueChildJob"})).toEqual(2)
   })
 
   it("rejects missing, malformed, and tampered producer proofs", async () => {
@@ -104,7 +107,8 @@ describe("Background jobs owned enqueue store", {databaseCleaning: {transaction:
     for (const rejectedProof of rejectedProofs) {
       await expect(async () => await store.enqueueFromOwnedHandoff({
         ...request,
-        producerProof: /** @type {import("../../src/background-jobs/types.js").BackgroundJobProducerProof} */ (rejectedProof)
+        producerProof: /** @type {import("../../src/background-jobs/types.js").BackgroundJobProducerProof} */ (rejectedProof),
+        producerInvocationId: "rejected-proof-invocation"
       })).toThrow(/producer (proof is invalid|handoff is no longer owned)/i)
     }
 
@@ -118,7 +122,8 @@ describe("Background jobs owned enqueue store", {databaseCleaning: {transaction:
       args: ["same-event"],
       jobName: "StaleOwnedChildJob",
       options: {deduplicateWhileQueued: true},
-      producerProof
+      producerProof,
+      producerInvocationId: "stale-invocation"
     }
     const childJobId = await store.enqueueFromOwnedHandoff(request)
 
@@ -134,13 +139,15 @@ describe("Background jobs owned enqueue store", {databaseCleaning: {transaction:
       args: ["build-42"],
       jobName: "DedupeOwnedChildJob",
       options: {deduplicateWhileQueued: true, scheduledAtMs: 5_000},
-      producerProof
+      producerProof,
+      producerInvocationId: "dedupe-invocation-1"
     })
     const coveredJobId = await store.enqueueFromOwnedHandoff({
       args: ["build-42"],
       jobName: "DedupeOwnedChildJob",
       options: {deduplicateWhileQueued: true, scheduledAtMs: 6_000},
-      producerProof
+      producerProof,
+      producerInvocationId: "dedupe-invocation-2"
     })
 
     expect(coveredJobId).toEqual(firstJobId)
@@ -151,11 +158,27 @@ describe("Background jobs owned enqueue store", {databaseCleaning: {transaction:
       args: ["build-42"],
       jobName: "DedupeOwnedChildJob",
       options: {deduplicateWhileQueued: true, scheduledAtMs: 7_000},
-      producerProof
+      producerProof,
+      producerInvocationId: "dedupe-invocation-3"
     })
 
     expect(laterJobId).not.toEqual(firstJobId)
     expect(await store.countJobs({jobName: "DedupeOwnedChildJob"})).toEqual(2)
+  })
+
+  it("preserves explicit idempotency across distinct producer invocations", async () => {
+    const {producerProof, store} = await ownedEnqueueFixture()
+    const request = {
+      args: ["logical-event"],
+      jobName: "IdempotentOwnedChildJob",
+      options: {idempotencyKey: "logical-event-1"},
+      producerProof
+    }
+    const firstJobId = await store.enqueueFromOwnedHandoff({...request, producerInvocationId: "idempotent-invocation-1"})
+    const replayedJobId = await store.enqueueFromOwnedHandoff({...request, producerInvocationId: "idempotent-invocation-2"})
+
+    expect(replayedJobId).toEqual(firstJobId)
+    expect(await store.countJobs({jobName: "IdempotentOwnedChildJob"})).toEqual(1)
   })
 
   it("lets an insertion that owns the transaction commit before producer completion", async () => {
@@ -169,7 +192,8 @@ describe("Background jobs owned enqueue store", {databaseCleaning: {transaction:
     const enqueue = store.enqueueFromOwnedHandoff({
       args: [],
       jobName: "RacingOwnedChildJob",
-      producerProof
+      producerProof,
+      producerInvocationId: "racing-invocation"
     })
 
     await validated.waiting
@@ -195,7 +219,8 @@ describe("Background jobs owned enqueue store", {databaseCleaning: {transaction:
     await expect(async () => await store.enqueueFromOwnedHandoff({
       args: [],
       jobName: "LosingOwnedChildJob",
-      producerProof
+      producerProof,
+      producerInvocationId: "losing-invocation"
     })).toThrow(/producer handoff is no longer owned/i)
     expect(await store.countJobs({jobName: "LosingOwnedChildJob"})).toEqual(0)
   })

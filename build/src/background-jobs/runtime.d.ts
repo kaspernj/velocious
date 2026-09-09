@@ -18,14 +18,16 @@ export declare function enqueueBackgroundJob({ JobClass, jobArgs, jobOptions }: 
  * @param {typeof import("./platform-job.js").default} args.JobClass - Job class.
  * @param {Array<ReturnType<typeof JSON.parse>>} args.jobArgs - Job arguments.
  * @param {import("./types.js").BackgroundJobOptions | undefined} args.jobOptions - Job options.
+ * @param {string} [args.producerInvocationId] - Stable identity for one owned enqueue invocation.
  * @param {import("./types.js").BackgroundJobProducerProof} [args.producerProof] - Exact internal producer handoff.
  * @returns {Promise<string>} - Durable job id or ephemeral inline performance id.
  */
-export declare function enqueueBackgroundJobForConfiguration({ configuration, JobClass, jobArgs, jobOptions, producerProof }: {
+export declare function enqueueBackgroundJobForConfiguration({ configuration, JobClass, jobArgs, jobOptions, producerInvocationId, producerProof }: {
     configuration: import("../configuration.js").default;
     JobClass: typeof import("./platform-job.js").default;
     jobArgs: Array<ReturnType<typeof JSON.parse>>;
     jobOptions: import("./types.js").BackgroundJobOptions | undefined;
+    producerInvocationId?: string;
     producerProof?: import("./types.js").BackgroundJobProducerProof;
 }): Promise<string>;
 /**

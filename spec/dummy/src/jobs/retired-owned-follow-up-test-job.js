@@ -8,7 +8,7 @@ import RetiredOwnedFollowUpTestChildJob from "./retired-owned-follow-up-test-chi
 /**
  * @typedef {object} RetiredOwnedFollowUpRequest
  * @property {Array<ReturnType<typeof JSON.parse>>} args - Child arguments.
- * @property {import("../../../../src/background-jobs/types.js").BackgroundJobOptions} options - Child options.
+ * @property {import("../../../../src/background-jobs/types.js").BackgroundJobOptions} [options] - Child options; omission exercises `performLater()`.
  */
 
 /**
@@ -33,7 +33,11 @@ export default class RetiredOwnedFollowUpTestJob extends VelociousJob {
     })
 
     for (const request of requests) {
-      await RetiredOwnedFollowUpTestChildJob.performLaterWithOptions(request)
+      if (request.options) {
+        await RetiredOwnedFollowUpTestChildJob.performLaterWithOptions({args: request.args, options: request.options})
+      } else {
+        await RetiredOwnedFollowUpTestChildJob.performLater(...request.args)
+      }
     }
   }
 }
