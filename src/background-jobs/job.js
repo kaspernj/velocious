@@ -1,6 +1,7 @@
 // @ts-check
 
 import configurationResolver from "../configuration-resolver.js"
+import { currentBackgroundJobProducerProof } from "./execution-context.js"
 import PlatformVelociousJob from "./platform-job.js"
 import {
   cancelScheduledBackgroundJobForConfiguration,
@@ -25,7 +26,13 @@ export default class VelociousJob extends PlatformVelociousJob {
     const configuration = await configurationResolver()
     const {jobArgs, jobOptions} = this._splitArgsAndOptions(args)
 
-    return await enqueueBackgroundJobForConfiguration({configuration, JobClass: this, jobArgs, jobOptions})
+    return await enqueueBackgroundJobForConfiguration({
+      configuration,
+      JobClass: this,
+      jobArgs,
+      jobOptions,
+      producerProof: currentBackgroundJobProducerProof()
+    })
   }
 
   /**
@@ -38,7 +45,13 @@ export default class VelociousJob extends PlatformVelociousJob {
   static async performLaterWithOptions({args, options}) {
     const configuration = await configurationResolver()
 
-    return await enqueueBackgroundJobForConfiguration({configuration, JobClass: this, jobArgs: args, jobOptions: options})
+    return await enqueueBackgroundJobForConfiguration({
+      configuration,
+      JobClass: this,
+      jobArgs: args,
+      jobOptions: options,
+      producerProof: currentBackgroundJobProducerProof()
+    })
   }
 
   /**

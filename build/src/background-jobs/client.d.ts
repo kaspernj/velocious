@@ -29,12 +29,14 @@ export default class BackgroundJobsClient {
      * @param {string} args.jobName - Job name.
      * @param {Array<ReturnType<typeof JSON.parse>>} args.args - Job args.
      * @param {import("./types.js").BackgroundJobOptions} [args.options] - Job options.
+     * @param {import("./types.js").BackgroundJobProducerProof} [args.producerProof] - Exact internal producer handoff.
      * @returns {Promise<string>} - Job id.
      */
-    enqueue({ jobName, args, options }: {
+    enqueue({ jobName, args, options, producerProof }: {
         jobName: string;
         args: Array<ReturnType<typeof JSON.parse>>;
         options?: import("./types.js").BackgroundJobOptions;
+        producerProof?: import("./types.js").BackgroundJobProducerProof;
     }): Promise<string>;
     /**
      * Atomically replaces the queued owner of a stable schedule key.

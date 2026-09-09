@@ -68,10 +68,13 @@ export async function startGenerationMain({generationId, initialGenerationState,
   return {main, store: resolvedStore}
 }
 
-/** @returns {Promise<SqlBackgroundJobsAdapter>} - Empty real SQL adapter. */
-export async function emptyGenerationStore() {
+/**
+ * @param {{clock?: {now: () => number}}} [args] - Store controls.
+ * @returns {Promise<SqlBackgroundJobsAdapter>} - Empty real SQL adapter.
+ */
+export async function emptyGenerationStore({clock} = {}) {
   dummyConfiguration.setBackgroundJobsConfig({generationId: undefined, initialGenerationState: undefined, lifecycleSocketPath: undefined})
-  const store = new SqlBackgroundJobsAdapter({configuration: dummyConfiguration})
+  const store = new SqlBackgroundJobsAdapter({clock, configuration: dummyConfiguration})
   await store.clearAll()
 
   return store

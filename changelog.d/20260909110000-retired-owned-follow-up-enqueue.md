@@ -1,0 +1,1 @@
+Allow jobs still owned by a retired release generation to atomically enqueue or deduplicate follow-up work through their exact durable handoff, while leaving scheduling and dispatch exclusively with the active generation.

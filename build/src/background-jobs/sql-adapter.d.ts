@@ -7,6 +7,11 @@ export default class SqlBackgroundJobsAdapter extends BackgroundJobsStore {
      */
     supportsReleaseScopedGenerations(): boolean;
     /**
+     * Declares atomic owned-handoff enqueue support.
+     * @returns {boolean} - The SQL transaction validates ownership and enqueues atomically.
+     */
+    supportsOwnedEnqueueFromHandoff(): boolean;
+    /**
      * Ensures the built-in SQL schema during migration.
      * @param {{dbs: Record<string, import("../database/drivers/base.js").default>}} args - Migrated databases.
      * @returns {Promise<void>} - Resolves when the SQL schema is present.

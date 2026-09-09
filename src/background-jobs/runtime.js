@@ -49,9 +49,10 @@ export async function enqueueBackgroundJob({JobClass, jobArgs, jobOptions}) {
  * @param {typeof import("./platform-job.js").default} args.JobClass - Job class.
  * @param {Array<ReturnType<typeof JSON.parse>>} args.jobArgs - Job arguments.
  * @param {import("./types.js").BackgroundJobOptions | undefined} args.jobOptions - Job options.
+ * @param {import("./types.js").BackgroundJobProducerProof} [args.producerProof] - Exact internal producer handoff.
  * @returns {Promise<string>} - Durable job id or ephemeral inline performance id.
  */
-export async function enqueueBackgroundJobForConfiguration({configuration, JobClass, jobArgs, jobOptions}) {
+export async function enqueueBackgroundJobForConfiguration({configuration, JobClass, jobArgs, jobOptions, producerProof}) {
   const resolvedJobOptions = JobClass._withJobContext({jobArgs, jobOptions})
 
   if (configuration.getBackgroundJobsConfig().mode === "inline") {
@@ -83,7 +84,8 @@ export async function enqueueBackgroundJobForConfiguration({configuration, JobCl
   return await client.enqueue({
     jobName: JobClass.jobName(),
     args: jobArgs,
-    options: resolvedJobOptions
+    options: resolvedJobOptions,
+    producerProof
   })
 }
 

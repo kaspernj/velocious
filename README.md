@@ -2440,6 +2440,14 @@ the new main. Deploy and HTTP/WebSocket drain completion are independent of this
 potentially hours-long lifecycle. See [release-generation
 draining](docs/background-jobs.md#release-generation-draining).
 
+Jobs that remain owned by a retired generation may still use the unchanged
+`performLater()` / `performLaterWithOptions()` APIs to create follow-up work.
+Velocious carries the producer's exact handoff through its asynchronous
+execution context and atomically validates that lease with insertion or queued
+deduplication. The retired main commits and wakes the queue but never dispatches
+the follow-up; the active generation owns that work. Ordinary retired enqueue,
+replace, and cancel requests remain rejected.
+
 Velocious provides the opt-in generation protocol; production still requires a
 supervisor that preserves old generation units and release pins, and a deploy
 coordinator that retires the old generation before activating the healthy

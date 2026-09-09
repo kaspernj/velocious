@@ -12,6 +12,13 @@ export default class BackgroundJobsAdapter {
      */
     supportsReleaseScopedGenerations(): boolean;
     /**
+     * Declares atomic producer-handoff validation plus enqueue support. A
+     * generation-capable adapter must override this together with
+     * `enqueueFromOwnedHandoff`.
+     * @returns {boolean} - Whether atomic owned enqueue is supported.
+     */
+    supportsOwnedEnqueueFromHandoff(): boolean;
+    /**
      * Ensures the adapter can accept work.
      * @returns {Promise<void>} - Resolves when ready.
      */
@@ -55,6 +62,17 @@ export default class BackgroundJobsAdapter {
         jobName: string;
         args: Array<ReturnType<typeof JSON.parse>>;
         options?: import("./types.js").BackgroundJobOptions;
+    }): Promise<string>;
+    /**
+     * Atomically validates an exact producing handoff and enqueues its follow-up.
+     * @param {{jobName: string, args: Array<ReturnType<typeof JSON.parse>>, options?: import("./types.js").BackgroundJobOptions, producerProof: import("./types.js").BackgroundJobProducerProof}} _args - Owned enqueue request.
+     * @returns {Promise<string>} - Job id.
+     */
+    enqueueFromOwnedHandoff(_args: {
+        jobName: string;
+        args: Array<ReturnType<typeof JSON.parse>>;
+        options?: import("./types.js").BackgroundJobOptions;
+        producerProof: import("./types.js").BackgroundJobProducerProof;
     }): Promise<string>;
     /**
      * Replaces the owner of a stable schedule key.

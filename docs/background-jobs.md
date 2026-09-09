@@ -511,6 +511,20 @@ required:
    drain and exit. The supervisor may then reap the generation and release the
    old release's cleanup pin.
 
+An accepted job may enqueue follow-up work after its generation retires. Inline,
+pooled, forked, and spawned execution carry the exact producing `jobId`,
+`handoffId`, generation-qualified `workerId`, and `handedOffAtMs` through
+concurrency-safe asynchronous context; application-facing `performLater()` and
+`performLaterWithOptions()` signatures do not change. The retired main accepts
+such an enqueue only when its SQL transaction proves that exact handoff is still
+owned, then atomically inserts or deduplicates the follow-up and acknowledges
+after commit. Ownership is checked even for a replay or a covering queued row.
+Ordinary retired enqueue, replace, and cancel requests remain rejected. The old
+main publishes a queue wake but cannot schedule or dispatch the row; only the
+active generation may do so. Exact replay while the producer lease is valid
+returns the original durable job identity, and a later event may create a new
+row after the earlier matching row is no longer queued.
+
 Generations may overlap for hours and use different jobs-main endpoints while
 sharing durable queue storage and, optionally, Beacon. Multiple retired
 generations may drain concurrently. The process supervisor must durably preserve
@@ -602,9 +616,13 @@ Worker ownership is stored as `<generationId>:<workerUuid>` (maximum 165
 characters). The built-in SQL schema already gives `worker_id` 255 characters
 on SQLite, MariaDB/MySQL, PostgreSQL, and MSSQL, so enabling this feature needs
 no migration. Generation mode requires an adapter whose
-`supportsReleaseScopedGenerations()` returns `true`; the built-in SQL adapter
-does. Unsupported third-party adapters are rejected before listening, while
-legacy mode remains compatible with them.
+`supportsReleaseScopedGenerations()` and
+`supportsOwnedEnqueueFromHandoff()` return `true`. Its
+`enqueueFromOwnedHandoff()` operation must validate the exact producing lease
+and insert, replay, or queued-deduplicate the follow-up atomically. The built-in
+SQL adapter implements both capabilities. Generation-capable third-party
+adapters without the owned-enqueue capability are rejected before listening,
+while legacy mode remains compatible with them.
 
 The built-in SQL adapter bounds activation-time queue reconciliation to
 queue-derived concurrency keys plus counters that are active or stale. It does

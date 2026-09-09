@@ -20,6 +20,12 @@ class StartupAdapter extends BackgroundJobsTestAdapter {
   /** @returns {boolean} - Supports release-scoped lifecycle tests. */
   supportsReleaseScopedGenerations() { return true }
 
+  /** @returns {boolean} - Supports the owned-enqueue lifecycle boundary. */
+  supportsOwnedEnqueueFromHandoff() { return true }
+
+  /** @returns {Promise<string>} - Unexpected in these lifecycle-only tests. */
+  async enqueueFromOwnedHandoff() { throw new Error("Unexpected owned enqueue in startup lifecycle spec") }
+
   /** @returns {Promise<void>} - Resolves after reconciliation. */
   async reconcileQueueConcurrency() {
     this.reconcileCount++
