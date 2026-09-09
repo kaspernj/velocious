@@ -25,7 +25,7 @@ function buildConfiguration() {
   })
 }
 
-describe("HttpServer - request parser", {databaseCleaning: {transaction: false, truncate: false}}, async () => {
+describe("HttpServer - request parser", {databaseCleaning: {transaction: true}}, async () => {
   it("does not accept multiple requests in one parser", async () => {
     const configuration = buildConfiguration()
 
