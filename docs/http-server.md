@@ -112,12 +112,27 @@ application-supplied `Content-Encoding` are always passed through unchanged, and
 a globally disabled compression configuration never negotiates (backward
 compatible).
 
+File responses (`sendFile`) are only ever sent identity, so when the client
+forbids identity the server answers with the same empty `406 Not Acceptable`
+without opening or streaming the file. The `onFinished` callback still settles
+exactly once as `"completed"` so application cleanup runs as expected.
+
 Compressed responses carry `Content-Encoding` and the exact compressed
 `Content-Length`, and `Accept-Encoding` is merged into `Vary`
 case-insensitively without duplicates (an existing `Vary: *` is preserved).
 Bodies below `threshold` are sent as identity when identity is acceptable.
 Compression uses only asynchronous `node:zlib` APIs, so event-loop ordering of
 pipelined responses is preserved.
+
+The `Vary: Accept-Encoding` dimension is framework-owned: whenever compression
+is enabled and a representation is selected (transformed, identity, `406`, or
+file), the header is emitted identically for every request on the same
+connection so intermediate caches key on it correctly. It is never added when
+compression is disabled, the response is truly bodyless, or the application
+supplied its own `Content-Encoding` (which keeps the representation contract
+application-owned). Repeated `Accept-Encoding` request header fields are
+combined in wire order (RFC 9110 §5.3) before negotiation; all other repeated
+headers keep last-wins behavior.
 
 ### Exclusions
 

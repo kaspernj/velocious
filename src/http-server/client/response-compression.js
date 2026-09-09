@@ -22,9 +22,9 @@ const COMPRESSIBLE_EXACT_MEDIA_TYPES = new Set([
 
 /**
  * RFC 9110 §12.4.2 qvalue grammar: `0` or `1` with at most three fractional
- * digits, and only zeros after `1`.
+ * digits (the boundary forms `0.` and `1.` are valid), and only zeros after `1`.
  * @type {RegExp} */
-const QVALUE_PATTERN = /^(?:0(?:\.\d{1,3})?|1(?:\.0{1,3})?)$/u
+const QVALUE_PATTERN = /^(?:0(?:\.\d{0,3})?|1(?:\.0{0,3})?)$/u
 
 /**
  * Runs parse accept encoding.
@@ -118,7 +118,9 @@ export function isCompressibleContentType(contentType) {
 /**
  * Merges Accept-Encoding into the response Vary header case-insensitively and
  * without duplicates. An existing `Vary: *` already covers every request header
- * and is preserved as-is.
+ * and is preserved as-is. Called by the response sender for every
+ * framework-selected representation so the header is identical for every
+ * request on the same connection.
  * @param {import("./response.js").default} response - Response instance.
  * @returns {void} - No return value.
  */
@@ -160,7 +162,7 @@ export function addAcceptEncodingToVary(response) {
  * @param {import("../../configuration-types.js").NormalizedHttpCompressionConfiguration} args.compression - Normalized compression configuration.
  * @param {import("./request.js").default | import("./websocket-request.js").default} args.request - Request object.
  * @param {import("./response.js").default} args.response - Response instance.
- * @returns {Promise<{outcome: "identity"} | {outcome: "compressed", body: Buffer} | {outcome: "not-acceptable"}>} - Compression outcome.
+ * @returns {Promise<{outcome: "identity"} | {outcome: "compressed", body: Buffer} | {outcome: "not-acceptable"}>} - Compression outcome. The caller owns the Vary header and the file/406 representation decisions.
  */
 export async function applyResponseCompression({bodyBuffer, compression, request, response}) {
   if (!compression.enabled) return {outcome: "identity"}
@@ -202,10 +204,6 @@ export async function applyResponseCompression({bodyBuffer, compression, request
     // identity; when identity is forbidden, no acceptable representation can be sent.
     return negotiated.identityAcceptable ? {outcome: "identity"} : {outcome: "not-acceptable"}
   }
-
-  // The representation now depends on the request's Accept-Encoding, even when this
-  // particular response ends up identity (missing header, higher-q identity, below threshold).
-  addAcceptEncodingToVary(response)
 
   if (negotiated.encoding == "identity") return {outcome: "identity"}
 

@@ -29,7 +29,9 @@ export declare function isCompressibleContentType(contentType: string): boolean;
 /**
  * Merges Accept-Encoding into the response Vary header case-insensitively and
  * without duplicates. An existing `Vary: *` already covers every request header
- * and is preserved as-is.
+ * and is preserved as-is. Called by the response sender for every
+ * framework-selected representation so the header is identical for every
+ * request on the same connection.
  * @param {import("./response.js").default} response - Response instance.
  * @returns {void} - No return value.
  */
@@ -53,7 +55,7 @@ export declare function addAcceptEncodingToVary(response: import("./response.js"
  * @param {import("../../configuration-types.js").NormalizedHttpCompressionConfiguration} args.compression - Normalized compression configuration.
  * @param {import("./request.js").default | import("./websocket-request.js").default} args.request - Request object.
  * @param {import("./response.js").default} args.response - Response instance.
- * @returns {Promise<{outcome: "identity"} | {outcome: "compressed", body: Buffer} | {outcome: "not-acceptable"}>} - Compression outcome.
+ * @returns {Promise<{outcome: "identity"} | {outcome: "compressed", body: Buffer} | {outcome: "not-acceptable"}>} - Compression outcome. The caller owns the Vary header and the file/406 representation decisions.
  */
 export declare function applyResponseCompression({ bodyBuffer, compression, request, response }: {
     bodyBuffer: Buffer;
