@@ -19,13 +19,14 @@ import { describe, expect, it } from "../../src/testing/test.js"
  * @property {() => Promise<void>} close - Closes the proxy and its connections.
  * @property {number} connectionCount - Number of accepted client connections.
  * @property {Array<import("../../src/background-jobs/types.js").BackgroundJobEnqueueMessage>} enqueueMessages - Forwarded enqueue messages.
- * @property {string | undefined} withheldJobId - Durable id from the withheld acknowledgement.
+ * @property {string | undefined} withheldJobId - Durable id from the dropped acknowledgement.
  * @property {number} port - Bound proxy port.
  */
 
 /**
- * Forwards the generation protocol but withholds the first successful enqueue
- * acknowledgement after the real main has durably committed it.
+ * Forwards the generation protocol but drops the first successful enqueue
+ * acknowledgement after the real main has durably committed it, closing that
+ * connection so the client observes the loss only after the commit boundary.
  * @param {number} mainPort - Real generation main port.
  * @returns {Promise<AcknowledgementProxy>} - Started proxy.
  */
@@ -62,6 +63,8 @@ async function startAcknowledgementProxy(mainPort) {
     upstream.on("message", (message) => {
       if (withholdAcknowledgement && message?.type === "enqueued") {
         withheldJobId = message.jobId
+        downstreamSocket.end()
+        upstreamSocket.destroy()
         return
       }
 
@@ -145,7 +148,7 @@ describe("BackgroundJobsClient owned enqueue acknowledgement recovery", {databas
     try {
       const producer = await createOwnedProducer({generationId, jobName: "OwnedAckProducerJob", store})
       dummyConfiguration.setBackgroundJobsConfig({generationId, host: "127.0.0.1", port: proxy.port})
-      const client = new BackgroundJobsClient({configuration: dummyConfiguration, enqueueTimeoutMs: 40, generationId})
+      const client = new BackgroundJobsClient({configuration: dummyConfiguration, generationId})
       const jobId = await client.enqueue({
         args: ["once", outputPath],
         jobName: "AppendJob",
@@ -194,7 +197,7 @@ describe("BackgroundJobsClient owned enqueue acknowledgement recovery", {databas
       const producer = await createOwnedProducer({generationId, jobName: "StaleOwnedAckProducerJob", store})
       expect(await store.markCompleted({jobId: producer.jobId, ...producer.proof})).toEqual(true)
       dummyConfiguration.setBackgroundJobsConfig({generationId, host: "127.0.0.1", port: proxy.port})
-      const client = new BackgroundJobsClient({configuration: dummyConfiguration, enqueueTimeoutMs: 40, generationId})
+      const client = new BackgroundJobsClient({configuration: dummyConfiguration, generationId})
 
       await expect(async () => await client.enqueue({
         args: [],
@@ -212,22 +215,23 @@ describe("BackgroundJobsClient owned enqueue acknowledgement recovery", {databas
   })
 
   it("preserves ordinary idempotency-key enqueue acknowledgement behavior", async () => {
-    const generationId = "ordinary-ack-timeout"
+    const generationId = "ordinary-ack-loss"
     const store = new SqlBackgroundJobsAdapter({configuration: dummyConfiguration})
     const {main} = await startGenerationMain({generationId, initialGenerationState: "active", store})
     const proxy = await startAcknowledgementProxy(main.getPort())
 
     try {
       dummyConfiguration.setBackgroundJobsConfig({generationId, host: "127.0.0.1", port: proxy.port})
-      const client = new BackgroundJobsClient({configuration: dummyConfiguration, enqueueTimeoutMs: 40, generationId})
+      const client = new BackgroundJobsClient({configuration: dummyConfiguration, generationId})
 
       await expect(async () => await client.enqueue({
         args: ["ordinary"],
         jobName: "OrdinaryAckChildJob",
         options: {idempotencyKey: "ordinary-ack-child"}
-      })).toThrow("Background job enqueue acknowledgement timed out after 40ms")
+      })).toThrow(/closed before.*acknowledged/i)
       expect(proxy.connectionCount).toEqual(1)
       expect(proxy.enqueueMessages).toHaveLength(1)
+      expect(proxy.withheldJobId).toBeDefined()
       expect(await store.countJobs({jobName: "OrdinaryAckChildJob"})).toEqual(1)
     } finally {
       await proxy.close()
@@ -236,7 +240,7 @@ describe("BackgroundJobsClient owned enqueue acknowledgement recovery", {databas
   })
 
   it("does not replay a legacy enqueue carrying producer metadata", async () => {
-    const generationId = "legacy-owned-ack-timeout"
+    const generationId = "legacy-owned-ack-loss"
     const store = new SqlBackgroundJobsAdapter({configuration: dummyConfiguration})
     dummyConfiguration.setBackgroundJobsConfig({generationId: undefined, initialGenerationState: undefined, lifecycleSocketPath: undefined})
     const main = new BackgroundJobsMain({closeDatabaseConnectionsOnStop: false, configuration: dummyConfiguration, host: "127.0.0.1", port: 0})
@@ -247,14 +251,14 @@ describe("BackgroundJobsClient owned enqueue acknowledgement recovery", {databas
     try {
       const producer = await createOwnedProducer({generationId, jobName: "LegacyOwnedAckProducerJob", store})
       dummyConfiguration.setBackgroundJobsConfig({generationId: undefined, host: "127.0.0.1", port: proxy.port})
-      const client = new BackgroundJobsClient({configuration: dummyConfiguration, enqueueTimeoutMs: 40})
+      const client = new BackgroundJobsClient({configuration: dummyConfiguration})
 
       await expect(async () => await client.enqueue({
         args: [],
         jobName: "LegacyOwnedAckChildJob",
         producerInvocationId: "legacy-owned-ack-invocation",
         producerProof: producer.proof
-      })).toThrow("Background job enqueue acknowledgement timed out after 40ms")
+      })).toThrow(/closed before.*acknowledged/i)
       expect(proxy.connectionCount).toEqual(1)
       expect(proxy.enqueueMessages).toHaveLength(1)
       expect(proxy.withheldJobId).toBeDefined()
@@ -276,7 +280,6 @@ describe("BackgroundJobsClient owned enqueue acknowledgement recovery", {databas
       dummyConfiguration.setBackgroundJobsConfig({generationId: undefined, host: "127.0.0.1", port: proxy.port})
       const client = new BackgroundJobsClient({
         configuration: dummyConfiguration,
-        enqueueTimeoutMs: 40,
         generationId: "different-owned-ack-generation"
       })
 
