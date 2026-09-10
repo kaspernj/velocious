@@ -49,34 +49,54 @@ export default class BackgroundJobsClient {
    * @returns {Promise<string>} - Job id.
    */
   async enqueue({jobName, args, options, producerInvocationId, producerProof}) {
-    const request = await this._request()
+    const message = {
+      type: /** @type {const} */ ("enqueue"),
+      jobName,
+      args,
+      options,
+      ...(producerInvocationId ? {producerInvocationId} : {}),
+      ...(producerProof ? {producerProof} : {})
+    }
+    const acknowledgement = {explicitlyRejected: false, requestSent: false}
+    /**
+     * Sends one enqueue attempt. An owned caller may replay this exact message
+     * once when transport acknowledgement remains ambiguous after send.
+     * @param {{explicitlyRejected: boolean, requestSent: boolean} | undefined} attemptAcknowledgement - First-attempt observations.
+     * @returns {Promise<string>} - Job id.
+     */
+    const enqueueAttempt = async (attemptAcknowledgement) => {
+      const request = await this._request()
 
-    return await timeout({
-      errorMessage: `Background job enqueue acknowledgement timed out after ${this.enqueueTimeoutMs}ms`,
-      timeout: this.enqueueTimeoutMs
-    }, async ({control}) => await request.run({
-      signal: control.signal,
-      onConnect: (jsonSocket) => {
-        jsonSocket.send({
-          type: "enqueue",
-          jobName,
-          args,
-          options,
-          ...(producerInvocationId ? {producerInvocationId} : {}),
-          ...(producerProof ? {producerProof} : {})
-        })
-      },
-      onMessage: ({message, resolve, reject}) => {
-        if (message?.type === "enqueued") {
-          resolve(message.jobId)
-          return
-        }
+      return await timeout({
+        errorMessage: `Background job enqueue acknowledgement timed out after ${this.enqueueTimeoutMs}ms`,
+        timeout: this.enqueueTimeoutMs
+      }, async ({control}) => await request.run({
+        signal: control.signal,
+        onConnect: (jsonSocket) => {
+          jsonSocket.send(message)
+          if (attemptAcknowledgement) attemptAcknowledgement.requestSent = true
+        },
+        onMessage: ({message, resolve, reject}) => {
+          if (message?.type === "enqueued") {
+            resolve(message.jobId)
+            return
+          }
 
-        if (message?.type === "enqueue-error") {
-          reject(new Error(message.error || "Failed to enqueue job"))
+          if (message?.type === "enqueue-error") {
+            if (attemptAcknowledgement) attemptAcknowledgement.explicitlyRejected = true
+            reject(new Error(message.error || "Failed to enqueue job"))
+          }
         }
-      }
-    }))
+      }))
+    }
+
+    try {
+      return await enqueueAttempt(acknowledgement)
+    } catch (error) {
+      if (!producerInvocationId || !producerProof || !acknowledgement.requestSent || acknowledgement.explicitlyRejected) throw error
+    }
+
+    return await enqueueAttempt(undefined)
   }
 
   /**
