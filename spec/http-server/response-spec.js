@@ -3,7 +3,9 @@
 import {describe, expect, it} from "../../src/testing/test.js"
 import VelociousHttpServerClientResponse from "../../src/http-server/client/response.js"
 
-const stubConfiguration = /** @type {any} */ ({})
+const stubConfiguration = /** @type {any} */ ({
+  getHttpServerMaxBufferedResponseBodyBytes: () => undefined
+})
 
 describe("VelociousHttpServerClientResponse#setStatus", {databaseCleaning: {transaction: true}}, () => {
   it("accepts the existing named aliases", () => {

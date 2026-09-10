@@ -156,6 +156,21 @@ function positiveSafeInteger(value, name, defaultValue) {
 }
 
 /**
+ * Validates an optional positive safe integer configuration value.
+ * @param {ReturnType<typeof JSON.parse>} value - Configured positive safe integer.
+ * @param {string} name - Configuration key.
+ * @returns {number | undefined} - Validated configured value.
+ */
+function optionalPositiveSafeInteger(value, name) {
+  if (value === undefined) return undefined
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
+    throw new TypeError(`${name} must be a positive safe integer`)
+  }
+
+  return value
+}
+
+/**
  * Validates an integer configuration value inside an inclusive range.
  * @param {ReturnType<typeof JSON.parse>} value - Configured integer.
  * @param {string} name - Configuration key.
@@ -347,6 +362,8 @@ export default class VelociousConfiguration {
     this.httpServer = {
       ...(httpServer || {}),
       compression: normalizeHttpCompression(httpServer?.compression),
+      maxBufferedResponseBodyBytes: optionalPositiveSafeInteger(httpServer?.maxBufferedResponseBodyBytes, "httpServer.maxBufferedResponseBodyBytes"),
+      maxRequestBodyBytes: optionalPositiveSafeInteger(httpServer?.maxRequestBodyBytes, "httpServer.maxRequestBodyBytes"),
       websocketInboundQueue: {
         maxPendingBytes: positiveSafeInteger(websocketInboundQueue?.maxPendingBytes, "httpServer.websocketInboundQueue.maxPendingBytes", DEFAULT_WEBSOCKET_INBOUND_MAX_PENDING_BYTES),
         maxPendingMessages: positiveSafeInteger(websocketInboundQueue?.maxPendingMessages, "httpServer.websocketInboundQueue.maxPendingMessages", DEFAULT_WEBSOCKET_INBOUND_MAX_PENDING_MESSAGES)
@@ -642,6 +659,22 @@ export default class VelociousConfiguration {
    */
   getHttpServerCompression() {
     return this.httpServer.compression
+  }
+
+  /**
+   * Runs get maximum buffered response body bytes.
+   * @returns {number | undefined} - Configured byte limit, or undefined when unbounded.
+   */
+  getHttpServerMaxBufferedResponseBodyBytes() {
+    return this.httpServer.maxBufferedResponseBodyBytes
+  }
+
+  /**
+   * Runs get maximum request body bytes.
+   * @returns {number | undefined} - Configured byte limit, or undefined when unbounded.
+   */
+  getHttpServerMaxRequestBodyBytes() {
+    return this.httpServer.maxRequestBodyBytes
   }
 
   /**

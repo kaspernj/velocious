@@ -21,6 +21,61 @@ close is attempted. Multiple failures are returned as an ordered
 [application process lifecycle](application-process-lifecycle.md) for the hook
 and process-context API.
 
+## Database-free applications
+
+Small in-process HTTP services can explicitly disable database ownership. Use
+`database: false`; omitting `database` retains the existing fail-fast behavior
+when an application attempts to initialize its default database pool.
+
+```js
+const configuration = new Configuration({
+  database: false,
+  httpServer: {
+    host: "127.0.0.1",
+    inProcess: true,
+    port: 3006,
+    workers: 1
+  }
+})
+```
+
+`Application.initialize()` still runs route discovery, model registration,
+initializers, sync registration, and the normal shutdown lifecycle, but does
+not create a database pool. Ordinary route dispatch also skips its implicit
+controller connection scope. Database-backed models and connection helpers
+still fail if application code in a database-free service calls them explicitly.
+In-process handlers share the same configuration and mutable application state;
+no database is introduced for that state.
+
+## Buffered body limits
+
+Inbound and buffered outbound bodies can be bounded independently with positive
+safe integer byte limits:
+
+```js
+const configuration = new Configuration({
+  database: false,
+  httpServer: {
+    maxRequestBodyBytes: 64 * 1024,
+    maxBufferedResponseBodyBytes: 256 * 1024
+  }
+})
+```
+
+Both limits are opt-in and remain unbounded when omitted. The request limit is
+checked against `Content-Length` before body allocation and against cumulative
+decoded data for chunked requests. Multipart bodies are checked throughout
+line, header, and part-body accumulation, including requests without
+`Content-Length` or chunked transfer framing. An oversized request is rejected
+before routing with `413 Payload Too Large` and the connection is closed.
+
+The response limit uses the UTF-8 byte length of strings and the byte length of
+`Uint8Array` values. `response.setBody()` rejects an oversized value before
+retaining it. During routed request handling the error is emitted through the
+normal framework-error channels and the client receives an empty `500` response,
+which cannot itself exceed the configured bound. `sendFile` remains streamed and
+is outside the buffered-response limit.
+
 ## File Responses
 
 Controllers can stream a file without loading it into memory:

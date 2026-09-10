@@ -66,7 +66,7 @@ export default class VelociousApplication {
 
     this.configuration.setRoutes(routes)
 
-    if (!this.configuration.isDatabasePoolInitialized()) {
+    if (this.configuration.database !== false && !this.configuration.isDatabasePoolInitialized()) {
       await this.configuration.initializeDatabasePool()
     }
 
