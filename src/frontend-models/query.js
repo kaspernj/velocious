@@ -118,6 +118,28 @@ export class FrontendModelQueryError extends Error {
   }
 }
 
+const FRONTEND_MODEL_INDEX_PAYLOAD_KEYS = new Set([
+  "abilities",
+  "count",
+  "distinct",
+  "group",
+  "joins",
+  "limit",
+  "offset",
+  "page",
+  "perPage",
+  "pluck",
+  "preload",
+  "queryData",
+  "ransack",
+  "searches",
+  "select",
+  "selectsExtra",
+  "sort",
+  "where",
+  "withCount"
+])
+
 /**
  * Builds a query descriptor error.
  * @param {string} message - Error message.
@@ -125,6 +147,27 @@ export class FrontendModelQueryError extends Error {
  */
 function frontendModelQueryError(message) {
   return new FrontendModelQueryError(message)
+}
+
+/**
+ * Asserts the raw payload accepted by a shared frontend-model index command.
+ * @param {ReturnType<typeof JSON.parse>} payload - Raw index payload.
+ * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Valid index payload.
+ */
+export function assertFrontendModelIndexPayload(payload) {
+  if (payload == null) return {}
+
+  if (!isPlainObject(payload)) {
+    throw frontendModelQueryError("Expected frontend-model index payload to be a plain object")
+  }
+
+  for (const payloadKey of Object.keys(payload)) {
+    if (!FRONTEND_MODEL_INDEX_PAYLOAD_KEYS.has(payloadKey)) {
+      throw frontendModelQueryError(`Unknown frontend-model index payload key "${payloadKey}"`)
+    }
+  }
+
+  return payload
 }
 
 /**
