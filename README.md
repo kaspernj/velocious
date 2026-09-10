@@ -2450,7 +2450,13 @@ deduplication. Each call has its own internal replay identity, so two identical
 calls create distinct jobs unless the caller explicitly requests queued
 deduplication or durable idempotency. The retired main commits and wakes the
 queue but never dispatches the follow-up; the active generation owns that work.
-Ordinary retired enqueue, replace, and cancel requests remain rejected.
+If the first sent request loses its acknowledgement after the main accepts the
+generation fence, whether through connection loss or deadline expiry, the Node
+client makes one recovery attempt with the exact same producer proof and
+invocation identity. Legacy/default connections never replay automatically, even
+if execution context supplied producer metadata. Pre-send generation failures
+and explicit enqueue rejections are not retried. Ordinary retired enqueue,
+replace, and cancel requests remain rejected.
 
 Velocious provides the opt-in generation protocol; production still requires a
 supervisor that preserves old generation units and release pins, and a deploy
@@ -2722,7 +2728,7 @@ Set `deduplicateWhileQueued: true` to coalesce an enqueue onto the earliest iden
 
 Use `options: {idempotencyKey}` when producer replay must converge on the original durable job across every state and even after terminal-job pruning. Ownership is scoped to the resolved job class name, resolved queue, and key; reusing that scope with changed canonical arguments or behavior-affecting options fails. This is distinct from queued-only deduplication, and ownership rows are intentionally retained until a future explicit reconciliation/deletion policy. See [durable idempotent enqueue](docs/background-jobs.md#durable-idempotent-enqueue).
 
-The Node producer rejects and destroys its one-shot socket when the main closes before acknowledging or when an enqueue acknowledgement stalls for 5 seconds. Because the main may already have committed the job, this is an ambiguous outcome: replay with the same durable `idempotencyKey` to recover the original job id without creating a duplicate. Direct `BackgroundJobsClient` users can set a different bounded `enqueueTimeoutMs` constructor option. See [durable idempotent enqueue](docs/background-jobs.md#durable-idempotent-enqueue).
+The Node producer rejects and destroys its one-shot socket when the main closes before acknowledging or when an enqueue acknowledgement stalls for 5 seconds. Because the main may already have committed the job, this is an ambiguous outcome. A call made by an executing generation-owned job automatically makes one recovery attempt with its exact internal producer proof and per-call invocation identity, but never after a pre-send generation failure or explicit enqueue rejection. Ordinary enqueues are not retried automatically: replay one with the same durable `idempotencyKey` to recover the original job id without creating a duplicate. Direct `BackgroundJobsClient` users can set a different bounded `enqueueTimeoutMs` constructor option. See [durable idempotent enqueue](docs/background-jobs.md#durable-idempotent-enqueue).
 
 Select a non-default runtime explicitly with `options: {executionMode: "inline" | "forked" | "spawned"}`.
 

@@ -286,11 +286,26 @@ acknowledgement. A connection error, a peer that ends or closes before the
 acknowledgement, or a stalled acknowledgement rejects the producer call and
 tears down its one-shot socket. Persistence may already have committed when the
 acknowledgement is lost, so this rejection is deliberately an ambiguous outcome,
-not proof that no job exists. Replay the same request with the same
+not proof that no job exists.
+
+An enqueue made by a currently executing generation-owned job already carries
+an internal producer handoff proof and a per-call invocation identity. If its
+first request was sent after an accepted generation handshake but no `enqueued`
+or explicit `enqueue-error` response arrives, the Node client makes one recovery
+attempt with that exact unchanged message. The SQL store returns the invocation's
+original durable job id if the first attempt committed, or creates it if the
+first attempt did not reach the transaction. The client does not retry a
+handshake/generation rejection before send, an explicit enqueue rejection, an
+ordinary enqueue without this internal identity, or any legacy/default enqueue
+even if execution context supplied producer metadata. The recovery does not
+change `idempotencyKey` semantics and does not raise the acknowledgement timeout.
+
+For an ordinary enqueue, replay the same request with the same
 `idempotencyKey`: durable ownership returns the already-persisted job id instead
-of creating a second job. Replaying an enqueue without a durable idempotency key
-can create another job. Direct users of the Node `BackgroundJobsClient` may pass
-`enqueueTimeoutMs` to its constructor to use a different bounded deadline.
+of creating a second job. Replaying an ordinary enqueue without a durable
+idempotency key can create another job. Direct users of the Node
+`BackgroundJobsClient` may pass `enqueueTimeoutMs` to its constructor to use a
+different bounded deadline.
 
 The owned request includes the serialized arguments and behavior-affecting enqueue options: resolved queue, execution mode, retry cap, resolved concurrency configuration, and immediate-versus-scheduled timing. Reusing the same scope with a different canonical request fails with a safe `background-job-idempotency-conflict` error. Generated job ids and the wall-clock timestamp of an immediate enqueue are not request identity. `deduplicateWhileQueued` is also not identity: it remains the separate, transient queued-row optimization described above.
 
@@ -525,6 +540,9 @@ active generation may do so. Each `performLater()` or
 `performLaterWithOptions()` call owns an internal per-invocation replay identity:
 replaying that invocation while the producer lease is valid returns its original
 durable job identity, while a separate identical call creates a distinct row.
+After an ambiguous post-send acknowledgement failure, the Node client performs
+one such exact replay automatically; it never substitutes a new invocation
+identity and never retries an explicit ownership or generation rejection.
 `deduplicateWhileQueued` and explicit `idempotencyKey` options retain their
 requested convergence semantics, and a later queued-deduplication event may
 create a new row after the earlier matching row is no longer queued.
