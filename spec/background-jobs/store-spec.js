@@ -268,6 +268,62 @@ async function createStoreWithLegacyJobsSchema() {
   return store
 }
 
+/** @returns {Promise<BackgroundJobsStore>} - Store whose jobs table predates the pooled-child acceptance columns. */
+async function createStoreWithoutChildAcceptanceColumns() {
+  dummyConfiguration.setCurrent()
+  const store = new BackgroundJobsStore({configuration: dummyConfiguration})
+  const pool = dummyConfiguration.getDatabasePool(store.getDatabaseIdentifier())
+
+  await pool.withConnection({name: "Background jobs pre-child-acceptance schema"}, async (db) => {
+    await db.dropTable("background_jobs", {cascade: true, ifExists: true})
+    db.clearSchemaCache()
+
+    const jobsTable = new TableData("background_jobs")
+    jobsTable.string("id", {primaryKey: true})
+    jobsTable.string("job_name", {null: false, index: true})
+    jobsTable.text("args_json", {null: false})
+    jobsTable.string("execution_mode", {null: false})
+    jobsTable.string("queue", {null: true, index: true})
+    jobsTable.integer("max_retries", {null: false})
+    jobsTable.integer("attempts", {null: false})
+    jobsTable.string("status", {null: false, index: true})
+    jobsTable.bigint("scheduled_at_ms", {null: false, index: true})
+    jobsTable.bigint("created_at_ms", {null: false, index: true})
+    jobsTable.string("schedule_key", {null: true, index: true})
+    jobsTable.bigint("handed_off_at_ms", {null: true, index: true})
+    jobsTable.string("handoff_id", {null: true})
+    jobsTable.bigint("completed_at_ms", {null: true})
+    jobsTable.bigint("failed_at_ms", {null: true})
+    jobsTable.bigint("orphaned_at_ms", {null: true, index: true})
+    jobsTable.string("worker_id", {null: true})
+    jobsTable.text("last_error", {null: true})
+    jobsTable.string("concurrency_key", {null: true, index: true})
+    jobsTable.integer("max_concurrency", {null: true})
+    jobsTable.bigint("timeout_ms", {null: true})
+    await db.createTable(jobsTable)
+    db.clearSchemaCache()
+
+    const now = Date.now()
+
+    await db.insert({
+      tableName: "background_jobs",
+      data: {
+        id: "pre-acceptance-job",
+        job_name: "TestJob",
+        args_json: "[]",
+        execution_mode: "pooled",
+        max_retries: 0,
+        attempts: 0,
+        status: "queued",
+        scheduled_at_ms: now,
+        created_at_ms: now
+      }
+    })
+  })
+
+  return store
+}
+
 describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => {
   it("validates paired concurrency options and rejects conflicting caps", async () => {
     const store = await createClearedStore()
@@ -863,6 +919,190 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     expect(job.handoffId).toEqual(secondHandoff.handoffId)
     expect(job.attempts).toEqual(0)
     expect(job.lastError).toBeNull()
+  })
+
+  it("persists pooled child acceptance evidence against the active handoff lease", async () => {
+    const store = await createClearedStore()
+    const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {}})
+    const handoff = await store.markHandedOff({jobId, workerId: "worker-1"})
+
+    if (!handoff) throw new Error("Expected the job to be handed off")
+
+    const receivedAtMs = 1_000_000
+    const startedAtMs = receivedAtMs + 250
+
+    const accepted = await store.markChildAccepted({
+      childInstanceId: "child-a",
+      childPid: 4242,
+      handedOffAtMs: handoff.handedOffAtMs,
+      handoffId: handoff.handoffId,
+      jobId,
+      receivedAtMs,
+      workerId: "worker-1"
+    })
+
+    expect(accepted).toEqual(true)
+
+    let job = await getJobOrFail({jobId, store})
+    expect(job.childInstanceId).toEqual("child-a")
+    expect(job.childPid).toEqual(4242)
+    expect(job.childReceivedAtMs).toEqual(receivedAtMs)
+    expect(job.childStartedAtMs).toBeNull()
+
+    const started = await store.markChildAccepted({
+      childInstanceId: "child-a",
+      childPid: 4242,
+      handedOffAtMs: handoff.handedOffAtMs,
+      handoffId: handoff.handoffId,
+      jobId,
+      startedAtMs,
+      workerId: "worker-1"
+    })
+
+    expect(started).toEqual(true)
+
+    job = await getJobOrFail({jobId, store})
+    expect(job.status).toEqual("handed_off")
+    expect(job.childReceivedAtMs).toEqual(receivedAtMs)
+    expect(job.childStartedAtMs).toEqual(startedAtMs)
+  })
+
+  it("fences stale child acceptance reports and clears evidence when the lease is released", async () => {
+    const store = await createClearedStore()
+    const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {}})
+    const firstHandoff = await store.markHandedOff({jobId, workerId: "shared-worker-id"})
+
+    if (!firstHandoff) throw new Error("Expected the first handoff to be claimed")
+
+    const firstAccepted = await store.markChildAccepted({
+      childInstanceId: "child-a",
+      childPid: 1,
+      handedOffAtMs: firstHandoff.handedOffAtMs,
+      handoffId: firstHandoff.handoffId,
+      jobId,
+      receivedAtMs: 1_000_000,
+      workerId: "shared-worker-id"
+    })
+
+    expect(firstAccepted).toEqual(true)
+
+    await store.markReturnedToQueue({jobId, handoffId: firstHandoff.handoffId})
+
+    let job = await getJobOrFail({jobId, store})
+    expect(job.childInstanceId).toBeNull()
+    expect(job.childPid).toBeNull()
+    expect(job.childReceivedAtMs).toBeNull()
+    expect(job.childStartedAtMs).toBeNull()
+
+    const secondHandoff = await store.markHandedOff({jobId, workerId: "shared-worker-id"})
+
+    if (!secondHandoff) throw new Error("Expected the second handoff to be claimed")
+
+    const staleAccepted = await store.markChildAccepted({
+      childInstanceId: "child-a",
+      childPid: 1,
+      handedOffAtMs: firstHandoff.handedOffAtMs,
+      handoffId: firstHandoff.handoffId,
+      jobId,
+      startedAtMs: 1_000_250,
+      workerId: "shared-worker-id"
+    })
+
+    expect(staleAccepted).toEqual(false)
+
+    job = await getJobOrFail({jobId, store})
+    expect(job.status).toEqual("handed_off")
+    expect(job.handoffId).toEqual(secondHandoff.handoffId)
+    expect(job.childInstanceId).toBeNull()
+    expect(job.childStartedAtMs).toBeNull()
+  })
+
+  it("clears pooled child acceptance evidence on failure retry and keeps it on terminal failure", async () => {
+    const store = await createClearedStore()
+    const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {maxRetries: 1}})
+    const firstHandoff = await store.markHandedOff({jobId, workerId: "worker-1"})
+
+    if (!firstHandoff) throw new Error("Expected the job to be handed off")
+
+    await store.markChildAccepted({
+      childInstanceId: "child-a",
+      childPid: 7,
+      handedOffAtMs: firstHandoff.handedOffAtMs,
+      handoffId: firstHandoff.handoffId,
+      jobId,
+      receivedAtMs: 1_000_000,
+      startedAtMs: 1_000_100,
+      workerId: "worker-1"
+    })
+
+    await store.markFailed({error: "boom", jobId, ...firstHandoff})
+
+    let job = await getJobOrFail({jobId, store})
+    expect(job.status).toEqual("queued")
+    expect(job.childInstanceId).toBeNull()
+    expect(job.childPid).toBeNull()
+    expect(job.childReceivedAtMs).toBeNull()
+    expect(job.childStartedAtMs).toBeNull()
+
+    const secondHandoff = await store.markHandedOff({jobId, workerId: "worker-2"})
+
+    if (!secondHandoff) throw new Error("Expected the retried job to be handed off")
+
+    await store.markChildAccepted({
+      childInstanceId: "child-b",
+      childPid: 8,
+      handedOffAtMs: secondHandoff.handedOffAtMs,
+      handoffId: secondHandoff.handoffId,
+      jobId,
+      receivedAtMs: 2_000_000,
+      workerId: "worker-2"
+    })
+
+    await store.markFailed({error: "boom again", jobId, ...secondHandoff})
+
+    job = await getJobOrFail({jobId, store})
+    expect(job.status).toEqual("failed")
+    expect(job.childInstanceId).toEqual("child-b")
+    expect(job.childPid).toEqual(8)
+    expect(job.childReceivedAtMs).toEqual(2_000_000)
+    expect(job.childStartedAtMs).toBeNull()
+  })
+
+  it("rejects child acceptance evidence for jobs that are not handed off", async () => {
+    const store = await createClearedStore()
+    const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {}})
+
+    const accepted = await store.markChildAccepted({childInstanceId: "child-a", jobId, receivedAtMs: 1_000_000})
+
+    expect(accepted).toEqual(false)
+
+    const job = await getJobOrFail({jobId, store})
+    expect(job.childInstanceId).toBeNull()
+    expect(job.childReceivedAtMs).toBeNull()
+  })
+
+  it("adds pooled child acceptance columns to a jobs table that predates them", async () => {
+    const store = await createStoreWithoutChildAcceptanceColumns()
+
+    await store.ensureReady()
+
+    const pool = dummyConfiguration.getDatabasePool(store.getDatabaseIdentifier())
+
+    await pool.withConnection({name: "Background jobs verify child acceptance columns"}, async (db) => {
+      const jobsTable = await db.getTableByNameOrFail("background_jobs")
+
+      for (const columnName of ["child_received_at_ms", "child_started_at_ms", "child_instance_id", "child_pid"]) {
+        expect(await jobsTable.getColumnByName(columnName)).not.toBeNull()
+      }
+    })
+
+    const job = await getJobOrFail({jobId: "pre-acceptance-job", store})
+
+    expect(job.status).toEqual("queued")
+    expect(job.childInstanceId).toBeNull()
+    expect(job.childPid).toBeNull()
+    expect(job.childReceivedAtMs).toBeNull()
+    expect(job.childStartedAtMs).toBeNull()
   })
 
   it("keeps the concurrency counter consistent across every release path", async () => {

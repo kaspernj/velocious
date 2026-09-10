@@ -1219,6 +1219,11 @@ export default class BackgroundJobsMain {
       }
       return
     }
+    if (message?.type === "job-accepted") {
+      await this._handleJobAccepted({jsonSocket, message})
+      return
+    }
+
     if (message?.type === "job-complete") {
       await this._handleJobComplete({jsonSocket, message})
       return
@@ -1235,13 +1240,42 @@ export default class BackgroundJobsMain {
   }
 
   /**
+   * Persists pooled-child acceptance evidence for an active handoff. The
+   * report is diagnostic: a stale lease (job already reclaimed or terminal)
+   * answers the same `job-updated` acknowledgement as an accepted report, and
+   * only a store failure answers `job-update-error` so the worker can retry.
+   * @param {object} args - Options.
+   * @param {JsonSocket} args.jsonSocket - JSON socket.
+   * @param {import("./types.js").BackgroundJobAcceptedMessage} args.message - Message.
+   * @returns {Promise<void>} - Resolves when handled.
+   */
+  async _handleJobAccepted({jsonSocket, message}) {
+    try {
+      await this.store.markChildAccepted({
+        childInstanceId: message.childInstanceId,
+        childPid: message.childPid,
+        handedOffAtMs: message.handedOffAtMs,
+        handoffId: message.handoffId,
+        jobId: message.jobId,
+        receivedAtMs: message.receivedAtMs,
+        startedAtMs: message.startedAtMs,
+        workerId: message.workerId
+      })
+      jsonSocket.send({type: "job-updated", jobId: message.jobId})
+    } catch (error) {
+      this._reportJobUpdateFailure({error, jobId: message.jobId, stage: "background-job-accepted"})
+      jsonSocket.send({type: "job-update-error", jobId: message.jobId, error: "Failed to update job"})
+    }
+  }
+
+  /**
    * Requires the complete durable lease identity before a generation-mode
    * reporter can mutate a job. Legacy reporters keep their permissive protocol.
    * @param {import("./types.js").BackgroundJobSocketMessage} message - Reporter message.
    * @returns {boolean} - Whether the report lacks its exact generation lease.
    */
   _generationReportIsInvalid(message) {
-    if (message?.type !== "job-complete" && message?.type !== "job-failed" && message?.type !== "job-reschedule") return false
+    if (message?.type !== "job-accepted" && message?.type !== "job-complete" && message?.type !== "job-failed" && message?.type !== "job-reschedule") return false
     const generationId = this.generationId
     if (!generationId) return false
 

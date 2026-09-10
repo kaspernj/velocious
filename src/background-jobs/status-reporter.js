@@ -93,6 +93,102 @@ export default class BackgroundJobsStatusReporter {
   }
 
   /**
+   * Runs report child accepted.
+   * @param {object} args - Options.
+   * @param {string} args.jobId - Job id.
+   * @param {string} [args.handoffId] - Handoff lease id.
+   * @param {string} [args.workerId] - Worker id.
+   * @param {number} [args.handedOffAtMs] - Handed off timestamp.
+   * @param {number} [args.receivedAtMs] - Epoch ms the runner child received the job.
+   * @param {number} [args.startedAtMs] - Epoch ms the job's perform started in the child.
+   * @param {string} [args.childInstanceId] - Stable pooled child identity.
+   * @param {number} [args.childPid] - Pooled child OS pid.
+   * @returns {Promise<void>} - Resolves when reported.
+   */
+  async reportChildAccepted({jobId, handoffId, workerId, handedOffAtMs, receivedAtMs, startedAtMs, childInstanceId, childPid}) {
+    const config = this.configuration.getBackgroundJobsConfig()
+    const host = this.host || config.host
+    const port = typeof this.port === "number" ? this.port : config.port
+    const {generationId} = this.configuration.resolveBackgroundJobsGenerationConfig({
+      generationId: this.explicitGenerationId,
+      sourceName: "BackgroundJobsStatusReporter"
+    })
+
+    await timeout({timeout: this.attemptTimeoutMs}, async ({control}) => {
+      const request = new BackgroundJobsSocketRequest({host, port, role: "reporter", generationHandshakeTimeoutMs: this.generationHandshakeTimeoutMs, generationId})
+
+      this._lastRequest = request
+
+      await request.run({
+        signal: control.signal,
+        onConnect: (jsonSocket) => {
+          jsonSocket.send({
+            type: "job-accepted",
+            jobId,
+            handoffId,
+            workerId,
+            handedOffAtMs,
+            receivedAtMs,
+            startedAtMs,
+            childInstanceId,
+            childPid
+          })
+        },
+        onMessage: ({message, resolve, reject}) => {
+          if (message?.type === "job-updated" && message.jobId === jobId) {
+            resolve(undefined)
+            return
+          }
+
+          if (message?.type === "job-update-error" && message.jobId === jobId) {
+            reject(new BackgroundJobUpdateError(message.error || "Job update failed"))
+          }
+        }
+      })
+    })
+  }
+
+  /**
+   * Runs report child accepted with retry. Acceptance evidence is diagnostic
+   * rather than terminal, so a transient main/DB failure retries only until
+   * `maxDurationMs` elapses and then gives up instead of stranding the report.
+   * @param {object} args - Options.
+   * @param {string} args.jobId - Job id.
+   * @param {string} [args.handoffId] - Handoff lease id.
+   * @param {string} [args.workerId] - Worker id.
+   * @param {number} [args.handedOffAtMs] - Handed off timestamp.
+   * @param {number} [args.receivedAtMs] - Epoch ms the runner child received the job.
+   * @param {number} [args.startedAtMs] - Epoch ms the job's perform started in the child.
+   * @param {string} [args.childInstanceId] - Stable pooled child identity.
+   * @param {number} [args.childPid] - Pooled child OS pid.
+   * @param {number} args.maxDurationMs - Max duration for retries.
+   * @returns {Promise<void>} - Resolves when reported or the budget elapses.
+   */
+  async reportChildAcceptedWithRetry({jobId, handoffId, workerId, handedOffAtMs, receivedAtMs, startedAtMs, childInstanceId, childPid, maxDurationMs}) {
+    let attempt = 0
+    const startTime = Date.now()
+
+    while (true) {
+      try {
+        await this.reportChildAccepted({jobId, handoffId, workerId, handedOffAtMs, receivedAtMs, startedAtMs, childInstanceId, childPid})
+        return
+      } catch (error) {
+        attempt += 1
+        const delaySeconds = Math.min(30, 0.5 * attempt)
+
+        this.logger.debug(() => ["Background job child-acceptance report failed, retrying", error])
+
+        if (Date.now() - startTime >= maxDurationMs) {
+          this.logger.warn(() => ["Background job child-acceptance report timed out, giving up", error])
+          throw error
+        }
+
+        await wait(delaySeconds)
+      }
+    }
+  }
+
+  /**
    * Runs report with retry.
    * @param {object} args - Options.
    * @param {string} args.jobId - Job id.
@@ -104,7 +200,7 @@ export default class BackgroundJobsStatusReporter {
    * @param {string} [args.workerId] - Worker id.
    * @param {import("./types.js").PooledRunnerFailure} [args.runnerFailure] - Pooled-child process failure provenance.
    * @param {number} [args.maxDurationMs] - Max duration for retries.
-   * @param {boolean} [args.retryPersistErrors] - Retry a `BackgroundJobUpdateError` (main's `job-update-error`, i.e. a transient DB failure while persisting the terminal status) instead of throwing immediately. Off by default so short-lived forked/spawned runners keep failing loudly and exit non-zero to be reclaimed; on for the long-lived worker, which cannot exit-to-reclaim and would otherwise strand the job in `handed_off`.
+   * @param {boolean} [args.retryPersistErrors] - Retry a `BackgroundJobUpdateError` (main's `job-update-error`, i.e. a transient DB failure while persisting the terminal status) instead of throwing immediately. Off by default so short-lived forked/spawned runners keep failing loudly and exit non-zero to be reclaimed; on for the long-lived worker, which cannot exit to trigger orphan reclaim and would otherwise drop the completion and strand the row in `handed_off`.
    * @returns {Promise<void>} - Resolves when reported.
    */
   async reportWithRetry({jobId, status, delayMs, error, handoffId, handedOffAtMs, workerId, runnerFailure, maxDurationMs, retryPersistErrors = false}) {

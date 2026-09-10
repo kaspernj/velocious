@@ -84,6 +84,7 @@ describe("Background jobs - pooled ready dispatch", {tags: ["dummy"], databaseCl
     const originalReporter = backgroundJobs.worker.statusReporter
     if (!originalReporter) throw new Error("Expected a worker status reporter")
     backgroundJobs.worker.statusReporter = /** @type {import("../../src/background-jobs/status-reporter.js").default} */ (/** @type {unknown} */ ({
+      reportChildAcceptedWithRetry: (args) => originalReporter.reportChildAcceptedWithRetry(args),
       reportWithRetry: async (args) => {
         if (args.status !== "failed" || args.jobId !== firstId) return await originalReporter.reportWithRetry(args)
 
