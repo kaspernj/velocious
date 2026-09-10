@@ -646,9 +646,11 @@ describe("Controller frontend model actions", () => {
     const requestPayload = unknownSharedFrontendModelRequestParams()
 
     requestPayload.requests[0].payload = {
-      authorization: "Bearer private-token",
-      comments: ["x".repeat(1200)],
-      payload: {contentBase64: "raw-base64"}
+      queryData: {
+        authorization: "Bearer private-token",
+        comments: ["x".repeat(1200)],
+        payload: {contentBase64: "raw-base64"}
+      }
     }
 
     configuration.addClientErrorPayloadReporter(async ({context, error, requestDetails}) => {
@@ -687,9 +689,9 @@ describe("Controller frontend model actions", () => {
     expect(reporterContexts[0].requestId).toEqual("request-1")
     expect(reporterRequestDetails[0]?.httpMethod).toEqual("POST")
     expect(reporterRequestDetails[0]?.path).toEqual("/frontend-models")
-    expect(reporterRequestDetails[0]?.body?.requests?.[0]?.payload?.authorization).toEqual(LOG_REDACTION_MARKER)
-    expect(reporterRequestDetails[0]?.body?.requests?.[0]?.payload?.comments?.[0]).toContain("[truncated ")
-    expect(reporterRequestDetails[0]?.body?.requests?.[0]?.payload?.payload?.contentBase64).toEqual(LOG_REDACTION_MARKER)
+    expect(reporterRequestDetails[0]?.body?.requests?.[0]?.payload?.queryData?.authorization).toEqual(LOG_REDACTION_MARKER)
+    expect(reporterRequestDetails[0]?.body?.requests?.[0]?.payload?.queryData?.comments?.[0]).toContain("[truncated ")
+    expect(reporterRequestDetails[0]?.body?.requests?.[0]?.payload?.queryData?.payload?.contentBase64).toEqual(LOG_REDACTION_MARKER)
   })
 
   it("compacts oversized shared frontend-model request details for client error reporters", async () => {
@@ -698,6 +700,7 @@ describe("Controller frontend model actions", () => {
     const reporterRequestDetails = []
     const requestPayload = unknownSharedFrontendModelRequestParams()
 
+    requestPayload.requests[0].commandType = "find"
     requestPayload.requests[0].payload = {
       attributes: {
         description: "x".repeat(15000),
@@ -721,7 +724,7 @@ describe("Controller frontend model actions", () => {
     expect(reporterRequestDetails[0]?.body?.__truncated).toEqual(true)
     expect(reporterRequestDetails[0]?.body?.originalSerializedLength).toBeGreaterThan(12000)
     expect(reporterRequestDetails[0]?.body?.requests).toEqual([{
-      commandType: "index",
+      commandType: "find",
       model: "UnknownModel",
       payload: {
         attributes: {
@@ -1872,6 +1875,44 @@ describe("Controller frontend model actions", () => {
     })
   })
 
+  it("rejects unknown index payload keys without aborting valid batch siblings", async () => {
+    await Dummy.run(async () => {
+      const scopedTask = await createTask("Scoped index payload task")
+      await createTask("Unscoped index payload task")
+
+      const payload = await postFrontendModel("/frontend-models", {
+        requests: [
+          {
+            commandType: "index",
+            model: "Task",
+            payload: {query: {where: {id: scopedTask.id()}}},
+            requestId: "invalid-index-payload"
+          },
+          {
+            commandType: "index",
+            model: "Task",
+            payload: {where: {id: scopedTask.id()}},
+            requestId: "valid-index-payload"
+          }
+        ]
+      })
+      const invalidResponse = payload.responses[0].response
+      const validResponse = payload.responses[1].response
+
+      expect({
+        models: invalidResponse.models?.map((model) => model.id),
+        status: invalidResponse.status
+      }).toEqual({
+        models: undefined,
+        status: "error"
+      })
+      expect(invalidResponse.errorMessage).toEqual('Unknown frontend-model index payload key "query"')
+      expect(invalidResponse.velocious).toEqual({code: "frontend-model-query-error"})
+      expect(validResponse.status).toEqual("success")
+      expect(validResponse.models.map((model) => model.id)).toEqual([scopedTask.id()])
+    })
+  })
+
   it("applies relationship-path where params to frontendIndex query", async () => {
     await Dummy.run(async () => {
       await User.create({
@@ -2211,6 +2252,11 @@ describe("Controller frontend model actions", () => {
           model: "User",
           payload: {ransack: {encryptedPassword_eq: "secret"}},
           requestId: "hidden-ransack"
+        },
+        {
+          expectedMessage: 'Unknown frontend-model index payload key "query"',
+          payload: {query: {where: {id: "missing"}}},
+          requestId: "invalid-index-payload-key"
         }
       ]) {
         const configuration = buildFrontendModelControllerConfiguration("production", {resolveFrontendModelAbility: true})

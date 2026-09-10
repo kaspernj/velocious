@@ -270,6 +270,12 @@ export declare class FrontendModelQueryError extends Error {
     constructor(message: string);
 }
 /**
+ * Asserts the raw payload accepted by a shared frontend-model index command.
+ * @param {ReturnType<typeof JSON.parse>} payload - Raw index payload.
+ * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Valid index payload.
+ */
+export declare function assertFrontendModelIndexPayload(payload: ReturnType<typeof JSON.parse>): Record<string, ReturnType<typeof JSON.parse>>;
+/**
  * Runs the normalizePreload helper.
  * @param {import("../database/query/index.js").NestedPreloadRecord | string | Array<string | import("../database/query/index.js").NestedPreloadRecord> | boolean | undefined | null} preload - Preload shorthand.
  * @returns {import("../database/query/index.js").NestedPreloadRecord} - Normalized preload.

@@ -10,7 +10,7 @@ import {frontendModelResourceClassFromDefinition, frontendModelResourceConfigura
 import {createOfflineGrantFromBootstrap, verifyOfflineGrant} from "./sync/offline-grant.js"
 import {serverChangeFeedStoreForConfiguration} from "./sync/server-change-feed.js"
 import {mutationIdempotencyKey, verifySignedMutation} from "./sync/device-identity.js"
-import {FrontendModelQueryError, normalizeGroup as normalizeQueryGroup, normalizeJoins as normalizeQueryJoins, normalizePluck as normalizeQueryPluck, normalizePreload as normalizeQueryPreload, normalizeSearchOperator as normalizeQuerySearchOperator, normalizeSort as normalizeQuerySort} from "./frontend-models/query.js"
+import {assertFrontendModelIndexPayload, FrontendModelQueryError, normalizeGroup as normalizeQueryGroup, normalizeJoins as normalizeQueryJoins, normalizePluck as normalizeQueryPluck, normalizePreload as normalizeQueryPreload, normalizeSearchOperator as normalizeQuerySearchOperator, normalizeSort as normalizeQuerySort} from "./frontend-models/query.js"
 import {assignSafeProperty, deserializeFrontendModelTransportValue, isBackendModelInstance, serializeFrontendModelTransportValue} from "./frontend-models/transport-serialization.js"
 import {requestDetails} from "./error-reporting/request-details.js"
 import RoutesResolver from "./routes/resolver.js"
@@ -4455,14 +4455,27 @@ export default class FrontendModelController extends Controller {
       }
 
       try {
+        let indexPayload = {}
+
+        if (commandType === "index") {
+          try {
+            indexPayload = assertFrontendModelIndexPayload(payload)
+          } catch (error) {
+            throwFrontendModelQueryErrorForParserError(error)
+          }
+        }
+
         const requestContext = captureFrontendModelRemoteRequestContext(requestEntry?.requestContext)
         let responsePayload
 
         if (isBuiltInCommand) {
+          const commandPayload = commandType === "index"
+            ? indexPayload
+            : (payload && typeof payload === "object" ? payload : {})
           const commandParams = mergeFrontendModelRemoteRequestContext(
             requestContext,
             {
-              ...(payload && typeof payload === "object" ? payload : {}),
+              ...commandPayload,
               model
             }
           )
