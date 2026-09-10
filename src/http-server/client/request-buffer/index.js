@@ -3,6 +3,7 @@
 import EventEmitter from "../../../utils/event-emitter.js"
 import FormDataPart from "./form-data-part.js"
 import Header from "./header.js"
+import {HttpRequestBodyTooLargeError} from "../errors.js"
 import {incorporate} from "incorporator"
 import Logger from "../../../logger.js"
 import ParamsToObject from "../params-to-object.js"
@@ -64,6 +65,19 @@ export default class RequestBuffer {
   constructor({configuration}) {
     this.configuration = configuration
     this.logger = new Logger(this, {debug: false})
+  }
+
+  /**
+   * Raises before buffering a request body beyond the configured bound.
+   * @param {number} actualBytes - Declared or accumulated decoded body bytes.
+   * @returns {void}
+   */
+  assertRequestBodySize(actualBytes) {
+    const maxBytes = this.configuration.getHttpServerMaxRequestBodyBytes()
+
+    if (maxBytes !== undefined && actualBytes > maxBytes) {
+      throw new HttpRequestBodyTooLargeError({actualBytes, maxBytes})
+    }
   }
 
   destroy() {
@@ -414,6 +428,12 @@ export default class RequestBuffer {
         this.readingBody = true
         this.bodyLength = 0
 
+        if (this.contentLength !== undefined) {
+          if (Number.isNaN(this.contentLength)) throw new Error("Content length is invalid")
+
+          this.assertRequestBodySize(this.contentLength)
+        }
+
         const match = this.getHeader("content-type")?.value?.match(/^multipart\/form-data;\s*boundary=(.+)$/i)
 
         if (match) {
@@ -425,8 +445,6 @@ export default class RequestBuffer {
           this.setState("multi-part-form-data")
         } else if (this.contentLength === 0 || this.contentLength === undefined) {
           this.completeRequest()
-        } else if (Number.isNaN(this.contentLength)) {
-          throw new Error("Content length is invalid")
         } else {
           /**
            * Narrows the runtime value to the documented type.
@@ -520,6 +538,8 @@ export default class RequestBuffer {
       this.setState("chunked-trailer")
       return
     }
+
+    this.assertRequestBodySize((this.chunkedBodyChars?.length || 0) + size)
 
     this.currentChunkSize = size
     this.currentChunkBytesRead = 0

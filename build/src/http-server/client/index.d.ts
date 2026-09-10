@@ -50,6 +50,11 @@ export default class VeoliciousHttpServerClient {
      */
     _sendBadRequestResponse(message: string): void;
     /**
+     * Sends a deterministic request-body limit response and closes the connection.
+     * @returns {void} - No return value.
+     */
+    _sendPayloadTooLargeResponse(): void;
+    /**
      * Runs handle bad request.
      * @param {Error} error - Error instance.
      * @returns {void} - No return value.

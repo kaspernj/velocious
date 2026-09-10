@@ -46,6 +46,12 @@ export default class RequestBuffer {
     constructor({ configuration }: {
         configuration: import("../../../configuration.js").default;
     });
+    /**
+     * Raises before buffering a request body beyond the configured bound.
+     * @param {number} actualBytes - Declared or accumulated decoded body bytes.
+     * @returns {void}
+     */
+    assertRequestBodySize(actualBytes: number): void;
     destroy(): void;
     /**
      * Runs feed.
