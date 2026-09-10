@@ -2450,10 +2450,12 @@ deduplication. Each call has its own internal replay identity, so two identical
 calls create distinct jobs unless the caller explicitly requests queued
 deduplication or durable idempotency. The retired main commits and wakes the
 queue but never dispatches the follow-up; the active generation owns that work.
-If the first sent request loses its acknowledgement, the Node client makes one
-recovery attempt with the exact same producer proof and invocation identity.
-Pre-send generation failures and explicit enqueue rejections are not retried.
-Ordinary retired enqueue, replace, and cancel requests remain rejected.
+If the first sent request loses its acknowledgement after the main accepts the
+generation fence, the Node client makes one recovery attempt with the exact same
+producer proof and invocation identity. Legacy/default connections never replay
+automatically, even if execution context supplied producer metadata. Pre-send
+generation failures and explicit enqueue rejections are not retried. Ordinary
+retired enqueue, replace, and cancel requests remain rejected.
 
 Velocious provides the opt-in generation protocol; production still requires a
 supervisor that preserves old generation units and release pins, and a deploy

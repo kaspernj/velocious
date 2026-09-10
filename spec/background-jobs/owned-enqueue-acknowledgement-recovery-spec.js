@@ -4,6 +4,7 @@ import fs from "fs/promises"
 import net from "net"
 import BackgroundJobsClient from "../../src/background-jobs/client.js"
 import JsonSocket from "../../src/background-jobs/json-socket.js"
+import BackgroundJobsMain from "../../src/background-jobs/main.js"
 import SqlBackgroundJobsAdapter from "../../src/background-jobs/sql-adapter.js"
 import BackgroundJobsWorker from "../../src/background-jobs/worker.js"
 import { createGenerationWorkerId } from "../../src/background-jobs/generation-identity.js"
@@ -228,6 +229,36 @@ describe("BackgroundJobsClient owned enqueue acknowledgement recovery", {databas
       expect(proxy.connectionCount).toEqual(1)
       expect(proxy.enqueueMessages).toHaveLength(1)
       expect(await store.countJobs({jobName: "OrdinaryAckChildJob"})).toEqual(1)
+    } finally {
+      await proxy.close()
+      await main.stop()
+    }
+  })
+
+  it("does not replay a legacy enqueue carrying producer metadata", async () => {
+    const generationId = "legacy-owned-ack-timeout"
+    const store = new SqlBackgroundJobsAdapter({configuration: dummyConfiguration})
+    dummyConfiguration.setBackgroundJobsConfig({generationId: undefined, initialGenerationState: undefined, lifecycleSocketPath: undefined})
+    const main = new BackgroundJobsMain({closeDatabaseConnectionsOnStop: false, configuration: dummyConfiguration, host: "127.0.0.1", port: 0})
+    main.store = store
+    await main.start()
+    const proxy = await startAcknowledgementProxy(main.getPort())
+
+    try {
+      const producer = await createOwnedProducer({generationId, jobName: "LegacyOwnedAckProducerJob", store})
+      dummyConfiguration.setBackgroundJobsConfig({generationId: undefined, host: "127.0.0.1", port: proxy.port})
+      const client = new BackgroundJobsClient({configuration: dummyConfiguration, enqueueTimeoutMs: 40})
+
+      await expect(async () => await client.enqueue({
+        args: [],
+        jobName: "LegacyOwnedAckChildJob",
+        producerInvocationId: "legacy-owned-ack-invocation",
+        producerProof: producer.proof
+      })).toThrow("Background job enqueue acknowledgement timed out after 40ms")
+      expect(proxy.connectionCount).toEqual(1)
+      expect(proxy.enqueueMessages).toHaveLength(1)
+      expect(proxy.withheldJobId).toBeDefined()
+      expect(await store.countJobs({jobName: "LegacyOwnedAckChildJob"})).toEqual(1)
     } finally {
       await proxy.close()
       await main.stop()

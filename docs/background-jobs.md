@@ -290,14 +290,15 @@ not proof that no job exists.
 
 An enqueue made by a currently executing generation-owned job already carries
 an internal producer handoff proof and a per-call invocation identity. If its
-first request was sent but no `enqueued` or explicit `enqueue-error` response
-arrives, the Node client makes one recovery attempt with that exact unchanged
-message. The SQL store returns the invocation's original durable job id if the
-first attempt committed, or creates it if the first attempt did not reach the
-transaction. The client does not retry a handshake/generation rejection before
-send, an explicit enqueue rejection, or an ordinary enqueue without this
-internal identity. The recovery does not change `idempotencyKey` semantics and
-does not raise the acknowledgement timeout.
+first request was sent after an accepted generation handshake but no `enqueued`
+or explicit `enqueue-error` response arrives, the Node client makes one recovery
+attempt with that exact unchanged message. The SQL store returns the invocation's
+original durable job id if the first attempt committed, or creates it if the
+first attempt did not reach the transaction. The client does not retry a
+handshake/generation rejection before send, an explicit enqueue rejection, an
+ordinary enqueue without this internal identity, or any legacy/default enqueue
+even if execution context supplied producer metadata. The recovery does not
+change `idempotencyKey` semantics and does not raise the acknowledgement timeout.
 
 For an ordinary enqueue, replay the same request with the same
 `idempotencyKey`: durable ownership returns the already-persisted job id instead

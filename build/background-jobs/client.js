@@ -57,11 +57,11 @@ export default class BackgroundJobsClient {
       ...(producerInvocationId ? {producerInvocationId} : {}),
       ...(producerProof ? {producerProof} : {})
     }
-    const acknowledgement = {explicitlyRejected: false, requestSent: false}
+    const acknowledgement = {explicitlyRejected: false, generationFenced: false, requestSent: false}
     /**
      * Sends one enqueue attempt. An owned caller may replay this exact message
      * once when transport acknowledgement remains ambiguous after send.
-     * @param {{explicitlyRejected: boolean, requestSent: boolean} | undefined} attemptAcknowledgement - First-attempt observations.
+     * @param {{explicitlyRejected: boolean, generationFenced: boolean, requestSent: boolean} | undefined} attemptAcknowledgement - First-attempt observations.
      * @returns {Promise<string>} - Job id.
      */
     const enqueueAttempt = async (attemptAcknowledgement) => {
@@ -74,7 +74,10 @@ export default class BackgroundJobsClient {
         signal: control.signal,
         onConnect: (jsonSocket) => {
           jsonSocket.send(message)
-          if (attemptAcknowledgement) attemptAcknowledgement.requestSent = true
+          if (attemptAcknowledgement) {
+            attemptAcknowledgement.generationFenced = Boolean(request.generationId)
+            attemptAcknowledgement.requestSent = true
+          }
         },
         onMessage: ({message, resolve, reject}) => {
           if (message?.type === "enqueued") {
@@ -93,7 +96,7 @@ export default class BackgroundJobsClient {
     try {
       return await enqueueAttempt(acknowledgement)
     } catch (error) {
-      if (!producerInvocationId || !producerProof || !acknowledgement.requestSent || acknowledgement.explicitlyRejected) throw error
+      if (!producerInvocationId || !producerProof || !acknowledgement.generationFenced || !acknowledgement.requestSent || acknowledgement.explicitlyRejected) throw error
     }
 
     return await enqueueAttempt(undefined)
