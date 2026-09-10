@@ -41,10 +41,11 @@ const configuration = new Configuration({
 
 `Application.initialize()` still runs route discovery, model registration,
 initializers, sync registration, and the normal shutdown lifecycle, but does
-not create a database pool. Database-backed models and connection helpers still
-fail if a database-free service calls them. In-process handlers share the same
-configuration and mutable application state; no database is introduced for
-that state.
+not create a database pool. Ordinary route dispatch also skips its implicit
+controller connection scope. Database-backed models and connection helpers
+still fail if application code in a database-free service calls them explicitly.
+In-process handlers share the same configuration and mutable application state;
+no database is introduced for that state.
 
 ## Buffered body limits
 
@@ -63,8 +64,10 @@ const configuration = new Configuration({
 
 Both limits are opt-in and remain unbounded when omitted. The request limit is
 checked against `Content-Length` before body allocation and against cumulative
-decoded data for chunked requests. An oversized request is rejected before
-routing with `413 Payload Too Large` and the connection is closed.
+decoded data for chunked requests. Multipart bodies are checked throughout
+line, header, and part-body accumulation, including requests without
+`Content-Length` or chunked transfer framing. An oversized request is rejected
+before routing with `413 Payload Too Large` and the connection is closed.
 
 The response limit uses the UTF-8 byte length of strings and the byte length of
 `Uint8Array` values. `response.setBody()` rejects an oversized value before

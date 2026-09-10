@@ -80,6 +80,18 @@ export default class RequestBuffer {
     }
   }
 
+  /**
+   * Records bytes consumed after request headers. Multipart parsing can accept
+   * an unframed body, so enforce its configured bound during accumulation.
+   * @param {number} bytes - Newly consumed body bytes.
+   * @returns {void}
+   */
+  recordBodyBytes(bytes) {
+    this.bodyLength += bytes
+
+    if (this.multiPartyFormData) this.assertRequestBodySize(this.bodyLength)
+  }
+
   destroy() {
     // Do nothing for now...
   }
@@ -127,7 +139,7 @@ export default class RequestBuffer {
     const newlineIndex = data.indexOf(10, index)
 
     if (newlineIndex === -1) {
-      if (this.readingBody) this.bodyLength += data.length - index
+      if (this.readingBody) this.recordBodyBytes(data.length - index)
 
       for (let dataIndex = index; dataIndex < data.length; dataIndex += 1) {
         this.data.push(data[dataIndex])
@@ -136,7 +148,7 @@ export default class RequestBuffer {
       return data.length
     }
 
-    if (this.readingBody) this.bodyLength += newlineIndex + 1 - index
+    if (this.readingBody) this.recordBodyBytes(newlineIndex + 1 - index)
 
     let line
 
@@ -171,7 +183,7 @@ export default class RequestBuffer {
     const endIndex = Math.min(data.length, index + remainingBodyBytes)
 
     this.postBodyBuffers.push(data.subarray(index, endIndex))
-    this.bodyLength += endIndex - index
+    this.recordBodyBytes(endIndex - index)
 
     if (this.contentLength && this.bodyLength >= this.contentLength) {
       this.postRequestDone()
@@ -189,7 +201,7 @@ export default class RequestBuffer {
   feedByte(data, index) {
     const char = data[index]
 
-    if (this.readingBody) this.bodyLength += 1
+    if (this.readingBody) this.recordBodyBytes(1)
 
     switch(this.state) {
       case "chunked-data": {

@@ -87,10 +87,7 @@ describe("Application database-free initialization", {databaseCleaning: {transac
       return {
         action: "index",
         controller: "state",
-        controllerClass: StateController,
-        skipAbilityResolution: true,
-        skipControllerConnections: true,
-        skipTenantResolution: true
+        controllerClass: StateController
       }
     })
 

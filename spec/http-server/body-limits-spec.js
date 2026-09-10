@@ -93,6 +93,20 @@ describe("HTTP buffered body limits", {databaseCleaning: {transaction: false, tr
     expect(result.closed).toEqual(true)
   })
 
+  it("rejects an unframed multipart body while bytes accumulate", () => {
+    const result = parseRequest(buildConfiguration({maxRequestBodyBytes: 4}), [
+      "POST / HTTP/1.1",
+      "Host: localhost",
+      "Content-Type: multipart/form-data; boundary=demo",
+      "Connection: close",
+      "",
+      "--demo"
+    ].join("\r\n"))
+
+    expect(result.output).toContain("HTTP/1.1 413 Payload Too Large")
+    expect(result.closed).toEqual(true)
+  })
+
   it("rejects an oversized buffered response by its UTF-8 byte length", async () => {
     const response = new Response({configuration: buildConfiguration({maxBufferedResponseBodyBytes: 3})})
 

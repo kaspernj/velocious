@@ -52,6 +52,13 @@ export default class RequestBuffer {
      * @returns {void}
      */
     assertRequestBodySize(actualBytes: number): void;
+    /**
+     * Records bytes consumed after request headers. Multipart parsing can accept
+     * an unframed body, so enforce its configured bound during accumulation.
+     * @param {number} bytes - Newly consumed body bytes.
+     * @returns {void}
+     */
+    recordBodyBytes(bytes: number): void;
     destroy(): void;
     /**
      * Runs feed.
