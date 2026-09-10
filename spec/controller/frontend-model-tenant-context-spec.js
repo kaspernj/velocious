@@ -87,9 +87,8 @@ describe("Controller frontend model tenant context", {databaseCleaning: {transac
       requests: [{
         commandType: "index",
         model: "Task",
-        payload: {
-          project_slug: "alpha"
-        },
+        payload: {},
+        requestContext: {project_slug: "alpha"},
         requestId: "request-1"
       }]
     }), {
