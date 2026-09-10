@@ -56,6 +56,12 @@ const FORKED_RUNNER_ENTRY_PATH = fileURLToPath(new URL("./forked-runner-child.js
 const POOLED_RUNNER_ENTRY_PATH = fileURLToPath(new URL("./pooled-runner-child.js", import.meta.url))
 /** How often the worker sends a liveness heartbeat to the main. */
 const HEARTBEAT_INTERVAL_MS = 15000
+/**
+ * Max time the worker spends retrying one pooled child's acceptance report
+ * before dropping it. Acceptance evidence is diagnostic — a persistent
+ * main/DB outage must not hold runner capacity hostage.
+ */
+const CHILD_ACCEPTANCE_REPORT_MAX_DURATION_MS = 10000
 /** TCP keepalive so a half-open connection to the main surfaces as a close. */
 const SOCKET_KEEPALIVE_MS = 10000
 /**
@@ -70,6 +76,28 @@ const EXECUTION_MODES = ["inline", "forked", "pooled", "spawned"]
  */
 function positiveInteger(value) {
   return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined
+}
+
+/**
+ * Checks whether an IPC value is a pooled child's acceptance observation for
+ * one job. The child carries its exact handoff lease so the worker can forward
+ * the report without depending on its in-flight entry still existing.
+ * @param {ReturnType<typeof JSON.parse>} message - IPC message.
+ * @returns {message is {type: "job-received" | "job-started", jobId: string, handoffId?: string, workerId?: string, handedOffAtMs?: number, receivedAtMs?: number, startedAtMs?: number, childInstanceId?: string, childPid?: number}} - Whether this is a valid acceptance message.
+ */
+function isChildAcceptanceMessage(message) {
+  if (!message || typeof message !== "object") return false
+  const record = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (message)
+
+  return (record.type === "job-received" || record.type === "job-started")
+    && typeof record.jobId === "string"
+    && (record.handoffId === undefined || typeof record.handoffId === "string")
+    && (record.workerId === undefined || typeof record.workerId === "string")
+    && (record.handedOffAtMs === undefined || typeof record.handedOffAtMs === "number")
+    && (record.receivedAtMs === undefined || typeof record.receivedAtMs === "number")
+    && (record.startedAtMs === undefined || typeof record.startedAtMs === "number")
+    && (record.childInstanceId === undefined || typeof record.childInstanceId === "string")
+    && (record.childPid === undefined || Number.isInteger(record.childPid))
 }
 
 /**
@@ -1225,6 +1253,10 @@ export default class BackgroundJobsWorker {
       if (state) state.started = true
       return
     }
+    if (isChildAcceptanceMessage(message)) {
+      this._reportChildAccepted(message)
+      return
+    }
     if (record.type !== "job-outcome" || !state || state.settling || typeof record.jobId !== "string") return
     state.started = true
     const entry = state.inflight.get(record.jobId)
@@ -1256,6 +1288,33 @@ export default class BackgroundJobsWorker {
       this._beginRetirePooledChild(child)
     }
     this._terminateIfDrained(child)
+  }
+
+  /**
+   * Forwards one pooled child's acceptance observation to main as a bounded
+   * diagnostic report. The child carries its exact handoff lease, so a timeout
+   * or outcome that already settled the worker's in-flight entry cannot lose
+   * the fencing. A report that never lands degrades phase diagnostics for that
+   * job only — it must never block or fail the job itself.
+   * @param {{type: "job-received" | "job-started", jobId: string, handoffId?: string, workerId?: string, handedOffAtMs?: number, receivedAtMs?: number, startedAtMs?: number, childInstanceId?: string, childPid?: number}} message - Validated child acceptance message.
+   * @returns {void}
+   */
+  _reportChildAccepted(message) {
+    if (!this.statusReporter) return
+
+    void this.statusReporter.reportChildAcceptedWithRetry({
+      jobId: message.jobId,
+      handoffId: message.handoffId,
+      workerId: message.workerId,
+      handedOffAtMs: message.handedOffAtMs,
+      receivedAtMs: message.receivedAtMs,
+      startedAtMs: message.startedAtMs,
+      childInstanceId: message.childInstanceId,
+      childPid: message.childPid,
+      maxDurationMs: CHILD_ACCEPTANCE_REPORT_MAX_DURATION_MS
+    }).catch((error) => {
+      console.error("Background job child-acceptance reporting failed:", error)
+    })
   }
 
   /**

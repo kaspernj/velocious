@@ -559,6 +559,45 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
         handedOffAtMs?: number;
     }): Promise<boolean>;
     /**
+     * Records pooled-child acceptance evidence for an active handoff: when the
+     * executing runner child received and/or started the job, plus that child's
+     * stable identity and pid. Only the fields supplied are written, so a
+     * received-then-started observation lands as two fenced partial updates. The
+     * update is fenced by the exact active handoff lease, so a report for a
+     * reclaimed or re-handed-off job is dropped instead of stamping the wrong
+     * attempt.
+     * @param {object} args - Options.
+     * @param {string} args.jobId - Job id.
+     * @param {string} [args.handoffId] - Handoff lease id.
+     * @param {string} [args.workerId] - Worker id.
+     * @param {number} [args.handedOffAtMs] - Handed off timestamp.
+     * @param {number} [args.receivedAtMs] - Epoch ms the runner child received the job.
+     * @param {number} [args.startedAtMs] - Epoch ms the job's perform started in the child.
+     * @param {string} [args.childInstanceId] - Stable pooled child identity.
+     * @param {number} [args.childPid] - Pooled child OS pid.
+     * @returns {Promise<boolean>} - Whether the fenced report was accepted.
+     */
+    markChildAccepted({ jobId, handoffId, workerId, handedOffAtMs, receivedAtMs, startedAtMs, childInstanceId, childPid }: {
+        jobId: string;
+        handoffId?: string;
+        workerId?: string;
+        handedOffAtMs?: number;
+        receivedAtMs?: number;
+        startedAtMs?: number;
+        childInstanceId?: string;
+        childPid?: number;
+    }): Promise<boolean>;
+    /**
+     * Returns the database data that clears pooled-child acceptance evidence.
+     * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Cleared acceptance columns.
+     */
+    _clearedChildAcceptanceData(): Record<string, ReturnType<typeof JSON.parse>>;
+    /**
+     * Returns the row-shape counterpart of the cleared acceptance columns.
+     * @returns {Pick<import("./types.js").BackgroundJobRow, "childInstanceId" | "childPid" | "childReceivedAtMs" | "childStartedAtMs">} - Cleared acceptance fields.
+     */
+    _clearedChildAcceptanceRow(): Pick<import("./types.js").BackgroundJobRow, "childInstanceId" | "childPid" | "childReceivedAtMs" | "childStartedAtMs">;
+    /**
      * Returns an active handoff to the queue at a caller-requested future time.
      * This is normal job control flow: it preserves failure attempts and metadata.
      * @param {object} args - Options.
@@ -836,6 +875,15 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
      * @returns {Promise<void>} - Resolves when complete.
      */
     _ensureJobsTableColumns(db: import("../database/drivers/base.js").default): Promise<void>;
+    /**
+     * Idempotently adds the pooled-child acceptance evidence columns to existing
+     * job tables. They record when the executing runner child received and
+     * started a job plus that child's identity, so a handed-off job can be told
+     * apart from one whose runner never picked it up.
+     * @param {import("../database/drivers/base.js").default} db - Database connection.
+     * @returns {Promise<void>} - Resolves when ensured.
+     */
+    _ensureChildAcceptanceColumns(db: import("../database/drivers/base.js").default): Promise<void>;
     /**
      * Repairs secondary indexes that older add-column upgrades declared but did
      * not create on every SQL driver. The migration ledger keeps routine store

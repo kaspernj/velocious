@@ -492,6 +492,20 @@ export default class BackgroundJobsMain {
         message: import("./types.js").BackgroundJobSocketMessage;
     }): Promise<void>;
     /**
+     * Persists pooled-child acceptance evidence for an active handoff. The
+     * report is diagnostic: a stale lease (job already reclaimed or terminal)
+     * answers the same `job-updated` acknowledgement as an accepted report, and
+     * only a store failure answers `job-update-error` so the worker can retry.
+     * @param {object} args - Options.
+     * @param {JsonSocket} args.jsonSocket - JSON socket.
+     * @param {import("./types.js").BackgroundJobAcceptedMessage} args.message - Message.
+     * @returns {Promise<void>} - Resolves when handled.
+     */
+    _handleJobAccepted({ jsonSocket, message }: {
+        jsonSocket: JsonSocket;
+        message: import("./types.js").BackgroundJobAcceptedMessage;
+    }): Promise<void>;
+    /**
      * Requires the complete durable lease identity before a generation-mode
      * reporter can mutate a job. Legacy reporters keep their permissive protocol.
      * @param {import("./types.js").BackgroundJobSocketMessage} message - Reporter message.

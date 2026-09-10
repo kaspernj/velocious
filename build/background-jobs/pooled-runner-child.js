@@ -1,5 +1,6 @@
 // @ts-check
 
+import { randomUUID } from "node:crypto"
 import runJobPayload, { BackgroundJobPerformedFailure } from "./job-runner.js"
 import { closeRunnerConnections, closeRunnerFrameworkConnections, currentConfigurationOrNull } from "./runner-graceful-shutdown.js"
 import setRunnerProcessTitle from "./runner-process-title.js"
@@ -7,6 +8,8 @@ import PooledRunnerBrokerIdentity from "./pooled-runner-broker-identity.js"
 import { runWithSharedTransactionBrokerConfig } from "../testing/shared-transaction-proxy-driver.js"
 
 const BASE_PROCESS_TITLE = "velocious background-jobs-runner"
+/** Stable identity of this pooled child process for the life of the process. */
+const childInstanceId = randomUUID()
 
 setRunnerProcessTitle()
 
@@ -55,6 +58,39 @@ function updateProcessTitle() {
   const count = runningJobIds.size
 
   process.title = count > 0 ? `${BASE_PROCESS_TITLE}: ${count} ${count === 1 ? "job" : "jobs"}` : BASE_PROCESS_TITLE
+}
+
+/**
+ * Reports one acceptance observation (job received / perform started) to the
+ * worker over IPC. The message carries the job's exact handoff lease so the
+ * worker can persist it fenced without any other lookup. Send failures are
+ * swallowed: a dead IPC channel is terminal for this child (the disconnect
+ * handler owns shutdown), and losing acceptance evidence must never fail the
+ * job itself.
+ * @param {"job-received" | "job-started"} type - Observation kind.
+ * @param {import("./types.js").BackgroundJobPayload & {id: string}} payload - Job payload carrying the handoff lease.
+ * @param {number} observedAtMs - Epoch ms of the observation.
+ * @returns {void}
+ */
+function sendChildAcceptance(type, payload, observedAtMs) {
+  if (!process.send) return
+
+  const message = {
+    childInstanceId,
+    childPid: process.pid,
+    handedOffAtMs: payload.handedOffAtMs,
+    handoffId: payload.handoffId,
+    jobId: payload.id,
+    type,
+    workerId: payload.workerId,
+    ...(type === "job-received" ? {receivedAtMs: observedAtMs} : {startedAtMs: observedAtMs})
+  }
+
+  try {
+    process.send(message)
+  } catch {
+    // The IPC channel is already gone; the disconnect handler owns shutdown.
+  }
 }
 
 /**
@@ -114,6 +150,7 @@ async function runJob(payload, sharedTransactionBroker) {
         return await runJobPayload(payload, {
           closeConnections: false,
           manageProcessTitle: false,
+          onPerformStart: () => sendChildAcceptance("job-started", payload, Date.now()),
           processType: "background-jobs-pooled-runner"
         })
       })
@@ -143,6 +180,7 @@ function handleMessage(message) {
 
   runningJobIds.add(message.payload.id)
   updateProcessTitle()
+  sendChildAcceptance("job-received", message.payload, Date.now())
   void runJob(message.payload, message.sharedTransactionBroker || {expected: false})
 }
 

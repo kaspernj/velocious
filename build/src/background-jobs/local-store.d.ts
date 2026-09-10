@@ -63,6 +63,14 @@ export default class LocalBackgroundJobsStore {
      */
     _applySchema(db: import("../database/drivers/base.js").default): Promise<boolean>;
     /**
+     * Idempotently adds columns from the current jobs table definition that an
+     * existing local table is missing, so an upgraded framework finds a
+     * compatible schema instead of failing the column assertion.
+     * @param {import("../database/drivers/base.js").default} db - Local SQLite connection.
+     * @returns {Promise<boolean>} - Whether a column was added.
+     */
+    _ensureJobColumns(db: import("../database/drivers/base.js").default): Promise<boolean>;
+    /**
      * Builds the migration ledger table definition.
      * @returns {TableData} - Migration ledger table.
      */
@@ -215,6 +223,26 @@ export default class LocalBackgroundJobsStore {
         handoffId?: string;
     }): Promise<boolean>;
     /**
+     * Records pooled-child acceptance evidence for an active handoff. Only the
+     * fields supplied are written, fenced by the exact active handoff lease.
+     * @param {object} args - Acceptance report.
+     * @param {string} args.jobId - Job id.
+     * @param {string} [args.handoffId] - Handoff lease id.
+     * @param {number} [args.receivedAtMs] - Epoch ms the runner child received the job.
+     * @param {number} [args.startedAtMs] - Epoch ms the job's perform started in the child.
+     * @param {string} [args.childInstanceId] - Stable pooled child identity.
+     * @param {number} [args.childPid] - Pooled child OS pid.
+     * @returns {Promise<boolean>} - Whether the lease won.
+     */
+    markChildAccepted({ jobId, handoffId, receivedAtMs, startedAtMs, childInstanceId, childPid }: {
+        jobId: string;
+        handoffId?: string;
+        receivedAtMs?: number;
+        startedAtMs?: number;
+        childInstanceId?: string;
+        childPid?: number;
+    }): Promise<boolean>;
+    /**
      * Applies a fenced reschedule without consuming an attempt.
      * @param {{jobId: string, handoffId?: string, delayMs: number}} args - Reschedule report.
      * @returns {Promise<boolean>} - Whether the lease won.
@@ -252,6 +280,16 @@ export default class LocalBackgroundJobsStore {
      * @returns {Promise<import("./types.js").BackgroundJobRow | null>} - Transition snapshot.
      */
     _applyFailure(db: import("../database/drivers/base.js").default, job: import("./types.js").BackgroundJobRow, error: ReturnType<typeof JSON.parse>): Promise<import("./types.js").BackgroundJobRow | null>;
+    /**
+     * Returns the database data that clears pooled-child acceptance evidence.
+     * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Cleared acceptance columns.
+     */
+    _clearedChildAcceptanceData(): Record<string, ReturnType<typeof JSON.parse>>;
+    /**
+     * Returns the row-shape counterpart of the cleared acceptance columns.
+     * @returns {Pick<import("./types.js").BackgroundJobRow, "childInstanceId" | "childPid" | "childReceivedAtMs" | "childStartedAtMs">} - Cleared acceptance fields.
+     */
+    _clearedChildAcceptanceRow(): Pick<import("./types.js").BackgroundJobRow, "childInstanceId" | "childPid" | "childReceivedAtMs" | "childStartedAtMs">;
     /**
      * Ensures that a durable concurrency counter exists with the required cap.
      * @param {import("../database/drivers/base.js").default} db - Local SQLite connection.
