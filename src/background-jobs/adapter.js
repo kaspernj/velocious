@@ -130,6 +130,15 @@ export default class BackgroundJobsAdapter {
   async markCompleted(_args) { throw new Error("BackgroundJobsAdapter#markCompleted is not implemented") }
 
   /**
+   * Records pooled-child acceptance evidence (received/started timestamps plus
+   * runner identity) for a handed-off job, fenced by its active handoff lease.
+   * Only the fields supplied are written.
+   * @param {{jobId: string, handoffId?: string, workerId?: string, handedOffAtMs?: number, receivedAtMs?: number, startedAtMs?: number, childInstanceId?: string, childPid?: number}} _args - Acceptance report.
+   * @returns {Promise<boolean>} - Whether the fenced report was accepted.
+   */
+  async markChildAccepted(_args) { throw new Error("BackgroundJobsAdapter#markChildAccepted is not implemented") }
+
+  /**
    * Returns a handed-off job to its schedule.
    * @param {{jobId: string, delayMs: number, handoffId?: string, workerId?: string, handedOffAtMs?: number}} _args - Reschedule report.
    * @returns {Promise<boolean>} - Whether the fenced report was accepted.

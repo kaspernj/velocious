@@ -49,7 +49,11 @@ const EXPECTED_JOB_COLUMNS = [
   "failed_at_ms",
   "last_error",
   "concurrency_key",
-  "max_concurrency"
+  "max_concurrency",
+  "child_received_at_ms",
+  "child_started_at_ms",
+  "child_instance_id",
+  "child_pid"
 ]
 const EXPECTED_CONCURRENCY_COLUMNS = ["concurrency_key", "max_concurrency", "active_count"]
 /** @type {WeakMap<import("../configuration.js").default, Map<string, Promise<void>>>} */
@@ -202,6 +206,7 @@ export default class LocalBackgroundJobsStore {
       await db.createTable(this._jobsTableData())
       changed = true
     } else {
+      if (await this._ensureJobColumns(db)) changed = true
       await this._assertColumns(db, LOCAL_BACKGROUND_JOBS_TABLE, EXPECTED_JOB_COLUMNS)
     }
 
@@ -230,6 +235,45 @@ export default class LocalBackgroundJobsStore {
     }
 
     return changed
+  }
+
+  /**
+   * Idempotently adds columns from the current jobs table definition that an
+   * existing local table is missing, so an upgraded framework finds a
+   * compatible schema instead of failing the column assertion.
+   * @param {import("../database/drivers/base.js").default} db - Local SQLite connection.
+   * @returns {Promise<boolean>} - Whether a column was added.
+   */
+  async _ensureJobColumns(db) {
+    db.clearSchemaCache()
+    const table = await db.getTableByNameOrFail(LOCAL_BACKGROUND_JOBS_TABLE)
+    const tableData = new TableData(LOCAL_BACKGROUND_JOBS_TABLE)
+    let added = false
+
+    for (const column of this._jobsTableData().getColumns()) {
+      if (await table.getColumnByName(column.getName())) continue
+      if (column.getPrimaryKey()) continue
+
+      const columnArgs = /** @type {{null: boolean, maxLength?: number}} */ ({null: column.getNull() !== false})
+      const maxLength = column.getMaxLength()
+
+      if (typeof maxLength === "number") columnArgs.maxLength = maxLength
+
+      const type = column.getType()
+      if (type === "string") tableData.string(column.getName(), columnArgs)
+      else if (type === "text") tableData.text(column.getName(), columnArgs)
+      else if (type === "bigint") tableData.bigint(column.getName(), columnArgs)
+      else if (type === "integer") tableData.integer(column.getName(), columnArgs)
+      else if (type === "boolean") tableData.boolean(column.getName(), columnArgs)
+      else continue
+      added = true
+    }
+
+    if (!added) return false
+
+    for (const sql of await db.alterTableSQLs(tableData)) await db.query(sql)
+    db.clearSchemaCache()
+    return true
   }
 
   /**
@@ -272,6 +316,10 @@ export default class LocalBackgroundJobsStore {
     table.text("last_error", {null: true})
     table.string("concurrency_key", {null: true})
     table.integer("max_concurrency", {null: true})
+    table.bigint("child_received_at_ms", {null: true})
+    table.bigint("child_started_at_ms", {null: true})
+    table.string("child_instance_id", {null: true})
+    table.integer("child_pid", {null: true})
     table.addIndex(new TableIndex(["status", "scheduled_at_ms", "created_at_ms", "id"], {name: LOCAL_BACKGROUND_JOBS_INDEX_NAMES[0]}))
     table.addIndex(new TableIndex(["queue", "status", "created_at_ms"], {name: LOCAL_BACKGROUND_JOBS_INDEX_NAMES[1]}))
     table.addIndex(new TableIndex(["args_digest"], {name: LOCAL_BACKGROUND_JOBS_INDEX_NAMES[2]}))
@@ -708,7 +756,7 @@ export default class LocalBackgroundJobsStore {
       const handedOffAtMs = this.clock.now()
       const affectedRows = await this._updateAffectedRows(db, {
         conditions: {id: jobId, status: "queued"},
-        data: {handed_off_at_ms: handedOffAtMs, handoff_id: handoffId, status: "handed_off", worker_id: workerId || "local"},
+        data: {...this._clearedChildAcceptanceData(), handed_off_at_ms: handedOffAtMs, handoff_id: handoffId, status: "handed_off", worker_id: workerId || "local"},
         tableName: LOCAL_BACKGROUND_JOBS_TABLE
       })
 
@@ -763,6 +811,7 @@ export default class LocalBackgroundJobsStore {
       const affectedRows = await this._updateAffectedRows(db, {
         conditions: {handoff_id: handoffId, id: jobId, status: "handed_off"},
         data: {
+          ...this._clearedChildAcceptanceData(),
           handed_off_at_ms: null,
           handoff_id: null,
           scheduled_at_ms: this.clock.now(),
@@ -803,6 +852,43 @@ export default class LocalBackgroundJobsStore {
   }
 
   /**
+   * Records pooled-child acceptance evidence for an active handoff. Only the
+   * fields supplied are written, fenced by the exact active handoff lease.
+   * @param {object} args - Acceptance report.
+   * @param {string} args.jobId - Job id.
+   * @param {string} [args.handoffId] - Handoff lease id.
+   * @param {number} [args.receivedAtMs] - Epoch ms the runner child received the job.
+   * @param {number} [args.startedAtMs] - Epoch ms the job's perform started in the child.
+   * @param {string} [args.childInstanceId] - Stable pooled child identity.
+   * @param {number} [args.childPid] - Pooled child OS pid.
+   * @returns {Promise<boolean>} - Whether the lease won.
+   */
+  async markChildAccepted({jobId, handoffId, receivedAtMs, startedAtMs, childInstanceId, childPid}) {
+    await this.ensureReady()
+
+    return await this._withDb(async (connection) => await this._mutate(connection, async (db) => {
+      const job = await this._getJob(db, jobId)
+
+      if (!this._acceptsHandoff(job, handoffId)) return false
+
+      const data = {}
+      if (typeof receivedAtMs === "number") data.child_received_at_ms = receivedAtMs
+      if (typeof startedAtMs === "number") data.child_started_at_ms = startedAtMs
+      if (typeof childInstanceId === "string") data.child_instance_id = childInstanceId
+      if (typeof childPid === "number") data.child_pid = childPid
+      if (Object.keys(data).length === 0) return false
+
+      const affectedRows = await this._updateAffectedRows(db, {
+        conditions: {handoff_id: handoffId, id: jobId, status: "handed_off"},
+        data,
+        tableName: LOCAL_BACKGROUND_JOBS_TABLE
+      })
+
+      return affectedRows === 1
+    }))
+  }
+
+  /**
    * Applies a fenced reschedule without consuming an attempt.
    * @param {{jobId: string, handoffId?: string, delayMs: number}} args - Reschedule report.
    * @returns {Promise<boolean>} - Whether the lease won.
@@ -819,6 +905,7 @@ export default class LocalBackgroundJobsStore {
       const affectedRows = await this._updateAffectedRows(db, {
         conditions: {handoff_id: handoffId, id: jobId, status: "handed_off"},
         data: {
+          ...this._clearedChildAcceptanceData(),
           handed_off_at_ms: null,
           handoff_id: null,
           scheduled_at_ms: rescheduledBackgroundJobAtMs(delayMs, this.clock.now()),
@@ -917,7 +1004,9 @@ export default class LocalBackgroundJobsStore {
     }
 
     if (willRetry) {
-      Object.assign(data, {scheduled_at_ms: nowMs + retryDelayMs(attempts)})
+      // A retry starts a fresh handoff with a possibly different runner, so the
+      // previous child's acceptance evidence must not leak into the next attempt.
+      Object.assign(data, {scheduled_at_ms: nowMs + retryDelayMs(attempts), ...this._clearedChildAcceptanceData()})
     } else {
       Object.assign(data, {failed_at_ms: nowMs})
     }
@@ -934,6 +1023,7 @@ export default class LocalBackgroundJobsStore {
 
     return {
       ...job,
+      ...(willRetry ? this._clearedChildAcceptanceRow() : {}),
       attempts,
       failedAtMs: willRetry ? job.failedAtMs : nowMs,
       handedOffAtMs: null,
@@ -943,6 +1033,22 @@ export default class LocalBackgroundJobsStore {
       status: data.status,
       workerId: null
     }
+  }
+
+  /**
+   * Returns the database data that clears pooled-child acceptance evidence.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Cleared acceptance columns.
+   */
+  _clearedChildAcceptanceData() {
+    return {child_instance_id: null, child_pid: null, child_received_at_ms: null, child_started_at_ms: null}
+  }
+
+  /**
+   * Returns the row-shape counterpart of the cleared acceptance columns.
+   * @returns {Pick<import("./types.js").BackgroundJobRow, "childInstanceId" | "childPid" | "childReceivedAtMs" | "childStartedAtMs">} - Cleared acceptance fields.
+   */
+  _clearedChildAcceptanceRow() {
+    return {childInstanceId: null, childPid: null, childReceivedAtMs: null, childStartedAtMs: null}
   }
 
   /**
@@ -1106,6 +1212,10 @@ export default class LocalBackgroundJobsStore {
     return {
       args: parsedArgs,
       attempts: this._numberOrNull(row.attempts),
+      childInstanceId: row.child_instance_id === null || row.child_instance_id === undefined ? null : String(row.child_instance_id),
+      childPid: this._numberOrNull(row.child_pid),
+      childReceivedAtMs: this._numberOrNull(row.child_received_at_ms),
+      childStartedAtMs: this._numberOrNull(row.child_started_at_ms),
       completedAtMs: this._numberOrNull(row.completed_at_ms),
       concurrencyKey: row.concurrency_key === null || row.concurrency_key === undefined ? null : String(row.concurrency_key),
       createdAtMs: this._numberOrNull(row.created_at_ms),
