@@ -1255,7 +1255,8 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
           status: "handed_off",
           handed_off_at_ms: handedOffAtMs,
           handoff_id: handoffId,
-          worker_id: workerId || null
+          worker_id: workerId || null,
+          ...this._clearedChildAcceptanceData()
         },
         conditions: {concurrency_key: queuedJob.concurrencyKey, id: jobId, status: "queued"}
       })
@@ -1269,6 +1270,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       /** @type {import("./types.js").BackgroundJobRow} */
       const handedOffJob = {
         ...queuedJob,
+        ...this._clearedChildAcceptanceRow(),
         handedOffAtMs,
         handoffId,
         status: "handed_off",
@@ -1316,6 +1318,67 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
   }
 
   /**
+   * Records pooled-child acceptance evidence for an active handoff: when the
+   * executing runner child received and/or started the job, plus that child's
+   * stable identity and pid. Only the fields supplied are written, so a
+   * received-then-started observation lands as two fenced partial updates. The
+   * update is fenced by the exact active handoff lease, so a report for a
+   * reclaimed or re-handed-off job is dropped instead of stamping the wrong
+   * attempt.
+   * @param {object} args - Options.
+   * @param {string} args.jobId - Job id.
+   * @param {string} [args.handoffId] - Handoff lease id.
+   * @param {string} [args.workerId] - Worker id.
+   * @param {number} [args.handedOffAtMs] - Handed off timestamp.
+   * @param {number} [args.receivedAtMs] - Epoch ms the runner child received the job.
+   * @param {number} [args.startedAtMs] - Epoch ms the job's perform started in the child.
+   * @param {string} [args.childInstanceId] - Stable pooled child identity.
+   * @param {number} [args.childPid] - Pooled child OS pid.
+   * @returns {Promise<boolean>} - Whether the fenced report was accepted.
+   */
+  async markChildAccepted({jobId, handoffId, workerId, handedOffAtMs, receivedAtMs, startedAtMs, childInstanceId, childPid}) {
+    await this.ensureReady()
+
+    return await this._serializedConnectionMutation(async (db) => {
+      const job = await this._getJobRowById(db, jobId)
+
+      if (!job) return false
+      if (!this._shouldAcceptReport({job, handoffId, workerId, handedOffAtMs})) return false
+
+      const data = {}
+      if (typeof receivedAtMs === "number") data.child_received_at_ms = receivedAtMs
+      if (typeof startedAtMs === "number") data.child_started_at_ms = startedAtMs
+      if (typeof childInstanceId === "string") data.child_instance_id = childInstanceId
+      if (typeof childPid === "number") data.child_pid = childPid
+      if (Object.keys(data).length === 0) return false
+
+      const affectedRows = await this._updateAffectedRows(db, {
+        tableName: JOBS_TABLE,
+        data,
+        conditions: this._activeHandoffConditions(job)
+      })
+
+      return affectedRows === 1
+    })
+  }
+
+  /**
+   * Returns the database data that clears pooled-child acceptance evidence.
+   * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Cleared acceptance columns.
+   */
+  _clearedChildAcceptanceData() {
+    return {child_instance_id: null, child_pid: null, child_received_at_ms: null, child_started_at_ms: null}
+  }
+
+  /**
+   * Returns the row-shape counterpart of the cleared acceptance columns.
+   * @returns {Pick<import("./types.js").BackgroundJobRow, "childInstanceId" | "childPid" | "childReceivedAtMs" | "childStartedAtMs">} - Cleared acceptance fields.
+   */
+  _clearedChildAcceptanceRow() {
+    return {childInstanceId: null, childPid: null, childReceivedAtMs: null, childStartedAtMs: null}
+  }
+
+  /**
    * Returns an active handoff to the queue at a caller-requested future time.
    * This is normal job control flow: it preserves failure attempts and metadata.
    * @param {object} args - Options.
@@ -1345,7 +1408,8 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
           scheduled_at_ms: scheduledAtMs,
           handed_off_at_ms: null,
           handoff_id: null,
-          worker_id: null
+          worker_id: null,
+          ...this._clearedChildAcceptanceData()
         },
         conditions: this._activeHandoffConditions(job)
       })
@@ -1378,7 +1442,8 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
           scheduled_at_ms: this.clock.now(),
           handed_off_at_ms: null,
           handoff_id: null,
-          worker_id: null
+          worker_id: null,
+          ...this._clearedChildAcceptanceData()
         },
         conditions: {handoff_id: handoffId, id: jobId, status: "handed_off"}
       })
@@ -2063,6 +2128,10 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
     table.string("concurrency_key", {null: true, index: true})
     table.integer("max_concurrency", {null: true})
     table.bigint("timeout_ms", {null: true})
+    table.bigint("child_received_at_ms", {null: true})
+    table.bigint("child_started_at_ms", {null: true})
+    table.string("child_instance_id", {null: true})
+    table.integer("child_pid", {null: true})
 
     await db.createTable(table)
   }
@@ -2156,7 +2225,54 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
     await this._ensureQueueColumn(db)
     await this._ensureScheduleKeyColumn(db)
     await this._ensureJobTimeoutColumn(db)
+    await this._ensureChildAcceptanceColumns(db)
     await this._ensureJobsTableIndexesOnce(db)
+  }
+
+  /**
+   * Idempotently adds the pooled-child acceptance evidence columns to existing
+   * job tables. They record when the executing runner child received and
+   * started a job plus that child's identity, so a handed-off job can be told
+   * apart from one whose runner never picked it up.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<void>} - Resolves when ensured.
+   */
+  async _ensureChildAcceptanceColumns(db) {
+    const lockName = `${MIGRATION_SCOPE}:child_acceptance_columns`
+    const acquired = await db.acquireAdvisoryLock(lockName)
+
+    if (!acquired) throw new Error("Failed to acquire background jobs child-acceptance schema lock")
+
+    try {
+      db.clearSchemaCache()
+      const table = await db.getTableByNameOrFail(JOBS_TABLE)
+      const tableData = new TableData(JOBS_TABLE)
+      let added = false
+
+      if (!(await table.getColumnByName("child_received_at_ms"))) {
+        tableData.bigint("child_received_at_ms", {null: true})
+        added = true
+      }
+      if (!(await table.getColumnByName("child_started_at_ms"))) {
+        tableData.bigint("child_started_at_ms", {null: true})
+        added = true
+      }
+      if (!(await table.getColumnByName("child_instance_id"))) {
+        tableData.string("child_instance_id", {null: true})
+        added = true
+      }
+      if (!(await table.getColumnByName("child_pid"))) {
+        tableData.integer("child_pid", {null: true})
+        added = true
+      }
+
+      if (added) {
+        for (const sql of await db.alterTableSQLs(tableData)) await db.query(sql)
+        db.clearSchemaCache()
+      }
+    } finally {
+      await db.releaseAdvisoryLock(lockName)
+    }
   }
 
   /**
@@ -2514,6 +2630,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
     /** @type {import("./types.js").BackgroundJobRow} */
     const transitionedJob = {
       ...job,
+      ...(shouldRetry ? this._clearedChildAcceptanceRow() : {}),
       attempts: nextAttempt,
       handedOffAtMs: null,
       lastError: failureMessage,
@@ -2552,6 +2669,11 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       worker_id: null,
       last_error: failureMessage
     }
+
+    // A retry starts a fresh handoff with a possibly different runner, so the
+    // previous child's acceptance evidence must not leak into the next attempt.
+    // Terminal failures keep it as historical evidence for the lost attempt.
+    if (shouldRetry) Object.assign(update, this._clearedChildAcceptanceData())
 
     this._applyOrphanedFailureUpdate({markOrphaned, now, update})
     this._applyFailureStatusUpdate({markOrphaned, now, scheduledAt, shouldRetry, update})
@@ -2630,7 +2752,11 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       lastError: row.last_error ? String(row.last_error) : null,
       concurrencyKey: row.concurrency_key ? String(row.concurrency_key) : null,
       maxConcurrency: this._normalizeNumber(row.max_concurrency),
-      timeoutMs: this._normalizeNumber(row.timeout_ms)
+      timeoutMs: this._normalizeNumber(row.timeout_ms),
+      childReceivedAtMs: this._normalizeNumber(row.child_received_at_ms),
+      childStartedAtMs: this._normalizeNumber(row.child_started_at_ms),
+      childInstanceId: row.child_instance_id ? String(row.child_instance_id) : null,
+      childPid: this._normalizeNumber(row.child_pid)
     }
   }
 

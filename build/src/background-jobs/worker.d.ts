@@ -549,6 +549,26 @@ export default class BackgroundJobsWorker {
         message: ReturnType<typeof JSON.parse>;
     }): void;
     /**
+     * Forwards one pooled child's acceptance observation to main as a bounded
+     * diagnostic report. The child carries its exact handoff lease, so a timeout
+     * or outcome that already settled the worker's in-flight entry cannot lose
+     * the fencing. A report that never lands degrades phase diagnostics for that
+     * job only — it must never block or fail the job itself.
+     * @param {{type: "job-received" | "job-started", jobId: string, handoffId?: string, workerId?: string, handedOffAtMs?: number, receivedAtMs?: number, startedAtMs?: number, childInstanceId?: string, childPid?: number}} message - Validated child acceptance message.
+     * @returns {void}
+     */
+    _reportChildAccepted(message: {
+        type: "job-received" | "job-started";
+        jobId: string;
+        handoffId?: string;
+        workerId?: string;
+        handedOffAtMs?: number;
+        receivedAtMs?: number;
+        startedAtMs?: number;
+        childInstanceId?: string;
+        childPid?: number;
+    }): void;
+    /**
      * Marks a pooled child for retirement and eagerly spawns a single replacement
      * (1-for-1) so its capacity is restored immediately without waiting for it to
      * finish draining. The retiring child stops receiving new jobs and is
