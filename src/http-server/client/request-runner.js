@@ -3,6 +3,7 @@
 import {ensureError} from "typanic"
 import BacktraceCleaner from "../../utils/backtrace-cleaner-node.js"
 import EventEmitter from "../../utils/event-emitter.js"
+import {HttpResponseBodyTooLargeError} from "./errors.js"
 import Logger from "../../logger.js"
 import RequestTiming from "./request-timing.js"
 import Response from "./response.js"
@@ -304,7 +305,13 @@ export default class VelociousHttpServerClientRequestRunner {
       })
 
       response.setStatus(500)
-      response.setErrorBody(error)
+      try {
+        response.setErrorBody(error)
+      } catch (responseError) {
+        if (!(responseError instanceof HttpResponseBodyTooLargeError)) throw responseError
+
+        response.setBody("")
+      }
     }
 
     await this.logger.debug(() => ["Request runner done", {

@@ -5,6 +5,7 @@ import fs from "node:fs/promises"
 import {digg} from "diggerize"
 import {ensureError} from "typanic"
 import EventEmitter from "../../utils/event-emitter.js"
+import {HttpRequestBodyTooLargeError} from "./errors.js"
 import Logger from "../../logger.js"
 import Request from "./request.js"
 import RequestRunner from "./request-runner.js"
@@ -105,6 +106,26 @@ export default class VeoliciousHttpServerClient {
   }
 
   /**
+   * Sends a deterministic request-body limit response and closes the connection.
+   * @returns {void} - No return value.
+   */
+  _sendPayloadTooLargeResponse() {
+    const httpVersion = this.currentRequest?.httpVersion() || "1.1"
+    const body = "Payload Too Large\n"
+    const headers = [
+      `HTTP/${httpVersion} 413 Payload Too Large`,
+      "Connection: Close",
+      "Content-Type: text/plain; charset=UTF-8",
+      `Content-Length: ${Buffer.byteLength(body, "utf8")}`,
+      "",
+      body
+    ].join("\r\n")
+
+    this.events.emit("output", headers)
+    this.events.emit("close")
+  }
+
+  /**
    * Runs handle bad request.
    * @param {Error} error - Error instance.
    * @returns {void} - No return value.
@@ -121,7 +142,11 @@ export default class VeoliciousHttpServerClient {
     this.currentRequest = undefined
     this.state = "initial"
 
-    this._sendBadRequestResponse("Bad Request")
+    if (error instanceof HttpRequestBodyTooLargeError) {
+      this._sendPayloadTooLargeResponse()
+    } else {
+      this._sendBadRequestResponse("Bad Request")
+    }
   }
 
   executeCurrentRequest = () => {

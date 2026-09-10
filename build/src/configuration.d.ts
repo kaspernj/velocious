@@ -74,11 +74,11 @@ export default class VelociousConfiguration {
     _clientErrorPayloadReporters: import("./configuration-types.js").ClientErrorPayloadReporterType[];
     cors: import("./configuration-types.js").CorsType | undefined;
     _cookieSecret: string | undefined;
-    database: {
+    database: false | {
         [key: string]: {
             [key: string]: import("./configuration-types.js").DatabaseConfigurationType;
         };
-    };
+    } | undefined;
     debug: boolean;
     _debugEndpoint: {
         enabled: boolean;
@@ -141,6 +141,8 @@ export default class VelociousConfiguration {
         port?: number;
         workers?: number;
         compression: import("./configuration-types.js").NormalizedHttpCompressionConfiguration;
+        maxBufferedResponseBodyBytes: number | undefined;
+        maxRequestBodyBytes: number | undefined;
         websocketInboundQueue: {
             maxPendingBytes: number;
             maxPendingMessages: number;
@@ -378,6 +380,16 @@ export default class VelociousConfiguration {
      * @returns {import("./configuration-types.js").NormalizedHttpCompressionConfiguration} - Normalized buffered response compression configuration.
      */
     getHttpServerCompression(): import("./configuration-types.js").NormalizedHttpCompressionConfiguration;
+    /**
+     * Runs get maximum buffered response body bytes.
+     * @returns {number | undefined} - Configured byte limit, or undefined when unbounded.
+     */
+    getHttpServerMaxBufferedResponseBodyBytes(): number | undefined;
+    /**
+     * Runs get maximum request body bytes.
+     * @returns {number | undefined} - Configured byte limit, or undefined when unbounded.
+     */
+    getHttpServerMaxRequestBodyBytes(): number | undefined;
     /**
      * Runs get cookie secret.
      * @returns {string | undefined} - Cookie secret.

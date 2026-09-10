@@ -601,6 +601,14 @@ export type HttpServerConfiguration = {
      */
     inProcess?: boolean;
     /**
+     * - Maximum UTF-8/binary byte length accepted by buffered response bodies. Unbounded when absent; streamed file responses are unaffected.
+     */
+    maxBufferedResponseBodyBytes?: number;
+    /**
+     * - Maximum decoded request-body bytes accepted before routing. Unbounded when absent.
+     */
+    maxRequestBodyBytes?: number;
+    /**
      * - Backward-compatible alias for workers.
      */
     maxWorkers?: number;
@@ -1547,9 +1555,9 @@ export type ConfigurationArgsType = {
      */
     packages?: VelociousPackageConfiguration[];
     /**
-     * - Database configurations keyed by environment and identifier.
+     * - Database configurations keyed by environment and identifier, or false for an explicitly database-free application.
      */
-    database: {
+    database?: false | {
         [key: string]: {
             [key: string]: DatabaseConfigurationType;
         };
@@ -1965,6 +1973,8 @@ export type ConfigurationArgsType = {
  * @property {boolean | HttpCompressionConfiguration} [compression] - Buffered response compression. Enabled with documented defaults when absent; false or {enabled: false} disables it globally.
  * @property {string} [host] - Hostname to bind the HTTP server to.
  * @property {boolean} [inProcess] - Run HTTP handlers in the main thread instead of worker threads.
+ * @property {number} [maxBufferedResponseBodyBytes] - Maximum UTF-8/binary byte length accepted by buffered response bodies. Unbounded when absent; streamed file responses are unaffected.
+ * @property {number} [maxRequestBodyBytes] - Maximum decoded request-body bytes accepted before routing. Unbounded when absent.
  * @property {number} [maxWorkers] - Backward-compatible alias for workers.
  * @property {number} [port] - Port to bind the HTTP server to.
  * @property {{maxPendingBytes?: number, maxPendingMessages?: number}} [websocketInboundQueue] - Per-session retained inbound WebSocket message limits.
@@ -2351,7 +2361,7 @@ export type ConfigurationArgsType = {
  * @property {AttachmentsConfiguration} [attachments] - Attachment storage configuration.
  * @property {BackendProjectConfiguration[]} [backendProjects] - Backend project definitions used for frontend model generation.
  * @property {VelociousPackageConfiguration[]} [packages] - External Velocious packages that contribute models, frontend-model resources and migrations.
- * @property {{[key: string]: {[key: string]: DatabaseConfigurationType}}} database - Database configurations keyed by environment and identifier.
+ * @property {false | {[key: string]: {[key: string]: DatabaseConfigurationType}}} [database] - Database configurations keyed by environment and identifier, or false for an explicitly database-free application.
  * @property {boolean} [debug] - Enable debug logging.
  * @property {boolean | DebugEndpointConfiguration} [debugEndpoint] - Enable the built-in debug endpoint. Defaults to false.
  * @property {boolean | ApiManifestConfiguration} [apiManifest] - Enable the built-in API manifest endpoint. Defaults to false.

@@ -46,6 +46,19 @@ export default class RequestBuffer {
     constructor({ configuration }: {
         configuration: import("../../../configuration.js").default;
     });
+    /**
+     * Raises before buffering a request body beyond the configured bound.
+     * @param {number} actualBytes - Declared or accumulated decoded body bytes.
+     * @returns {void}
+     */
+    assertRequestBodySize(actualBytes: number): void;
+    /**
+     * Records bytes consumed after request headers. Multipart parsing can accept
+     * an unframed body, so enforce its configured bound during accumulation.
+     * @param {number} bytes - Newly consumed body bytes.
+     * @returns {void}
+     */
+    recordBodyBytes(bytes: number): void;
     destroy(): void;
     /**
      * Runs feed.

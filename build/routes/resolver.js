@@ -92,7 +92,7 @@ export default class VelociousRoutesResolver {
     }
 
     const routeResolverHookMatch = await this.resolveRouteResolverHooks(currentPath, {hasMatchingCustomRoute})
-    let skipControllerConnections = routeResolverHookMatch?.skipControllerConnections === true
+    let skipControllerConnections = this.configuration.database === false || routeResolverHookMatch?.skipControllerConnections === true
     let skipAbilityResolution = routeResolverHookMatch?.skipAbilityResolution === true
     let skipTenantResolution = routeResolverHookMatch?.skipTenantResolution === true
     const matchResult = routeResolverHookMatch || !currentRoute ? undefined : this.matchPathWithRoutes(currentRoute, currentPath)

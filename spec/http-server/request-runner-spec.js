@@ -6,9 +6,10 @@ import {describe, expect, it} from "../../src/testing/test.js"
 
 /**
  * @param {Error} error - Error raised by the CORS hook.
+ * @param {number} [maxBufferedResponseBodyBytes] - Optional response body limit.
  * @returns {import("../../src/configuration.js").default} - Request-runner configuration contract.
  */
-function buildConfiguration(error) {
+function buildConfiguration(error, maxBufferedResponseBodyBytes) {
   const logRedactor = new LogRedactor()
 
   return /** @type {import("../../src/configuration.js").default} */ ({
@@ -16,6 +17,7 @@ function buildConfiguration(error) {
       throw error
     },
     getErrorEvents: () => ({emit: () => {}}),
+    getHttpServerMaxBufferedResponseBodyBytes: () => maxBufferedResponseBodyBytes,
     getLogRedactor: () => logRedactor,
     runWithRequestTiming: async (_requestTiming, callback) => await callback(),
     runWithTestSharedConnectionContexts: (callback) => callback()
@@ -138,5 +140,26 @@ describe("HttpServer - request runner", {databaseCleaning: {transaction: false, 
     expect(consoleErrorWrites[0]).toContain("resolveRequest")
     expect(consoleErrorWrites[0]).toContain("handleRequest")
     expect(consoleErrorWrites[0].includes("Error while running request: at ")).toEqual(false)
+  })
+
+  it("finishes with an empty 500 when the configured bound rejects the error body", async () => {
+    const originalConsoleError = console.error
+
+    try {
+      console.error = () => {}
+
+      const requestRunner = new VelociousHttpServerClientRequestRunner({
+        configuration: buildConfiguration(new Error("route failed"), 3),
+        request: buildRequest()
+      })
+
+      await requestRunner.run()
+
+      expect(requestRunner.getState()).toEqual("done")
+      expect(requestRunner.response.getStatusCode()).toEqual(500)
+      expect(requestRunner.response.getBody()).toEqual("")
+    } finally {
+      console.error = originalConsoleError
+    }
   })
 })

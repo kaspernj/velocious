@@ -3,6 +3,7 @@
 import EventEmitter from "../../../utils/event-emitter.js"
 import FormDataPart from "./form-data-part.js"
 import Header from "./header.js"
+import {HttpRequestBodyTooLargeError} from "../errors.js"
 import {incorporate} from "incorporator"
 import Logger from "../../../logger.js"
 import ParamsToObject from "../params-to-object.js"
@@ -66,6 +67,31 @@ export default class RequestBuffer {
     this.logger = new Logger(this, {debug: false})
   }
 
+  /**
+   * Raises before buffering a request body beyond the configured bound.
+   * @param {number} actualBytes - Declared or accumulated decoded body bytes.
+   * @returns {void}
+   */
+  assertRequestBodySize(actualBytes) {
+    const maxBytes = this.configuration.getHttpServerMaxRequestBodyBytes()
+
+    if (maxBytes !== undefined && actualBytes > maxBytes) {
+      throw new HttpRequestBodyTooLargeError({actualBytes, maxBytes})
+    }
+  }
+
+  /**
+   * Records bytes consumed after request headers. Multipart parsing can accept
+   * an unframed body, so enforce its configured bound during accumulation.
+   * @param {number} bytes - Newly consumed body bytes.
+   * @returns {void}
+   */
+  recordBodyBytes(bytes) {
+    this.bodyLength += bytes
+
+    if (this.multiPartyFormData) this.assertRequestBodySize(this.bodyLength)
+  }
+
   destroy() {
     // Do nothing for now...
   }
@@ -113,7 +139,7 @@ export default class RequestBuffer {
     const newlineIndex = data.indexOf(10, index)
 
     if (newlineIndex === -1) {
-      if (this.readingBody) this.bodyLength += data.length - index
+      if (this.readingBody) this.recordBodyBytes(data.length - index)
 
       for (let dataIndex = index; dataIndex < data.length; dataIndex += 1) {
         this.data.push(data[dataIndex])
@@ -122,7 +148,7 @@ export default class RequestBuffer {
       return data.length
     }
 
-    if (this.readingBody) this.bodyLength += newlineIndex + 1 - index
+    if (this.readingBody) this.recordBodyBytes(newlineIndex + 1 - index)
 
     let line
 
@@ -157,7 +183,7 @@ export default class RequestBuffer {
     const endIndex = Math.min(data.length, index + remainingBodyBytes)
 
     this.postBodyBuffers.push(data.subarray(index, endIndex))
-    this.bodyLength += endIndex - index
+    this.recordBodyBytes(endIndex - index)
 
     if (this.contentLength && this.bodyLength >= this.contentLength) {
       this.postRequestDone()
@@ -175,7 +201,7 @@ export default class RequestBuffer {
   feedByte(data, index) {
     const char = data[index]
 
-    if (this.readingBody) this.bodyLength += 1
+    if (this.readingBody) this.recordBodyBytes(1)
 
     switch(this.state) {
       case "chunked-data": {
@@ -414,6 +440,12 @@ export default class RequestBuffer {
         this.readingBody = true
         this.bodyLength = 0
 
+        if (this.contentLength !== undefined) {
+          if (Number.isNaN(this.contentLength)) throw new Error("Content length is invalid")
+
+          this.assertRequestBodySize(this.contentLength)
+        }
+
         const match = this.getHeader("content-type")?.value?.match(/^multipart\/form-data;\s*boundary=(.+)$/i)
 
         if (match) {
@@ -425,8 +457,6 @@ export default class RequestBuffer {
           this.setState("multi-part-form-data")
         } else if (this.contentLength === 0 || this.contentLength === undefined) {
           this.completeRequest()
-        } else if (Number.isNaN(this.contentLength)) {
-          throw new Error("Content length is invalid")
         } else {
           /**
            * Narrows the runtime value to the documented type.
@@ -520,6 +550,8 @@ export default class RequestBuffer {
       this.setState("chunked-trailer")
       return
     }
+
+    this.assertRequestBodySize((this.chunkedBodyChars?.length || 0) + size)
 
     this.currentChunkSize = size
     this.currentChunkBytesRead = 0

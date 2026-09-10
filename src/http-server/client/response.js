@@ -1,5 +1,7 @@
 // @ts-check
 
+import {HttpResponseBodyTooLargeError} from "./errors.js"
+
 /**
  * Named status aliases.
  * @type {Record<string, number>} */
@@ -226,6 +228,15 @@ export default class VelociousHttpServerClientResponse {
   setBody(value) {
     this.filePath = null
     this.fileOnFinished = null
+
+    const actualBytes = typeof value === "string" ? Buffer.byteLength(value, "utf8") : value.byteLength
+    const maxBytes = this.configuration.getHttpServerMaxBufferedResponseBodyBytes()
+
+    if (maxBytes !== undefined && actualBytes > maxBytes) {
+      this.body = ""
+      throw new HttpResponseBodyTooLargeError({actualBytes, maxBytes})
+    }
+
     this.body = value
   }
 
