@@ -103,6 +103,14 @@ const configuration = new Configuration({
         tenantOnly: true,
         type: "sqlite"
       },
+      requestConnectionProbe: {
+        driver: SqliteDriver,
+        migrations: false,
+        name: "test-db-request-connection-probe",
+        poolType: AsyncTrackedMultiConnection,
+        tenantOnly: true,
+        type: "sqlite"
+      },
       mssql: {
         driver: MssqlDriver,
         poolType: AsyncTrackedMultiConnection,

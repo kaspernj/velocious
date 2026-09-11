@@ -47,6 +47,7 @@ describe("Cli - Commands - db:migrate", () => {
       "background_job_count_revisions",
       "background_job_concurrency",
       "background_job_idempotency_keys",
+      "background_job_schedule_order_watermarks",
       "background_job_schedule_keys",
       "background_jobs",
       "mailer_delivery_operations",
@@ -54,6 +55,7 @@ describe("Cli - Commands - db:migrate", () => {
       "velocious_internal_migrations",
       // The optional local adapter owns these tables, not application migrations.
       "velocious_local_background_job_concurrency",
+      "velocious_local_background_job_schedule_keys",
       "velocious_local_background_jobs",
       "velocious_server_sequences",
       "velocious_sync_scopes",

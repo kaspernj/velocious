@@ -84,44 +84,54 @@ export default class RootController extends Controller {
   }
 
   async concurrentConnectionIdentity() {
-    const connection = this.getConfiguration().getDatabasePool("mssql").getCurrentConnection()
-    let connectionId = connectionIdentities.get(connection)
+    const configuration = this.getConfiguration()
+    const databaseIdentifier = configuration.getDisabledDatabaseIdentifiers().has("mssql")
+      ? "requestConnectionProbe"
+      : "mssql"
 
-    if (connectionId === undefined) {
-      connectionId = nextConnectionIdentity++
-      connectionIdentities.set(connection, connectionId)
-    }
+    await configuration.ensureConnections({
+      databaseIdentifiers: [databaseIdentifier],
+      name: "Concurrent request connection identity probe"
+    }, async () => {
+      const connection = configuration.getDatabasePool(databaseIdentifier).getCurrentConnection()
+      let connectionId = connectionIdentities.get(connection)
 
-    /** @type {ConnectionIdentityWaiter | undefined} */
-    let connectionIdentityWaiter
-
-    try {
-      const connectionIds = await timeout({timeout: 2000}, async () => {
-        return await new Promise((resolve) => {
-          connectionIdentityWaiter = {connectionId, resolve}
-          connectionIdentityWaiters.push(connectionIdentityWaiter)
-
-          if (connectionIdentityWaiters.length == 2) {
-            const completedWaiters = connectionIdentityWaiters.splice(0)
-            const completedConnectionIds = completedWaiters.map((waiter) => waiter.connectionId)
-
-            for (const waiter of completedWaiters) {
-              waiter.resolve(completedConnectionIds)
-            }
-          }
-        })
-      })
-
-      await this.render({json: {connectionId, connectionIds}})
-    } finally {
-      const waiterIndex = connectionIdentityWaiter === undefined
-        ? -1
-        : connectionIdentityWaiters.indexOf(connectionIdentityWaiter)
-
-      if (waiterIndex >= 0) {
-        connectionIdentityWaiters.splice(waiterIndex, 1)
+      if (connectionId === undefined) {
+        connectionId = nextConnectionIdentity++
+        connectionIdentities.set(connection, connectionId)
       }
-    }
+
+      /** @type {ConnectionIdentityWaiter | undefined} */
+      let connectionIdentityWaiter
+
+      try {
+        const connectionIds = await timeout({timeout: 2000}, async () => {
+          return await new Promise((resolve) => {
+            connectionIdentityWaiter = {connectionId, resolve}
+            connectionIdentityWaiters.push(connectionIdentityWaiter)
+
+            if (connectionIdentityWaiters.length == 2) {
+              const completedWaiters = connectionIdentityWaiters.splice(0)
+              const completedConnectionIds = completedWaiters.map((waiter) => waiter.connectionId)
+
+              for (const waiter of completedWaiters) {
+                waiter.resolve(completedConnectionIds)
+              }
+            }
+          })
+        })
+
+        await this.render({json: {connectionId, connectionIds}})
+      } finally {
+        const waiterIndex = connectionIdentityWaiter === undefined
+          ? -1
+          : connectionIdentityWaiters.indexOf(connectionIdentityWaiter)
+
+        if (waiterIndex >= 0) {
+          connectionIdentityWaiters.splice(waiterIndex, 1)
+        }
+      }
+    })
   }
 
   async testRequestTransactionMarker() {
