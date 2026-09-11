@@ -45,7 +45,7 @@ new Configuration({
       authenticationToken: () => getUser().getAuthenticationToken(),
       isOnline: async () => (await Network.getNetworkStateAsync()).isConnected !== false,
       onError: (error) => reportSyncError(error),
-      transport: websocketClientAdapter // the frontend-model transport: post(path, body) => Promise<{json: () => object}>
+      transport: websocketClientAdapter // post(path, body, {signal}) => Promise<{json: () => object}>
     }
   }
 })
@@ -117,6 +117,39 @@ await Event.where({partnerId}).sync()
 The query is serialized into a `{resourceType, conditions}` scope (only plain attribute equality conditions are supported — joins, orders, limits, raw SQL, and negations fail loudly), persisted in the framework-owned `velocious_sync_scopes` table (auto-created; process-local memory when no database is configured), and pulled immediately when online. `pull()` iterates every active scope with its own persisted cursor and sends the scope in each changes request so the server can enforce access per scope. `unsync(query)` / `query.unsync()` deactivates a scope.
 
 Devices migrating from a pre-scope cursor store can seed newly declared scopes through the `legacyCursor({scope})` option, avoiding a full re-pull.
+
+### Abort, selected-scope reset, and identity replacement
+
+Auth, customer, project, or locale changes must replace the cache owner as one lifecycle, not by racing `unsubscribe` against an old pull. `SyncClient` exposes three quiescent transitions:
+
+```js
+const oldScopes = [
+  {conditions: {customer_id: previousCustomerId}, resourceType: "Ticket"},
+  {conditions: {locale: previousLocale}, resourceType: "Event"}
+]
+
+await syncClient().replaceIdentity({
+  resetScopes: oldScopes,
+  cleanup: async ({connection, scopes}) => {
+    // App-owned policy: delete only rows owned by these scopes, using the
+    // supplied local database connection so rows and cursors change atomically.
+    await purgeOwnedRows({connection, scopes})
+  },
+  replace: async () => {
+    setCurrentSession(nextSession)
+  },
+  subscribeUserScope: true
+})
+```
+
+- `await client.stop({resetScopes?, cleanup?})` unregisters automatic mutation tracking synchronously, aborts and drains in-flight pull/replay/realtime startup, waits for queued realtime applies, then optionally resets selected scopes. Repeated stops and repeated resets are idempotent.
+- `await client.resetScopes(scopes, {cleanup?})` keeps tracking declarations registered but otherwise uses the same quiescence barrier.
+- `await client.replaceIdentity({resetScopes, cleanup?, replace, subscribeUserScope?})` drains the old generation, atomically purges app-owned rows and rotates the selected scope identities/cursors, invokes `replace`, then optionally subscribes the new user scope. New sync work waits behind the transition, and old work cannot advance a rotated cursor.
+- `cleanup({connection, scopes})` is deliberately narrow. With a local database it runs inside the same transaction as cursor reset; a rejection rolls back both. With the process-local scope store, `connection` is `null` and cleanup completes before the in-memory reset. Velocious never decides which application rows belong to an identity.
+- The transport `post(path, body, {signal})`, websocket `connect({signal})`, and subscription `waitForReady({signal})` boundaries receive the generation's `AbortSignal`. Adapters should honor it. Velocious also checks the signal before and after every network, apply, progress, replay-acknowledgement, and cursor boundary, so a late response cannot publish progress or advance the replacement generation.
+- A caller awaiting interrupted work receives `SyncClientLifecycleAbortError`. Framework-owned background replay and reconnect pulls suppress only that expected cancellation; transport, cleanup, apply, and other unexpected errors still report or reject normally.
+
+Reset removes cursor continuity intentionally: after process restart, reactivating a reset scope starts at a null cursor and therefore requires a complete authorized backfill. Scopes not selected for reset retain their durable cursors. Do not combine these APIs with an app-owned cursor table, fallback poller, or second writer.
 
 ### Pull progress ("X of Y")
 

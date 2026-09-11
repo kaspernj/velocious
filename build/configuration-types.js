@@ -501,14 +501,14 @@
  * Client-side sync transport owning HTTP POSTs to the framework sync endpoints,
  * matching the frontend-model websocket client post contract.
  * @typedef {object} VelociousSyncClientTransport
- * @property {(path: string, body?: ReturnType<typeof JSON.parse>, options?: {headers?: Record<string, string>}) => Promise<{json: () => ReturnType<typeof JSON.parse>}>} post - Posts one request and resolves a response with a json accessor.
+ * @property {(path: string, body?: ReturnType<typeof JSON.parse>, options?: {headers?: Record<string, string>, signal?: AbortSignal}) => Promise<{json: () => ReturnType<typeof JSON.parse>}>} post - Posts one request and resolves a response with a json accessor.
  */
 
 /**
  * Websocket client contract required from `sync.client.realtime.createClient`,
  * matching `VelociousWebsocketClient` / snapreq's websocket client.
  * @typedef {object} VelociousSyncRealtimeWebsocketClient
- * @property {() => Promise<ReturnType<typeof JSON.parse>>} connect - Connects the websocket.
+ * @property {(options?: {signal?: AbortSignal}) => Promise<ReturnType<typeof JSON.parse>>} connect - Connects the websocket.
  * @property {(channelType: string, options?: {params?: Record<string, ReturnType<typeof JSON.parse>>, onMessage?: (body: ReturnType<typeof JSON.parse>) => void, onResume?: () => void, onClose?: (reason: string) => void}) => VelociousSyncRealtimeSubscription} subscribeChannel - Opens one channel subscription.
  * @property {() => Promise<void>} disconnectAndStopReconnect - Closes the socket and stops auto-reconnect.
  */
@@ -518,7 +518,7 @@
  * @typedef {object} VelociousSyncRealtimeSubscription
  * @property {() => void} close - Closes the subscription.
  * @property {() => boolean} isReady - Whether the subscription is acknowledged and ready.
- * @property {(params?: {timeoutMs?: number}) => Promise<void>} waitForReady - Resolves once the server acknowledges the subscription.
+ * @property {(params?: {signal?: AbortSignal, timeoutMs?: number}) => Promise<void>} waitForReady - Resolves once the server acknowledges the subscription.
  */
 
 /**

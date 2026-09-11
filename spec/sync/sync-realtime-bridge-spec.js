@@ -1,6 +1,7 @@
 // @ts-check
 
 import {describe, expect, it} from "../../src/testing/test.js"
+import {deferred} from "awaitery"
 import {buildConfiguration, buildFakeSyncModel, buildMetadataModelClass, fakeQuery, triggerLifecycle} from "./sync-client-fakes.js"
 import {buildFakeWebsocketClient} from "./sync-realtime-fakes.js"
 import SyncClient from "../../src/sync/sync-client.js"
@@ -435,6 +436,89 @@ describe("sync realtime bridge", () => {
     expect(harness.fakeWebsocketClient.subscriptions.length).toEqual(0)
     expect(harness.fakeWebsocketClient.disconnectCalls).toEqual(1)
     expect(harness.postChangesCalls.length).toEqual(0)
+  })
+
+  it("aborts and drains an in-flight realtime start when the sync client stops", async () => {
+    const harness = buildRealtimeHarness({
+      channels: () => [{channel: "ticket-scans", params: {eventId: EVENT_ID}, resourceType: "TicketScan"}],
+      deferConnect: true,
+      pullOnReconnect: false
+    })
+
+    const subscribing = harness.client.subscribeRealtime()
+
+    await flushUntil(() => harness.fakeWebsocketClient.connectCalls === 1)
+
+    const stopping = Promise.resolve(harness.client.stop())
+
+    await Promise.resolve()
+    if (harness.fakeWebsocketClient.resolveConnect) harness.fakeWebsocketClient.resolveConnect()
+
+    const [subscribeResult, stopResult] = await Promise.allSettled([subscribing, stopping])
+
+    expect(subscribeResult.status).toEqual("rejected")
+    expect(stopResult.status).toEqual("fulfilled")
+    expect(harness.client.realtimeStatus()).toEqual({channels: [], state: "unsubscribed"})
+    expect(harness.fakeWebsocketClient.subscriptions).toHaveLength(0)
+    expect(harness.errors).toEqual([])
+  })
+
+  it("drains an active realtime apply but suppresses callbacks queued by the stale subscription", async () => {
+    const TicketScan = buildApplyableModelClass({
+      columns: SCAN_COLUMNS,
+      modelName: "TicketScan",
+      sync: {
+        attributes: (/** @type {{data: Record<string, ReturnType<typeof JSON.parse>>}} */ {data}) => ({accepted: data.accepted, ticketNr: data.ticketNr})
+      }
+    })
+    const originalFindOrInitializeBy = TicketScan.findOrInitializeBy
+    const applyStarted = deferred()
+    const applyCanFinish = deferred()
+
+    TicketScan.findOrInitializeBy = async (conditions) => {
+      const record = await originalFindOrInitializeBy(conditions)
+
+      if (conditions.id === SCAN_ID) {
+        const originalSave = record.save
+
+        record.save = async () => {
+          applyStarted.resolve(undefined)
+          await applyCanFinish.promise
+          await originalSave()
+        }
+      }
+
+      return record
+    }
+
+    const harness = buildRealtimeHarness({
+      channels: () => [{channel: "ticket-scans", resourceType: "TicketScan"}],
+      modelClasses: [TicketScan],
+      pullOnReconnect: false
+    })
+
+    await harness.client.subscribeRealtime()
+
+    harness.fakeWebsocketClient.subscriptions[0].emitMessage({
+      data: {accepted: true, ticketNr: "active"},
+      resourceId: SCAN_ID,
+      syncType: "update"
+    })
+    await applyStarted.promise
+    harness.fakeWebsocketClient.subscriptions[0].emitMessage({
+      data: {accepted: true, ticketNr: "stale"},
+      resourceId: SECOND_SCAN_ID,
+      syncType: "update"
+    })
+
+    const stopping = harness.client.stop()
+
+    applyCanFinish.resolve(undefined)
+    await stopping
+
+    expect(TicketScan.records.get(SCAN_ID).attributesData.ticketNr).toEqual("active")
+    expect(TicketScan.records.has(SECOND_SCAN_ID)).toEqual(false)
+    expect(harness.errors).toEqual([])
   })
 
   it("fails loudly when channel params try to supply their own authenticationToken", async () => {
