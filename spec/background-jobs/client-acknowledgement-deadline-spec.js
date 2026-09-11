@@ -17,10 +17,11 @@ const STAGE_DELAY_MS = 300
  * @param {object} [args] - Server behavior.
  * @param {boolean} [args.acknowledgeEnqueue] - Whether to acknowledge enqueue requests.
  * @param {string} [args.generationId] - Generation identity returned to a fenced client.
+ * @param {() => void} [args.onEnqueueReceived] - Called when the peer observes the enqueue request.
  * @param {number} [args.stageDelayMs] - Delay before each enabled response.
  * @returns {Promise<{close: () => Promise<void>, enqueueMessages: Array<import("../../src/background-jobs/types.js").BackgroundJobEnqueueMessage>, port: number}>} - Server handle.
  */
-async function startStagedAcknowledgementServer({acknowledgeEnqueue = true, generationId = "acknowledgement-deadline", stageDelayMs = STAGE_DELAY_MS} = {}) {
+async function startStagedAcknowledgementServer({acknowledgeEnqueue = true, generationId = "acknowledgement-deadline", onEnqueueReceived, stageDelayMs = STAGE_DELAY_MS} = {}) {
   /** @type {Set<net.Socket>} */
   const sockets = new Set()
   /** @type {Set<ReturnType<typeof setTimeout>>} */
@@ -64,6 +65,7 @@ async function startStagedAcknowledgementServer({acknowledgeEnqueue = true, gene
 
       if (message?.type === "enqueue") {
         enqueueMessages.push(message)
+        if (onEnqueueReceived) onEnqueueReceived()
         if (!acknowledgeEnqueue) return
 
         sendAfterStageDelay(() => {
@@ -128,7 +130,17 @@ describe("BackgroundJobsClient acknowledgement deadline", {databaseCleaning: {tr
   })
 
   it("raises a safe typed error when a sent enqueue acknowledgement stalls", {timeoutMs: 2000}, async () => {
-    const server = await startStagedAcknowledgementServer({acknowledgeEnqueue: false, stageDelayMs: 0})
+    const originalDateNow = Date.now
+    let enqueueReceived = false
+    const server = await startStagedAcknowledgementServer({
+      acknowledgeEnqueue: false,
+      onEnqueueReceived: () => {
+        enqueueReceived = true
+        // The peer receipt proves the post-send timer is active; keep the adjustable wall clock behind that real timer.
+        Date.now = () => 0
+      },
+      stageDelayMs: 0
+    })
 
     try {
       const client = new BackgroundJobsClient({
@@ -167,12 +179,14 @@ describe("BackgroundJobsClient acknowledgement deadline", {databaseCleaning: {tr
 
       if (!initialAttempt) throw new Error("Expected the initial timeout attempt")
 
+      expect(enqueueReceived).toEqual(true)
       expect(Object.isFrozen(caughtError.attemptHistory)).toEqual(true)
       expect(Object.isFrozen(initialAttempt)).toEqual(true)
       expect(initialAttempt.acknowledgementWaitElapsedMs >= 40).toEqual(true)
       expect(initialAttempt.attemptElapsedMs >= initialAttempt.acknowledgementWaitElapsedMs).toEqual(true)
       expect(JSON.stringify(caughtError)).not.toMatch(/must-not-leak/)
     } finally {
+      Date.now = originalDateNow
       await server.close()
     }
   })

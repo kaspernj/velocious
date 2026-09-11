@@ -146,9 +146,11 @@ export default class BackgroundJobsClient {
         if (requestSentAtMs === undefined) throw new Error("Background job enqueue acknowledgement wait started before the request was sent", {cause: error})
 
         const timedOutAtMs = Date.now()
+        // The fired timer proves its logical deadline even when the adjustable wall clock reports a shorter interval.
+        const acknowledgementWaitElapsedMs = Math.max(this.enqueueTimeoutMs, timedOutAtMs - requestSentAtMs)
 
-        attemptObservation.acknowledgementWaitElapsedMs = timedOutAtMs - requestSentAtMs
-        attemptObservation.attemptElapsedMs = timedOutAtMs - attemptStartedAtMs
+        attemptObservation.acknowledgementWaitElapsedMs = acknowledgementWaitElapsedMs
+        attemptObservation.attemptElapsedMs = Math.max(acknowledgementWaitElapsedMs, timedOutAtMs - attemptStartedAtMs)
 
         throw new BackgroundJobEnqueueAcknowledgementTimeoutError({
           acknowledgementTimeoutMs: this.enqueueTimeoutMs,
