@@ -141,11 +141,12 @@ export default class SyncRealtimeBridge {
     /**
      * Chains one pushed message onto the serialized apply queue so changes apply
      * in arrival order; failures go to the sync client's error reporting.
-     * @param {{body: ReturnType<typeof JSON.parse>, resourceType: string | null}} args - Message args.
+     * @param {{body: ReturnType<typeof JSON.parse>, generation?: number, resourceType: string | null}} args - Message args.
      * @returns {void}
      */
-    enqueueApply({ body, resourceType }: {
+    enqueueApply({ body, generation, resourceType }: {
         body: ReturnType<typeof JSON.parse>;
+        generation?: number;
         resourceType: string | null;
     }): void;
     /**
@@ -163,8 +164,9 @@ export default class SyncRealtimeBridge {
      * Schedules a coalesced background pull closing offline gaps after
      * (re)subscription readiness. Resumes arriving while a pull is already
      * scheduled or in flight coalesce into that pull instead of stacking.
+     * @param {number} [generation] - Subscription generation owning the resume/readiness callback.
      * @returns {void}
      */
-    schedulePull(): void;
+    schedulePull(generation?: number): void;
 }
 //# sourceMappingURL=sync-realtime-bridge.d.ts.map

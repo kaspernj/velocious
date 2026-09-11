@@ -61,6 +61,7 @@ export default class SyncClient {
     /** @type {Set<Promise<unknown>>} */
     _activeLifecycleWork: Set<Promise<unknown>>;
     _lifecycleAbortController: AbortController;
+    _lifecycleGeneration: number;
     _lifecycleTransitionCount: number;
     /** @type {Promise<void>} */
     _lifecycleTransitionPromise: Promise<void>;
@@ -123,6 +124,22 @@ export default class SyncClient {
      * @returns {Promise<Result>} Callback result.
      */
     _runLifecycleWork<Result>(callback: (signal: AbortSignal) => Promise<Result>): Promise<Result>;
+    /**
+     * Runs mutation queueing only while the lifecycle generation captured by the
+     * caller remains active. Unlike pulls, a mutation must never wait through an
+     * identity transition and then persist under the replacement identity.
+     * @template Result
+     * @param {number} lifecycleGeneration - Generation owning the mutation.
+     * @param {() => Promise<Result>} callback - Mutation queueing work.
+     * @returns {Promise<Result>} Callback result.
+     */
+    _runMutationLifecycleWork<Result>(lifecycleGeneration: number, callback: () => Promise<Result>): Promise<Result>;
+    /**
+     * Rejects mutation queueing captured outside the current stable lifecycle.
+     * @param {number} lifecycleGeneration - Generation owning the mutation.
+     * @returns {void}
+     */
+    _assertMutationLifecycleGeneration(lifecycleGeneration: number): void;
     /**
      * Serializes a lifecycle barrier: cooperatively aborts transport/start work,
      * stops new realtime delivery, awaits old applies/replays/pulls, rejects on

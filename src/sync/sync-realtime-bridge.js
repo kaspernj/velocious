@@ -155,8 +155,8 @@ export default class SyncRealtimeBridge {
           params: {...channelDescriptor.params, authenticationToken}
         })
         const subscription = client.subscribeChannel(channelDescriptor.channel, {
-          onMessage: (body) => this.enqueueApply({body, resourceType}),
-          onResume: () => this.schedulePull(),
+          onMessage: (body) => this.enqueueApply({body, generation, resourceType}),
+          onResume: () => this.schedulePull(generation),
           params
         })
 
@@ -175,7 +175,7 @@ export default class SyncRealtimeBridge {
       this._client = client
       this._ownsClient = ownsClient
       this._state = "subscribed"
-      this.schedulePull()
+      this.schedulePull(generation)
     } catch (error) {
       await teardown()
 
@@ -341,12 +341,10 @@ export default class SyncRealtimeBridge {
   /**
    * Chains one pushed message onto the serialized apply queue so changes apply
    * in arrival order; failures go to the sync client's error reporting.
-   * @param {{body: ReturnType<typeof JSON.parse>, resourceType: string | null}} args - Message args.
+   * @param {{body: ReturnType<typeof JSON.parse>, generation?: number, resourceType: string | null}} args - Message args.
    * @returns {void}
    */
-  enqueueApply({body, resourceType}) {
-    const generation = this._generation
-
+  enqueueApply({body, generation = this._generation, resourceType}) {
     this._applyPromise = this._applyPromise.then(async () => {
       if (generation !== this._generation) return
 
@@ -395,9 +393,11 @@ export default class SyncRealtimeBridge {
    * Schedules a coalesced background pull closing offline gaps after
    * (re)subscription readiness. Resumes arriving while a pull is already
    * scheduled or in flight coalesce into that pull instead of stacking.
+   * @param {number} [generation] - Subscription generation owning the resume/readiness callback.
    * @returns {void}
    */
-  schedulePull() {
+  schedulePull(generation = this._generation) {
+    if (generation !== this._generation) return
     if (this.realtimeConfiguration()?.pullOnReconnect === false) return
 
     this._scheduledPull ||= (async () => {

@@ -364,6 +364,37 @@ describe("sync realtime bridge", () => {
     expect(harness.errors).toEqual([])
   })
 
+  it("ignores a stale reconnect resume once identity replacement owns the lifecycle barrier", async () => {
+    const authTokenHolder = {value: "token-a"}
+    const harness = buildRealtimeHarness({
+      authTokenHolder,
+      channels: () => [{channel: "ticket-scans", resourceType: "TicketScan"}]
+    })
+
+    await harness.client.subscribeRealtime()
+    await harness.client.waitForRealtimeApplied()
+
+    const staleSubscription = harness.fakeWebsocketClient.subscriptions[0]
+    const replacement = harness.client.replaceIdentity({
+      replace: async () => {
+        authTokenHolder.value = "token-b"
+      }
+    })
+    let replacementSettled = false
+    const observedReplacement = replacement.then(() => {
+      replacementSettled = true
+    })
+
+    staleSubscription.emitResume()
+
+    await flushUntil(() => replacementSettled)
+    await observedReplacement
+
+    expect(authTokenHolder.value).toEqual("token-b")
+    expect(harness.client.realtimeStatus()).toEqual({channels: [], state: "unsubscribed"})
+    expect(harness.errors).toEqual([])
+  })
+
   it("pulls once when the subscription becomes ready to close offline gaps", async () => {
     const harness = buildRealtimeHarness({
       channels: () => [{channel: "ticket-scans", resourceType: "TicketScan"}]

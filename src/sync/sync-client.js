@@ -196,6 +196,7 @@ export default class SyncClient {
     /** @type {Set<Promise<unknown>>} */
     this._activeLifecycleWork = new Set()
     this._lifecycleAbortController = new AbortController()
+    this._lifecycleGeneration = 0
     this._lifecycleTransitionCount = 0
     /** @type {Promise<void>} */
     this._lifecycleTransitionPromise = Promise.resolve()
@@ -336,6 +337,36 @@ export default class SyncClient {
   }
 
   /**
+   * Runs mutation queueing only while the lifecycle generation captured by the
+   * caller remains active. Unlike pulls, a mutation must never wait through an
+   * identity transition and then persist under the replacement identity.
+   * @template Result
+   * @param {number} lifecycleGeneration - Generation owning the mutation.
+   * @param {() => Promise<Result>} callback - Mutation queueing work.
+   * @returns {Promise<Result>} Callback result.
+   */
+  async _runMutationLifecycleWork(lifecycleGeneration, callback) {
+    this._assertMutationLifecycleGeneration(lifecycleGeneration)
+
+    return await this._runLifecycleWork(async () => {
+      this._assertMutationLifecycleGeneration(lifecycleGeneration)
+
+      return await callback()
+    })
+  }
+
+  /**
+   * Rejects mutation queueing captured outside the current stable lifecycle.
+   * @param {number} lifecycleGeneration - Generation owning the mutation.
+   * @returns {void}
+   */
+  _assertMutationLifecycleGeneration(lifecycleGeneration) {
+    if (this._lifecycleTransitionCount === 0 && lifecycleGeneration === this._lifecycleGeneration) return
+
+    throw new SyncClientLifecycleAbortError("Sync mutation belongs to an inactive lifecycle generation")
+  }
+
+  /**
    * Serializes a lifecycle barrier: cooperatively aborts transport/start work,
    * stops new realtime delivery, awaits old applies/replays/pulls, rejects on
    * unexpected old-work failures, then runs the reset/replacement callback.
@@ -345,6 +376,9 @@ export default class SyncClient {
   _runLifecycleTransition(callback) {
     this._lifecycleTransitionCount += 1
 
+    // unsubscribe() invalidates the subscription generation synchronously, so
+    // an old onResume/onMessage callback cannot enter this transition's drain.
+    const realtimeUnsubscribePromise = this._realtimeBridge?.unsubscribe()
     const previousTransition = this._lifecycleTransitionPromise
     const transition = previousTransition.then(async () => {
       const abortController = this._lifecycleAbortController
@@ -352,9 +386,7 @@ export default class SyncClient {
 
       abortController.abort(abortReason)
 
-      if (this._realtimeBridge) {
-        await this._realtimeBridge.unsubscribe()
-      }
+      if (realtimeUnsubscribePromise) await realtimeUnsubscribePromise
 
       const workResults = await Promise.allSettled([...this._activeLifecycleWork])
 
@@ -373,6 +405,7 @@ export default class SyncClient {
       await callback()
     }).finally(() => {
       this._lifecycleAbortController = new AbortController()
+      this._lifecycleGeneration += 1
       this._lifecycleTransitionCount -= 1
       this._userScopeState = "unsubscribed"
       this._subscribeUserScopePromise = null
@@ -466,6 +499,7 @@ export default class SyncClient {
       if (!this.ownsRecord(record)) return
       if (this.isTrackingSuppressed(record)) return
 
+      const lifecycleGeneration = this._lifecycleGeneration
       const data = SyncApiClient.queuedSyncData({
         booleanAttributes: resourceConfig.booleanAttributes || [],
         data: resourceConfig.trackedData ? resourceConfig.trackedData({operation, record}) : undefined,
@@ -483,20 +517,24 @@ export default class SyncClient {
 
       await record.connection().afterCommit(async () => {
         try {
-          if (resourceConfig.conflictTracking) {
-            await SyncApiClient.queueConflictTrackedSync({
-              baseVersion,
-              conflictTracking: resourceConfig.conflictTracking,
-              data,
-              operation,
-              resource: record,
-              resourceType: record.constructor.getModelName(),
-              syncType
-            })
-          } else {
-            await SyncApiClient.queueLocalSync({data, resource: record, syncModel: operationScope, syncType})
-          }
+          await this._runMutationLifecycleWork(lifecycleGeneration, async () => {
+            if (resourceConfig.conflictTracking) {
+              await SyncApiClient.queueConflictTrackedSync({
+                baseVersion,
+                conflictTracking: resourceConfig.conflictTracking,
+                data,
+                operation,
+                resource: record,
+                resourceType: record.constructor.getModelName(),
+                syncType
+              })
+            } else {
+              await SyncApiClient.queueLocalSync({data, resource: record, syncModel: operationScope, syncType})
+            }
+          })
         } catch (error) {
+          if (this.isLifecycleAbort(error)) return
+
           await this.reportAfterCommitError(/** @type {Error} */ (error))
 
           return
@@ -978,45 +1016,49 @@ export default class SyncClient {
    * @returns {Promise<ReturnType<typeof JSON.parse> | import("./local-mutation-log.js").LocalMutationLogRecord>} Pending local sync row or durable conflict-tracked intent.
    */
   async queue({baseVersion, data, operation = "update", resource, syncType}) {
-    this.assertTenantReady()
-    this.assertRecordOwnership(resource)
-    const resourceConfig = this.resourceConfigFor(resource)
-    const resolvedSyncType = syncType ?? this.defaultSyncType({operation, record: resource, resourceConfig})
+    const lifecycleGeneration = this._lifecycleGeneration
 
-    if (resourceConfig.conflictTracking) {
-      const queuedData = SyncApiClient.queuedSyncData({
+    return await this._runMutationLifecycleWork(lifecycleGeneration, async () => {
+      this.assertTenantReady()
+      this.assertRecordOwnership(resource)
+      const resourceConfig = this.resourceConfigFor(resource)
+      const resolvedSyncType = syncType ?? this.defaultSyncType({operation, record: resource, resourceConfig})
+
+      if (resourceConfig.conflictTracking) {
+        const queuedData = SyncApiClient.queuedSyncData({
+          booleanAttributes: resourceConfig.booleanAttributes || [],
+          data,
+          localOnlyAttributes: resourceConfig.localOnlyAttributes || [],
+          resource
+        })
+        const record = await SyncApiClient.queueConflictTrackedSync({
+          baseVersion: baseVersion === undefined ? this.baseVersionFor({operation, record: resource, resourceConfig}) : baseVersion,
+          conflictTracking: resourceConfig.conflictTracking,
+          data: queuedData,
+          operation,
+          resource,
+          resourceType: resource.constructor.getModelName(),
+          syncType: resolvedSyncType
+        })
+
+        this.scheduleReplay()
+
+        return record
+      }
+
+      const syncRow = await this.withTenantOperation(async (databaseOperation) => await SyncApiClient.queueLocalSync({
         booleanAttributes: resourceConfig.booleanAttributes || [],
         data,
         localOnlyAttributes: resourceConfig.localOnlyAttributes || [],
-        resource
-      })
-      const record = await SyncApiClient.queueConflictTrackedSync({
-        baseVersion: baseVersion === undefined ? this.baseVersionFor({operation, record: resource, resourceConfig}) : baseVersion,
-        conflictTracking: resourceConfig.conflictTracking,
-        data: queuedData,
-        operation,
         resource,
-        resourceType: resource.constructor.getModelName(),
+        syncModel: databaseOperation ? databaseOperation.modelClass(this.config.syncModel) : this.config.syncModel,
         syncType: resolvedSyncType
-      })
+      }))
 
       this.scheduleReplay()
 
-      return record
-    }
-
-    const syncRow = await this.withTenantOperation(async (databaseOperation) => await SyncApiClient.queueLocalSync({
-      booleanAttributes: resourceConfig.booleanAttributes || [],
-      data,
-      localOnlyAttributes: resourceConfig.localOnlyAttributes || [],
-      resource,
-      syncModel: databaseOperation ? databaseOperation.modelClass(this.config.syncModel) : this.config.syncModel,
-      syncType: resolvedSyncType
-    }))
-
-    this.scheduleReplay()
-
-    return syncRow
+      return syncRow
+    })
   }
 
   /**

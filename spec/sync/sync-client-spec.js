@@ -1022,6 +1022,73 @@ describe("sync client", () => {
     expect(harness.syncModel.rows[0].attributes.state).toEqual("pending")
   })
 
+  it("rejects explicit queueing started after identity replacement so it cannot replay with the new token", async () => {
+    const authTokenHolder = {value: "token-a"}
+    const harness = buildHarness({authTokenHolder})
+    const replacement = harness.client.replaceIdentity({
+      replace: async () => {
+        authTokenHolder.value = "token-b"
+      }
+    })
+
+    const [queueResult, replacementResult] = await Promise.allSettled([
+      harness.client.queue({resource: buildScanRecord(harness.modelClasses[1])}),
+      replacement
+    ])
+
+    await harness.client.waitForScheduledReplay()
+
+    expect({
+      queueErrorName: queueResult.status === "rejected" ? queueResult.reason.name : null,
+      queueStatus: queueResult.status,
+      queuedRows: harness.syncModel.rows.length,
+      replacementStatus: replacementResult.status,
+      replayTokens: harness.postReplayCalls.map((call) => call.authenticationToken)
+    }).toEqual({
+      queueErrorName: "SyncClientLifecycleAbortError",
+      queueStatus: "rejected",
+      queuedRows: 0,
+      replacementStatus: "fulfilled",
+      replayTokens: []
+    })
+  })
+
+  it("drops a tracked after-commit queue callback from the replaced identity generation", async () => {
+    const TrackedScan = buildMetadataModelClass({columns: SCAN_COLUMNS, modelName: "TrackedScan", sync: {track: true}})
+    /** @type {Array<() => Promise<void>>} */
+    const afterCommitCallbacks = []
+
+    TrackedScan.connection = () => ({
+      /** @param {() => Promise<void>} callback - Deferred commit callback. @returns {Promise<void>} */
+      afterCommit: async (callback) => {
+        afterCommitCallbacks.push(callback)
+      }
+    })
+
+    const authTokenHolder = {value: "token-a"}
+    const harness = buildHarness({authTokenHolder, modelClasses: [TrackedScan]})
+
+    await harness.client.start()
+    await triggerLifecycle(TrackedScan, "afterCreate", buildScanRecord(TrackedScan))
+
+    const replacement = harness.client.replaceIdentity({
+      replace: async () => {
+        authTokenHolder.value = "token-b"
+      }
+    })
+
+    await Promise.all([afterCommitCallbacks[0](), replacement])
+    await harness.client.waitForScheduledReplay()
+
+    expect({
+      errors: harness.errors,
+      queuedRows: harness.syncModel.rows.length,
+      replayTokens: harness.postReplayCalls.map((call) => call.authenticationToken)
+    }).toEqual({errors: [], queuedRows: 0, replayTokens: []})
+
+    await harness.client.stop()
+  })
+
   it("replaces identity only after old work is quiescent and its private scope is purged", async () => {
     const authTokenHolder = {value: "token-a"}
     const harness = buildHarness({authTokenHolder})
