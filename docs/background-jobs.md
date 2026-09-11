@@ -283,12 +283,16 @@ const jobId = await PublishEventJob.performLaterWithOptions({
 
 The durable ownership scope is the tuple of resolved job class name, resolved queue, and caller key. The first enqueue atomically creates the ownership row and job row. Concurrent first enqueues converge through the database's unique ownership key. An exact replay returns the original job id while the job is queued, running, completed, failed, cancelled, or orphaned, and continues returning that id after terminal-job retention prunes the job row.
 
-The Node TCP producer waits at most 5 seconds for the main process's `enqueued`
-acknowledgement. A connection error, a peer that ends or closes before the
-acknowledgement, or a stalled acknowledgement rejects the producer call and
-tears down its one-shot socket. Persistence may already have committed when the
-acknowledgement is lost, so this rejection is deliberately an ambiguous outcome,
-not proof that no job exists.
+The Node TCP producer gives connection/handshake and post-send acknowledgement
+separate bounded phases. The default generation handshake retains its own
+4-second deadline inside the 5-second pre-send phase; after the enqueue enters
+the socket, a fresh 5-second budget waits for the main process's `enqueued`
+acknowledgement. Connection or generation-handshake latency therefore cannot
+consume the durable acknowledgement budget. A connection error, a peer that
+ends or closes before the acknowledgement, or either phase stalling rejects the
+producer call and tears down its one-shot socket. Persistence may already have
+committed after the send, so a post-send rejection is deliberately an ambiguous
+outcome, not proof that no job exists.
 
 An enqueue made by a currently executing generation-owned job already carries
 an internal producer handoff proof and a per-call invocation identity. If its
@@ -307,7 +311,7 @@ For an ordinary enqueue, replay the same request with the same
 of creating a second job. Replaying an ordinary enqueue without a durable
 idempotency key can create another job. Direct users of the Node
 `BackgroundJobsClient` may pass `enqueueTimeoutMs` to its constructor to use a
-different bounded deadline.
+different bound for each phase.
 
 The owned request includes the serialized arguments and behavior-affecting enqueue options: resolved queue, execution mode, retry cap, resolved concurrency configuration, and immediate-versus-scheduled timing. Reusing the same scope with a different canonical request fails with a safe `background-job-idempotency-conflict` error. Generated job ids and the wall-clock timestamp of an immediate enqueue are not request identity. `deduplicateWhileQueued` is also not identity: it remains the separate, transient queued-row optimization described above.
 
