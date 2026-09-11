@@ -367,9 +367,12 @@ export default class SyncPublisher {
    * server-origin rows carry a null actor column (no device to echo the
    * change back to), so repeated server changes to one complete resource and
    * scope identity reuse and re-sequence one feed row. A database advisory
-   * lock serializes the lookup plus shared upsert because unique constraints
-   * containing nullable actor/scope columns do not enforce this identity
-   * portably across supported databases.
+   * lock serializes reconciliation plus the shared upsert because unique
+   * constraints containing nullable actor/scope columns do not enforce this
+   * identity portably across supported databases. Reconciliation retains the
+   * row with the newest feed sequence (then lowest id for a deterministic tie)
+   * and removes older matching server-origin rows before applying the current
+   * mutation.
    * @param {Record<string, ReturnType<typeof JSON.parse>>} attributes - Snapshotted sync row attributes.
    * @param {ReturnType<typeof JSON.parse>} syncModel - Operation-bound or static Sync model interface.
    * @param {string[]} scopeColumnNames - Persisted scope columns participating in the complete identity.
@@ -392,9 +395,17 @@ export default class SyncPublisher {
     }
 
     return await this.config.syncModel.withAdvisoryLock(syncPublisherIdentityLockName(identity), async () => {
-      const existingSync = await syncModel
+      const matchingSyncs = await syncModel
         .where(identity)
-        .first()
+        .toArray()
+
+      matchingSyncs.sort(comparePublishedSyncRowsByRecency)
+
+      const [existingSync, ...duplicateSyncs] = matchingSyncs
+
+      for (const duplicateSync of duplicateSyncs) {
+        await duplicateSync.destroy()
+      }
 
       return await upsertSyncRow({attributes, existingSync, syncModel})
     }, {dedicatedConnection: true})
@@ -466,6 +477,26 @@ function syncPublisherIdentityLockName(identity) {
   const hash = sha256Hex(stableJsonStringify(identity)).slice(0, 32)
 
   return `vsp:${hash}`
+}
+
+/**
+ * Orders matching published rows by the feed's public recency contract so
+ * legacy duplicates have one deterministic survivor. Server sequences are
+ * positive and monotonic; a legacy null sequence is older than any assigned
+ * sequence, and the immutable row id breaks otherwise-equal ties.
+ * @param {ReturnType<typeof JSON.parse>} left - First matching sync row.
+ * @param {ReturnType<typeof JSON.parse>} right - Second matching sync row.
+ * @returns {number} Sort comparison with the canonical survivor first.
+ */
+function comparePublishedSyncRowsByRecency(left, right) {
+  const leftSequence = left.serverSequence()
+  const rightSequence = right.serverSequence()
+
+  if (leftSequence === null && rightSequence !== null) return 1
+  if (leftSequence !== null && rightSequence === null) return -1
+  if (leftSequence !== rightSequence) return rightSequence - leftSequence
+
+  return left.id().localeCompare(right.id())
 }
 
 /**

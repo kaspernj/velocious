@@ -137,4 +137,104 @@ describe("sync publisher atomic server identity", { databaseCleaning: { transact
       publisher.stop()
     }
   })
+
+  it("reconciles pre-existing duplicate server rows through the newest sequence without crossing nullable scope or actor identity", async () => {
+    const legacyTimestamp = new Date("2026-09-10T10:00:00.000Z")
+    const firstLegacyServerRow = await SyncEntry.create({
+      authentication_token_id: null,
+      client_updated_at: legacyTimestamp,
+      data: JSON.stringify({title: "First legacy server row"}),
+      project_id: null,
+      resource_id: RESOURCE_ID,
+      resource_type: RESOURCE_TYPE,
+      sync_type: "update"
+    })
+    const newestLegacyServerRow = await SyncEntry.create({
+      authentication_token_id: null,
+      client_updated_at: legacyTimestamp,
+      data: JSON.stringify({title: "Newest legacy server row"}),
+      project_id: null,
+      resource_id: RESOURCE_ID,
+      resource_type: RESOURCE_TYPE,
+      sync_type: "update"
+    })
+    const actorRow = await SyncEntry.create({
+      authentication_token_id: ACTOR_ID,
+      client_updated_at: legacyTimestamp,
+      data: JSON.stringify({title: "Device replay"}),
+      project_id: null,
+      resource_id: RESOURCE_ID,
+      resource_type: RESOURCE_TYPE,
+      sync_type: "update"
+    })
+    const otherScopeServerRow = await SyncEntry.create({
+      authentication_token_id: null,
+      client_updated_at: legacyTimestamp,
+      data: JSON.stringify({title: "Other scope"}),
+      project_id: "project-elsewhere",
+      resource_id: RESOURCE_ID,
+      resource_type: RESOURCE_TYPE,
+      sync_type: "update"
+    })
+    const AtomicPublishedItem = buildMetadataModelClass({
+      columns: DEVICE_COLUMNS,
+      modelName: RESOURCE_TYPE,
+      sync: {
+        publish: {
+          scopeAttributes: async ({record}) => ({projectId: record.readAttribute("projectId") ?? null}),
+          serialize: (/** @type {ReturnType<typeof JSON.parse>} */ record) => ({id: record.id(), title: record.readAttribute("title")})
+        }
+      }
+    })
+    /** @type {Array<{body: ReturnType<typeof JSON.parse>, channel: string, params: Record<string, ReturnType<typeof JSON.parse>>}>} */
+    const broadcasts = []
+    const publisher = new SyncPublisher({
+      broadcaster: async (broadcast) => {
+        broadcasts.push(broadcast)
+      },
+      configuration: buildConfiguration({modelClasses: [AtomicPublishedItem], sync: {}}),
+      syncModel: SyncEntry
+    })
+
+    expect(newestLegacyServerRow.serverSequence()).toBeGreaterThan(firstLegacyServerRow.serverSequence())
+
+    await publisher.start()
+
+    try {
+      await triggerLifecycle(AtomicPublishedItem, "afterCreate", buildRecord(AtomicPublishedItem, RESOURCE_ID, {
+        id: RESOURCE_ID,
+        title: "Reconciled commit"
+      }))
+
+      const rows = await SyncEntry
+        .where({resource_id: RESOURCE_ID, resource_type: RESOURCE_TYPE})
+        .toArray()
+      const actorRows = rows.filter((row) => row.authenticationTokenId() === ACTOR_ID)
+      const nullableScopeServerRows = rows.filter((row) => row.authenticationTokenId() === null && row.projectId() === null)
+      const otherScopeServerRows = rows.filter((row) => row.authenticationTokenId() === null && row.projectId() === "project-elsewhere")
+
+      expect(nullableScopeServerRows).toHaveLength(1)
+      expect(nullableScopeServerRows[0].id()).toEqual(newestLegacyServerRow.id())
+      expect(nullableScopeServerRows[0].serverSequence()).toBeGreaterThan(newestLegacyServerRow.serverSequence())
+      expect(nullableScopeServerRows[0].clientUpdatedAt()?.getTime()).toBeGreaterThan(legacyTimestamp.getTime())
+      expect(nullableScopeServerRows[0].syncType()).toEqual("update")
+      expect(JSON.parse(nullableScopeServerRows[0].data()).title).toEqual("Reconciled commit")
+      expect(await SyncEntry.findBy({id: firstLegacyServerRow.id()})).toEqual(null)
+
+      expect(actorRows).toHaveLength(1)
+      expect(actorRows[0].id()).toEqual(actorRow.id())
+      expect(JSON.parse(actorRows[0].data()).title).toEqual("Device replay")
+      expect(otherScopeServerRows).toHaveLength(1)
+      expect(otherScopeServerRows[0].id()).toEqual(otherScopeServerRow.id())
+      expect(JSON.parse(otherScopeServerRows[0].data()).title).toEqual("Other scope")
+
+      expect(broadcasts).toHaveLength(1)
+      expect(broadcasts[0].body.syncs[0].id).toEqual(nullableScopeServerRows[0].id())
+      expect(broadcasts[0].body.syncs[0].serverSequence).toEqual(nullableScopeServerRows[0].serverSequence())
+      expect(broadcasts[0].body.syncs[0].updatedAt).toEqual(nullableScopeServerRows[0].updatedAt()?.toISOString())
+      expect(broadcasts[0].body.syncs[0].data.title).toEqual("Reconciled commit")
+    } finally {
+      publisher.stop()
+    }
+  })
 })
