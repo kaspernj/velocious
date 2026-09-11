@@ -1,0 +1,1 @@
+Start the Node background-job enqueue acknowledgement deadline only after the request is sent, while retaining an independently bounded connection/generation-handshake phase, so valid handshake latency cannot consume the durable acknowledgement budget.

@@ -136,18 +136,44 @@ export default class BackgroundJobsClient {
      */
     const enqueueAttempt = async (attemptAcknowledgement) => {
       const request = await this._request()
-
-      return await timeout({
-        errorMessage: `Background job enqueue acknowledgement timed out after ${this.enqueueTimeoutMs}ms`,
+      const requestAbortController = new AbortController()
+      const timeoutErrorMessage = `Background job enqueue acknowledgement timed out after ${this.enqueueTimeoutMs}ms`
+      /**
+       * Resolves the pre-send phase when the mutation has entered the socket.
+       * @type {() => void}
+       */
+      let markRequestSent = () => {}
+      const requestSent = new Promise((resolve) => {
+        markRequestSent = () => resolve(undefined)
+      })
+      /**
+       * Applies the configured deadline independently to one request phase.
+       * @template T
+       * @param {() => Promise<T>} callback - Phase work.
+       * @returns {Promise<T>} - Phase result.
+       */
+      const withEnqueueTimeout = async (callback) => await timeout({
+        errorMessage: timeoutErrorMessage,
         timeout: this.enqueueTimeoutMs
-      }, async ({control}) => await request.run({
-        signal: control.signal,
+      }, async ({control}) => {
+        const abortRequest = () => requestAbortController.abort(control.signal.reason)
+
+        control.signal.addEventListener("abort", abortRequest)
+        try {
+          return await callback()
+        } finally {
+          control.signal.removeEventListener("abort", abortRequest)
+        }
+      })
+      const requestPromise = request.run({
+        signal: requestAbortController.signal,
         onConnect: (jsonSocket) => {
           jsonSocket.send(message)
           if (attemptAcknowledgement) {
             attemptAcknowledgement.generationFenced = Boolean(request.generationId)
             attemptAcknowledgement.requestSent = true
           }
+          markRequestSent()
         },
         onMessage: ({message, resolve, reject}) => {
           if (message?.type === "enqueued") {
@@ -160,7 +186,11 @@ export default class BackgroundJobsClient {
             reject(new Error(message.error || "Failed to enqueue job"))
           }
         }
-      }))
+      })
+
+      await withEnqueueTimeout(async () => await Promise.race([requestSent, requestPromise]))
+
+      return await withEnqueueTimeout(async () => await requestPromise)
     }
 
     try {
