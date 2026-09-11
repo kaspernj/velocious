@@ -36,8 +36,9 @@ function buildBroadcastingPublisher({modelClass, scopeAttributes}) {
 
 /**
  * Builds a fake server sync/change model implementing the shared Sync-row
- * upsert contract (where().first(), create, assign/advanceServerSequence/save)
- * while recording rows and sequence advances.
+ * upsert contract (where().toArray(), create, destroy,
+ * assign/advanceServerSequence/save) while recording rows and sequence
+ * advances.
  *
  * Returned rows honor the real Sync-row model contract used by canonical
  * broadcast construction: generated typed accessors for id, serverSequence,
@@ -78,6 +79,14 @@ function buildFakeServerSyncModel({scopeAttributes} = {}) {
           Object.assign(row.attributes, newAttributes)
         },
         attributes,
+        /** @returns {Promise<void>} Destroys the fake row. */
+        destroy: async () => {
+          const rowIndex = rows.indexOf(row)
+
+          if (rowIndex < 0) throw new Error(`Fake sync row is not persisted: ${row.id()}`)
+
+          rows.splice(rowIndex, 1)
+        },
         /** @returns {string} Persisted row id. */
         id: () => row.attributes.id,
         /** @returns {Promise<void>} Saves the fake row. */
@@ -104,12 +113,11 @@ function buildFakeServerSyncModel({scopeAttributes} = {}) {
       return row
     },
     rows,
-    /** @param {Record<string, ReturnType<typeof JSON.parse>>} conditions - Where conditions. @returns {{first: () => Promise<ReturnType<typeof JSON.parse>>}} Chainable query. */
+    /** @template T @param {string} _name - Advisory lock name. @param {() => Promise<T>} callback - Locked callback. @returns {Promise<T>} Callback result. */
+    withAdvisoryLock: async (_name, callback) => await callback(),
+    /** @param {Record<string, ReturnType<typeof JSON.parse>>} conditions - Where conditions. @returns {{toArray: () => Promise<Array<ReturnType<typeof JSON.parse>>>}} Chainable query. */
     where: (conditions) => ({
-      first: async () => rows.find((row) =>
-        row.attributes.resource_id === conditions.resource_id &&
-        row.attributes.resource_type === conditions.resource_type &&
-        row.attributes.authentication_token_id === conditions.authentication_token_id) || null
+      toArray: async () => rows.filter((row) => Object.entries(conditions).every(([columnName, value]) => row.attributes[columnName] === value))
     })
   }
 }
