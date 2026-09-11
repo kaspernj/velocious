@@ -33,7 +33,7 @@ export default class BackgroundJobEnqueueAcknowledgementTimeoutError extends Tim
     /** @type {"BACKGROUND_JOB_ENQUEUE_ACKNOWLEDGEMENT_TIMEOUT"} */
     this.code = "BACKGROUND_JOB_ENQUEUE_ACKNOWLEDGEMENT_TIMEOUT"
     this.acknowledgementTimeoutMs = acknowledgementTimeoutMs
-    this.attemptHistory = attemptHistory.map((attempt) => Object.freeze({
+    this.attemptHistory = Object.freeze(attemptHistory.map((attempt) => Object.freeze({
       acknowledgementWaitElapsedMs: attempt.acknowledgementWaitElapsedMs,
       attemptElapsedMs: attempt.attemptElapsedMs,
       attemptKind: attempt.attemptKind,
@@ -41,8 +41,7 @@ export default class BackgroundJobEnqueueAcknowledgementTimeoutError extends Tim
       explicitlyRejected: attempt.explicitlyRejected,
       generationFenced: attempt.generationFenced,
       requestSent: attempt.requestSent
-    }))
-    Object.freeze(this.attemptHistory)
+    })))
     this.generationId = generationId
     this.jobName = jobName
     this.producerInvocationId = producerInvocationId

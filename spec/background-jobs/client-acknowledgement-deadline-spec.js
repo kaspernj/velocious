@@ -27,6 +27,23 @@ async function startStagedAcknowledgementServer({acknowledgeEnqueue = true, gene
   const timers = new Set()
   /** @type {Array<import("../../src/background-jobs/types.js").BackgroundJobEnqueueMessage>} */
   const enqueueMessages = []
+  /**
+   * Sends a response directly when no delay was requested.
+   * @param {() => void} sendResponse - Protocol response observed by the client.
+   */
+  const sendAfterStageDelay = (sendResponse) => {
+    if (stageDelayMs === 0) {
+      sendResponse()
+      return
+    }
+
+    const timer = setTimeout(() => {
+      timers.delete(timer)
+      sendResponse()
+    }, stageDelayMs)
+
+    timers.add(timer)
+  }
   const server = net.createServer((socket) => {
     const jsonSocket = new JsonSocket(socket)
 
@@ -34,16 +51,14 @@ async function startStagedAcknowledgementServer({acknowledgeEnqueue = true, gene
     socket.once("close", () => sockets.delete(socket))
     jsonSocket.on("message", (message) => {
       if (message?.type === "hello") {
-        const timer = setTimeout(() => {
-          timers.delete(timer)
+        sendAfterStageDelay(() => {
           jsonSocket.send({
             type: "generation-accepted",
             generationId,
             lifecycleState: "active"
           })
-        }, stageDelayMs)
+        })
 
-        timers.add(timer)
         return
       }
 
@@ -51,12 +66,9 @@ async function startStagedAcknowledgementServer({acknowledgeEnqueue = true, gene
         enqueueMessages.push(message)
         if (!acknowledgeEnqueue) return
 
-        const timer = setTimeout(() => {
-          timers.delete(timer)
+        sendAfterStageDelay(() => {
           jsonSocket.send({type: "enqueued", jobId: "staged-job"})
-        }, stageDelayMs)
-
-        timers.add(timer)
+        })
       }
     })
   })

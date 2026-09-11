@@ -78,7 +78,7 @@ export default class BackgroundJobsClient {
      * Sends one enqueue attempt. An owned caller may replay this exact message
      * once when transport acknowledgement remains ambiguous after send.
      * @param {import("./enqueue-acknowledgement-timeout-error.js").BackgroundJobEnqueueAttempt} attemptObservation - Mutable attempt observations.
-     * @param {Array<import("./enqueue-acknowledgement-timeout-error.js").BackgroundJobEnqueueAttempt>} previousAttempts - Earlier timed-out attempts.
+     * @param {Readonly<Array<import("./enqueue-acknowledgement-timeout-error.js").BackgroundJobEnqueueAttempt>>} previousAttempts - Earlier timed-out attempts.
      * @returns {Promise<string>} - Job id.
      */
     const enqueueAttempt = async (attemptObservation, previousAttempts) => {

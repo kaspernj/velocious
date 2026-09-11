@@ -44,7 +44,7 @@ export default class BackgroundJobEnqueueAcknowledgementTimeoutError extends Tim
     /** @type {"BACKGROUND_JOB_ENQUEUE_ACKNOWLEDGEMENT_TIMEOUT"} */
     code: "BACKGROUND_JOB_ENQUEUE_ACKNOWLEDGEMENT_TIMEOUT";
     acknowledgementTimeoutMs: number;
-    attemptHistory: Readonly<{
+    attemptHistory: readonly Readonly<{
         acknowledgementWaitElapsedMs: number;
         attemptElapsedMs: number;
         attemptKind: "initial" | "owned_replay";
