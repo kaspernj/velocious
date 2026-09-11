@@ -104,6 +104,8 @@ function buildFakeServerSyncModel({scopeAttributes} = {}) {
       return row
     },
     rows,
+    /** @template T @param {string} _name - Advisory lock name. @param {() => Promise<T>} callback - Locked callback. @returns {Promise<T>} Callback result. */
+    withAdvisoryLock: async (_name, callback) => await callback(),
     /** @param {Record<string, ReturnType<typeof JSON.parse>>} conditions - Where conditions. @returns {{first: () => Promise<ReturnType<typeof JSON.parse>>}} Chainable query. */
     where: (conditions) => ({
       first: async () => rows.find((row) =>

@@ -1,0 +1,1 @@
+Serialize server-origin `SyncPublisher` lookup/upserts by their complete null-safe resource and scope identity, preventing concurrent after-commit publishers from creating duplicate feed rows across supported databases while keeping actor/device-origin rows distinct.

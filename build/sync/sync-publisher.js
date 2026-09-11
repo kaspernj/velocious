@@ -4,6 +4,8 @@ import Configuration from "../configuration.js"
 import Logger from "../logger.js"
 import {scalarModelPrimaryKeyValue} from "../utils/model-primary-key.js"
 import restArgsError from "../utils/rest-args-error.js"
+import sha256Hex from "../utils/sha256-hex.js"
+import stableJsonStringify from "../utils/stable-json.js"
 
 import {declaredSyncScopeAttributes} from "./sync-scope-attributes.js"
 import {deliverDeclaredBroadcasts, upsertSyncRow} from "./sync-change-fanout.js"
@@ -211,7 +213,8 @@ export default class SyncPublisher {
 
       await record.connection().afterCommit(async () => {
         try {
-          const syncRow = await this.upsertPublishedSyncRow(attributes, operationScope)
+          const scopeColumnNames = resourceConfig.scopePlan.map(({columnName}) => columnName)
+          const syncRow = await this.upsertPublishedSyncRow(attributes, operationScope, scopeColumnNames)
 
           await this.broadcaster()({
             body: {
@@ -362,22 +365,39 @@ export default class SyncPublisher {
   /**
    * Upserts the published server-origin sync row for a resource identity:
    * server-origin rows carry a null actor column (no device to echo the
-   * change back to), so repeated server changes to one resource reuse and
-   * re-sequence one feed row.
+   * change back to), so repeated server changes to one complete resource and
+   * scope identity reuse and re-sequence one feed row. A database advisory
+   * lock serializes the lookup plus shared upsert because unique constraints
+   * containing nullable actor/scope columns do not enforce this identity
+   * portably across supported databases.
    * @param {Record<string, ReturnType<typeof JSON.parse>>} attributes - Snapshotted sync row attributes.
    * @param {ReturnType<typeof JSON.parse>} syncModel - Operation-bound or static Sync model interface.
+   * @param {string[]} scopeColumnNames - Persisted scope columns participating in the complete identity.
    * @returns {Promise<ReturnType<typeof JSON.parse>>} Upserted sync row.
    */
-  async upsertPublishedSyncRow(attributes, syncModel = this.config.syncModel) {
-    const existingSync = await syncModel
-      .where({
-        [this.config.actorForeignKeyColumn]: null,
-        resource_id: attributes.resource_id,
-        resource_type: attributes.resource_type
-      })
-      .first()
+  async upsertPublishedSyncRow(attributes, syncModel = this.config.syncModel, scopeColumnNames = []) {
+    /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
+    const identity = {
+      [this.config.actorForeignKeyColumn]: null,
+      resource_id: attributes.resource_id,
+      resource_type: attributes.resource_type
+    }
 
-    return await upsertSyncRow({attributes, existingSync, syncModel})
+    for (const columnName of scopeColumnNames) {
+      if (!Object.hasOwn(attributes, columnName)) {
+        throw new Error(`Published sync row identity is missing the scope column ${columnName}`)
+      }
+
+      identity[columnName] = attributes[columnName]
+    }
+
+    return await this.config.syncModel.withAdvisoryLock(syncPublisherIdentityLockName(identity), async () => {
+      const existingSync = await syncModel
+        .where(identity)
+        .first()
+
+      return await upsertSyncRow({attributes, existingSync, syncModel})
+    }, {dedicatedConnection: true})
   }
 
   /**
@@ -432,6 +452,20 @@ export default class SyncPublisher {
 
     return this._logger
   }
+}
+
+/**
+ * Returns a deterministic, MySQL-safe advisory-lock name for one complete
+ * server-origin publisher identity. Stable JSON preserves null actor/scope
+ * components distinctly from strings, and the truncated SHA-256 digest keeps
+ * the final name below MySQL/MariaDB's 64-character `GET_LOCK` limit.
+ * @param {Record<string, ReturnType<typeof JSON.parse>>} identity - Complete sync-row identity in column form.
+ * @returns {string} Advisory-lock name.
+ */
+function syncPublisherIdentityLockName(identity) {
+  const hash = sha256Hex(stableJsonStringify(identity)).slice(0, 32)
+
+  return `vsp:${hash}`
 }
 
 /**
