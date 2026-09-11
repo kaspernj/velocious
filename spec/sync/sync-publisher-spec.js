@@ -156,6 +156,117 @@ describe("sync publisher", {databaseCleaning: {transaction: false, truncate: tru
     }
   })
 
+  it("keeps static scope-attribute mappings backward compatible", async () => {
+    const {frameworkBroadcasts, publisher, restore} = buildUuidItemPublishHarness({
+      publish: {
+        scopeAttributes: {projectId: "title"},
+        serialize: (/** @type {UuidItem} */ uuidItem) => ({id: uuidItem.id(), title: uuidItem.title()})
+      }
+    })
+
+    await publisher.start()
+
+    try {
+      const uuidItem = await UuidItem.create({id: "9e5a65b4-b833-4eb7-89ce-9a930fcc650c", title: "customer:41"})
+      const syncRow = await SyncEntry.findBy({resourceId: uuidItem.id(), resourceType: "UuidItem"})
+
+      expect(syncRow?.projectId()).toEqual("customer:41")
+      expect(frameworkBroadcasts[0].params.projectId).toEqual("customer:41")
+    } finally {
+      restore()
+    }
+  })
+
+  it("resolves all computed scope attributes once from the publishing connection context", async () => {
+    let resolverCalls = 0
+    /** @type {ReturnType<typeof JSON.parse> | null} */
+    let resolverContext = null
+    const {frameworkBroadcasts, publisher, restore} = buildUuidItemPublishHarness({
+      publish: {
+        scopeAttributes: async (context) => {
+          resolverCalls += 1
+          resolverContext = context
+
+          return {projectId: "customer:42"}
+        },
+        serialize: (/** @type {UuidItem} */ uuidItem) => ({id: uuidItem.id(), title: uuidItem.title()})
+      }
+    })
+
+    await publisher.start()
+
+    try {
+      const uuidItem = await UuidItem.create({id: "70fd9295-143f-4c4b-9aa2-2581a243b886", title: "Computed"})
+      const syncRow = await SyncEntry.findBy({resourceId: uuidItem.id(), resourceType: "UuidItem"})
+
+      expect(resolverCalls).toEqual(1)
+      expect(resolverContext?.record).toBe(uuidItem)
+      expect(resolverContext?.connection).toBe(uuidItem.connection())
+      expect(resolverContext?.configuration).toBe(dummyConfiguration)
+      expect(syncRow?.projectId()).toEqual("customer:42")
+      expect(frameworkBroadcasts[0].params.projectId).toEqual("customer:42")
+    } finally {
+      restore()
+    }
+  })
+
+  it("accepts a nullable computed scope attribute", async () => {
+    const {frameworkBroadcasts, publisher, restore} = buildUuidItemPublishHarness({
+      publish: {scopeAttributes: async () => ({projectId: null})}
+    })
+
+    await publisher.start()
+
+    try {
+      const uuidItem = await UuidItem.create({id: "44d8322d-1048-4ee8-a54c-6ad9cc28ad79", title: "Public"})
+      const syncRow = await SyncEntry.findBy({resourceId: uuidItem.id(), resourceType: "UuidItem"})
+
+      expect(syncRow?.projectId()).toEqual(null)
+      expect(frameworkBroadcasts[0].params.projectId).toEqual(null)
+    } finally {
+      restore()
+    }
+  })
+
+  it("fails loudly when a computed scope resolver fails or omits valid declared attributes", async () => {
+    const failingHarness = buildUuidItemPublishHarness({
+      publish: {
+        scopeAttributes: async () => {
+          throw new Error("Authenticated customer identity is missing")
+        }
+      }
+    })
+
+    await failingHarness.publisher.start()
+
+    try {
+      await expect(async () => await UuidItem.create({id: "ad787f75-3a41-4ef5-bad5-5bb2c900bdf5", title: "Missing identity"}))
+        .toThrow("Authenticated customer identity is missing")
+    } finally {
+      failingHarness.restore()
+    }
+
+    for (const [id, label, resolvedValue, expectedMessage] of [
+      ["f2a55f65-0845-4aea-bc9f-8fd14aefee7a", "array", [], "must resolve to a plain object"],
+      ["f2a55f65-0845-4aea-bc9f-8fd14aefee7b", "missing", {}, "must resolve the declared scope attribute projectId"],
+      ["f2a55f65-0845-4aea-bc9f-8fd14aefee7c", "nested", {projectId: {id: 42}}, "scope attribute projectId must be a string, number, or null"],
+      ["f2a55f65-0845-4aea-bc9f-8fd14aefee7d", "unknown", {otherId: 42, projectId: "customer:42"}, "returned unknown scope attribute: otherId"]
+    ]) {
+      const invalidHarness = buildUuidItemPublishHarness({
+        publish: {scopeAttributes: async () => resolvedValue}
+      })
+
+      await invalidHarness.publisher.start()
+
+      try {
+        await expect(async () => await UuidItem.create({id, title: label}))
+          .toThrow(new RegExp(expectedMessage, "u"))
+      } finally {
+        invalidHarness.restore()
+      }
+    }
+  })
+
   it("publishes only after the save transaction commits", async () => {
     const {broadcasts, publisher, restore} = buildUuidItemPublishHarness()
 

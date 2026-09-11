@@ -74,6 +74,62 @@ describe("sync scope store", {tags: ["dummy"], databaseCleaning: {transaction: f
     expect((await store.activeScopes()).length).toEqual(1)
   })
 
+  it("atomically resets selected scopes and rejects stale cursor advancement", async () => {
+    const store = buildStore()
+    const selectedScope = serializedScopeFromQuery(Task.where({projectId: 5}))
+    const retainedScope = serializedScopeFromQuery(Task.where({projectId: 6}))
+    const selectedRow = await store.findOrCreateScope(selectedScope)
+    const retainedRow = await store.findOrCreateScope(retainedScope)
+    let cleanupCalls = 0
+
+    await store.saveCursor(selectedRow, {id: "sync-1", serverSequence: 11, updatedAt: "2026-07-01T10:00:00.000Z"})
+    await store.saveCursor(retainedRow, {id: "sync-2", serverSequence: 12, updatedAt: "2026-07-01T10:01:00.000Z"})
+    await store.reset([selectedScope], {
+      cleanup: async ({connection, scopes}) => {
+        cleanupCalls += 1
+        expect(connection).not.toEqual(null)
+        expect(scopes).toEqual([selectedScope])
+      }
+    })
+
+    await store.saveCursor(selectedRow, {id: "stale", serverSequence: 99, updatedAt: "2026-07-01T11:00:00.000Z"})
+
+    expect(cleanupCalls).toEqual(1)
+    expect((await store.activeScopes()).map((scope) => scope.resourceType)).toEqual(["Task"])
+    expect(JSON.parse(String(await store.loadCursor(retainedRow))).id).toEqual("sync-2")
+
+    const reactivatedRow = await store.findOrCreateScope(selectedScope)
+
+    expect(reactivatedRow.id).not.toEqual(selectedRow.id)
+    expect(await store.loadCursor(reactivatedRow)).toEqual(null)
+
+    await store.reset([selectedScope])
+    await store.reset([selectedScope])
+
+    const repeatedlyResetRow = await store.findOrCreateScope(selectedScope)
+
+    expect(await store.loadCursor(repeatedlyResetRow)).toEqual(null)
+  })
+
+  it("rolls back scope reset when the cleanup hook fails", async () => {
+    const store = buildStore()
+    const scope = serializedScopeFromQuery(Task.where({projectId: 5}))
+    const scopeRow = await store.findOrCreateScope(scope)
+
+    await store.saveCursor(scopeRow, {id: "sync-1", serverSequence: 11, updatedAt: "2026-07-01T10:00:00.000Z"})
+
+    await expect(async () => await store.reset([scope], {
+      cleanup: async () => {
+        throw new Error("Customer cache purge failed")
+      }
+    })).toThrow("Customer cache purge failed")
+
+    const activeScope = (await store.activeScopes())[0]
+
+    expect(activeScope.id).toEqual(scopeRow.id)
+    expect(JSON.parse(String(await store.loadCursor(activeScope))).id).toEqual("sync-1")
+  })
+
   it("recreates its table after transactional creation rolls back", async () => {
     const configuration = Configuration.current()
 

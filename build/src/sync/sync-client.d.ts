@@ -1,6 +1,14 @@
 import Configuration from "../configuration.js";
 import Logger from "../logger.js";
 import SyncRealtimeBridge from "./sync-realtime-bridge.js";
+/** Expected cooperative cancellation raised by a SyncClient lifecycle transition. */
+export declare class SyncClientLifecycleAbortError extends Error {
+    /**
+     * Builds an expected lifecycle cancellation error.
+     * @param {string} message - Lifecycle cancellation reason.
+     */
+    constructor(message: string);
+}
 /**
  * Declarative client-side sync driver.
  *
@@ -50,6 +58,13 @@ export default class SyncClient {
     _logger: Logger | {
         error: (...messages: Array<ReturnType<typeof JSON.parse>>) => Promise<void>;
     } | null;
+    /** @type {Set<Promise<unknown>>} */
+    _activeLifecycleWork: Set<Promise<unknown>>;
+    _lifecycleAbortController: AbortController;
+    _lifecycleGeneration: number;
+    _lifecycleTransitionCount: number;
+    /** @type {Promise<void>} */
+    _lifecycleTransitionPromise: Promise<void>;
     _started: boolean;
     /**
      * Builds the sync client by deriving everything from the app's Velocious
@@ -73,10 +88,84 @@ export default class SyncClient {
      */
     start(): Promise<void>;
     /**
-     * Unregisters all tracking callbacks (tests, sign-out, hot reload).
+     * Unregisters all tracking callbacks, aborts in-flight pull/replay/realtime
+     * work and resolves after it is quiescent. Optional selected scope reset and
+     * app-owned cleanup happen after old work drains.
+     * @param {import("./sync-client-types.js").SyncClientStopOptions} [options] - Stop and selected-scope reset options.
+     * @returns {Promise<void>}
+     */
+    stop(options?: import("./sync-client-types.js").SyncClientStopOptions): Promise<void>;
+    /**
+     * Aborts and drains current work, then atomically resets selected scope
+     * cursors together with an optional app-owned local-row cleanup hook.
+     * Tracking declarations remain registered so the same client may continue.
+     * @param {import("./sync-client-types.js").SerializedSyncScope[]} scopes - Selected scopes to reset.
+     * @param {{cleanup?: import("./sync-client-types.js").SyncClientScopeCleanup}} [options] - Scope cleanup options.
+     * @returns {Promise<void>}
+     */
+    resetScopes(scopes: import("./sync-client-types.js").SerializedSyncScope[], options?: {
+        cleanup?: import("./sync-client-types.js").SyncClientScopeCleanup;
+    }): Promise<void>;
+    /**
+     * Atomically replaces the external identity read by the configured auth and
+     * scope-owner resolvers: old work is aborted and drained, selected private
+     * scope state/cache is reset, then the app's replacement callback runs while
+     * new sync work remains behind the lifecycle barrier. Optionally subscribes
+     * the new user scope before resolving.
+     * @param {import("./sync-client-types.js").SyncClientReplaceIdentityOptions} options - Identity replacement contract.
+     * @returns {Promise<void>}
+     */
+    replaceIdentity(options: import("./sync-client-types.js").SyncClientReplaceIdentityOptions): Promise<void>;
+    /**
+     * Runs one callback while holding the current lifecycle generation and
+     * tracks it so stop/reset/identity replacement can await quiescence.
+     * @template Result
+     * @param {(signal: AbortSignal) => Promise<Result>} callback - Generation-bound work.
+     * @returns {Promise<Result>} Callback result.
+     */
+    _runLifecycleWork<Result>(callback: (signal: AbortSignal) => Promise<Result>): Promise<Result>;
+    /**
+     * Runs mutation queueing only while the lifecycle generation captured by the
+     * caller remains active. Unlike pulls, a mutation must never wait through an
+     * identity transition and then persist under the replacement identity.
+     * @template Result
+     * @param {number} lifecycleGeneration - Generation owning the mutation.
+     * @param {() => Promise<Result>} callback - Mutation queueing work.
+     * @returns {Promise<Result>} Callback result.
+     */
+    _runMutationLifecycleWork<Result>(lifecycleGeneration: number, callback: () => Promise<Result>): Promise<Result>;
+    /**
+     * Rejects mutation queueing captured outside the current stable lifecycle.
+     * @param {number} lifecycleGeneration - Generation owning the mutation.
      * @returns {void}
      */
-    stop(): void;
+    _assertMutationLifecycleGeneration(lifecycleGeneration: number): void;
+    /**
+     * Serializes a lifecycle barrier: cooperatively aborts transport/start work,
+     * stops new realtime delivery, awaits old applies/replays/pulls, rejects on
+     * unexpected old-work failures, then runs the reset/replacement callback.
+     * @param {() => Promise<void>} callback - Transition action after quiescence.
+     * @returns {Promise<void>}
+     */
+    _runLifecycleTransition(callback: () => Promise<void>): Promise<void>;
+    /**
+     * Resets selected scopes through the framework-owned store.
+     * @param {import("./sync-client-types.js").SyncClientStopOptions} options - Reset options.
+     * @returns {Promise<void>}
+     */
+    _resetScopesForLifecycle(options: import("./sync-client-types.js").SyncClientStopOptions): Promise<void>;
+    /**
+     * Whether an error is the framework's narrow expected lifecycle abort.
+     * @param {unknown} error - Candidate error.
+     * @returns {boolean} Whether the error is an expected lifecycle abort.
+     */
+    isLifecycleAbort(error: unknown): boolean;
+    /**
+     * Throws the current lifecycle reason when the signal is aborted.
+     * @param {AbortSignal} signal - Lifecycle signal.
+     * @returns {void}
+     */
+    _throwIfLifecycleAborted(signal: AbortSignal): void;
     /**
      * Resolves and validates the tracked operations for a resource config.
      * Tracking is on by default: models declaring `static sync` without a `track`
@@ -211,6 +300,19 @@ export default class SyncClient {
         upstreamRefresh?: boolean;
     }): Promise<import("./sync-api-client-types.js").SyncChangesResult | null>;
     /**
+     * Pull implementation bound to one lifecycle generation.
+     * @param {object} args - Pull args.
+     * @param {(progress: import("./sync-api-client-types.js").SyncPullProgress) => void} [args.onProgress] - Progress callback.
+     * @param {AbortSignal} args.signal - Lifecycle cancellation signal.
+     * @param {boolean} [args.upstreamRefresh] - User-initiated upstream refresh marker.
+     * @returns {Promise<import("./sync-api-client-types.js").SyncChangesResult | null>} Combined pull result, or null while offline.
+     */
+    _pull({ onProgress, signal, upstreamRefresh }: {
+        onProgress?: (progress: import("./sync-api-client-types.js").SyncPullProgress) => void;
+        signal: AbortSignal;
+        upstreamRefresh?: boolean;
+    }): Promise<import("./sync-api-client-types.js").SyncChangesResult | null>;
+    /**
      * Builds the derived remote-change applier shared by pulls and realtime pushes:
      * applies through the declared resource configs, registers each written record
      * for echo suppression (tracked resources do not re-queue applied changes), and
@@ -255,9 +357,10 @@ export default class SyncClient {
     /**
      * Declares and activates the user scope for every pullable resource, then
      * subscribes realtime and pulls.
+     * @param {AbortSignal} signal - Lifecycle cancellation signal.
      * @returns {Promise<void>}
      */
-    _subscribeUserScope(): Promise<void>;
+    _subscribeUserScope(signal: AbortSignal): Promise<void>;
     /**
      * Unsubscribes the user scope: deactivates the per-resource user scopes and
      * closes the realtime channel subscriptions. The shared websocket connection
@@ -338,6 +441,12 @@ export default class SyncClient {
      * @returns {Promise<void>}
      */
     replayPending(): Promise<void>;
+    /**
+     * Replay implementation bound to one lifecycle generation.
+     * @param {AbortSignal} signal - Lifecycle cancellation signal.
+     * @returns {Promise<void>}
+     */
+    _replayPending(signal: AbortSignal): Promise<void>;
     /**
      * Records an authoritative remote observation so an in-flight acknowledgement
      * cannot rebase a successor across that observation.

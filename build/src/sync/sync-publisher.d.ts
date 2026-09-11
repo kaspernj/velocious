@@ -123,6 +123,18 @@ export default class SyncPublisher {
         params: Record<string, string | null>;
     }>;
     /**
+     * Resolves and validates one computed scope-attributes declaration. The
+     * resolver runs once per published mutation with the exact connection that
+     * owns that mutation; every declared scope value is then reused for row
+     * persistence and broadcast routing so those two identities cannot drift.
+     * @param {{record: ReturnType<typeof JSON.parse>, resourceConfig: import("./sync-publisher-types.js").SyncPublisherResourceConfig}} args - Record and resource configuration.
+     * @returns {Promise<Record<string, string | number | null>>} Complete computed scope values.
+     */
+    resolveComputedScopeAttributes({ record, resourceConfig }: {
+        record: ReturnType<typeof JSON.parse>;
+        resourceConfig: import("./sync-publisher-types.js").SyncPublisherResourceConfig;
+    }): Promise<Record<string, string | number | null>>;
+    /**
      * Builds the framework sync channel entry for one published change: the
      * snapshotted payload plus the persisted sync row's public exact-row metadata
      * (id, server sequence, updated-at, and declared scope-partition attributes).

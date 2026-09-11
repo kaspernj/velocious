@@ -49,9 +49,12 @@ export default class SyncRealtimeBridge {
      * an active subscription is kept as-is and a concurrent subscribe awaits the
      * in-flight attempt. Call `unsubscribe()` first to change the context.
      * @param {ReturnType<typeof JSON.parse>} [context] - App context passed to the deprecated `sync.client.realtime.channels` callback (runtime scope values).
+     * @param {{signal?: AbortSignal}} [options] - Subscription lifecycle options.
      * @returns {Promise<void>}
      */
-    subscribe(context?: ReturnType<typeof JSON.parse>): Promise<void>;
+    subscribe(context?: ReturnType<typeof JSON.parse>, { signal }?: {
+        signal?: AbortSignal;
+    }): Promise<void>;
     /**
      * Connects the websocket client, subscribes every derived channel, and waits
      * for each subscription's server acknowledgement before the gap-closing pull,
@@ -60,9 +63,10 @@ export default class SyncRealtimeBridge {
      * is live; an unsubscribe arriving during any await marks this attempt stale
      * and it tears its own resources down instead of resubscribing.
      * @param {ReturnType<typeof JSON.parse>} context - App context passed to the channels callback.
+     * @param {AbortSignal | undefined} signal - Subscription lifecycle signal.
      * @returns {Promise<void>}
      */
-    _subscribe(context: ReturnType<typeof JSON.parse>): Promise<void>;
+    _subscribe(context: ReturnType<typeof JSON.parse>, signal: AbortSignal | undefined): Promise<void>;
     /**
      * Closes every channel subscription (idempotent). The websocket is
      * disconnected only when the bridge owns it (deprecated per-cycle
@@ -137,11 +141,12 @@ export default class SyncRealtimeBridge {
     /**
      * Chains one pushed message onto the serialized apply queue so changes apply
      * in arrival order; failures go to the sync client's error reporting.
-     * @param {{body: ReturnType<typeof JSON.parse>, resourceType: string | null}} args - Message args.
+     * @param {{body: ReturnType<typeof JSON.parse>, generation?: number, resourceType: string | null}} args - Message args.
      * @returns {void}
      */
-    enqueueApply({ body, resourceType }: {
+    enqueueApply({ body, generation, resourceType }: {
         body: ReturnType<typeof JSON.parse>;
+        generation?: number;
         resourceType: string | null;
     }): void;
     /**
@@ -159,8 +164,9 @@ export default class SyncRealtimeBridge {
      * Schedules a coalesced background pull closing offline gaps after
      * (re)subscription readiness. Resumes arriving while a pull is already
      * scheduled or in flight coalesce into that pull instead of stacking.
+     * @param {number} [generation] - Subscription generation owning the resume/readiness callback.
      * @returns {void}
      */
-    schedulePull(): void;
+    schedulePull(generation?: number): void;
 }
 //# sourceMappingURL=sync-realtime-bridge.d.ts.map

@@ -41,21 +41,25 @@ export default class SyncApiClient {
      * @param {string} args.authenticationToken - Authentication token.
      * @param {number} [args.batchSize] - Batch size.
      * @param {import("./sync-client-types.js").SyncClientConflictTrackingConfig} args.conflictTracking - Tracking configuration.
-     * @param {(payload: {authenticationToken: string, syncs: Array<Record<string, ReturnType<typeof JSON.parse>>>}) => Promise<SyncReplayResponse>} args.postReplay - Transport boundary.
+     * @param {(payload: {authenticationToken: string, syncs: Array<Record<string, ReturnType<typeof JSON.parse>>>}, options?: {signal?: AbortSignal}) => Promise<SyncReplayResponse>} args.postReplay - Transport boundary.
      * @param {(identity: string) => number} args.remoteGeneration - Current remote generation.
      * @param {string} args.resourceType - Resource whose log records should drain.
+     * @param {AbortSignal} [args.signal] - Lifecycle cancellation signal.
      * @returns {Promise<void>} Resolves when no ready intent remains.
      */
-    static replayConflictTrackedSyncs({ authenticationToken, batchSize, conflictTracking, postReplay, remoteGeneration, resourceType }: {
+    static replayConflictTrackedSyncs({ authenticationToken, batchSize, conflictTracking, postReplay, remoteGeneration, resourceType, signal }: {
         authenticationToken: string;
         batchSize?: number;
         conflictTracking: import("./sync-client-types.js").SyncClientConflictTrackingConfig;
         postReplay: (payload: {
             authenticationToken: string;
             syncs: Array<Record<string, ReturnType<typeof JSON.parse>>>;
+        }, options?: {
+            signal?: AbortSignal;
         }) => Promise<SyncReplayResponse>;
         remoteGeneration: (identity: string) => number;
         resourceType: string;
+        signal?: AbortSignal;
     }): Promise<void>;
     /**
      * Builds safe transport groups from root-ready records and their successors.
@@ -121,6 +125,7 @@ export default class SyncApiClient {
      * @param {(payload: SyncChangesRequest) => Promise<SyncChangesResponse>} args.postChanges - Posts one changes request.
      * @param {Record<string, SyncResourceConfig>} args.resources - Resource policies.
      * @param {(progress: import("./sync-api-client-types.js").SyncPullProgress) => void} [args.onProgress] - Progress callback.
+     * @param {AbortSignal} [args.signal] - Lifecycle cancellation signal.
      * @returns {Promise<SyncChangesResult>} Pull result.
      */
     static pullChangesWithCursor(args: {
@@ -131,6 +136,7 @@ export default class SyncApiClient {
         postChanges: (payload: SyncChangesRequest) => Promise<SyncChangesResponse>;
         resources: Record<string, SyncResourceConfig>;
         onProgress?: (progress: import("./sync-api-client-types.js").SyncPullProgress) => void;
+        signal?: AbortSignal;
     }): Promise<SyncChangesResult>;
     /**
      * Loads a persisted sync cursor from a model row with a value column.
@@ -160,9 +166,10 @@ export default class SyncApiClient {
      * @param {number} [args.batchSize] - Max syncs per request. Defaults to 100.
      * @param {() => Promise<SyncCursor | string | null | undefined>} args.loadCursor - Loads the persisted local cursor.
      * @param {(cursor: SyncCursor) => Promise<void>} args.saveCursor - Persists the final acknowledged cursor.
-     * @param {(payload: SyncChangesRequest) => Promise<SyncChangesResponse>} args.postChanges - Posts one changes request.
+     * @param {(payload: SyncChangesRequest, options?: {signal?: AbortSignal}) => Promise<SyncChangesResponse>} args.postChanges - Posts one changes request.
      * @param {(sync: SyncChangeEnvelope) => Promise<SyncChangeApplyResult>} args.applySync - Applies one normalized sync row locally.
      * @param {(progress: import("./sync-api-client-types.js").SyncPullProgress) => void} [args.onProgress] - Progress callback invoked per applied page (and once for an empty pull) with the applied counts and the stable server total.
+     * @param {AbortSignal} [args.signal] - Lifecycle cancellation signal.
      * @returns {Promise<SyncChangesResult>} Pull result.
      */
     static pullChanges(args: {
@@ -170,9 +177,12 @@ export default class SyncApiClient {
         batchSize?: number;
         loadCursor: () => Promise<SyncCursor | string | null | undefined>;
         saveCursor: (cursor: SyncCursor) => Promise<void>;
-        postChanges: (payload: SyncChangesRequest) => Promise<SyncChangesResponse>;
+        postChanges: (payload: SyncChangesRequest, options?: {
+            signal?: AbortSignal;
+        }) => Promise<SyncChangesResponse>;
         applySync: (sync: SyncChangeEnvelope) => Promise<SyncChangeApplyResult>;
         onProgress?: (progress: import("./sync-api-client-types.js").SyncPullProgress) => void;
+        signal?: AbortSignal;
     }): Promise<SyncChangesResult>;
     /**
      * Fetches and validates one backend sync changes page.
@@ -180,15 +190,19 @@ export default class SyncApiClient {
      * @param {SyncCursor} args.afterCursor - Last acknowledged cursor.
      * @param {string} args.authenticationToken - Auth token.
      * @param {number} args.batchSize - Page size.
-     * @param {(payload: SyncChangesRequest) => Promise<SyncChangesResponse>} args.postChanges - Changes poster.
+     * @param {(payload: SyncChangesRequest, options?: {signal?: AbortSignal}) => Promise<SyncChangesResponse>} args.postChanges - Changes poster.
+     * @param {AbortSignal} [args.signal] - Lifecycle cancellation signal.
      * @param {SyncCursor} args.upToCursor - Snapshot upper-bound cursor.
      * @returns {Promise<{nextCursor: SyncCursor, syncs: SyncChangeEnvelope[], total: number | null, upToCursor: SyncCursor}>} Normalized changes page.
      */
-    static changesPage({ afterCursor, authenticationToken, batchSize, postChanges, upToCursor }: {
+    static changesPage({ afterCursor, authenticationToken, batchSize, postChanges, signal, upToCursor }: {
         afterCursor: SyncCursor;
         authenticationToken: string;
         batchSize: number;
-        postChanges: (payload: SyncChangesRequest) => Promise<SyncChangesResponse>;
+        postChanges: (payload: SyncChangesRequest, options?: {
+            signal?: AbortSignal;
+        }) => Promise<SyncChangesResponse>;
+        signal?: AbortSignal;
         upToCursor: SyncCursor;
     }): Promise<{
         nextCursor: SyncCursor;
@@ -262,7 +276,8 @@ export default class SyncApiClient {
      * @param {string} args.authenticationToken - Auth token to send with replay requests.
      * @param {number} [args.batchSize] - Max syncs per request.
      * @param {ReturnType<typeof JSON.parse>} args.syncModel - Local Sync model class.
-     * @param {(payload: {authenticationToken: string, syncs: Array<Record<string, ReturnType<typeof JSON.parse>>>}) => Promise<SyncReplayResponse>} args.postReplay - Replay poster.
+     * @param {(payload: {authenticationToken: string, syncs: Array<Record<string, ReturnType<typeof JSON.parse>>>}, options?: {signal?: AbortSignal}) => Promise<SyncReplayResponse>} args.postReplay - Replay poster.
+     * @param {AbortSignal} [args.signal] - Lifecycle cancellation signal.
      * @returns {Promise<void>}
      */
     static replayLocalSyncs(args: {
@@ -272,7 +287,10 @@ export default class SyncApiClient {
         postReplay: (payload: {
             authenticationToken: string;
             syncs: Array<Record<string, ReturnType<typeof JSON.parse>>>;
+        }, options?: {
+            signal?: AbortSignal;
         }) => Promise<SyncReplayResponse>;
+        signal?: AbortSignal;
     }): Promise<void>;
     /**
      * Serializes the replay-relevant state of a local sync row for in-flight comparisons.
@@ -394,8 +412,9 @@ export default class SyncApiClient {
      * @param {() => Promise<Array<unknown>>} args.pendingSyncs - Loads pending local sync rows in replay order.
      * @param {(sync: unknown) => string | number | null | undefined} args.syncId - Returns the local sync id.
      * @param {(sync: unknown) => Record<string, ReturnType<typeof JSON.parse>>} args.syncPayload - Builds the API sync envelope.
-     * @param {(payload: {authenticationToken: string, syncs: Array<Record<string, ReturnType<typeof JSON.parse>>>}) => Promise<SyncReplayResponse>} args.postReplay - Posts one replay request.
+     * @param {(payload: {authenticationToken: string, syncs: Array<Record<string, ReturnType<typeof JSON.parse>>>}, options?: {signal?: AbortSignal}) => Promise<SyncReplayResponse>} args.postReplay - Posts one replay request.
      * @param {(sync: unknown, response: SyncReplayItem) => Promise<void>} args.markSuccessful - Marks one sync as successful locally.
+     * @param {AbortSignal} [args.signal] - Lifecycle cancellation signal.
      * @returns {Promise<void>} Resolves after all batches are replayed.
      */
     static replayPending(args: {
@@ -407,8 +426,11 @@ export default class SyncApiClient {
         postReplay: (payload: {
             authenticationToken: string;
             syncs: Array<Record<string, ReturnType<typeof JSON.parse>>>;
+        }, options?: {
+            signal?: AbortSignal;
         }) => Promise<SyncReplayResponse>;
         markSuccessful: (sync: unknown, response: SyncReplayItem) => Promise<void>;
+        signal?: AbortSignal;
     }): Promise<void>;
     /**
      * Replays one batch of syncs.
@@ -417,8 +439,9 @@ export default class SyncApiClient {
      * @param {Array<unknown>} args.pendingSyncs - Batch syncs.
      * @param {(sync: unknown) => string | number | null | undefined} args.syncId - Sync id getter.
      * @param {(sync: unknown) => Record<string, ReturnType<typeof JSON.parse>>} args.syncPayload - Payload builder.
-     * @param {(payload: {authenticationToken: string, syncs: Array<Record<string, ReturnType<typeof JSON.parse>>>}) => Promise<SyncReplayResponse>} args.postReplay - Replay poster.
+     * @param {(payload: {authenticationToken: string, syncs: Array<Record<string, ReturnType<typeof JSON.parse>>>}, options?: {signal?: AbortSignal}) => Promise<SyncReplayResponse>} args.postReplay - Replay poster.
      * @param {(sync: unknown, response: SyncReplayItem) => Promise<void>} args.markSuccessful - Success hook.
+     * @param {AbortSignal} [args.signal] - Lifecycle cancellation signal.
      * @returns {Promise<void>} Resolves after the batch is acknowledged.
      */
     static replayBatch(args: {
@@ -429,8 +452,11 @@ export default class SyncApiClient {
         postReplay: (payload: {
             authenticationToken: string;
             syncs: Array<Record<string, ReturnType<typeof JSON.parse>>>;
+        }, options?: {
+            signal?: AbortSignal;
         }) => Promise<SyncReplayResponse>;
         markSuccessful: (sync: unknown, response: SyncReplayItem) => Promise<void>;
+        signal?: AbortSignal;
     }): Promise<void>;
     /**
      * Checks API response status and shape.

@@ -237,13 +237,15 @@ export default class SyncScopeStore {
     await this.ensureReady()
 
     if (this._usesMemoryStorage()) {
-      return this._memoryScopes.get(scopeRow.scopeDigest)?.cursorPayload ?? null
+      const currentScope = this._memoryScopes.get(scopeRow.scopeDigest)
+
+      return currentScope?.id === scopeRow.id ? currentScope.cursorPayload : null
     }
 
     return await this._withDb(async (db) => {
       const row = await this._rowByScopeDigest(db, scopeRow.scopeDigest)
 
-      return row ? row.cursorPayload : null
+      return row?.id === scopeRow.id ? row.cursorPayload : null
     })
   }
 
@@ -265,6 +267,7 @@ export default class SyncScopeStore {
       const memoryScope = this._memoryScopes.get(scopeRow.scopeDigest)
 
       if (!memoryScope) throw new Error(`No sync scope found for: ${scopeRow.scopeDigest}`)
+      if (memoryScope.id !== scopeRow.id || memoryScope.state !== "active") return
 
       memoryScope.cursorPayload = cursorPayload
       return
@@ -272,7 +275,7 @@ export default class SyncScopeStore {
 
     await this._withDb(async (db) => {
       await db.update({
-        conditions: {scope_digest: scopeRow.scopeDigest},
+        conditions: {id: scopeRow.id, scope_digest: scopeRow.scopeDigest, state: "active"},
         data: {cursor_json: cursorPayload, updated_at: new Date()},
         tableName: TABLE_NAME
       })
@@ -299,6 +302,79 @@ export default class SyncScopeStore {
 
     await this._withDb(async (db) => {
       await db.update({conditions: {scope_digest: digest}, data: {state: "removed", updated_at: new Date()}, tableName: TABLE_NAME})
+    })
+  }
+
+  /**
+   * Atomically deactivates selected scopes, clears their cursors and rotates
+   * their row identities. A cursor save carrying a pre-reset row identity can
+   * therefore never repopulate the reset scope. The optional cleanup hook runs
+   * inside the same database transaction, allowing an app to purge the local
+   * rows owned by those scopes without a cursor/cache split.
+   * @param {import("./sync-client-types.js").SerializedSyncScope[]} scopes - Selected scopes to reset.
+   * @param {object} [options] - Reset options.
+   * @param {(args: {connection: import("../database/drivers/base.js").default | null, scopes: import("./sync-client-types.js").SerializedSyncScope[]}) => Promise<void> | void} [options.cleanup] - App-owned local-row cleanup hook.
+   * @returns {Promise<void>}
+   */
+  async reset(scopes, {cleanup} = {}) {
+    if (!Array.isArray(scopes) || scopes.length === 0) throw new Error("SyncScopeStore.reset requires at least one serialized scope")
+    if (cleanup !== undefined && typeof cleanup !== "function") throw new Error("SyncScopeStore.reset cleanup must be a function")
+
+    await this.ensureReady()
+
+    const uniqueScopes = [...new Map(scopes.map((scope) => [scopeDigestForScope(scope), scope])).values()]
+
+    if (this._usesMemoryStorage()) {
+      if (cleanup) await cleanup({connection: null, scopes: uniqueScopes})
+
+      for (const scope of uniqueScopes) this._resetMemoryScope(scope)
+
+      return
+    }
+
+    await this._withDb(async (db) => {
+      await db.transaction(async () => {
+        if (cleanup) await cleanup({connection: db, scopes: uniqueScopes})
+
+        for (const scope of uniqueScopes) await this._resetDatabaseScope({db, scope})
+      })
+    })
+  }
+
+  /**
+   * Resets one memory-backed scope while preserving repeated-reset idempotence.
+   * @param {import("./sync-client-types.js").SerializedSyncScope} scope - Scope to reset.
+   * @returns {void}
+   */
+  _resetMemoryScope(scope) {
+    const digest = scopeDigestForScope(scope)
+    const memoryScope = this._memoryScopes.get(digest)
+
+    if (!memoryScope || (memoryScope.state === "removed" && memoryScope.cursorPayload === null)) return
+
+    this._memoryScopes.set(digest, {
+      ...memoryScope,
+      cursorPayload: null,
+      id: new UUID(4).format(),
+      state: "removed"
+    })
+  }
+
+  /**
+   * Resets one database-backed scope while preserving repeated-reset idempotence.
+   * @param {{db: import("../database/drivers/base.js").default, scope: import("./sync-client-types.js").SerializedSyncScope}} args - Database and scope.
+   * @returns {Promise<void>}
+   */
+  async _resetDatabaseScope({db, scope}) {
+    const digest = scopeDigestForScope(scope)
+    const existingRow = await this._rowByScopeDigest(db, digest)
+
+    if (!existingRow || (existingRow.state === "removed" && existingRow.cursorPayload === null)) return
+
+    await db.update({
+      conditions: {id: existingRow.id, scope_digest: digest},
+      data: {cursor_json: null, id: new UUID(4).format(), state: "removed", updated_at: new Date()},
+      tableName: TABLE_NAME
     })
   }
 

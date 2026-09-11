@@ -461,7 +461,24 @@ class Sync extends ApplicationRecord {
 }
 ```
 
-For every published change, each declared scope attribute reads the record's attribute of the same name when the model has one, else the record's own id (scope-root models — e.g. the record a scope condition points at). `publish: {scopeAttributes: {accountId: "ownerId"}}` overrides the record attribute per model by name. The resolved values are persisted onto the sync row's matching columns (so the app's `scopeChangesQuery` can serve them) and broadcast as the framework sync channel's scoping params. The change feed's default row serialization emits every declared scope attribute under its own name; a sync model declaring no scope attributes keeps the deprecated pre-declaration wire, which emits `eventId`.
+For every published change, each declared scope attribute reads the record's attribute of the same name when the model has one, else the record's own id (scope-root models — e.g. the record a scope condition points at). `publish: {scopeAttributes: {accountId: "ownerId"}}` overrides the record attribute per model by name. A model whose audience depends on authenticated connection context or related rows may instead declare one async resolver:
+
+```js
+class Ticket extends ApplicationRecord {
+  static sync = {
+    publish: {
+      scopeAttributes: async ({configuration, connection, record}) => ({
+        audienceKey: await ticketAudienceKey({configuration, connection, ticket: record}),
+        locale: record.locale()
+      })
+    }
+  }
+}
+```
+
+The resolver runs exactly once for each published mutation and receives the publishing record, its operation-owned database connection, and configuration. It must return a plain object containing every attribute declared by the sync model's `static syncScopeAttributes`, with no undeclared keys; each value must be a string, number, or `null`. Missing identity, resolver failures, arrays, nested values, and incomplete results fail loudly. Velocious validates and reuses the one result for both feed-row persistence and websocket routing, but authorization and application-specific audience policy remain in the app.
+
+Static mappings remain unchanged. Whether statically mapped or computed, resolved values are persisted onto the sync row's matching columns (so the app's `scopeChangesQuery` can serve them) and broadcast as the framework sync channel's scoping params. The change feed's default row serialization emits every declared scope attribute under its own name; a sync model declaring no scope attributes keeps the deprecated pre-declaration wire, which emits `eventId`.
 
 ### The framework sync channel
 
@@ -479,7 +496,7 @@ The pre-framework-channel declaration forms keep working but are deprecated: `ev
 
 A subscription with **empty conditions** is a *user scope* — "everything my ability can see". Its `authorizeChanges` runs with an empty-conditions scope (the app decides whether user scopes are allowed), and because it declares no conditions it matches every broadcast of its resource type. Broadcast routing therefore re-checks record access **per delivery** for user scopes: each published change is filtered through the sync resource's `changeDeliverable({params, scope, sync})`, whose default reuses the app's `scopeChangesQuery` — applying it to the change-feed model (which for an empty-conditions scope falls back to ability scoping) and checking whether the published change's feed row is visible in that scope. The `sync` argument is the **complete broadcast sync entry** — immutable sync-row `id`, actor-specific metadata, and every other publisher field — with only `resourceId`/`resourceType` normalized to strings (on a copy; the published entry is never mutated), so an override can authorize two entries for the same resource identity independently by their exact-row identity. Scoped subscriptions (with explicit conditions) already routed through `matches()`, so they deliver unchanged with no extra query. Two subscribers with disjoint access each receive only their own changes over one connection (precedent: the frontend-models channel's per-delivery access check). The per-delivery re-check runs in the broadcast's ambient tenant/connection context; the feed's own scope columns and the app's ability scoping bound what each subscriber sees.
 
-On the client, `syncClient().subscribeUserScope()` declares an empty-conditions scope for every pullable resource type, subscribes their `velocious-sync` channels, and pulls (the empty-conditions pull scope makes `scopeChangesQuery` fall back to ability scoping with per-scope cursor continuity). `unsubscribeUserScope()` deactivates the scopes and closes the subscriptions without disconnecting the shared connection.
+On the client, `syncClient().subscribeUserScope()` declares an empty-conditions scope for every pullable resource type, subscribes their `velocious-sync` channels, and pulls (the empty-conditions pull scope makes `scopeChangesQuery` fall back to ability scoping with per-scope cursor continuity). `unsubscribeUserScope()` deactivates the scopes and closes the subscriptions without disconnecting the shared connection. When the authenticated or audience identity changes, use the quiescent `stop`, `resetScopes`, or `replaceIdentity` contracts documented in [`sync-client.md`](sync-client.md): they abort transport/realtime startup, drain applies, atomically pair selected-scope cursor reset with app-owned row cleanup, and prevent a late old-generation apply from advancing the new identity's cursor.
 
 Mechanics mirror the client tracker: the payload is snapshotted through `serialize(record)` at mutation-callback time (later drift on the record cannot change what was committed), persisting and broadcasting defer through the model connection's `afterCommit` hook (rolled-back mutations never publish), and post-commit failures are reported loudly (`options.onError` or the publisher logger) without poisoning the driver's afterCommit chain. The sync row is upserted through the same shared primitive as the replay service's model-backed persistence (`src/sync/sync-change-fanout.js`): one server-origin row per resource identity, keyed by a null actor column (`authentication_token_id` by default — a server-origin change has no device to echo back to), reassigned and re-sequenced through `advanceServerSequence()` so feed cursors pick the change up again. Framework and declared broadcasts deliver through the same injected broadcaster shape the replay service uses (defaulting to the configuration's channel broadcast).
 

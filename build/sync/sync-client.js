@@ -47,6 +47,18 @@ const SYNC_REQUEST_RESERVED_KEYS = [
 /** @type {WeakMap<Configuration, SyncClient>} */
 const syncClientsByConfiguration = new WeakMap()
 
+/** Expected cooperative cancellation raised by a SyncClient lifecycle transition. */
+export class SyncClientLifecycleAbortError extends Error {
+  /**
+   * Builds an expected lifecycle cancellation error.
+   * @param {string} message - Lifecycle cancellation reason.
+   */
+  constructor(message) {
+    super(message)
+    this.name = "SyncClientLifecycleAbortError"
+  }
+}
+
 /**
  * Declarative client-side sync driver.
  *
@@ -181,6 +193,13 @@ export default class SyncClient {
     this._withoutTrackingDepth = 0
     /** @type {Logger | {error: (...messages: Array<ReturnType<typeof JSON.parse>>) => Promise<void>} | null} */
     this._logger = null
+    /** @type {Set<Promise<unknown>>} */
+    this._activeLifecycleWork = new Set()
+    this._lifecycleAbortController = new AbortController()
+    this._lifecycleGeneration = 0
+    this._lifecycleTransitionCount = 0
+    /** @type {Promise<void>} */
+    this._lifecycleTransitionPromise = Promise.resolve()
     this._started = false
   }
 
@@ -193,6 +212,7 @@ export default class SyncClient {
    * @returns {Promise<void>}
    */
   async start() {
+    await this._lifecycleTransitionPromise
     this.assertTenantReady()
     if (this._started) return
 
@@ -230,16 +250,207 @@ export default class SyncClient {
   }
 
   /**
-   * Unregisters all tracking callbacks (tests, sign-out, hot reload).
-   * @returns {void}
+   * Unregisters all tracking callbacks, aborts in-flight pull/replay/realtime
+   * work and resolves after it is quiescent. Optional selected scope reset and
+   * app-owned cleanup happen after old work drains.
+   * @param {import("./sync-client-types.js").SyncClientStopOptions} [options] - Stop and selected-scope reset options.
+   * @returns {Promise<void>}
    */
-  stop() {
+  stop(options = {}) {
     for (const {callback, callbackName, modelClass} of this._trackedCallbacks) {
       modelClass.unregisterLifecycleCallback(callbackName, callback)
     }
 
     this._trackedCallbacks = []
     this._started = false
+
+    return this._runLifecycleTransition(async () => {
+      await this._resetScopesForLifecycle(options)
+    })
+  }
+
+  /**
+   * Aborts and drains current work, then atomically resets selected scope
+   * cursors together with an optional app-owned local-row cleanup hook.
+   * Tracking declarations remain registered so the same client may continue.
+   * @param {import("./sync-client-types.js").SerializedSyncScope[]} scopes - Selected scopes to reset.
+   * @param {{cleanup?: import("./sync-client-types.js").SyncClientScopeCleanup}} [options] - Scope cleanup options.
+   * @returns {Promise<void>}
+   */
+  async resetScopes(scopes, options = {}) {
+    await this._runLifecycleTransition(async () => {
+      await this._resetScopesForLifecycle({...options, resetScopes: scopes})
+    })
+  }
+
+  /**
+   * Atomically replaces the external identity read by the configured auth and
+   * scope-owner resolvers: old work is aborted and drained, selected private
+   * scope state/cache is reset, then the app's replacement callback runs while
+   * new sync work remains behind the lifecycle barrier. Optionally subscribes
+   * the new user scope before resolving.
+   * @param {import("./sync-client-types.js").SyncClientReplaceIdentityOptions} options - Identity replacement contract.
+   * @returns {Promise<void>}
+   */
+  async replaceIdentity(options) {
+    if (!options || typeof options !== "object" || Array.isArray(options)) {
+      throw new Error("SyncClient.replaceIdentity requires an options object")
+    }
+
+    const {cleanup, replace, resetScopes = [], subscribeUserScope = false, ...restOptions} = options
+
+    restArgsError(restOptions)
+    if (typeof replace !== "function") throw new Error("SyncClient.replaceIdentity requires a replace callback")
+    if (typeof subscribeUserScope !== "boolean") throw new Error("SyncClient.replaceIdentity subscribeUserScope must be boolean")
+
+    await this._runLifecycleTransition(async () => {
+      await this._resetScopesForLifecycle({cleanup, resetScopes})
+      await replace()
+    })
+
+    if (subscribeUserScope) await this.subscribeUserScope()
+  }
+
+  /**
+   * Runs one callback while holding the current lifecycle generation and
+   * tracks it so stop/reset/identity replacement can await quiescence.
+   * @template Result
+   * @param {(signal: AbortSignal) => Promise<Result>} callback - Generation-bound work.
+   * @returns {Promise<Result>} Callback result.
+   */
+  async _runLifecycleWork(callback) {
+    if (this._lifecycleTransitionCount > 0) await this._lifecycleTransitionPromise
+
+    const signal = this._lifecycleAbortController.signal
+
+    this._throwIfLifecycleAborted(signal)
+
+    const promise = callback(signal)
+
+    this._activeLifecycleWork.add(promise)
+
+    try {
+      return await promise
+    } finally {
+      this._activeLifecycleWork.delete(promise)
+    }
+  }
+
+  /**
+   * Runs mutation queueing only while the lifecycle generation captured by the
+   * caller remains active. Unlike pulls, a mutation must never wait through an
+   * identity transition and then persist under the replacement identity.
+   * @template Result
+   * @param {number} lifecycleGeneration - Generation owning the mutation.
+   * @param {() => Promise<Result>} callback - Mutation queueing work.
+   * @returns {Promise<Result>} Callback result.
+   */
+  async _runMutationLifecycleWork(lifecycleGeneration, callback) {
+    this._assertMutationLifecycleGeneration(lifecycleGeneration)
+
+    return await this._runLifecycleWork(async () => {
+      this._assertMutationLifecycleGeneration(lifecycleGeneration)
+
+      return await callback()
+    })
+  }
+
+  /**
+   * Rejects mutation queueing captured outside the current stable lifecycle.
+   * @param {number} lifecycleGeneration - Generation owning the mutation.
+   * @returns {void}
+   */
+  _assertMutationLifecycleGeneration(lifecycleGeneration) {
+    if (this._lifecycleTransitionCount === 0 && lifecycleGeneration === this._lifecycleGeneration) return
+
+    throw new SyncClientLifecycleAbortError("Sync mutation belongs to an inactive lifecycle generation")
+  }
+
+  /**
+   * Serializes a lifecycle barrier: cooperatively aborts transport/start work,
+   * stops new realtime delivery, awaits old applies/replays/pulls, rejects on
+   * unexpected old-work failures, then runs the reset/replacement callback.
+   * @param {() => Promise<void>} callback - Transition action after quiescence.
+   * @returns {Promise<void>}
+   */
+  _runLifecycleTransition(callback) {
+    this._lifecycleTransitionCount += 1
+
+    // unsubscribe() invalidates the subscription generation synchronously, so
+    // an old onResume/onMessage callback cannot enter this transition's drain.
+    const realtimeUnsubscribePromise = this._realtimeBridge?.unsubscribe()
+    const previousTransition = this._lifecycleTransitionPromise
+    const transition = previousTransition.then(async () => {
+      const abortController = this._lifecycleAbortController
+      const abortReason = new SyncClientLifecycleAbortError("Sync client lifecycle was stopped")
+
+      abortController.abort(abortReason)
+
+      if (realtimeUnsubscribePromise) await realtimeUnsubscribePromise
+
+      const workResults = await Promise.allSettled([...this._activeLifecycleWork])
+
+      if (this._realtimeBridge) await this._realtimeBridge.waitForApplied()
+
+      /** @type {unknown[]} */
+      const unexpectedErrors = []
+
+      for (const result of workResults) {
+        if (result.status === "rejected" && !this.isLifecycleAbort(result.reason)) unexpectedErrors.push(result.reason)
+      }
+
+      if (unexpectedErrors.length === 1) throw unexpectedErrors[0]
+      if (unexpectedErrors.length > 1) throw new AggregateError(unexpectedErrors, "Sync client lifecycle failed while becoming quiescent")
+
+      await callback()
+    }).finally(() => {
+      this._lifecycleAbortController = new AbortController()
+      this._lifecycleGeneration += 1
+      this._lifecycleTransitionCount -= 1
+      this._userScopeState = "unsubscribed"
+      this._subscribeUserScopePromise = null
+    })
+
+    this._lifecycleTransitionPromise = transition.then(() => undefined, () => undefined)
+
+    return transition
+  }
+
+  /**
+   * Resets selected scopes through the framework-owned store.
+   * @param {import("./sync-client-types.js").SyncClientStopOptions} options - Reset options.
+   * @returns {Promise<void>}
+   */
+  async _resetScopesForLifecycle(options) {
+    const {cleanup, resetScopes = [], ...restOptions} = options
+
+    restArgsError(restOptions)
+    if (!Array.isArray(resetScopes)) throw new Error("Sync client resetScopes must be an array")
+    if (cleanup !== undefined && typeof cleanup !== "function") throw new Error("Sync client cleanup must be a function")
+    if (cleanup && resetScopes.length === 0) throw new Error("Sync client cleanup requires at least one reset scope")
+    if (resetScopes.length === 0) return
+
+    await this.scopeStore().reset(resetScopes, {cleanup})
+  }
+
+  /**
+   * Whether an error is the framework's narrow expected lifecycle abort.
+   * @param {unknown} error - Candidate error.
+   * @returns {boolean} Whether the error is an expected lifecycle abort.
+   */
+  isLifecycleAbort(error) {
+    return error instanceof SyncClientLifecycleAbortError
+  }
+
+  /**
+   * Throws the current lifecycle reason when the signal is aborted.
+   * @param {AbortSignal} signal - Lifecycle signal.
+   * @returns {void}
+   */
+  _throwIfLifecycleAborted(signal) {
+    if (!signal.aborted) return
+
+    throw signal.reason instanceof Error ? signal.reason : new SyncClientLifecycleAbortError("Sync client lifecycle was stopped")
   }
 
   /**
@@ -288,6 +499,7 @@ export default class SyncClient {
       if (!this.ownsRecord(record)) return
       if (this.isTrackingSuppressed(record)) return
 
+      const lifecycleGeneration = this._lifecycleGeneration
       const data = SyncApiClient.queuedSyncData({
         booleanAttributes: resourceConfig.booleanAttributes || [],
         data: resourceConfig.trackedData ? resourceConfig.trackedData({operation, record}) : undefined,
@@ -305,20 +517,24 @@ export default class SyncClient {
 
       await record.connection().afterCommit(async () => {
         try {
-          if (resourceConfig.conflictTracking) {
-            await SyncApiClient.queueConflictTrackedSync({
-              baseVersion,
-              conflictTracking: resourceConfig.conflictTracking,
-              data,
-              operation,
-              resource: record,
-              resourceType: record.constructor.getModelName(),
-              syncType
-            })
-          } else {
-            await SyncApiClient.queueLocalSync({data, resource: record, syncModel: operationScope, syncType})
-          }
+          await this._runMutationLifecycleWork(lifecycleGeneration, async () => {
+            if (resourceConfig.conflictTracking) {
+              await SyncApiClient.queueConflictTrackedSync({
+                baseVersion,
+                conflictTracking: resourceConfig.conflictTracking,
+                data,
+                operation,
+                resource: record,
+                resourceType: record.constructor.getModelName(),
+                syncType
+              })
+            } else {
+              await SyncApiClient.queueLocalSync({data, resource: record, syncModel: operationScope, syncType})
+            }
+          })
         } catch (error) {
+          if (this.isLifecycleAbort(error)) return
+
           await this.reportAfterCommitError(/** @type {Error} */ (error))
 
           return
@@ -484,14 +700,30 @@ export default class SyncClient {
    * @returns {Promise<import("./sync-api-client-types.js").SyncChangesResult | null>} Combined pull result, or null while offline.
    */
   async pull({onProgress, upstreamRefresh} = {}) {
+    return await this._runLifecycleWork(async (signal) => await this._pull({onProgress, signal, upstreamRefresh}))
+  }
+
+  /**
+   * Pull implementation bound to one lifecycle generation.
+   * @param {object} args - Pull args.
+   * @param {(progress: import("./sync-api-client-types.js").SyncPullProgress) => void} [args.onProgress] - Progress callback.
+   * @param {AbortSignal} args.signal - Lifecycle cancellation signal.
+   * @param {boolean} [args.upstreamRefresh] - User-initiated upstream refresh marker.
+   * @returns {Promise<import("./sync-api-client-types.js").SyncChangesResult | null>} Combined pull result, or null while offline.
+   */
+  async _pull({onProgress, signal, upstreamRefresh}) {
+    this._throwIfLifecycleAborted(signal)
     this.assertTenantReady()
     if (!(await this.isOnline())) return null
+    this._throwIfLifecycleAborted(signal)
 
     /** @type {import("./sync-api-client-types.js").SyncChangesResult | null} */
     let combinedResult = null
 
     await SyncApiClient.singleFlight(`velocious-sync-client-pull-${this._clientNumber}`, async () => {
+      this._throwIfLifecycleAborted(signal)
       const authenticationToken = await this.config.authenticationToken()
+      this._throwIfLifecycleAborted(signal)
       const scopeStore = this.scopeStore()
       const applySync = this.remoteApplySync()
       const result = {
@@ -504,6 +736,7 @@ export default class SyncClient {
       }
 
       for (const scopeRow of await scopeStore.activeScopes()) {
+        this._throwIfLifecycleAborted(signal)
         // Cumulate scope progress onto the counts of the scopes already pulled so a single
         // scope's per-page progress reads exactly its own counts (base 0), and multi-scope
         // pulls report a running cumulative total across every scope.
@@ -520,7 +753,7 @@ export default class SyncClient {
             syncedCount: baseSyncedCount + progress.syncedCount,
             total: baseTotal + progress.total
           }) : undefined,
-          postChanges: async (payload) => await this.config.postChanges({
+          postChanges: async (payload, options) => await this.config.postChanges({
             ...payload,
             // Only the all-types scope carries the type list; a type-declared scope needs none.
             scope: {
@@ -529,8 +762,9 @@ export default class SyncClient {
               ...(scopeRow.resourceType === null ? {resourceTypes: this.userScopeResourceTypes()} : {})
             },
             ...(upstreamRefresh ? {upstreamRefresh: true} : {})
-          }),
-          saveCursor: async (cursor) => await scopeStore.saveCursor(scopeRow, cursor)
+          }, options),
+          saveCursor: async (cursor) => await scopeStore.saveCursor(scopeRow, cursor),
+          signal
         })
 
         result.changed ||= scopeResult.changed
@@ -549,6 +783,7 @@ export default class SyncClient {
       combinedResult = result
     })
 
+    this._throwIfLifecycleAborted(signal)
     return combinedResult
   }
 
@@ -627,8 +862,11 @@ export default class SyncClient {
    * @returns {Promise<void>}
    */
   async subscribeRealtime(context) {
-    this.assertTenantReady()
-    await this.realtimeBridge().subscribe(context)
+    await this._runLifecycleWork(async (signal) => {
+      this.assertTenantReady()
+      await this.realtimeBridge().subscribe(context, {signal})
+      this._throwIfLifecycleAborted(signal)
+    })
   }
 
   /**
@@ -646,7 +884,7 @@ export default class SyncClient {
     if (this._userScopeState === "subscribed") return
 
     if (!this._subscribeUserScopePromise) {
-      this._subscribeUserScopePromise = this._subscribeUserScope().finally(() => {
+      this._subscribeUserScopePromise = this._runLifecycleWork(async (signal) => await this._subscribeUserScope(signal)).finally(() => {
         this._subscribeUserScopePromise = null
       })
     }
@@ -657,17 +895,26 @@ export default class SyncClient {
   /**
    * Declares and activates the user scope for every pullable resource, then
    * subscribes realtime and pulls.
+   * @param {AbortSignal} signal - Lifecycle cancellation signal.
    * @returns {Promise<void>}
    */
-  async _subscribeUserScope() {
+  async _subscribeUserScope(signal) {
     this._userScopeState = "subscribing"
 
-    await this.scopeStore().findOrCreateScope(await this.userScope())
+    try {
+      await this.scopeStore().findOrCreateScope(await this.userScope())
+      this._throwIfLifecycleAborted(signal)
 
-    await this.subscribeRealtime()
-    await this.pull()
+      await this.subscribeRealtime()
+      this._throwIfLifecycleAborted(signal)
+      await this.pull()
+      this._throwIfLifecycleAborted(signal)
 
-    this._userScopeState = "subscribed"
+      this._userScopeState = "subscribed"
+    } catch (error) {
+      this._userScopeState = "unsubscribed"
+      throw error
+    }
   }
 
   /**
@@ -769,45 +1016,49 @@ export default class SyncClient {
    * @returns {Promise<ReturnType<typeof JSON.parse> | import("./local-mutation-log.js").LocalMutationLogRecord>} Pending local sync row or durable conflict-tracked intent.
    */
   async queue({baseVersion, data, operation = "update", resource, syncType}) {
-    this.assertTenantReady()
-    this.assertRecordOwnership(resource)
-    const resourceConfig = this.resourceConfigFor(resource)
-    const resolvedSyncType = syncType ?? this.defaultSyncType({operation, record: resource, resourceConfig})
+    const lifecycleGeneration = this._lifecycleGeneration
 
-    if (resourceConfig.conflictTracking) {
-      const queuedData = SyncApiClient.queuedSyncData({
+    return await this._runMutationLifecycleWork(lifecycleGeneration, async () => {
+      this.assertTenantReady()
+      this.assertRecordOwnership(resource)
+      const resourceConfig = this.resourceConfigFor(resource)
+      const resolvedSyncType = syncType ?? this.defaultSyncType({operation, record: resource, resourceConfig})
+
+      if (resourceConfig.conflictTracking) {
+        const queuedData = SyncApiClient.queuedSyncData({
+          booleanAttributes: resourceConfig.booleanAttributes || [],
+          data,
+          localOnlyAttributes: resourceConfig.localOnlyAttributes || [],
+          resource
+        })
+        const record = await SyncApiClient.queueConflictTrackedSync({
+          baseVersion: baseVersion === undefined ? this.baseVersionFor({operation, record: resource, resourceConfig}) : baseVersion,
+          conflictTracking: resourceConfig.conflictTracking,
+          data: queuedData,
+          operation,
+          resource,
+          resourceType: resource.constructor.getModelName(),
+          syncType: resolvedSyncType
+        })
+
+        this.scheduleReplay()
+
+        return record
+      }
+
+      const syncRow = await this.withTenantOperation(async (databaseOperation) => await SyncApiClient.queueLocalSync({
         booleanAttributes: resourceConfig.booleanAttributes || [],
         data,
         localOnlyAttributes: resourceConfig.localOnlyAttributes || [],
-        resource
-      })
-      const record = await SyncApiClient.queueConflictTrackedSync({
-        baseVersion: baseVersion === undefined ? this.baseVersionFor({operation, record: resource, resourceConfig}) : baseVersion,
-        conflictTracking: resourceConfig.conflictTracking,
-        data: queuedData,
-        operation,
         resource,
-        resourceType: resource.constructor.getModelName(),
+        syncModel: databaseOperation ? databaseOperation.modelClass(this.config.syncModel) : this.config.syncModel,
         syncType: resolvedSyncType
-      })
+      }))
 
       this.scheduleReplay()
 
-      return record
-    }
-
-    const syncRow = await this.withTenantOperation(async (databaseOperation) => await SyncApiClient.queueLocalSync({
-      booleanAttributes: resourceConfig.booleanAttributes || [],
-      data,
-      localOnlyAttributes: resourceConfig.localOnlyAttributes || [],
-      resource,
-      syncModel: databaseOperation ? databaseOperation.modelClass(this.config.syncModel) : this.config.syncModel,
-      syncType: resolvedSyncType
-    }))
-
-    this.scheduleReplay()
-
-    return syncRow
+      return syncRow
+    })
   }
 
   /**
@@ -816,10 +1067,22 @@ export default class SyncClient {
    * @returns {Promise<void>}
    */
   async replayPending() {
+    await this._runLifecycleWork(async (signal) => await this._replayPending(signal))
+  }
+
+  /**
+   * Replay implementation bound to one lifecycle generation.
+   * @param {AbortSignal} signal - Lifecycle cancellation signal.
+   * @returns {Promise<void>}
+   */
+  async _replayPending(signal) {
+    this._throwIfLifecycleAborted(signal)
     this.assertTenantReady()
     if (!(await this.isOnline())) return
+    this._throwIfLifecycleAborted(signal)
 
     await SyncApiClient.singleFlight(`velocious-sync-client-replay-${this._clientNumber}`, async () => await this.withTenantOperation(async (operation) => {
+      this._throwIfLifecycleAborted(signal)
       for (const [resourceType, resourceConfig] of Object.entries(this.config.resources)) {
         if (!resourceConfig.conflictTracking) continue
 
@@ -829,17 +1092,22 @@ export default class SyncClient {
           conflictTracking: resourceConfig.conflictTracking,
           postReplay: this.config.postReplay,
           remoteGeneration: (identity) => this._remoteGenerations.get(identity) || 0,
-          resourceType
+          resourceType,
+          signal
         })
       }
 
+      this._throwIfLifecycleAborted(signal)
       await SyncApiClient.replayLocalSyncs({
         authenticationToken: await this.config.authenticationToken(),
         batchSize: this.config.batchSize,
         postReplay: this.config.postReplay,
+        signal,
         syncModel: operation ? operation.modelClass(this.config.syncModel) : this.config.syncModel
       })
     }))
+
+    this._throwIfLifecycleAborted(signal)
   }
 
   /**
@@ -928,6 +1196,8 @@ export default class SyncClient {
       try {
         await this.replayPending()
       } catch (error) {
+        if (this.isLifecycleAbort(error)) return
+
         this.reportError(/** @type {Error} */ (error))
       }
     })()
@@ -1289,16 +1559,16 @@ function normalizedTrack(track) {
 /**
  * Builds a framework-owned sync endpoint POSTer over the configured transport.
  * @param {{path: string, requestContext: import("../remote-request-context.js").RemoteRequestContext, transport: import("../configuration-types.js").VelociousSyncClientTransport}} args - Poster args.
- * @returns {(payload: Record<string, ReturnType<typeof JSON.parse>>) => Promise<ReturnType<typeof JSON.parse>>} Sync endpoint POSTer.
+ * @returns {(payload: Record<string, ReturnType<typeof JSON.parse>>, options?: {signal?: AbortSignal}) => Promise<ReturnType<typeof JSON.parse>>} Sync endpoint POSTer.
  */
 function transportPoster({path, requestContext, transport}) {
-  return async (payload) => {
+  return async (payload, options = {}) => {
     const requestPayload = mergeRemoteRequestContext({
       context: requestContext,
       label: "Sync client request context",
       params: payload
     })
-    const response = await transport.post(path, requestPayload)
+    const response = await transport.post(path, requestPayload, {signal: options.signal})
 
     if (!response || typeof response.json !== "function") {
       throw new Error(`sync.client transport.post must resolve to a response with a json() method for ${path} (like the frontend-model websocket client)`)

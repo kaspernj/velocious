@@ -104,6 +104,38 @@ export default class SyncScopeStore {
      */
     deactivate(scope: import("./sync-client-types.js").SerializedSyncScope): Promise<void>;
     /**
+     * Atomically deactivates selected scopes, clears their cursors and rotates
+     * their row identities. A cursor save carrying a pre-reset row identity can
+     * therefore never repopulate the reset scope. The optional cleanup hook runs
+     * inside the same database transaction, allowing an app to purge the local
+     * rows owned by those scopes without a cursor/cache split.
+     * @param {import("./sync-client-types.js").SerializedSyncScope[]} scopes - Selected scopes to reset.
+     * @param {object} [options] - Reset options.
+     * @param {(args: {connection: import("../database/drivers/base.js").default | null, scopes: import("./sync-client-types.js").SerializedSyncScope[]}) => Promise<void> | void} [options.cleanup] - App-owned local-row cleanup hook.
+     * @returns {Promise<void>}
+     */
+    reset(scopes: import("./sync-client-types.js").SerializedSyncScope[], { cleanup }?: {
+        cleanup?: (args: {
+            connection: import("../database/drivers/base.js").default | null;
+            scopes: import("./sync-client-types.js").SerializedSyncScope[];
+        }) => Promise<void> | void;
+    }): Promise<void>;
+    /**
+     * Resets one memory-backed scope while preserving repeated-reset idempotence.
+     * @param {import("./sync-client-types.js").SerializedSyncScope} scope - Scope to reset.
+     * @returns {void}
+     */
+    _resetMemoryScope(scope: import("./sync-client-types.js").SerializedSyncScope): void;
+    /**
+     * Resets one database-backed scope while preserving repeated-reset idempotence.
+     * @param {{db: import("../database/drivers/base.js").default, scope: import("./sync-client-types.js").SerializedSyncScope}} args - Database and scope.
+     * @returns {Promise<void>}
+     */
+    _resetDatabaseScope({ db, scope }: {
+        db: import("../database/drivers/base.js").default;
+        scope: import("./sync-client-types.js").SerializedSyncScope;
+    }): Promise<void>;
+    /**
      * Whether the store runs without a configured database.
      * @returns {boolean} Whether memory storage is used.
      */
