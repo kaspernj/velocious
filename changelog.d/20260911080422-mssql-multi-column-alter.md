@@ -1,0 +1,1 @@
+Fixed MS-SQL schema upgrades that add several columns in one `ALTER TABLE`: the generated statement now emits the required single `ADD` clause followed by comma-separated column definitions instead of repeating `ADD` for every column.
