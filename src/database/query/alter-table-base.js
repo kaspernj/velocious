@@ -32,21 +32,30 @@ export default class VelociousDatabaseQueryAlterTableBase extends QueryBase {
 
     let sql = `ALTER TABLE ${options.quoteTableName(tableData.getName())} `
     let actionCount = 0
+    let previousActionWasMssqlColumnAdd = false
 
     for (const column of tableData.getColumns()) {
       if (actionCount > 0) sql += ", "
 
       if (column.isNewColumn()) {
-        sql += databaseType == "mssql" ? "ADD " : "ADD COLUMN "
+        if (databaseType != "mssql") {
+          sql += "ADD COLUMN "
+        } else if (!previousActionWasMssqlColumnAdd) {
+          sql += "ADD "
+        }
+
         sql += column.getSQL({driver: this.getDriver(), forAlterTable: false})
+        previousActionWasMssqlColumnAdd = databaseType == "mssql"
       } else if (column.getNewName()) {
         const newColumnName = column.getNewName()
 
         if (!newColumnName) throw new Error(`Expected new column name for ${column.getName()}`)
 
         sql += `RENAME COLUMN ${options.quoteColumnName(column.getName())} TO ${options.quoteColumnName(newColumnName)}`
+        previousActionWasMssqlColumnAdd = false
       } else if (column.getDropColumn()) {
         sql += `DROP COLUMN ${options.quoteColumnName(column.getName())}`
+        previousActionWasMssqlColumnAdd = false
       } else {
         if (databaseType == "mssql" || databaseType == "pgsql") {
           sql += "ALTER COLUMN "
@@ -55,6 +64,7 @@ export default class VelociousDatabaseQueryAlterTableBase extends QueryBase {
         }
 
         sql += column.getSQL({driver: this.getDriver(), forAlterTable: true})
+        previousActionWasMssqlColumnAdd = false
       }
 
 

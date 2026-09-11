@@ -250,12 +250,17 @@ export default class SyncPublisher {
     const columns = {}
     /** @type {Record<string, string | null>} */
     const params = {}
+    const computedScopeAttributes = resourceConfig.scopeAttributesResolver
+      ? await this.resolveComputedScopeAttributes({record, resourceConfig})
+      : null
 
     for (const scopePlanEntry of resourceConfig.scopePlan) {
       /** @type {ReturnType<typeof JSON.parse>} */
       let rawValue
 
-      if (scopePlanEntry.resolver) {
+      if (computedScopeAttributes) {
+        rawValue = computedScopeAttributes[scopePlanEntry.scopeAttribute]
+      } else if (scopePlanEntry.resolver) {
         rawValue = await scopePlanEntry.resolver(record)
       } else if (scopePlanEntry.recordAttribute) {
         rawValue = record.readAttribute(scopePlanEntry.recordAttribute)
@@ -270,6 +275,52 @@ export default class SyncPublisher {
     }
 
     return {columns, params}
+  }
+
+  /**
+   * Resolves and validates one computed scope-attributes declaration. The
+   * resolver runs once per published mutation with the exact connection that
+   * owns that mutation; every declared scope value is then reused for row
+   * persistence and broadcast routing so those two identities cannot drift.
+   * @param {{record: ReturnType<typeof JSON.parse>, resourceConfig: import("./sync-publisher-types.js").SyncPublisherResourceConfig}} args - Record and resource configuration.
+   * @returns {Promise<Record<string, string | number | null>>} Complete computed scope values.
+   */
+  async resolveComputedScopeAttributes({record, resourceConfig}) {
+    const resolver = resourceConfig.scopeAttributesResolver
+
+    if (!resolver) throw new Error(`No computed scope-attributes resolver configured for ${resourceConfig.resourceType}`)
+
+    const resolved = await resolver({
+      configuration: this.config.configuration,
+      connection: record.connection(),
+      record
+    })
+
+    if (!isPlainObject(resolved)) {
+      throw new Error(`${resourceConfig.resourceType} static sync publish scopeAttributes resolver must resolve to a plain object`)
+    }
+
+    const declaredAttributes = resourceConfig.scopePlan.map(({scopeAttribute}) => scopeAttribute)
+
+    for (const scopeAttribute of Object.keys(resolved)) {
+      if (!declaredAttributes.includes(scopeAttribute)) {
+        throw new Error(`${resourceConfig.resourceType} static sync publish scopeAttributes resolver returned unknown scope attribute: ${scopeAttribute} (the sync model declares: ${declaredAttributes.join(", ")})`)
+      }
+    }
+
+    for (const scopeAttribute of declaredAttributes) {
+      if (!Object.hasOwn(resolved, scopeAttribute)) {
+        throw new Error(`${resourceConfig.resourceType} static sync publish scopeAttributes resolver must resolve the declared scope attribute ${scopeAttribute}`)
+      }
+
+      const value = resolved[scopeAttribute]
+
+      if (value !== null && typeof value !== "string" && typeof value !== "number") {
+        throw new Error(`${resourceConfig.resourceType} static sync publish scope attribute ${scopeAttribute} must be a string, number, or null`)
+      }
+    }
+
+    return /** @type {Record<string, string | number | null>} */ (resolved)
   }
 
   /**
@@ -434,12 +485,15 @@ function resourceConfigFromPublishDeclaration({modelClass, publish, scopeAttribu
     }
   }
 
+  const scopePlan = scopePlanFor({eventId, modelClass, modelName, scopeAttributes, syncModel, syncScopeAttributes})
+
   return {
     broadcasts,
     modelClass,
     operations: operations === undefined ? DEFAULT_PUBLISHED_OPERATIONS : operations,
     resourceType: resourceType === undefined ? modelName : resourceType,
-    scopePlan: scopePlanFor({eventId, modelClass, modelName, scopeAttributes, syncModel, syncScopeAttributes}),
+    scopeAttributesResolver: typeof scopeAttributes === "function" ? scopeAttributes : undefined,
+    scopePlan,
     serialize: serialize === undefined ? defaultSerializedAttributes : serialize
   }
 }
@@ -452,7 +506,7 @@ function resourceConfigFromPublishDeclaration({modelClass, publish, scopeAttribu
  * name map), or the record's own id when the model has no such attribute
  * (scope-root models). The deprecated `eventId` declaration forms map to a
  * fixed `eventId`/`event_id` plan for 1.0.503 compatibility.
- * @param {{eventId: import("./sync-publisher-types.js").SyncPublishDeclarationConfig["eventId"], modelClass: ReturnType<typeof JSON.parse>, modelName: string, scopeAttributes: Record<string, string> | undefined, syncModel: ReturnType<typeof JSON.parse>, syncScopeAttributes: string[] | null}} args - Declaration and sync-model scope args.
+ * @param {{eventId: import("./sync-publisher-types.js").SyncPublishDeclarationConfig["eventId"], modelClass: ReturnType<typeof JSON.parse>, modelName: string, scopeAttributes: import("./sync-publisher-types.js").SyncPublishDeclarationConfig["scopeAttributes"], syncModel: ReturnType<typeof JSON.parse>, syncScopeAttributes: string[] | null}} args - Declaration and sync-model scope args.
  * @returns {Array<import("./sync-publisher-types.js").SyncPublisherScopePlanEntry>} Derived scope plan.
  */
 function scopePlanFor({eventId, modelClass, modelName, scopeAttributes, syncModel, syncScopeAttributes}) {
@@ -480,6 +534,15 @@ function scopePlanFor({eventId, modelClass, modelName, scopeAttributes, syncMode
   }
 
   if (!syncScopeAttributes) return []
+
+  if (typeof scopeAttributes === "function") {
+    return syncScopeAttributes.map((scopeAttribute) => ({
+      columnName: syncScopeColumnName({scopeAttribute, syncModel}),
+      recordAttribute: null,
+      resolver: undefined,
+      scopeAttribute
+    }))
+  }
 
   if (scopeAttributes !== undefined && (typeof scopeAttributes !== "object" || Array.isArray(scopeAttributes))) {
     throw new Error(`${modelName} static sync publish scopeAttributes must be an object mapping scope attributes to record attribute names, got: ${String(scopeAttributes)}`)
@@ -509,6 +572,19 @@ function scopePlanFor({eventId, modelClass, modelName, scopeAttributes, syncMode
       scopeAttribute
     }
   })
+}
+
+/**
+ * Checks that a computed declaration returned an ordinary key/value object.
+ * @param {unknown} value - Resolver result.
+ * @returns {value is Record<string, unknown>} Whether the value is a plain object.
+ */
+function isPlainObject(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false
+
+  const prototype = Object.getPrototypeOf(value)
+
+  return prototype === Object.prototype || prototype === null
 }
 
 /**

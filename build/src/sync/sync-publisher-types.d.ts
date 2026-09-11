@@ -52,9 +52,9 @@ export type SyncPublishDeclarationConfig<TModel = any> = {
      */
     serialize?: (record: TModel) => Record<string, ReturnType<typeof JSON.parse>> | Promise<Record<string, ReturnType<typeof JSON.parse>>>;
     /**
-     * - Record-attribute name overrides per scope attribute declared on the sync model's `static syncScopeAttributes`. By default each declared scope attribute reads the record's attribute of the same name when the model has one, else the record's own id (scope-root models).
+     * - Static record-attribute name overrides per scope attribute declared on the sync model's `static syncScopeAttributes`, or one async-capable resolver returning every declared scope value from the mutation's connection context. Static mappings retain the default for omitted attributes; computed results must include every declared attribute.
      */
-    scopeAttributes?: Record<string, string>;
+    scopeAttributes?: Record<string, string> | SyncPublisherScopeAttributesResolver<TModel>;
     /**
      * - Deprecated 1.0.503 form: attribute-name string (or resolver function) persisted to a fixed event_id sync-row column and broadcast as a fixed `eventId` scoping param. Declare `static syncScopeAttributes` on the sync model plus `scopeAttributes` overrides instead.
      */
@@ -72,6 +72,21 @@ export type SyncPublishDeclarationConfig<TModel = any> = {
      */
     resourceType?: string;
 };
+export type SyncPublisherScopeResolverContext<TModel = any> = {
+    /**
+     * - Configuration owning the publisher.
+     */
+    configuration: import("../configuration.js").default;
+    /**
+     * - Active database connection that owns the published mutation.
+     */
+    connection: ReturnType<typeof JSON.parse>;
+    /**
+     * - Published model record.
+     */
+    record: TModel;
+};
+export type SyncPublisherScopeAttributesResolver<TModel = any> = (context: SyncPublisherScopeResolverContext<TModel>) => Record<string, string | number | null> | Promise<Record<string, string | number | null>>;
 export type SyncPublishDeclaration<TModel = any> = boolean | SyncPublishDeclarationConfig<TModel>;
 export type SyncPublisherOptions = {
     /**
@@ -131,6 +146,10 @@ export type SyncPublisherResourceConfig = {
      */
     operations: Array<"create" | "update" | "destroy">;
     /**
+     * - Computed scope values resolver, when declared.
+     */
+    scopeAttributesResolver: SyncPublisherScopeAttributesResolver | undefined;
+    /**
      * - Derived scope-partition plan.
      */
     scopePlan: Array<SyncPublisherScopePlanEntry>;
@@ -175,11 +194,24 @@ export type SyncPublisherResourceConfig = {
  * @template [TModel=any]
  * @typedef {object} SyncPublishDeclarationConfig
  * @property {(record: TModel) => Record<string, ReturnType<typeof JSON.parse>> | Promise<Record<string, ReturnType<typeof JSON.parse>>>} [serialize] - Builds the published payload snapshot from the mutated record (snapshotted at mutation time). Defaults to the record's attributes with Date values serialized to ISO strings.
- * @property {Record<string, string>} [scopeAttributes] - Record-attribute name overrides per scope attribute declared on the sync model's `static syncScopeAttributes`. By default each declared scope attribute reads the record's attribute of the same name when the model has one, else the record's own id (scope-root models).
+ * @property {Record<string, string> | SyncPublisherScopeAttributesResolver<TModel>} [scopeAttributes] - Static record-attribute name overrides per scope attribute declared on the sync model's `static syncScopeAttributes`, or one async-capable resolver returning every declared scope value from the mutation's connection context. Static mappings retain the default for omitted attributes; computed results must include every declared attribute.
  * @property {string | ((record: TModel) => string | number | null | Promise<string | number | null>)} [eventId] - Deprecated 1.0.503 form: attribute-name string (or resolver function) persisted to a fixed event_id sync-row column and broadcast as a fixed `eventId` scoping param. Declare `static syncScopeAttributes` on the sync model plus `scopeAttributes` overrides instead.
  * @property {SyncPublishBroadcast[]} [broadcasts] - Deprecated: declarative app-channel broadcasts fanned out after the framework sync channel broadcast. The framework broadcast happens automatically; keep this only for legacy channels old app versions still subscribe.
  * @property {Array<"create" | "update" | "destroy">} [operations] - Published operations. Defaults to creates and updates; destroys are opt-in because a server destroy is often cleanup rather than a synced delete.
  * @property {string} [resourceType] - Published resource type. Defaults to the model name.
+ */
+/**
+ * Publishing context passed once to a computed scope-attributes resolver.
+ * @template [TModel=any]
+ * @typedef {object} SyncPublisherScopeResolverContext
+ * @property {import("../configuration.js").default} configuration - Configuration owning the publisher.
+ * @property {ReturnType<typeof JSON.parse>} connection - Active database connection that owns the published mutation.
+ * @property {TModel} record - Published model record.
+ */
+/**
+ * Async-capable resolver returning every declared sync scope attribute.
+ * @template [TModel=any]
+ * @typedef {(context: SyncPublisherScopeResolverContext<TModel>) => Record<string, string | number | null> | Promise<Record<string, string | number | null>>} SyncPublisherScopeAttributesResolver
  */
 /**
  * Model-level publish declaration value: `true` publishes with all defaults,
@@ -213,6 +245,7 @@ export type SyncPublisherResourceConfig = {
  * @property {SyncPublishBroadcast[] | undefined} broadcasts - Deprecated declared app-channel broadcasts.
  * @property {ReturnType<typeof JSON.parse>} modelClass - Server model class for this resource.
  * @property {Array<"create" | "update" | "destroy">} operations - Published operations.
+ * @property {SyncPublisherScopeAttributesResolver | undefined} scopeAttributesResolver - Computed scope values resolver, when declared.
  * @property {Array<SyncPublisherScopePlanEntry>} scopePlan - Derived scope-partition plan.
  * @property {(record: ReturnType<typeof JSON.parse>) => Record<string, ReturnType<typeof JSON.parse>> | Promise<Record<string, ReturnType<typeof JSON.parse>>>} serialize - Payload snapshot builder (the declaration's serialize or the default attribute serializer).
  * @property {string} resourceType - Published resource type.

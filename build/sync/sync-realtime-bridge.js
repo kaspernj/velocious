@@ -52,13 +52,14 @@ export default class SyncRealtimeBridge {
    * an active subscription is kept as-is and a concurrent subscribe awaits the
    * in-flight attempt. Call `unsubscribe()` first to change the context.
    * @param {ReturnType<typeof JSON.parse>} [context] - App context passed to the deprecated `sync.client.realtime.channels` callback (runtime scope values).
+   * @param {{signal?: AbortSignal}} [options] - Subscription lifecycle options.
    * @returns {Promise<void>}
    */
-  async subscribe(context) {
+  async subscribe(context, {signal} = {}) {
     if (this._state === "subscribed") return
 
     if (!this._subscribePromise) {
-      this._subscribePromise = this._subscribe(context).finally(() => {
+      this._subscribePromise = this._subscribe(context, signal).finally(() => {
         this._subscribePromise = null
       })
     }
@@ -74,9 +75,10 @@ export default class SyncRealtimeBridge {
    * is live; an unsubscribe arriving during any await marks this attempt stale
    * and it tears its own resources down instead of resubscribing.
    * @param {ReturnType<typeof JSON.parse>} context - App context passed to the channels callback.
+   * @param {AbortSignal | undefined} signal - Subscription lifecycle signal.
    * @returns {Promise<void>}
    */
-  async _subscribe(context) {
+  async _subscribe(context, signal) {
     const generation = this._generation
 
     this._state = "subscribing"
@@ -103,10 +105,13 @@ export default class SyncRealtimeBridge {
     }
 
     try {
+      throwIfAborted(signal)
+
       const sharedClient = this.syncClient.syncConnection()
       const realtime = this.requireClientSource(sharedClient)
       const channelDescriptors = await this.channelDescriptors(context)
 
+      throwIfAborted(signal)
       if (generation !== this._generation) return
 
       if (sharedClient) {
@@ -122,8 +127,9 @@ export default class SyncRealtimeBridge {
         return
       }
 
-      await client.connect()
+      await client.connect({signal})
 
+      throwIfAborted(signal)
       if (generation !== this._generation) {
         await teardown()
         return
@@ -131,6 +137,7 @@ export default class SyncRealtimeBridge {
 
       const authenticationToken = await this.syncClient.config.authenticationToken()
 
+      throwIfAborted(signal)
       if (generation !== this._generation) {
         await teardown()
         return
@@ -148,16 +155,17 @@ export default class SyncRealtimeBridge {
           params: {...channelDescriptor.params, authenticationToken}
         })
         const subscription = client.subscribeChannel(channelDescriptor.channel, {
-          onMessage: (body) => this.enqueueApply({body, resourceType}),
-          onResume: () => this.schedulePull(),
+          onMessage: (body) => this.enqueueApply({body, generation, resourceType}),
+          onResume: () => this.schedulePull(generation),
           params
         })
 
         channels.push({channel: channelDescriptor.channel, resourceType, subscription})
       }
 
-      await Promise.all(channels.map(({subscription}) => subscription.waitForReady()))
+      await Promise.all(channels.map(({subscription}) => subscription.waitForReady({signal})))
 
+      throwIfAborted(signal)
       if (generation !== this._generation) {
         await teardown()
         return
@@ -167,7 +175,7 @@ export default class SyncRealtimeBridge {
       this._client = client
       this._ownsClient = ownsClient
       this._state = "subscribed"
-      this.schedulePull()
+      this.schedulePull(generation)
     } catch (error) {
       await teardown()
 
@@ -333,11 +341,13 @@ export default class SyncRealtimeBridge {
   /**
    * Chains one pushed message onto the serialized apply queue so changes apply
    * in arrival order; failures go to the sync client's error reporting.
-   * @param {{body: ReturnType<typeof JSON.parse>, resourceType: string | null}} args - Message args.
+   * @param {{body: ReturnType<typeof JSON.parse>, generation?: number, resourceType: string | null}} args - Message args.
    * @returns {void}
    */
-  enqueueApply({body, resourceType}) {
+  enqueueApply({body, generation = this._generation, resourceType}) {
     this._applyPromise = this._applyPromise.then(async () => {
+      if (generation !== this._generation) return
+
       try {
         await this.applyMessage({body, resourceType})
       } catch (error) {
@@ -383,19 +393,34 @@ export default class SyncRealtimeBridge {
    * Schedules a coalesced background pull closing offline gaps after
    * (re)subscription readiness. Resumes arriving while a pull is already
    * scheduled or in flight coalesce into that pull instead of stacking.
+   * @param {number} [generation] - Subscription generation owning the resume/readiness callback.
    * @returns {void}
    */
-  schedulePull() {
+  schedulePull(generation = this._generation) {
+    if (generation !== this._generation) return
     if (this.realtimeConfiguration()?.pullOnReconnect === false) return
 
     this._scheduledPull ||= (async () => {
       try {
         await this.syncClient.pull()
       } catch (error) {
-        this.syncClient.reportError(/** @type {Error} */ (error))
+        if (!this.syncClient.isLifecycleAbort(error)) {
+          this.syncClient.reportError(/** @type {Error} */ (error))
+        }
       } finally {
         this._scheduledPull = null
       }
     })()
   }
+}
+
+/**
+ * Throws the lifecycle abort reason when the subscription is no longer owned.
+ * @param {AbortSignal | undefined} signal - Subscription lifecycle signal.
+ * @returns {void}
+ */
+function throwIfAborted(signal) {
+  if (!signal?.aborted) return
+
+  throw signal.reason instanceof Error ? signal.reason : new Error("Sync realtime subscription was aborted")
 }

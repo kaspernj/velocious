@@ -1,6 +1,7 @@
 // @ts-check
 
 import {describe, expect, it} from "../../src/testing/test.js"
+import {deferred} from "awaitery"
 import {buildConfiguration, buildFakeSyncModel, buildMetadataModelClass, buildRecord, fakeQuery, triggerLifecycle} from "./sync-client-fakes.js"
 import SyncClient from "../../src/sync/sync-client.js"
 
@@ -27,11 +28,12 @@ const SCAN_COLUMNS = [
  * Builds a sync client harness deriving everything from a configuration with
  * registered fake models and a recording transport.
  * @param {object} [args] - Harness args.
+ * @param {{value: string}} [args.authTokenHolder] - Mutable authentication-token holder.
  * @param {(args: {scope: Record<string, ReturnType<typeof JSON.parse>>}) => string | null | Promise<string | null>} [args.legacyCursor] - Legacy cursor seed hook.
  * @param {Array<ReturnType<typeof JSON.parse>>} [args.modelClasses] - Model classes to register. Defaults to a Ticket (pull-apply) and TicketScan (queueing) pair.
  * @returns {ReturnType<typeof JSON.parse>} Harness with client, fakes, and recorded calls.
  */
-function buildHarness({legacyCursor, modelClasses} = {}) {
+function buildHarness({authTokenHolder, legacyCursor, modelClasses} = {}) {
   /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */
   const postChangesCalls = []
   /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */
@@ -49,15 +51,20 @@ function buildHarness({legacyCursor, modelClasses} = {}) {
     save: async () => {}
   }
   const state = {
+    changesHandler: /** @type {null | ((args: {options: {signal?: AbortSignal}, payload: Record<string, ReturnType<typeof JSON.parse>>}) => Promise<Record<string, ReturnType<typeof JSON.parse>>>)} */ (null),
     changesResponses: /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */ ([]),
     online: true,
+    replayHandler: /** @type {null | ((args: {options: {signal?: AbortSignal}, payload: Record<string, ReturnType<typeof JSON.parse>>}) => Promise<Record<string, ReturnType<typeof JSON.parse>>>)} */ (null),
     replayResponse: /** @type {Record<string, ReturnType<typeof JSON.parse>> | ((payload: Record<string, ReturnType<typeof JSON.parse>>) => Record<string, ReturnType<typeof JSON.parse>>)} */ ({status: "success", syncs: []})
   }
+  const resolvedAuthTokenHolder = authTokenHolder || {value: "token-1"}
   const transport = {
-    /** @param {string} path - Posted path. @param {Record<string, ReturnType<typeof JSON.parse>>} payload - Posted payload. @returns {Promise<{json: () => Record<string, ReturnType<typeof JSON.parse>>}>} Response with json accessor. */
-    post: async (path, payload) => {
+    /** @param {string} path - Posted path. @param {Record<string, ReturnType<typeof JSON.parse>>} payload - Posted payload. @param {{signal?: AbortSignal}} [options] - Transport controls. @returns {Promise<{json: () => Record<string, ReturnType<typeof JSON.parse>>}>} Response with json accessor. */
+    post: async (path, payload, options = {}) => {
       if (path.endsWith("/changes")) {
         postChangesCalls.push(payload)
+
+        if (state.changesHandler) return {json: () => state.changesHandler?.({options, payload})}
 
         const changesResponse = state.changesResponses.shift() || {nextCursor: null, status: "success", syncs: [], upToCursor: null}
 
@@ -65,6 +72,8 @@ function buildHarness({legacyCursor, modelClasses} = {}) {
       }
 
       postReplayCalls.push(payload)
+
+      if (state.replayHandler) return {json: () => state.replayHandler?.({options, payload})}
 
       if (typeof state.replayResponse === "function") {
         const replayResponse = state.replayResponse(payload)
@@ -104,7 +113,7 @@ function buildHarness({legacyCursor, modelClasses} = {}) {
     modelClasses: resolvedModelClasses,
     sync: {
       client: {
-        authenticationToken: () => "token-1",
+        authenticationToken: () => resolvedAuthTokenHolder.value,
         isOnline: () => state.online,
         onError: (/** @type {Error} */ error) => {
           errors.push(error)
@@ -115,7 +124,7 @@ function buildHarness({legacyCursor, modelClasses} = {}) {
   })
   const client = new SyncClient({configuration, legacyCursor, syncModel})
 
-  return {client, errors, modelClasses: resolvedModelClasses, postChangesCalls, postReplayCalls, state, syncModel, ticketRecord}
+  return {authTokenHolder: resolvedAuthTokenHolder, client, errors, modelClasses: resolvedModelClasses, postChangesCalls, postReplayCalls, state, syncModel, ticketRecord}
 }
 
 /**
@@ -869,6 +878,297 @@ describe("sync client", () => {
     expect(TrackedScan.lifecycleCallbacks.afterCreate.length).toEqual(0)
     expect(TrackedScan.lifecycleCallbacks.afterUpdate.length).toEqual(0)
     expect(TrackedScan.lifecycleCallbacks.afterDestroy.length).toEqual(0)
+  })
+
+  it("aborts an in-flight pull, waits for quiescence and resets only selected scope state", async () => {
+    const harness = buildHarness()
+    const selectedScope = {conditions: {partner_id: 5}, resourceType: "Ticket"}
+    const retainedScope = {conditions: {partner_id: 6}, resourceType: "Ticket"}
+    const selectedRow = await harness.client.scopeStore().findOrCreateScope(selectedScope)
+    const retainedRow = await harness.client.scopeStore().findOrCreateScope(retainedScope)
+    const response = deferred()
+    let cleanupCalls = 0
+    /** @type {AbortSignal | undefined} */
+    let requestSignal
+
+    await harness.client.scopeStore().saveCursor(selectedRow, {id: "selected", serverSequence: 4, updatedAt: "2026-07-01T10:00:00.000Z"})
+    await harness.client.scopeStore().saveCursor(retainedRow, {id: "retained", serverSequence: 5, updatedAt: "2026-07-01T10:01:00.000Z"})
+    harness.state.changesHandler = async ({options}) => {
+      requestSignal = options.signal
+
+      return await new Promise((resolve, reject) => {
+        response.promise.then(resolve, reject)
+        options.signal?.addEventListener("abort", () => reject(options.signal?.reason), {once: true})
+      })
+    }
+
+    const pull = harness.client.pull()
+
+    while (!requestSignal && harness.postChangesCalls.length === 0) await Promise.resolve()
+
+    const stopping = Promise.resolve(harness.client.stop({
+      cleanup: async () => {
+        cleanupCalls += 1
+      },
+      resetScopes: [selectedScope]
+    }))
+
+    await Promise.resolve()
+    if (!requestSignal?.aborted) response.resolve({nextCursor: null, status: "success", syncs: [], upToCursor: null})
+
+    const [pullResult, stopResult] = await Promise.allSettled([pull, stopping])
+
+    expect(pullResult.status).toEqual("rejected")
+    expect(stopResult.status).toEqual("fulfilled")
+    expect(requestSignal?.aborted).toEqual(true)
+    expect(cleanupCalls).toEqual(1)
+    expect(JSON.parse(String(await harness.client.scopeStore().loadCursor(retainedRow))).id).toEqual("retained")
+
+    const reactivatedRow = await harness.client.scopeStore().findOrCreateScope(selectedScope)
+
+    expect(await harness.client.scopeStore().loadCursor(reactivatedRow)).toEqual(null)
+
+    await harness.client.stop({resetScopes: [selectedScope]})
+    await harness.client.stop({resetScopes: [selectedScope]})
+  })
+
+  it("does not advance a cursor when stop aborts after an apply has started", async () => {
+    const harness = buildHarness()
+    const scope = {conditions: {partner_id: 5}, resourceType: "Ticket"}
+    const scopeRow = await harness.client.scopeStore().findOrCreateScope(scope)
+    const applyStarted = deferred()
+    const applyCanFinish = deferred()
+    const lifecycleEvents = []
+
+    harness.ticketRecord.save = async () => {
+      lifecycleEvents.push("apply-started")
+      applyStarted.resolve(undefined)
+      await applyCanFinish.promise
+      lifecycleEvents.push("apply-finished")
+    }
+    harness.state.changesHandler = async () => ({
+      nextCursor: {id: "new-cursor", serverSequence: 6, updatedAt: "2026-07-01T10:02:00.000Z"},
+      status: "success",
+      syncs: [{data: {name: "Applied before stop"}, id: "sync-6", resourceId: TICKET_ID, resourceType: "Ticket", syncType: "update"}],
+      upToCursor: {id: "new-cursor", serverSequence: 6, updatedAt: "2026-07-01T10:02:00.000Z"}
+    })
+
+    const pull = harness.client.pull()
+
+    await applyStarted.promise
+
+    const stopping = Promise.resolve(harness.client.stop({
+      cleanup: async () => {
+        lifecycleEvents.push("cleanup")
+      },
+      resetScopes: [scope]
+    }))
+
+    await Promise.resolve()
+    expect(lifecycleEvents).toEqual(["apply-started"])
+
+    applyCanFinish.resolve(undefined)
+
+    const [pullResult, stopResult] = await Promise.allSettled([pull, stopping])
+
+    expect(pullResult.status).toEqual("rejected")
+    expect(stopResult.status).toEqual("fulfilled")
+    expect(lifecycleEvents).toEqual(["apply-started", "apply-finished", "cleanup"])
+
+    const reactivatedRow = await harness.client.scopeStore().findOrCreateScope(scope)
+
+    expect(reactivatedRow.id).not.toEqual(scopeRow.id)
+    expect(await harness.client.scopeStore().loadCursor(reactivatedRow)).toEqual(null)
+  })
+
+  it("aborts replay without acknowledging pending local mutations", async () => {
+    const TrackedScan = buildMetadataModelClass({columns: SCAN_COLUMNS, modelName: "TrackedScan", sync: {track: true}})
+    const harness = buildHarness({modelClasses: [TrackedScan]})
+    const replayResponse = deferred()
+    const record = buildScanRecord(TrackedScan)
+    /** @type {AbortSignal | undefined} */
+    let requestSignal
+
+    harness.state.online = false
+    await harness.client.queue({resource: record})
+    await harness.client.waitForScheduledReplay()
+    harness.state.online = true
+    harness.state.replayHandler = async ({options}) => {
+      requestSignal = options.signal
+
+      return await new Promise((resolve, reject) => {
+        replayResponse.promise.then(resolve, reject)
+        options.signal?.addEventListener("abort", () => reject(options.signal?.reason), {once: true})
+      })
+    }
+
+    const replay = harness.client.replayPending()
+
+    while (!requestSignal && harness.postReplayCalls.length === 0) await Promise.resolve()
+
+    const stopping = Promise.resolve(harness.client.stop())
+
+    await Promise.resolve()
+    if (!requestSignal?.aborted) replayResponse.resolve({
+      status: "success",
+      syncs: harness.postReplayCalls[0].syncs.map((/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ sync) => ({id: sync.id, syncState: "successful"}))
+    })
+
+    const [replayResult, stopResult] = await Promise.allSettled([replay, stopping])
+
+    expect(replayResult.status).toEqual("rejected")
+    expect(stopResult.status).toEqual("fulfilled")
+    expect(requestSignal?.aborted).toEqual(true)
+    expect(harness.syncModel.rows[0].attributes.state).toEqual("pending")
+  })
+
+  it("rejects explicit queueing started after identity replacement so it cannot replay with the new token", async () => {
+    const authTokenHolder = {value: "token-a"}
+    const harness = buildHarness({authTokenHolder})
+    const replacement = harness.client.replaceIdentity({
+      replace: async () => {
+        authTokenHolder.value = "token-b"
+      }
+    })
+
+    const [queueResult, replacementResult] = await Promise.allSettled([
+      harness.client.queue({resource: buildScanRecord(harness.modelClasses[1])}),
+      replacement
+    ])
+
+    await harness.client.waitForScheduledReplay()
+
+    expect({
+      queueErrorName: queueResult.status === "rejected" ? queueResult.reason.name : null,
+      queueStatus: queueResult.status,
+      queuedRows: harness.syncModel.rows.length,
+      replacementStatus: replacementResult.status,
+      replayTokens: harness.postReplayCalls.map((call) => call.authenticationToken)
+    }).toEqual({
+      queueErrorName: "SyncClientLifecycleAbortError",
+      queueStatus: "rejected",
+      queuedRows: 0,
+      replacementStatus: "fulfilled",
+      replayTokens: []
+    })
+  })
+
+  it("drops a tracked after-commit queue callback from the replaced identity generation", async () => {
+    const TrackedScan = buildMetadataModelClass({columns: SCAN_COLUMNS, modelName: "TrackedScan", sync: {track: true}})
+    /** @type {Array<() => Promise<void>>} */
+    const afterCommitCallbacks = []
+
+    TrackedScan.connection = () => ({
+      /** @param {() => Promise<void>} callback - Deferred commit callback. @returns {Promise<void>} */
+      afterCommit: async (callback) => {
+        afterCommitCallbacks.push(callback)
+      }
+    })
+
+    const authTokenHolder = {value: "token-a"}
+    const harness = buildHarness({authTokenHolder, modelClasses: [TrackedScan]})
+
+    await harness.client.start()
+    await triggerLifecycle(TrackedScan, "afterCreate", buildScanRecord(TrackedScan))
+
+    const replacement = harness.client.replaceIdentity({
+      replace: async () => {
+        authTokenHolder.value = "token-b"
+      }
+    })
+
+    await Promise.all([afterCommitCallbacks[0](), replacement])
+    await harness.client.waitForScheduledReplay()
+
+    expect({
+      errors: harness.errors,
+      queuedRows: harness.syncModel.rows.length,
+      replayTokens: harness.postReplayCalls.map((call) => call.authenticationToken)
+    }).toEqual({errors: [], queuedRows: 0, replayTokens: []})
+
+    await harness.client.stop()
+  })
+
+  it("replaces identity only after old work is quiescent and its private scope is purged", async () => {
+    const authTokenHolder = {value: "token-a"}
+    const harness = buildHarness({authTokenHolder})
+    const oldScope = await harness.client.userScope()
+    const oldScopeRow = await harness.client.scopeStore().findOrCreateScope(oldScope)
+    const applyStarted = deferred()
+    const applyCanFinish = deferred()
+    const lifecycleEvents = []
+
+    await harness.client.scopeStore().saveCursor(oldScopeRow, {id: "old", serverSequence: 7, updatedAt: "2026-07-01T10:03:00.000Z"})
+    harness.ticketRecord.save = async () => {
+      lifecycleEvents.push("old-apply-started")
+      applyStarted.resolve(undefined)
+      await applyCanFinish.promise
+      lifecycleEvents.push("old-apply-finished")
+    }
+    harness.state.changesHandler = async () => ({
+      nextCursor: {id: "old-late", serverSequence: 8, updatedAt: "2026-07-01T10:04:00.000Z"},
+      status: "success",
+      syncs: [{data: {name: "Old identity"}, id: "sync-8", resourceId: TICKET_ID, resourceType: "Ticket", syncType: "update"}],
+      upToCursor: {id: "old-late", serverSequence: 8, updatedAt: "2026-07-01T10:04:00.000Z"}
+    })
+
+    const oldPull = harness.client.pull()
+
+    await applyStarted.promise
+
+    const replacement = harness.client.replaceIdentity({
+      cleanup: async () => {
+        lifecycleEvents.push("cleanup-a")
+      },
+      replace: async () => {
+        lifecycleEvents.push("replace-b")
+        authTokenHolder.value = "token-b"
+      },
+      resetScopes: [oldScope]
+    })
+
+    await Promise.resolve()
+    expect(authTokenHolder.value).toEqual("token-a")
+
+    applyCanFinish.resolve(undefined)
+
+    const oldPullResult = await Promise.allSettled([oldPull])
+
+    await replacement
+
+    expect(oldPullResult[0].status).toEqual("rejected")
+    expect(lifecycleEvents).toEqual(["old-apply-started", "old-apply-finished", "cleanup-a", "replace-b"])
+    expect(await harness.client.userScope()).toEqual({conditions: {}, owner: "token-b", resourceType: null})
+
+    const reactivatedOldScope = await harness.client.scopeStore().findOrCreateScope(oldScope)
+
+    expect(reactivatedOldScope.id).not.toEqual(oldScopeRow.id)
+    expect(await harness.client.scopeStore().loadCursor(reactivatedOldScope)).toEqual(null)
+  })
+
+  it("keeps the old identity and cursor when replacement cleanup fails", async () => {
+    const authTokenHolder = {value: "token-a"}
+    const harness = buildHarness({authTokenHolder})
+    const oldScope = await harness.client.userScope()
+    const oldScopeRow = await harness.client.scopeStore().findOrCreateScope(oldScope)
+    let replaceCalls = 0
+
+    await harness.client.scopeStore().saveCursor(oldScopeRow, {id: "old", serverSequence: 7, updatedAt: "2026-07-01T10:03:00.000Z"})
+
+    await expect(async () => await harness.client.replaceIdentity({
+      cleanup: async () => {
+        throw new Error("Customer cache purge failed")
+      },
+      replace: async () => {
+        replaceCalls += 1
+        authTokenHolder.value = "token-b"
+      },
+      resetScopes: [oldScope]
+    })).toThrow("Customer cache purge failed")
+
+    expect(authTokenHolder.value).toEqual("token-a")
+    expect(replaceCalls).toEqual(0)
+    expect(JSON.parse(String(await harness.client.scopeStore().loadCursor(oldScopeRow))).id).toEqual("old")
   })
 
   it("fails loudly on invalid track configuration", async () => {

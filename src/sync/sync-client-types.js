@@ -98,6 +98,26 @@
  */
 
 /**
+ * Local cleanup hook that runs transactionally with selected scope resets.
+ * @typedef {(args: {connection: import("../database/drivers/base.js").default | null, scopes: SerializedSyncScope[]}) => Promise<void> | void} SyncClientScopeCleanup
+ */
+
+/**
+ * Options for stopping and resetting a sync client lifecycle.
+ * @typedef {object} SyncClientStopOptions
+ * @property {SyncClientScopeCleanup} [cleanup] - App-owned local-row purge run atomically with resetScopes.
+ * @property {SerializedSyncScope[]} [resetScopes] - Selected scope rows to deactivate and restart from a null cursor.
+ */
+
+/**
+ * Options for atomically replacing the external identity read by sync.client.
+ * @typedef {SyncClientStopOptions & {
+ *   replace: () => Promise<void> | void,
+ *   subscribeUserScope?: boolean
+ * }} SyncClientReplaceIdentityOptions
+ */
+
+/**
  * Internal derived sync client configuration built by the SyncClient
  * constructor — not an app-facing API.
  * @typedef {object} SyncClientConfig
@@ -107,8 +127,8 @@
  * @property {() => boolean | Promise<boolean>} [isOnline] - Connectivity gate for pulls and replays. Defaults to always online.
  * @property {(args: {scope: SerializedSyncScope}) => string | null | Promise<string | null>} [legacyCursor] - Seeds a newly declared scope's cursor (e.g. from a pre-scope cursor store) so devices don't re-pull everything.
  * @property {(error: Error) => void} [onError] - Reports background replay/pull failures. Defaults to rethrowing.
- * @property {(payload: import("./sync-api-client-types.js").SyncChangesRequest & {scope: SerializedSyncScope}) => Promise<import("./sync-api-client-types.js").SyncChangesResponse>} postChanges - Posts one changes request.
- * @property {(payload: {authenticationToken: string, syncs: Array<Record<string, ReturnType<typeof JSON.parse>>>}) => Promise<import("./sync-api-client-types.js").SyncReplayResponse>} postReplay - Posts one replay request.
+ * @property {(payload: import("./sync-api-client-types.js").SyncChangesRequest & {scope: SerializedSyncScope}, options?: {signal?: AbortSignal}) => Promise<import("./sync-api-client-types.js").SyncChangesResponse>} postChanges - Posts one changes request.
+ * @property {(payload: {authenticationToken: string, syncs: Array<Record<string, ReturnType<typeof JSON.parse>>>}, options?: {signal?: AbortSignal}) => Promise<import("./sync-api-client-types.js").SyncReplayResponse>} postReplay - Posts one replay request.
  * @property {import("../configuration-types.js").VelociousSyncClientRealtimeConfiguration} [realtime] - Realtime push configuration consumed by `subscribeRealtime(...)`.
  * @property {import("../remote-request-context.js").RemoteRequestContext} requestContext - Immutable scalar context captured for this client.
  * @property {Record<string, SyncClientResourceConfig>} resources - Derived resource policies keyed by resource/model name.

@@ -12,14 +12,15 @@
  */
 export function buildFakeWebsocketClient({deferConnect, deferReady} = {}) {
   const fakeWebsocketClient = {
-    /** @returns {Promise<void>} */
-    connect: () => {
+    /** @param {{signal?: AbortSignal}} [options] - Connection controls. @returns {Promise<void>} */
+    connect: (options = {}) => {
       fakeWebsocketClient.connectCalls += 1
 
       if (!deferConnect) return Promise.resolve()
 
-      return new Promise((resolve) => {
+      return new Promise((resolve, reject) => {
         fakeWebsocketClient.resolveConnect = resolve
+        options.signal?.addEventListener("abort", () => reject(options.signal?.reason), {once: true})
       })
     },
     connectCalls: 0,
@@ -56,12 +57,13 @@ export function buildFakeWebsocketClient({deferConnect, deferReady} = {}) {
         params,
         /** @type {(() => void) | null} */
         resolveReady: null,
-        /** @returns {Promise<void>} Resolves once the subscription is acknowledged. */
-        waitForReady: () => {
+        /** @param {{signal?: AbortSignal}} [options] - Readiness controls. @returns {Promise<void>} Resolves once the subscription is acknowledged. */
+        waitForReady: (options = {}) => {
           if (!deferReady) return Promise.resolve()
 
-          return new Promise((resolve) => {
+          return new Promise((resolve, reject) => {
             subscription.resolveReady = resolve
+            options.signal?.addEventListener("abort", () => reject(options.signal?.reason), {once: true})
           })
         }
       }
