@@ -1157,6 +1157,8 @@ export default class BackgroundJobsMain {
       if (message?.type === "enqueue" && !message.producerProof) jsonSocket.send({type: "enqueue-error", error: "Background jobs generation is retired"})
       if (message?.type === "replace-scheduled") jsonSocket.send({type: "replace-scheduled-error", error: "Background jobs generation is retired"})
       if (message?.type === "cancel-scheduled") jsonSocket.send({type: "cancel-scheduled-error", error: "Background jobs generation is retired"})
+      if (message?.type === "get-scheduled-job") jsonSocket.send({type: "get-scheduled-job-error", error: "Background jobs generation is retired"})
+      if (message?.type === "wake-scheduled") jsonSocket.send({type: "wake-scheduled-error", error: "Background jobs generation is retired"})
       if (message?.type !== "enqueue" || !message.producerProof) return
     }
 
@@ -1172,6 +1174,16 @@ export default class BackgroundJobsMain {
 
     if (message?.type === "cancel-scheduled") {
       await this._handleCancelScheduled({jsonSocket, message})
+      return
+    }
+
+    if (message?.type === "get-scheduled-job") {
+      await this._handleGetScheduledJob({jsonSocket, message})
+      return
+    }
+
+    if (message?.type === "wake-scheduled") {
+      await this._handleWakeScheduled({jsonSocket, message})
     }
   }
 
@@ -1600,6 +1612,61 @@ export default class BackgroundJobsMain {
   }
 
   /**
+   * Handles a stable schedule lookup and returns only normalized adapter jobs.
+   * @param {object} args - Options.
+   * @param {JsonSocket} args.jsonSocket - JSON socket.
+   * @param {import("./types.js").BackgroundJobGetScheduledMessage} args.message - Message.
+   * @returns {Promise<void>} - Resolves when handled.
+   */
+  async _handleGetScheduledJob({jsonSocket, message}) {
+    try {
+      const result = await this.store.getScheduledJob(message.scheduleKey, {
+        includeLatestTerminal: message.includeLatestTerminal
+      })
+
+      jsonSocket.send({type: "scheduled-job", ...result})
+    } catch (error) {
+      this._handleClientMutationError({
+        context: {scheduleKey: message.scheduleKey, stage: "background-job-get-scheduled"},
+        error,
+        fallbackMessage: "Failed to read scheduled job",
+        jsonSocket,
+        logMessage: "Failed to read scheduled background job:",
+        responseType: "get-scheduled-job-error"
+      })
+    }
+  }
+
+  /**
+   * Handles a stable schedule wake and re-arms dispatch after its transaction commits.
+   * @param {object} args - Options.
+   * @param {JsonSocket} args.jsonSocket - JSON socket.
+   * @param {import("./types.js").BackgroundJobWakeScheduledMessage} args.message - Message.
+   * @returns {Promise<void>} - Resolves when handled.
+   */
+  async _handleWakeScheduled({jsonSocket, message}) {
+    try {
+      const result = await this.store.wakeScheduled(message.scheduleKey)
+
+      if (result.outcome === "woken" || result.outcome === "already_due") {
+        this._notifyEnqueued()
+        await this._drain()
+      }
+
+      jsonSocket.send({type: "schedule-woken", ...result})
+    } catch (error) {
+      this._handleClientMutationError({
+        context: {scheduleKey: message.scheduleKey, stage: "background-job-wake-scheduled"},
+        error,
+        fallbackMessage: "Failed to wake scheduled job",
+        jsonSocket,
+        logMessage: "Failed to wake scheduled background job:",
+        responseType: "wake-scheduled-error"
+      })
+    }
+  }
+
+  /**
    * Returns safe validation failures and reports unexpected client mutations.
    * @param {object} args - Options.
    * @param {Record<string, ReturnType<typeof JSON.parse>>} args.context - Framework-error context.
@@ -1607,7 +1674,7 @@ export default class BackgroundJobsMain {
    * @param {string} args.fallbackMessage - Client-safe fallback message.
    * @param {JsonSocket} args.jsonSocket - JSON socket.
    * @param {string} args.logMessage - Error log prefix.
-   * @param {"enqueue-error" | "replace-scheduled-error" | "cancel-scheduled-error"} args.responseType - Response type.
+   * @param {"enqueue-error" | "replace-scheduled-error" | "cancel-scheduled-error" | "get-scheduled-job-error" | "wake-scheduled-error"} args.responseType - Response type.
    * @returns {void}
    */
   _handleClientMutationError({context, error, fallbackMessage, jsonSocket, logMessage, responseType}) {

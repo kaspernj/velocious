@@ -67,18 +67,46 @@ export default class LocalBackgroundJobsAdapter extends BackgroundJobsAdapter {
   }
 
   /**
-   * Rejects stable-key cancellation, which is outside the local adapter contract.
-   * @param {string} _scheduleKey - Unsupported stable key.
-   * @returns {Promise<import("./types.js").BackgroundJobCancellationResult>} - Never resolves.
+   * Cancels or detaches the current owner of a stable schedule key.
+   * @param {string} scheduleKey - Stable schedule key.
+   * @returns {Promise<import("./types.js").BackgroundJobCancellationResult>} - Cancellation result.
    */
-  async cancelScheduled(_scheduleKey) { throw new Error("cancelScheduled is not supported by the local background-jobs adapter") }
+  async cancelScheduled(scheduleKey) {
+    await this.ensureReady()
+    return await this.store.cancelScheduled(scheduleKey)
+  }
 
   /**
-   * Rejects stable-key replacement, which is outside the local adapter contract.
-   * @param {{scheduleKey: string, jobName: string, args: Array<ReturnType<typeof JSON.parse>>, options?: import("./types.js").BackgroundJobOptions}} _args - Unsupported request.
-   * @returns {Promise<import("./types.js").BackgroundJobReplacementResult>} - Never resolves.
+   * Replaces the current owner of a stable schedule key.
+   * @param {{scheduleKey: string, jobName: string, args: Array<ReturnType<typeof JSON.parse>>, options?: import("./types.js").BackgroundJobOptions}} args - Replacement request.
+   * @returns {Promise<import("./types.js").BackgroundJobReplacementResult>} - Replacement result.
    */
-  async replaceScheduled(_args) { throw new Error("replaceScheduled is not supported by the local background-jobs adapter") }
+  async replaceScheduled(args) {
+    await this.ensureReady()
+    this.registry.resolve(args.jobName)
+    return await this.store.replaceScheduled(args)
+  }
+
+  /**
+   * Reads stable ownership and optional terminal history.
+   * @param {string} scheduleKey - Stable schedule key.
+   * @param {{includeLatestTerminal?: boolean}} [options] - Lookup options.
+   * @returns {Promise<import("./types.js").BackgroundJobScheduledLookupResult>} - Normalized local jobs.
+   */
+  async getScheduledJob(scheduleKey, options) {
+    await this.ensureReady()
+    return await this.store.getScheduledJob(scheduleKey, options)
+  }
+
+  /**
+   * Makes a future queued stable owner due without replacing it.
+   * @param {string} scheduleKey - Stable schedule key.
+   * @returns {Promise<import("./types.js").BackgroundJobWakeResult>} - Exact wake result.
+   */
+  async wakeScheduled(scheduleKey) {
+    await this.ensureReady()
+    return await this.store.wakeScheduled(scheduleKey)
+  }
 
   /**
    * Finds the next eligible local job.

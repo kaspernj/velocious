@@ -42,4 +42,26 @@ export default class BackgroundJobsAdapterClient {
 
     return await adapter.cancelScheduled(scheduleKey)
   }
+
+  /**
+   * Reads a stable schedule through the configured adapter.
+   * @param {{scheduleKey: string, includeLatestTerminal?: boolean}} args - Lookup request.
+   * @returns {Promise<import("./types.js").BackgroundJobScheduledLookupResult>} - Normalized stable schedule jobs.
+   */
+  async getScheduledJob({scheduleKey, includeLatestTerminal}) {
+    const adapter = await this.configuration.acquireReadyBackgroundJobsAdapter()
+
+    return await adapter.getScheduledJob(scheduleKey, {includeLatestTerminal})
+  }
+
+  /**
+   * Wakes a stable schedule through the configured adapter.
+   * @param {{scheduleKey: string}} args - Wake request.
+   * @returns {Promise<import("./types.js").BackgroundJobWakeResult>} - Wake result.
+   */
+  async wakeScheduled({scheduleKey}) {
+    const adapter = await this.configuration.acquireReadyBackgroundJobsAdapter()
+
+    return await adapter.wakeScheduled(scheduleKey)
+  }
 }

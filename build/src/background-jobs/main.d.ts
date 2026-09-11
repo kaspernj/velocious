@@ -631,6 +631,28 @@ export default class BackgroundJobsMain {
         message: import("./types.js").BackgroundJobCancelScheduledMessage;
     }): Promise<void>;
     /**
+     * Handles a stable schedule lookup and returns only normalized adapter jobs.
+     * @param {object} args - Options.
+     * @param {JsonSocket} args.jsonSocket - JSON socket.
+     * @param {import("./types.js").BackgroundJobGetScheduledMessage} args.message - Message.
+     * @returns {Promise<void>} - Resolves when handled.
+     */
+    _handleGetScheduledJob({ jsonSocket, message }: {
+        jsonSocket: JsonSocket;
+        message: import("./types.js").BackgroundJobGetScheduledMessage;
+    }): Promise<void>;
+    /**
+     * Handles a stable schedule wake and re-arms dispatch after its transaction commits.
+     * @param {object} args - Options.
+     * @param {JsonSocket} args.jsonSocket - JSON socket.
+     * @param {import("./types.js").BackgroundJobWakeScheduledMessage} args.message - Message.
+     * @returns {Promise<void>} - Resolves when handled.
+     */
+    _handleWakeScheduled({ jsonSocket, message }: {
+        jsonSocket: JsonSocket;
+        message: import("./types.js").BackgroundJobWakeScheduledMessage;
+    }): Promise<void>;
+    /**
      * Returns safe validation failures and reports unexpected client mutations.
      * @param {object} args - Options.
      * @param {Record<string, ReturnType<typeof JSON.parse>>} args.context - Framework-error context.
@@ -638,7 +660,7 @@ export default class BackgroundJobsMain {
      * @param {string} args.fallbackMessage - Client-safe fallback message.
      * @param {JsonSocket} args.jsonSocket - JSON socket.
      * @param {string} args.logMessage - Error log prefix.
-     * @param {"enqueue-error" | "replace-scheduled-error" | "cancel-scheduled-error"} args.responseType - Response type.
+     * @param {"enqueue-error" | "replace-scheduled-error" | "cancel-scheduled-error" | "get-scheduled-job-error" | "wake-scheduled-error"} args.responseType - Response type.
      * @returns {void}
      */
     _handleClientMutationError({ context, error, fallbackMessage, jsonSocket, logMessage, responseType }: {
@@ -647,7 +669,7 @@ export default class BackgroundJobsMain {
         fallbackMessage: string;
         jsonSocket: JsonSocket;
         logMessage: string;
-        responseType: "enqueue-error" | "replace-scheduled-error" | "cancel-scheduled-error";
+        responseType: "enqueue-error" | "replace-scheduled-error" | "cancel-scheduled-error" | "get-scheduled-job-error" | "wake-scheduled-error";
     }): void;
     /**
      * Runs handle job complete.

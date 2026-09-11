@@ -94,6 +94,21 @@ export default class BackgroundJobsAdapter {
   async cancelScheduled(_scheduleKey) { throw new Error("BackgroundJobsAdapter#cancelScheduled is not implemented") }
 
   /**
+   * Reads current stable ownership and optional terminal history.
+   * @param {string} _scheduleKey - Stable schedule key.
+   * @param {{includeLatestTerminal?: boolean}} [_options] - Lookup options.
+   * @returns {Promise<import("./types.js").BackgroundJobScheduledLookupResult>} - Normalized public jobs.
+   */
+  async getScheduledJob(_scheduleKey, _options = {}) { throw new Error("BackgroundJobsAdapter#getScheduledJob is not implemented") }
+
+  /**
+   * Expedites a future queued stable owner without changing its identity.
+   * @param {string} _scheduleKey - Stable schedule key.
+   * @returns {Promise<import("./types.js").BackgroundJobWakeResult>} - Wake result.
+   */
+  async wakeScheduled(_scheduleKey) { throw new Error("BackgroundJobsAdapter#wakeScheduled is not implemented") }
+
+  /**
    * Finds the next eligible job.
    * @param {{executionMode?: import("./types.js").BackgroundJobExecutionMode | import("./types.js").BackgroundJobExecutionMode[]}} [_args] - Dequeue filters.
    * @returns {Promise<import("./types.js").BackgroundJobRow | null>} - Next eligible job.

@@ -207,6 +207,7 @@ export default class VelociousBackgroundJobsWebController extends Controller {
       maxRetries: job.maxRetries,
       orphanedAtMs: job.orphanedAtMs,
       scheduleKey: job.scheduleKey,
+      scheduleOrder: job.scheduleOrder,
       scheduledAtMs: job.scheduledAtMs,
       status: job.status,
       workerId: job.workerId

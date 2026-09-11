@@ -28,9 +28,18 @@ describe("Background jobs - stable schedule API", {databaseCleaning: {transactio
         scheduleKey: "event:51:reminder:24h",
         status: "queued"
       })
+      expect(await TestJob.getScheduledJob("event:51:reminder:24h", {includeLatestTerminal: true})).toMatchObject({
+        currentJob: {id: replacement.jobId, jobName: "TestJob", status: "queued"},
+        latestTerminalJob: null
+      })
+      expect(await TestJob.wakeScheduled("event:51:reminder:24h")).toEqual({jobId: replacement.jobId, outcome: "woken"})
       expect(await TestJob.cancelScheduled("event:51:reminder:24h")).toEqual({
         jobId: replacement.jobId,
         outcome: "cancelled"
+      })
+      expect(await TestJob.getScheduledJob("event:51:reminder:24h", {includeLatestTerminal: true})).toMatchObject({
+        currentJob: null,
+        latestTerminalJob: {id: replacement.jobId, jobName: "TestJob", status: "cancelled"}
       })
     } finally {
       await main.stop()
@@ -70,8 +79,15 @@ describe("Background jobs - stable schedule API", {databaseCleaning: {transactio
       const client = new BackgroundJobsClient({configuration: dummyConfiguration})
       const replacement = await client.replaceScheduled({scheduleKey: "client:key", jobName: "TestJob", args: []})
 
+      expect(await client.getScheduledJob({scheduleKey: "client:key", includeLatestTerminal: true})).toMatchObject({
+        currentJob: {id: replacement.jobId, jobName: "TestJob", status: "queued"},
+        latestTerminalJob: null
+      })
+      expect(await client.wakeScheduled({scheduleKey: "client:key"})).toEqual({jobId: replacement.jobId, outcome: "already_due"})
       expect(await client.cancelScheduled({scheduleKey: "client:key"})).toEqual({jobId: replacement.jobId, outcome: "cancelled"})
       await expect(async () => await client.cancelScheduled({scheduleKey: ""})).toThrow(/non-empty string/)
+      await expect(async () => await client.getScheduledJob({scheduleKey: "", includeLatestTerminal: true})).toThrow(/non-empty string/)
+      await expect(async () => await client.wakeScheduled({scheduleKey: "x".repeat(256)})).toThrow(/at most 255/)
       expect(frameworkErrorCount).toEqual(0)
     } finally {
       errorEvents.off("framework-error", onFrameworkError)

@@ -21,8 +21,9 @@ from a durable job's `executionMode`:
   adapter, open a main/worker transport, or create durable queue state. Errors
   propagate to the caller. All `jobOptions` are rejected because their retry,
   scheduling, queue, concurrency, idempotency, deduplication, and worker-execution
-  semantics require durable state. `replaceScheduled`, `cancelScheduled`, and
-  `rescheduleIn` are rejected for the same reason.
+  semantics require durable state. `replaceScheduled`, `cancelScheduled`,
+  `getScheduledJob`, `wakeScheduled`, and `rescheduleIn` are rejected for the
+  same reason.
 
 The established `background-jobs/job.js` entry remains the Node entry. It keeps
 lazy `src/config/configuration.js` discovery in fresh producer processes and
@@ -76,8 +77,8 @@ acquires the current ready generation again on every `start()`.
 The current main/worker architecture requires these adapter operations:
 
 - lifecycle/readiness: `ensureReady`, `health`, and `close`;
-- enqueue and stable schedules: `enqueue`, `replaceScheduled`, and
-  `cancelScheduled`;
+- enqueue and stable schedules: `enqueue`, `replaceScheduled`,
+  `cancelScheduled`, `getScheduledJob`, and `wakeScheduled`;
 - dequeue and timing: `nextAvailableJob`, `nextScheduledJob`,
   `reconcileQueueConcurrency`, and `reconcileActiveConcurrency`;
 - start/handoff state: `markHandedOff`, `markReturnedToQueue`,
@@ -156,7 +157,7 @@ Set the runtime explicitly with `executionMode` — `"pooled"` (default), `"inli
 
 For delayed one-off work, see [Scheduling One-Off Background Jobs](scheduled-background-job-enqueue.md). Recurring schedules use the separate `scheduledBackgroundJobs` configuration described in the [README](../README.md#scheduled-jobs).
 
-Logical one-off schedules that may be moved or cancelled can use `replaceScheduled` and `cancelScheduled` with a durable stable key. Queued replacement/cancellation is atomic across processes; a `handed_off` result is explicitly best-effort because running JavaScript is not interrupted. Consumers must pair the API with their own generation/revision check immediately before side effects. See [Replacing or cancelling a logical schedule](scheduled-background-job-enqueue.md#replacing-or-cancelling-a-logical-schedule).
+Logical one-off schedules that may be moved, cancelled, inspected, or expedited can use `replaceScheduled`, `cancelScheduled`, `getScheduledJob`, and `wakeScheduled` with a durable stable key. Lookup returns normalized current/latest-terminal job values under the same count-revision fence as handoff and terminal transitions. Each owner receives a monotonic `scheduleOrder` inside the ownership transaction, so causal terminal history does not depend on timestamps or random ids. The Node SQL store retains a per-key high-water mark outside prunable job history, so ownership order never resets after terminal retention. Wake advances only an existing future queued row, preserving its id and retry lineage, and never falls back to enqueue. Queued ownership transitions are atomic across processes; a `handed_off` result is explicitly best-effort because running JavaScript is not interrupted. Consumers must pair the API with their own generation/revision check immediately before side effects. The same API is available through the Browser/Expo local adapter, subject to its foreground-runtime boundaries. See [Replacing or cancelling a logical schedule](scheduled-background-job-enqueue.md#replacing-or-cancelling-a-logical-schedule).
 
 ## Rescheduling a running job
 
@@ -334,7 +335,7 @@ When at least one TTL is enabled, `background-jobs-main` registers a built-in `v
 - each run appears in the job tables as a normal queued job and can retry or fail like any other job;
 - runs are bounded — a `maxConcurrency: 1` reservation prevents overlap, and enqueue-time deduplication keeps the recurring schedule from piling up redundant queued rows when a prune runs slower than its interval or no worker is free.
 
-Deletion is batched by id (`SELECT` a page, then `DELETE ... WHERE id IN (...)`) so a large backlog is removed incrementally rather than in one long transaction. Retention only ever deletes terminal rows; `queued` and in-flight jobs are never pruned. Durable idempotency ownership and mail-operation rows are independent of job retention and are not deleted by this sweep.
+Deletion is batched by id (`SELECT` a page, then `DELETE ... WHERE id IN (...)`) so a large backlog is removed incrementally rather than in one long transaction. Retention only ever deletes terminal rows; `queued` and in-flight jobs are never pruned. Durable idempotency ownership, mail-operation rows, and stable-schedule order high-water marks are independent of job retention and are not deleted by this sweep.
 
 ## Worker Disconnect Recovery
 

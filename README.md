@@ -37,7 +37,7 @@
 * Explicit database-free in-process HTTP applications with optional request and buffered-response byte limits (see [docs/http-server.md](docs/http-server.md#database-free-applications))
 * Default-on buffered HTTP response compression with Brotli/gzip content negotiation, global and per-response opt-outs, and HEAD-correct representation headers (see [docs/http-server.md](docs/http-server.md#response-compression))
 * Background jobs with Node SQL/TCP workers plus a Browser/Expo local SQLite store and in-process dispatcher, including failure events, authorized database-scoped dashboard counts, and an opt-in release-scoped main/worker generation protocol with acknowledged activation, asynchronous retirement, and retired-main recovery. Production compliance additionally requires downstream supervisor retention/activation ordering and release pins (see [docs/background-jobs.md](docs/background-jobs.md), [docs/local-background-jobs.md](docs/local-background-jobs.md), and [docs/background-jobs-dashboard.md](docs/background-jobs-dashboard.md))
-* Durable one-off background-job scheduling with exact epoch timestamps (see [docs/scheduled-background-job-enqueue.md](docs/scheduled-background-job-enqueue.md))
+* Durable one-off background-job scheduling with exact epoch timestamps plus stable replacement, cancellation, normalized readback, and duplicate-free wake across Node SQL/TCP and Browser/Expo local SQLite adapters (see [docs/scheduled-background-job-enqueue.md](docs/scheduled-background-job-enqueue.md))
 * Rails-style request and database query logging with structured credential redaction (see [docs/logging.md](docs/logging.md))
 * EJS-backed mailers with delivery, queueing, and payload rendering support (see [docs/mailers.md](docs/mailers.md))
 * Trusted reverse proxy handling for `request.remoteAddress()` (see [docs/trusted-proxies.md](docs/trusted-proxies.md))
@@ -2723,7 +2723,16 @@ const result = await MyJob.replaceScheduled({
 await MyJob.cancelScheduled(`event:${eventId}:reminder:24h`)
 ```
 
-A queued owner is atomically cancelled during replacement/cancellation. Its acknowledgement waits for the corresponding dispatch drain lifecycle; if another drain is already active, the request coalesces and waits for its re-drain and future-job timer re-arm instead of acknowledging early. A `previousStatus` or cancellation `outcome` of `"handed_off"` means the worker may already be running; Velocious removes or replaces key ownership but does not claim that JavaScript stopped. Store a generation/revision in application state, pass it to the job, and re-check it immediately before irreversible effects. Stable keys and full result shapes are documented in [Scheduling One-Off Background Jobs](docs/scheduled-background-job-enqueue.md#replacing-or-cancelling-a-logical-schedule).
+Read the durable owner/history or expedite the same queued row without creating another job:
+
+```js
+const scheduled = await MyJob.getScheduledJob(`event:${eventId}:reminder:24h`, {
+  includeLatestTerminal: true
+})
+const wake = await MyJob.wakeScheduled(`event:${eventId}:reminder:24h`)
+```
+
+A queued owner is atomically cancelled during replacement/cancellation. On Node/TCP, its acknowledgement waits for the corresponding main-process dispatch drain lifecycle. The local adapter commits an adapter-owned transaction before its dispatcher wake runs; inside an ambient application transaction, the mutation and wake remain deferred to that outer commit. Readback returns normalized public jobs, including the transaction-assigned `scheduleOrder` used for causal history ordering; Node retains the per-key order high-water mark when terminal history is pruned. Wake moves only a future queued owner's eligibility to now while preserving its id, attempts, last error, and lineage; repeated calls never enqueue duplicates. A `previousStatus`, cancellation `outcome`, or wake `outcome` of `"handed_off"` means the worker may already be running; Velocious removes or replaces key ownership where appropriate but does not claim that JavaScript stopped. Store a generation/revision in application state, pass it to the job, and re-check it immediately before irreversible effects. Stable keys and full result shapes are documented in [Scheduling One-Off Background Jobs](docs/scheduled-background-job-enqueue.md#replacing-or-cancelling-a-logical-schedule).
 
 Set `deduplicateWhileQueued: true` to coalesce an enqueue onto the earliest identical queued job with the same job name, arguments, and queue when that existing job is scheduled no later than the new request. A retry backed off into the future does not suppress a new immediate enqueue, while repeated immediate triggers and equal or later schedules still coalesce.
 

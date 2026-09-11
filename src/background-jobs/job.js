@@ -8,7 +8,9 @@ import PlatformVelociousJob from "./platform-job.js"
 import {
   cancelScheduledBackgroundJobForConfiguration,
   enqueueBackgroundJobForConfiguration,
-  replaceScheduledBackgroundJobForConfiguration
+  getScheduledBackgroundJobForConfiguration,
+  replaceScheduledBackgroundJobForConfiguration,
+  wakeScheduledBackgroundJobForConfiguration
 } from "./runtime.js"
 
 /**
@@ -83,5 +85,28 @@ export default class VelociousJob extends PlatformVelociousJob {
     const configuration = await configurationResolver()
 
     return await cancelScheduledBackgroundJobForConfiguration({configuration, scheduleKey})
+  }
+
+  /**
+   * Reads current ownership and optional terminal history for a stable key.
+   * @param {string} scheduleKey - Stable logical schedule key.
+   * @param {{includeLatestTerminal?: boolean}} [options] - Lookup options.
+   * @returns {Promise<import("./types.js").BackgroundJobScheduledLookupResult>} - Normalized stable schedule jobs.
+   */
+  static async getScheduledJob(scheduleKey, options = {}) {
+    const configuration = await configurationResolver()
+
+    return await getScheduledBackgroundJobForConfiguration({configuration, scheduleKey, ...options})
+  }
+
+  /**
+   * Expedites a future queued owner without creating another job.
+   * @param {string} scheduleKey - Stable logical schedule key.
+   * @returns {Promise<import("./types.js").BackgroundJobWakeResult>} - Wake result.
+   */
+  static async wakeScheduled(scheduleKey) {
+    const configuration = await configurationResolver()
+
+    return await wakeScheduledBackgroundJobForConfiguration({configuration, scheduleKey})
   }
 }

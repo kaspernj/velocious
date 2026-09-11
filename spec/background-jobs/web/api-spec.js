@@ -223,6 +223,7 @@ describe("Background jobs - web API", {databaseCleaning: {truncate: true}}, () =
 
       expect(response.status).toEqual(200)
       expect(body.job.scheduleKey).toEqual("event:61:reminder:24h")
+      expect(body.job.scheduleOrder).toEqual(1)
       expect(body.job.status).toEqual("completed")
     })
   })

@@ -1,7 +1,9 @@
 import TableData from "../database/table-data/index.js";
 export declare const LOCAL_BACKGROUND_JOBS_TABLE = "velocious_local_background_jobs";
 export declare const LOCAL_BACKGROUND_JOB_CONCURRENCY_TABLE = "velocious_local_background_job_concurrency";
+export declare const LOCAL_BACKGROUND_JOB_SCHEDULE_KEYS_TABLE = "velocious_local_background_job_schedule_keys";
 export declare const LOCAL_BACKGROUND_JOBS_INDEX_NAMES: string[];
+export declare const LOCAL_BACKGROUND_JOB_SCHEDULE_KEYS_INDEX_NAMES: string[];
 /**
  * Creates the production clock used by local dispatch.
  * @returns {import("./types.js").LocalBackgroundJobsClock} - Production clock.
@@ -57,7 +59,8 @@ export default class LocalBackgroundJobsStore {
      */
     _ensureReadyWithDb(db: import("../database/drivers/base.js").default): Promise<void>;
     /**
-     * Creates or repairs version-one tables and indexes.
+     * Creates or upgrades the versioned local tables and indexes without
+     * rebuilding persisted queue data.
      * @param {import("../database/drivers/base.js").default} db - Local SQLite connection.
      * @returns {Promise<boolean>} - Whether schema state changed.
      */
@@ -86,6 +89,11 @@ export default class LocalBackgroundJobsStore {
      */
     _concurrencyTableData(): TableData;
     /**
+     * Builds the stable schedule-owner table definition.
+     * @returns {TableData} - Stable owner table definition.
+     */
+    _scheduleKeysTableData(): TableData;
+    /**
      * Rejects an incompatible current-version table rather than rebuilding data.
      * @param {import("../database/drivers/base.js").default} db - Local SQLite connection.
      * @param {string} tableName - Table name.
@@ -102,14 +110,23 @@ export default class LocalBackgroundJobsStore {
     /**
      * Checks whether the current local schema version is recorded.
      * @param {import("../database/drivers/base.js").default} db - Connection.
-     * @returns {Promise<boolean>} - Whether version one is recorded.
+     * @param {string} version - Local schema version.
+     * @returns {Promise<boolean>} - Whether the version is recorded.
      */
-    _hasMigration(db: import("../database/drivers/base.js").default): Promise<boolean>;
+    _hasMigration(db: import("../database/drivers/base.js").default, version: string): Promise<boolean>;
+    /**
+     * Records one local schema version after its additive changes are present.
+     * @param {import("../database/drivers/base.js").default} db - Connection.
+     * @param {string} version - Local schema version.
+     * @returns {Promise<void>} - Resolves after recording.
+     */
+    _recordMigration(db: import("../database/drivers/base.js").default, version: string): Promise<void>;
     /**
      * Builds the scoped migration key.
+     * @param {string} version - Local schema version.
      * @returns {string} - Scoped migration key.
      */
-    _migrationKey(): string;
+    _migrationKey(version: string): string;
     /**
      * Enqueues a local job in the caller's active transaction when present.
      * @param {object} args - Enqueue request.
@@ -123,6 +140,43 @@ export default class LocalBackgroundJobsStore {
         args: Array<ReturnType<typeof JSON.parse>>;
         options?: import("./types.js").BackgroundJobOptions;
     }): Promise<string>;
+    /**
+     * Replaces the queued owner of a stable schedule key with a new local job.
+     * A handed-off owner remains runnable but is detached from future ownership.
+     * @param {object} args - Replacement request.
+     * @param {string} args.scheduleKey - Stable logical schedule key.
+     * @param {string} args.jobName - Registered job name.
+     * @param {Array<ReturnType<typeof JSON.parse>>} args.args - Serialized job arguments.
+     * @param {import("./types.js").BackgroundJobOptions} [args.options] - Job options.
+     * @returns {Promise<import("./types.js").BackgroundJobReplacementResult>} - Replacement result.
+     */
+    replaceScheduled({ scheduleKey, jobName, args, options }: {
+        scheduleKey: string;
+        jobName: string;
+        args: Array<ReturnType<typeof JSON.parse>>;
+        options?: import("./types.js").BackgroundJobOptions;
+    }): Promise<import("./types.js").BackgroundJobReplacementResult>;
+    /**
+     * Cancels a queued stable owner or detaches an active handoff truthfully.
+     * @param {string} scheduleKey - Stable logical schedule key.
+     * @returns {Promise<import("./types.js").BackgroundJobCancellationResult>} - Cancellation result.
+     */
+    cancelScheduled(scheduleKey: string): Promise<import("./types.js").BackgroundJobCancellationResult>;
+    /**
+     * Reads stable ownership and optional latest terminal history in one transaction.
+     * @param {string} scheduleKey - Stable logical schedule key.
+     * @param {{includeLatestTerminal?: boolean}} [options] - Lookup options.
+     * @returns {Promise<import("./types.js").BackgroundJobScheduledLookupResult>} - Normalized local jobs.
+     */
+    getScheduledJob(scheduleKey: string, { includeLatestTerminal }?: {
+        includeLatestTerminal?: boolean;
+    }): Promise<import("./types.js").BackgroundJobScheduledLookupResult>;
+    /**
+     * Moves only a future queued stable owner to the current time.
+     * @param {string} scheduleKey - Stable logical schedule key.
+     * @returns {Promise<import("./types.js").BackgroundJobWakeResult>} - Exact wake outcome.
+     */
+    wakeScheduled(scheduleKey: string): Promise<import("./types.js").BackgroundJobWakeResult>;
     /**
      * Serializes matching in-process deduplication checks through commit while
      * leaving unrelated job identities independent.
@@ -146,9 +200,11 @@ export default class LocalBackgroundJobsStore {
      * Inserts one prepared local job row and its concurrency metadata.
      * @param {import("../database/drivers/base.js").default} db - Local SQLite connection.
      * @param {import("./types.js").PreparedLocalBackgroundJob} preparedJob - Prepared row data.
+     * @param {string | null} [scheduleKey] - Stable schedule history key.
+     * @param {number | null} [scheduleOrder] - Monotonic stable ownership order.
      * @returns {Promise<void>} - Resolves after insertion.
      */
-    _insertPreparedJob(db: import("../database/drivers/base.js").default, preparedJob: import("./types.js").PreparedLocalBackgroundJob): Promise<void>;
+    _insertPreparedJob(db: import("../database/drivers/base.js").default, preparedJob: import("./types.js").PreparedLocalBackgroundJob, scheduleKey?: string | null, scheduleOrder?: number | null): Promise<void>;
     /**
      * Reconciles configured queue-derived caps and durable counters.
      * @returns {Promise<void>} - Resolves after reconciliation.
@@ -344,6 +400,65 @@ export default class LocalBackgroundJobsStore {
      * @returns {Promise<import("./types.js").BackgroundJobRow | null>} - Persisted row.
      */
     _getJob(db: import("../database/drivers/base.js").default, jobId: string): Promise<import("./types.js").BackgroundJobRow | null>;
+    /**
+     * Reads the job currently named by one stable owner row.
+     * @param {import("../database/drivers/base.js").default} db - Database connection.
+     * @param {string} scheduleKey - Validated stable schedule key.
+     * @returns {Promise<import("./types.js").BackgroundJobRow | null>} - Normalized owner job.
+     */
+    _scheduledOwnerJob(db: import("../database/drivers/base.js").default, scheduleKey: string): Promise<import("./types.js").BackgroundJobRow | null>;
+    /**
+     * Assigns the next ownership order after SQLite write serialization is held.
+     * @param {import("../database/drivers/base.js").default} db - Database connection.
+     * @param {string} scheduleKey - Validated stable schedule key.
+     * @returns {Promise<number>} - Next monotonic ownership order.
+     */
+    _nextScheduleOrder(db: import("../database/drivers/base.js").default, scheduleKey: string): Promise<number>;
+    /**
+     * Builds a stable-schedule lookup exclusively from normalized local jobs.
+     * @param {import("../database/drivers/base.js").default} db - Database connection.
+     * @param {object} args - Lookup options.
+     * @param {boolean} args.includeLatestTerminal - Whether terminal history is requested.
+     * @param {string} args.scheduleKey - Validated stable schedule key.
+     * @returns {Promise<import("./types.js").BackgroundJobScheduledLookupResult>} - Normalized local jobs.
+     */
+    _scheduledJobLookup(db: import("../database/drivers/base.js").default, { includeLatestTerminal, scheduleKey }: {
+        includeLatestTerminal: boolean;
+        scheduleKey: string;
+    }): Promise<import("./types.js").BackgroundJobScheduledLookupResult>;
+    /**
+     * Releases ownership only when the key still points at the expected job.
+     * @param {import("../database/drivers/base.js").default} db - Database connection.
+     * @param {object} args - Ownership identity.
+     * @param {string | null} args.jobId - Expected owner job id, or null for a dangling owner.
+     * @param {string} args.scheduleKey - Stable schedule key.
+     * @returns {Promise<void>} - Resolves when deleted or already superseded.
+     */
+    _releaseScheduleOwnership(db: import("../database/drivers/base.js").default, { jobId, scheduleKey }: {
+        jobId: string | null;
+        scheduleKey: string;
+    }): Promise<void>;
+    /**
+     * Releases a terminal job's stable ownership when still current.
+     * @param {import("../database/drivers/base.js").default} db - Database connection.
+     * @param {import("./types.js").BackgroundJobRow} job - Terminal job.
+     * @returns {Promise<void>} - Resolves when deleted or not applicable.
+     */
+    _releaseScheduleOwnershipForJob(db: import("../database/drivers/base.js").default, job: import("./types.js").BackgroundJobRow): Promise<void>;
+    /**
+     * Acquires SQLite's transaction write serialization before reading a stable
+     * owner. A zero-row update still establishes the write boundary for a new key.
+     * @param {import("../database/drivers/base.js").default} db - Database connection.
+     * @param {string} scheduleKey - Validated stable schedule key.
+     * @returns {Promise<void>} - Resolves after write serialization is acquired.
+     */
+    _lockScheduleKey(db: import("../database/drivers/base.js").default, scheduleKey: string): Promise<void>;
+    /**
+     * Registers the local dispatch poke on the surrounding transaction commit.
+     * @param {import("../database/drivers/base.js").default} db - Transaction connection.
+     * @returns {Promise<void>} - Resolves after registration.
+     */
+    _wakeDispatcherAfterCommit(db: import("../database/drivers/base.js").default): Promise<void>;
     /**
      * Normalizes one raw local database row.
      * @param {Record<string, ReturnType<typeof JSON.parse>>} row - Raw row.

@@ -93,6 +93,21 @@ export default class BackgroundJobsAdapter {
      */
     cancelScheduled(_scheduleKey: string): Promise<import("./types.js").BackgroundJobCancellationResult>;
     /**
+     * Reads current stable ownership and optional terminal history.
+     * @param {string} _scheduleKey - Stable schedule key.
+     * @param {{includeLatestTerminal?: boolean}} [_options] - Lookup options.
+     * @returns {Promise<import("./types.js").BackgroundJobScheduledLookupResult>} - Normalized public jobs.
+     */
+    getScheduledJob(_scheduleKey: string, _options?: {
+        includeLatestTerminal?: boolean;
+    }): Promise<import("./types.js").BackgroundJobScheduledLookupResult>;
+    /**
+     * Expedites a future queued stable owner without changing its identity.
+     * @param {string} _scheduleKey - Stable schedule key.
+     * @returns {Promise<import("./types.js").BackgroundJobWakeResult>} - Wake result.
+     */
+    wakeScheduled(_scheduleKey: string): Promise<import("./types.js").BackgroundJobWakeResult>;
+    /**
      * Finds the next eligible job.
      * @param {{executionMode?: import("./types.js").BackgroundJobExecutionMode | import("./types.js").BackgroundJobExecutionMode[]}} [_args] - Dequeue filters.
      * @returns {Promise<import("./types.js").BackgroundJobRow | null>} - Next eligible job.
