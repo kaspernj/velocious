@@ -1,1 +1,1 @@
-Fix persistent test infrastructure reusing an attempt-owned shared database transaction while connection contexts are suppressed, while keeping in-process lifecycle broadcasts on the active test transaction.
+Fix transaction-cleaned in-process lifecycle broadcasts and queued WebSocket event-log persistence rejoining the attempt-owned shared database transaction after detaching publisher contexts.
