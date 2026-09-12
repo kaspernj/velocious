@@ -1,10 +1,10 @@
 // @ts-check
 
-import {createHash} from "node:crypto"
 import UUID from "pure-uuid"
 import TableData from "../../table-data/index.js"
 import TableIndex from "../../table-data/table-index.js"
 import {modelPrimaryKeyCacheKey} from "../../../utils/model-primary-key.js"
+import sha256Hex from "../../../utils/sha256-hex.js"
 import normalizeRecordAttachmentInput from "./normalize-input.js"
 
 /**
@@ -44,7 +44,7 @@ function attachmentRecordId(model) {
  * @returns {string} - SHA-256 digest.
  */
 function attachmentRecordIdDigest(recordId) {
-  return createHash("sha256").update(recordId).digest("hex")
+  return sha256Hex(recordId)
 }
 
 /**

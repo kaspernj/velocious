@@ -1,5 +1,6 @@
 import BrowserEnvironmentHandler from "velocious/build/src/environment-handlers/browser.js"
 import Configuration from "velocious/build/src/configuration.js"
+import DatabaseRecord from "velocious/build/src/database/record/index.js"
 import FrontendModelBase from "velocious/build/src/frontend-models/base.js"
 import SingleMultiUsePool from "velocious/build/src/database/pool/single-multi-use.js"
 import SqliteDriver from "velocious/build/src/database/drivers/sqlite/index"
@@ -58,6 +59,8 @@ class ExpoCompatibilityTask extends FrontendModelBase {
   }
 }
 
+class ExpoCompatibilityRecord extends DatabaseRecord {}
+
 FrontendModelBase.registerModel(ExpoCompatibilityTask)
 
-export {configuration, ExpoCompatibilityTask, SqliteDriver, useCreatedEvent}
+export {configuration, ExpoCompatibilityRecord, ExpoCompatibilityTask, SqliteDriver, useCreatedEvent}
