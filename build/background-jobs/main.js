@@ -529,7 +529,6 @@ export default class BackgroundJobsMain {
     await this.store.reconcileQueueConcurrency()
     if (this.lifecycleState !== expectedLifecycleState) return false
     this._setupDispatchTriggers()
-    this._setupStartupHandoffReclaim()
     this._startOrphanSweep()
     await this._startScheduler()
     if (this.lifecycleState !== expectedLifecycleState) {
@@ -542,6 +541,7 @@ export default class BackgroundJobsMain {
     this._activeOwnershipReady = true
     this._creditReadyWorkers()
     await this._drain()
+    if (this.lifecycleState === expectedLifecycleState) this._setupStartupHandoffReclaim()
     return this.lifecycleState === expectedLifecycleState
   }
 
