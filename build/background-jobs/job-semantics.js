@@ -8,6 +8,36 @@ export const DEFAULT_BACKGROUND_JOB_QUEUE = "default"
 export const QUEUE_CONCURRENCY_KEY_PREFIX = "queue:"
 /** @type {import("./types.js").BackgroundJobExecutionMode[]} */
 export const BACKGROUND_JOB_EXECUTION_MODES = ["inline", "forked", "pooled", "spawned"]
+/** @type {import("./types.js").BackgroundJobActiveStatus[]} */
+export const BACKGROUND_JOB_ACTIVE_STATUSES = ["queued", "handed_off"]
+/** @type {import("./types.js").BackgroundJobTerminalStatus[]} */
+export const BACKGROUND_JOB_TERMINAL_STATUSES = ["cancelled", "completed", "failed", "orphaned"]
+/** @type {import("./types.js").BackgroundJobStatus[]} */
+export const BACKGROUND_JOB_STATUSES = [...BACKGROUND_JOB_ACTIVE_STATUSES, ...BACKGROUND_JOB_TERMINAL_STATUSES]
+
+/**
+ * Normalizes persisted or transported job status vocabulary.
+ * @param {string} value - Candidate status.
+ * @returns {import("./types.js").BackgroundJobStatus} - Known status.
+ */
+export function normalizeBackgroundJobStatus(value) {
+  const status = BACKGROUND_JOB_STATUSES.find((candidate) => candidate === value)
+
+  if (status) return status
+
+  throw new Error(`Unknown background job status: ${value}`)
+}
+
+/**
+ * Validates a stable logical schedule key at every persistence boundary.
+ * @param {string} scheduleKey - Stable schedule key.
+ * @returns {string} - Validated key.
+ */
+export function normalizeBackgroundJobScheduleKey(scheduleKey) {
+  if (typeof scheduleKey === "string" && scheduleKey.length > 0 && scheduleKey.length <= 255) return scheduleKey
+
+  throw VelociousError.safe("background job scheduleKey must be a non-empty string of at most 255 characters")
+}
 
 /**
  * Normalizes a job queue.

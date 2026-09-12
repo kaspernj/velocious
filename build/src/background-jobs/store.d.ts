@@ -434,6 +434,21 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
      */
     cancelScheduled(scheduleKey: string): Promise<import("./types.js").BackgroundJobCancellationResult>;
     /**
+     * Reads stable ownership and optional latest terminal history in one fenced transaction.
+     * @param {string} scheduleKey - Stable logical schedule key.
+     * @param {{includeLatestTerminal?: boolean}} [options] - Lookup options.
+     * @returns {Promise<import("./types.js").BackgroundJobScheduledLookupResult>} - Normalized public jobs.
+     */
+    getScheduledJob(scheduleKey: string, { includeLatestTerminal }?: {
+        includeLatestTerminal?: boolean;
+    }): Promise<import("./types.js").BackgroundJobScheduledLookupResult>;
+    /**
+     * Moves only a future queued stable owner to the current time.
+     * @param {string} scheduleKey - Stable logical schedule key.
+     * @returns {Promise<import("./types.js").BackgroundJobWakeResult>} - Exact wake outcome.
+     */
+    wakeScheduled(scheduleKey: string): Promise<import("./types.js").BackgroundJobWakeResult>;
+    /**
      * Runs next available job.
      * @param {object} [args] - Options.
      * @param {import("./types.js").BackgroundJobExecutionMode | import("./types.js").BackgroundJobExecutionMode[]} [args.executionMode] - Execution mode or modes to match.
@@ -782,11 +797,13 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
      * @param {object} args - Insert input.
      * @param {PreparedBackgroundJob} args.preparedJob - Prepared job.
      * @param {string | null} args.scheduleKey - Historical stable key.
+     * @param {number | null} [args.scheduleOrder] - Monotonic stable ownership order.
      * @returns {Promise<void>} - Resolves after insertion.
      */
-    _insertPreparedJob(db: import("../database/drivers/base.js").default, { preparedJob, scheduleKey }: {
+    _insertPreparedJob(db: import("../database/drivers/base.js").default, { preparedJob, scheduleKey, scheduleOrder }: {
         preparedJob: PreparedBackgroundJob;
         scheduleKey: string | null;
+        scheduleOrder?: number | null;
     }): Promise<void>;
     /**
      * Runs normalize max retries.
@@ -905,6 +922,27 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
      */
     _ensureScheduleKeyColumn(db: import("../database/drivers/base.js").default): Promise<void>;
     /**
+     * Idempotently adds monotonic schedule ownership history and its lookup index.
+     * Existing rows remain null and use the documented legacy fallback ordering.
+     * @param {import("../database/drivers/base.js").default} db - Database connection.
+     * @returns {Promise<void>} - Resolves when ensured.
+     */
+    _ensureScheduleOrderColumn(db: import("../database/drivers/base.js").default): Promise<void>;
+    /**
+     * Creates the retention-independent schedule-order high-water table and
+     * initializes it from the greatest retained ordered row for every key.
+     * Legacy rows whose order is null deliberately do not establish a watermark.
+     * @param {import("../database/drivers/base.js").default} db - Database connection.
+     * @returns {Promise<void>} - Resolves when ensured and backfilled.
+     */
+    _ensureScheduleOrderWatermarksTable(db: import("../database/drivers/base.js").default): Promise<void>;
+    /**
+     * Backfills each key from its greatest retained non-legacy ownership order.
+     * @param {import("../database/drivers/base.js").default} db - Database connection.
+     * @returns {Promise<void>} - Resolves after all retained keys are represented.
+     */
+    _backfillScheduleOrderWatermarks(db: import("../database/drivers/base.js").default): Promise<void>;
+    /**
      * Idempotently adds the `queue` column to an existing jobs table. Existing
      * rows read back as the default queue (see {@link _normalizeJobRow}), so no
      * data backfill is required.
@@ -944,6 +982,67 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
      * @returns {Promise<import("./types.js").BackgroundJobRow | null>} - Job row.
      */
     _getJobRowById(db: import("../database/drivers/base.js").default, jobId: string): Promise<import("./types.js").BackgroundJobRow | null>;
+    /**
+     * Reads the job currently named by one stable owner row.
+     * @param {import("../database/drivers/base.js").default} db - Database connection.
+     * @param {string} scheduleKey - Validated stable schedule key.
+     * @returns {Promise<import("./types.js").BackgroundJobRow | null>} - Normalized owner job.
+     */
+    _scheduledOwnerJob(db: import("../database/drivers/base.js").default, scheduleKey: string): Promise<import("./types.js").BackgroundJobRow | null>;
+    /**
+     * Assigns the next ownership order while the caller holds the schedule-key
+     * advisory lock and count-revision transaction fence. The independent
+     * watermark survives both ownership release and terminal-history pruning.
+     * @param {import("../database/drivers/base.js").default} db - Database connection.
+     * @param {string} scheduleKey - Validated stable schedule key.
+     * @returns {Promise<number>} - Next monotonic ownership order.
+     */
+    _nextScheduleOrder(db: import("../database/drivers/base.js").default, scheduleKey: string): Promise<number>;
+    /**
+     * Finds the greatest retained non-legacy ownership order for migration and
+     * rolling-upgrade compatibility. It is never the sole durability boundary.
+     * @param {import("../database/drivers/base.js").default} db - Database connection.
+     * @param {string} scheduleKey - Validated stable schedule key.
+     * @returns {Promise<number | null>} - Greatest retained order, or null.
+     */
+    _greatestRetainedScheduleOrder(db: import("../database/drivers/base.js").default, scheduleKey: string): Promise<number | null>;
+    /**
+     * Reads and validates one retention-independent schedule-order watermark.
+     * @param {import("../database/drivers/base.js").default} db - Database connection.
+     * @param {string} scheduleKey - Validated stable schedule key.
+     * @returns {Promise<number | null>} - Current watermark, or null before first ownership.
+     */
+    _scheduleOrderWatermark(db: import("../database/drivers/base.js").default, scheduleKey: string): Promise<number | null>;
+    /**
+     * Persists one schedule-order watermark without exposing it as a job row.
+     * @param {import("../database/drivers/base.js").default} db - Database connection.
+     * @param {object} args - Watermark identity and value.
+     * @param {string} args.scheduleKey - Validated stable schedule key.
+     * @param {number} args.scheduleOrder - Validated monotonic order.
+     * @returns {Promise<void>} - Resolves after persistence.
+     */
+    _writeScheduleOrderWatermark(db: import("../database/drivers/base.js").default, { scheduleKey, scheduleOrder }: {
+        scheduleKey: string;
+        scheduleOrder: number;
+    }): Promise<void>;
+    /**
+     * Validates an ownership order loaded from durable storage.
+     * @param {ReturnType<typeof JSON.parse>} value - Stored order.
+     * @returns {number} - Positive safe integer ownership order.
+     */
+    _validatedScheduleOrder(value: ReturnType<typeof JSON.parse>): number;
+    /**
+     * Builds a stable-schedule lookup exclusively from normalized job rows.
+     * @param {import("../database/drivers/base.js").default} db - Database connection.
+     * @param {object} args - Lookup options.
+     * @param {boolean} args.includeLatestTerminal - Whether terminal history is requested.
+     * @param {string} args.scheduleKey - Validated stable schedule key.
+     * @returns {Promise<import("./types.js").BackgroundJobScheduledLookupResult>} - Normalized public jobs.
+     */
+    _scheduledJobLookup(db: import("../database/drivers/base.js").default, { includeLatestTerminal, scheduleKey }: {
+        includeLatestTerminal: boolean;
+        scheduleKey: string;
+    }): Promise<import("./types.js").BackgroundJobScheduledLookupResult>;
     /**
      * Releases ownership only when the key still points at the expected job.
      * @param {import("../database/drivers/base.js").default} db - Database connection.

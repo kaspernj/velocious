@@ -1,7 +1,13 @@
 // @ts-check
 
 import BackgroundJobRescheduleSignal from "./reschedule-signal.js"
-import {cancelScheduledBackgroundJob, enqueueBackgroundJob, replaceScheduledBackgroundJob} from "./runtime.js"
+import {
+  cancelScheduledBackgroundJob,
+  enqueueBackgroundJob,
+  getScheduledBackgroundJob,
+  replaceScheduledBackgroundJob,
+  wakeScheduledBackgroundJob
+} from "./runtime.js"
 
 /**
  * Base class for background jobs.
@@ -184,6 +190,25 @@ export default class VelociousJob {
    */
   static async cancelScheduled(scheduleKey) {
     return await cancelScheduledBackgroundJob(scheduleKey)
+  }
+
+  /**
+   * Reads current ownership and optional terminal history for a stable key.
+   * @param {string} scheduleKey - Stable logical schedule key.
+   * @param {{includeLatestTerminal?: boolean}} [options] - Lookup options.
+   * @returns {Promise<import("./types.js").BackgroundJobScheduledLookupResult>} - Normalized stable schedule jobs.
+   */
+  static async getScheduledJob(scheduleKey, options = {}) {
+    return await getScheduledBackgroundJob(scheduleKey, options)
+  }
+
+  /**
+   * Expedites a future queued owner without creating another job.
+   * @param {string} scheduleKey - Stable logical schedule key.
+   * @returns {Promise<import("./types.js").BackgroundJobWakeResult>} - Wake result.
+   */
+  static async wakeScheduled(scheduleKey) {
+    return await wakeScheduledBackgroundJob(scheduleKey)
   }
 
   /**

@@ -12,16 +12,12 @@ import SqliteDriver from "../../src/database/drivers/sqlite/index.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 
 /**
- * Runs a stable-key mutation while an independently serialized store has won
- * queued-to-handed-off but has not committed yet.
- * @param {"cancel" | "replace"} mutation - Stable-key mutation.
- * @returns {Promise<import("../../src/background-jobs/types.js").BackgroundJobCancellationResult | import("../../src/background-jobs/types.js").BackgroundJobReplacementResult>} - Mutation result.
+ * Builds independent pools over one SQLite file so process-local store
+ * serialization cannot hide cross-process ordering bugs.
+ * @param {string} directory - Isolated database directory.
+ * @returns {Configuration} - Race configuration.
  */
-async function runHandoffRace(mutation) {
-  dummyConfiguration.setCurrent()
-  await new BackgroundJobsStore({configuration: dummyConfiguration}).ensureReady()
-
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-stable-schedule-race-"))
+function raceConfiguration(directory) {
   const databaseName = "stable-schedule-handoff-race"
   const databaseOptions = {
     driver: SqliteDriver,
@@ -30,7 +26,8 @@ async function runHandoffRace(mutation) {
     poolType: SingleMultiUsePool,
     type: "sqlite"
   }
-  const configuration = new Configuration({
+
+  return new Configuration({
     database: {test: {handoff: {...databaseOptions}, mutation: {...databaseOptions}}},
     directory,
     environment: "test",
@@ -40,22 +37,36 @@ async function runHandoffRace(mutation) {
     localeFallbacks: {en: ["en"]},
     locales: ["en"]
   })
+}
+
+class ReadyOnceStore extends BackgroundJobsStore {
+  _raceReady = false
+
+  async ensureReady() {
+    if (this._raceReady) return
+
+    await super.ensureReady()
+    this._raceReady = true
+  }
+}
+
+/**
+ * Runs a stable-key mutation while an independently serialized store has won
+ * queued-to-handed-off but has not committed yet.
+ * @param {"cancel" | "replace" | "wake"} mutation - Stable-key mutation.
+ * @returns {Promise<import("../../src/background-jobs/types.js").BackgroundJobCancellationResult | import("../../src/background-jobs/types.js").BackgroundJobReplacementResult | import("../../src/background-jobs/types.js").BackgroundJobWakeResult>} - Mutation result.
+ */
+async function runHandoffRace(mutation) {
+  dummyConfiguration.setCurrent()
+  await new BackgroundJobsStore({configuration: dummyConfiguration}).ensureReady()
+
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-stable-schedule-race-"))
+  const configuration = raceConfiguration(directory)
   const handoffCanCommit = Promise.withResolvers()
   const handoffUpdated = Promise.withResolvers()
   const ownerReadCanContinue = Promise.withResolvers()
   const raceObserved = Promise.withResolvers()
   let raceObservation
-
-  class ReadyOnceStore extends BackgroundJobsStore {
-    _raceReady = false
-
-    async ensureReady() {
-      if (this._raceReady) return
-
-      await super.ensureReady()
-      this._raceReady = true
-    }
-  }
 
   class PausedHandoffStore extends ReadyOnceStore {
     async _updateAffectedRows(db, args) {
@@ -112,9 +123,12 @@ async function runHandoffRace(mutation) {
       })
     ])
 
-    const mutationPromise = (mutation === "cancel"
+    const mutationRequest = mutation === "cancel"
       ? mutationStore.cancelScheduled(scheduleKey)
-      : mutationStore.replaceScheduled({scheduleKey, jobName: "EventReminderJob", args: ["replacement"]}))
+      : mutation === "replace"
+        ? mutationStore.replaceScheduled({scheduleKey, jobName: "EventReminderJob", args: ["replacement"]})
+        : mutationStore.wakeScheduled(scheduleKey)
+    const mutationPromise = mutationRequest
       .then((result) => ({result}), (error) => ({error}))
     const observed = await raceObserved.promise
 
@@ -134,6 +148,97 @@ async function runHandoffRace(mutation) {
   } finally {
     handoffCanCommit.resolve()
     ownerReadCanContinue.resolve()
+    await configuration.closeDatabaseConnections()
+    dummyConfiguration.setCurrent()
+    await dummyConfiguration.initializeModels()
+    await fs.rm(directory, {force: true, recursive: true})
+  }
+}
+
+/**
+ * Models PostgreSQL/MSSQL read-committed statement snapshots while an
+ * independent store commits a terminal transition between lookup reads.
+ * @returns {Promise<{firstCommitBoundary: string, lookup: import("../../src/background-jobs/types.js").BackgroundJobScheduledLookupResult}>} - Lookup snapshot and ordering evidence.
+ */
+async function runLookupTerminalRace() {
+  dummyConfiguration.setCurrent()
+  await new BackgroundJobsStore({configuration: dummyConfiguration}).ensureReady()
+
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-stable-schedule-lookup-race-"))
+  const configuration = raceConfiguration(directory)
+  const lookupCanContinue = Promise.withResolvers()
+  const lookupCountLocked = Promise.withResolvers()
+  const ownerRead = Promise.withResolvers()
+  let countMutationDepth = 0
+  let pauseOwnerRead = true
+
+  class ReadCommittedLookupStore extends ReadyOnceStore {
+    async _serializedCountMutation(callback, options = {}) {
+      countMutationDepth += 1
+
+      try {
+        return await super._serializedCountMutation(callback, options)
+      } finally {
+        countMutationDepth -= 1
+      }
+    }
+
+    async _serializedTransactionMutation(callback, options = {}) {
+      if (countMutationDepth > 0) return await super._serializedTransactionMutation(callback, options)
+
+      return await this._serializedConnectionMutation(callback, options)
+    }
+
+    async _lockCountRevision(db) {
+      await super._lockCountRevision(db)
+      lookupCountLocked.resolve()
+    }
+
+    async _scheduledOwnerJob(db, scheduleKey) {
+      const job = await super._scheduledOwnerJob(db, scheduleKey)
+
+      if (pauseOwnerRead && job?.status === "handed_off") {
+        pauseOwnerRead = false
+        ownerRead.resolve()
+        await lookupCanContinue.promise
+      }
+
+      return job
+    }
+  }
+
+  const setupStore = new BackgroundJobsStore({configuration, databaseIdentifier: "mutation"})
+  const lookupStore = new ReadCommittedLookupStore({configuration, databaseIdentifier: "mutation"})
+  const terminalStore = new ReadyOnceStore({configuration, databaseIdentifier: "handoff"})
+
+  try {
+    await setupStore.clearAll()
+    await lookupStore.ensureReady()
+    await terminalStore.ensureReady()
+
+    const scheduleKey = "event:lookup-terminal-race"
+    const scheduled = await setupStore.replaceScheduled({scheduleKey, jobName: "EventReminderJob", args: []})
+    const handoff = await setupStore.markHandedOff({jobId: scheduled.jobId, workerId: "lookup-race-worker"})
+
+    if (!handoff) throw new Error("Expected lookup race handoff")
+
+    const lookupPromise = lookupStore.getScheduledJob(scheduleKey, {includeLatestTerminal: true})
+
+    await ownerRead.promise
+
+    const completionPromise = terminalStore.markCompleted({jobId: scheduled.jobId, workerId: "lookup-race-worker", ...handoff})
+    const firstCommitBoundary = await Promise.race([
+      lookupCountLocked.promise.then(() => "lookup-fenced"),
+      completionPromise.then(() => "terminal-committed")
+    ])
+
+    lookupCanContinue.resolve()
+    const lookup = await lookupPromise
+
+    expect(await completionPromise).toEqual(true)
+    return {firstCommitBoundary, lookup}
+  } finally {
+    lookupCanContinue.resolve()
     await configuration.closeDatabaseConnections()
     dummyConfiguration.setCurrent()
     await dummyConfiguration.initializeModels()
@@ -162,5 +267,19 @@ describe("Background jobs - stable schedule handoff races", {databaseCleaning: {
 
     expect(result).toMatchObject({previousStatus: "handed_off"})
     expect(result.previousJobId).not.toBeNull()
+  })
+
+  it("reports handed_off without changing the row when wake loses to an independent store handoff", async () => {
+    const result = await runHandoffRace("wake")
+
+    expect(result).toMatchObject({outcome: "handed_off"})
+    expect(result.jobId).not.toBeNull()
+  })
+
+  it("returns one fenced lookup snapshot when an independent store completes its handed-off owner", async () => {
+    const {firstCommitBoundary, lookup} = await runLookupTerminalRace()
+
+    expect(lookup).toMatchObject({currentJob: {status: "handed_off"}, latestTerminalJob: null})
+    expect(firstCommitBoundary).toEqual("lookup-fenced")
   })
 })

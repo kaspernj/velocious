@@ -63,6 +63,8 @@ describe("Background jobs runtime mode", () => {
       await expect(async () => await InlineModeJob.performLaterWithOptions({args: [], options: {executionMode: "inline"}})).toThrow(/executionMode.*inline mode/)
       await expect(async () => await InlineModeJob.replaceScheduled({scheduleKey: "inline", args: []})).toThrow(/replaceScheduled.*inline mode/)
       await expect(async () => await InlineModeJob.cancelScheduled("inline")).toThrow(/cancelScheduled.*inline mode/)
+      await expect(async () => await InlineModeJob.getScheduledJob("inline")).toThrow(/getScheduledJob.*inline mode/)
+      await expect(async () => await InlineModeJob.wakeScheduled("inline")).toThrow(/wakeScheduled.*inline mode/)
       await expect(async () => await ReschedulingInlineModeJob.performLater()).toThrow(/rescheduleIn.*inline mode/)
     } finally {
       previousConfiguration.setCurrent()

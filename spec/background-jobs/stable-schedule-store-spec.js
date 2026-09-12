@@ -4,6 +4,8 @@ import BackgroundJobsStore from "../../src/background-jobs/store.js"
 import TableData from "../../src/database/table-data/index.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 
+const SCHEDULE_ORDER_WATERMARK_MIGRATION_KEY = "background_jobs:20260911120000"
+
 /** @returns {BackgroundJobsStore} - Background jobs store. */
 function createStore() {
   dummyConfiguration.setCurrent()
@@ -86,7 +88,7 @@ describe("Background jobs - stable schedule store", {databaseCleaning: {transact
       const jobsTable = await db.getTableByNameOrFail("background_jobs")
 
       for (const index of await jobsTable.getIndexes()) {
-        if (!index.getColumnNames().includes("schedule_key")) continue
+        if (!index.getColumnNames().some((columnName) => ["schedule_key", "schedule_order"].includes(columnName))) continue
 
         for (const sql of await db.removeIndexSQLs({name: index.getName(), tableName: "background_jobs"})) {
           await db.query(sql)
@@ -95,7 +97,8 @@ describe("Background jobs - stable schedule store", {databaseCleaning: {transact
 
       const tableData = new TableData("background_jobs")
 
-      tableData.addColumn("schedule_key", {dropColumn: true})
+      if (await jobsTable.getColumnByName("schedule_key")) tableData.addColumn("schedule_key", {dropColumn: true})
+      if (await jobsTable.getColumnByName("schedule_order")) tableData.addColumn("schedule_order", {dropColumn: true})
       for (const sql of await db.alterTableSQLs(tableData)) await db.query(sql)
       db.clearSchemaCache()
     })
@@ -105,10 +108,80 @@ describe("Background jobs - stable schedule store", {databaseCleaning: {transact
 
     await pool.withConnection({name: "Background jobs inspect upgraded stable schedule schema"}, async (db) => {
       const jobsTable = await db.getTableByNameOrFail("background_jobs")
+      const indexNames = (await jobsTable.getIndexes()).map((index) => index.getName())
 
       expect((await jobsTable.getColumnByName("schedule_key"))?.getName()).toEqual("schedule_key")
+      expect((await jobsTable.getColumnByName("schedule_order"))?.getName()).toEqual("schedule_order")
+      expect(indexNames).toContain("index_background_jobs_schedule_history_order")
       expect((await db.getTableByName("background_job_schedule_keys"))?.getName()).toEqual("background_job_schedule_keys")
     })
+  })
+
+  it("backfills durable schedule-order watermarks without losing v3 jobs or owners", async () => {
+    const store = createStore()
+    const ownedFirst = await store.replaceScheduled({scheduleKey: "migration:owned", jobName: "EventReminderJob", args: ["owned-first"]})
+    const ownedSecond = await store.replaceScheduled({scheduleKey: "migration:owned", jobName: "EventReminderJob", args: ["owned-second"]})
+    const terminalFirst = await store.replaceScheduled({scheduleKey: "migration:terminal", jobName: "EventReminderJob", args: ["terminal-first"]})
+    const terminalSecond = await store.replaceScheduled({scheduleKey: "migration:terminal", jobName: "EventReminderJob", args: ["terminal-second"]})
+    const legacy = await store.replaceScheduled({scheduleKey: "migration:legacy", jobName: "EventReminderJob", args: ["legacy"]})
+
+    await store.cancelScheduled("migration:terminal")
+    await store.cancelScheduled("migration:legacy")
+
+    const pool = dummyConfiguration.getDatabasePool(store.getDatabaseIdentifier())
+
+    await pool.withConnection({name: "Prepare pre-watermark stable schedule schema"}, async (db) => {
+      await db.update({
+        conditions: {id: legacy.jobId},
+        data: {schedule_order: null},
+        tableName: "background_jobs"
+      })
+      await db.dropTable("background_job_schedule_order_watermarks", {cascade: true, ifExists: true})
+      await db.delete({
+        conditions: {key: SCHEDULE_ORDER_WATERMARK_MIGRATION_KEY},
+        tableName: "velocious_internal_migrations"
+      })
+      db.clearSchemaCache()
+    })
+
+    const upgradedStore = new BackgroundJobsStore({configuration: dummyConfiguration})
+
+    await upgradedStore.ensureReady()
+
+    expect(await getJobOrFail(upgradedStore, ownedFirst.jobId)).toMatchObject({scheduleOrder: 1, status: "cancelled"})
+    expect(await getJobOrFail(upgradedStore, ownedSecond.jobId)).toMatchObject({scheduleOrder: 2, status: "queued"})
+    expect(await getJobOrFail(upgradedStore, terminalFirst.jobId)).toMatchObject({scheduleOrder: 1, status: "cancelled"})
+    expect(await getJobOrFail(upgradedStore, terminalSecond.jobId)).toMatchObject({scheduleOrder: 2, status: "cancelled"})
+    expect(await getJobOrFail(upgradedStore, legacy.jobId)).toMatchObject({scheduleOrder: null, status: "cancelled"})
+
+    await pool.withConnection({name: "Inspect backfilled schedule-order watermarks"}, async (db) => {
+      const table = await db.getTableByNameOrFail("background_job_schedule_order_watermarks")
+      const ownerRows = await db
+        .newQuery()
+        .from("background_job_schedule_keys")
+        .where({schedule_key: "migration:owned"})
+        .results()
+      const watermarkRows = await db
+        .newQuery()
+        .from("background_job_schedule_order_watermarks")
+        .order("schedule_key")
+        .results()
+      const watermarkKeys = watermarkRows.map((row) => String(row.schedule_key))
+
+      expect((await table.getColumnByName("schedule_key"))?.getPrimaryKey()).toEqual(true)
+      expect(ownerRows).toMatchObject([{job_id: ownedSecond.jobId}])
+      expect(watermarkKeys).toEqual(["migration:owned", "migration:terminal"])
+      expect(await upgradedStore._scheduleOrderWatermark(db, "migration:owned")).toEqual(2)
+      expect(await upgradedStore._scheduleOrderWatermark(db, "migration:terminal")).toEqual(2)
+    })
+
+    const legacyReplacement = await upgradedStore.replaceScheduled({
+      scheduleKey: "migration:legacy",
+      jobName: "EventReminderJob",
+      args: ["legacy-replacement"]
+    })
+
+    expect(await getJobOrFail(upgradedStore, legacyReplacement.jobId)).toMatchObject({scheduleOrder: 1, status: "queued"})
   })
 
   it("atomically replaces the queued owner while retaining keyed history", async () => {
@@ -163,6 +236,176 @@ describe("Background jobs - stable schedule store", {databaseCleaning: {transact
       status: "cancelled"
     })
     expect(await store.cancelScheduled("event:43:reminder:24h")).toEqual({jobId: null, outcome: "not_found"})
+  })
+
+  it("reads the current owner and latest normalized terminal history", async () => {
+    let nowMs = 1_000
+    const store = new BackgroundJobsStore({configuration: dummyConfiguration, clock: {now: () => nowMs}})
+    const first = await store.replaceScheduled({
+      scheduleKey: "event:readback",
+      jobName: "EventReminderJob",
+      args: ["first"],
+      options: {scheduledAtMs: 60_000}
+    })
+
+    nowMs += 1
+    const second = await store.replaceScheduled({
+      scheduleKey: "event:readback",
+      jobName: "EventReminderJob",
+      args: ["second"],
+      options: {scheduledAtMs: 120_000}
+    })
+    const scheduled = await store.getScheduledJob("event:readback", {includeLatestTerminal: true})
+
+    expect(scheduled.currentJob).toMatchObject({args: ["second"], id: second.jobId, scheduleKey: "event:readback", status: "queued"})
+    expect(scheduled.latestTerminalJob).toMatchObject({args: ["first"], id: first.jobId, scheduleKey: "event:readback", status: "cancelled"})
+
+    expect(await store.cancelScheduled("event:readback")).toEqual({jobId: second.jobId, outcome: "cancelled"})
+    expect(await store.getScheduledJob("event:readback", {includeLatestTerminal: true})).toMatchObject({
+      currentJob: null,
+      latestTerminalJob: {args: ["second"], id: second.jobId, scheduleKey: "event:readback", status: "cancelled"}
+    })
+  })
+
+  it("orders terminal history by ownership acquired after reversed fixed-clock preparation", async () => {
+    const delayedPrepared = Promise.withResolvers()
+    const delayedCanAcquire = Promise.withResolvers()
+
+    class OrderedScheduleStore extends BackgroundJobsStore {
+      pauseNextScheduleMutation = false
+
+      _prepareJob(args) {
+        const preparedJob = super._prepareJob(args)
+        const identity = args.args[0]
+
+        return {...preparedJob, jobId: identity === "later-owner" ? "a-later-owner" : "z-earlier-owner"}
+      }
+
+      async _serializedCountMutation(callback, options = {}) {
+        if (this.pauseNextScheduleMutation && options.advisoryLock) {
+          this.pauseNextScheduleMutation = false
+          delayedPrepared.resolve()
+          await delayedCanAcquire.promise
+        }
+
+        return await super._serializedCountMutation(callback, options)
+      }
+    }
+
+    const clock = {now: () => 1_000}
+    const delayedStore = new OrderedScheduleStore({configuration: dummyConfiguration, clock})
+    const competingStore = new OrderedScheduleStore({configuration: dummyConfiguration, clock})
+
+    delayedStore.pauseNextScheduleMutation = true
+
+    const laterOwnerPromise = delayedStore.replaceScheduled({
+      scheduleKey: "event:ownership-order",
+      jobName: "EventReminderJob",
+      args: ["later-owner"]
+    })
+
+    await delayedPrepared.promise
+
+    const earlierOwner = await competingStore.replaceScheduled({
+      scheduleKey: "event:ownership-order",
+      jobName: "EventReminderJob",
+      args: ["earlier-owner"]
+    })
+
+    delayedCanAcquire.resolve()
+    const laterOwner = await laterOwnerPromise
+
+    expect(await delayedStore.cancelScheduled("event:ownership-order")).toEqual({jobId: laterOwner.jobId, outcome: "cancelled"})
+
+    const lookup = await delayedStore.getScheduledJob("event:ownership-order", {includeLatestTerminal: true})
+
+    expect(lookup.latestTerminalJob).toMatchObject({args: ["later-owner"], id: laterOwner.jobId, scheduleOrder: 2})
+    expect(await delayedStore.getJob(earlierOwner.jobId)).toMatchObject({scheduleOrder: 1, status: "cancelled"})
+  })
+
+  it("keeps schedule ownership order monotonic after real terminal retention pruning", async () => {
+    const retentionMs = 7 * 24 * 60 * 60 * 1000
+    let nowMs = 1_000
+    const store = new BackgroundJobsStore({configuration: dummyConfiguration, clock: {now: () => nowMs}})
+    const first = await store.replaceScheduled({
+      scheduleKey: "event:retained-watermark",
+      jobName: "EventReminderJob",
+      args: ["first"]
+    })
+    const firstJob = await getJobOrFail(store, first.jobId)
+    const firstOrder = firstJob.scheduleOrder
+    const handoff = await store.markHandedOff({jobId: first.jobId, workerId: "retention-worker"})
+
+    if (firstOrder === null) throw new Error("Expected retained-watermark schedule order")
+    if (!handoff) throw new Error("Expected retained-watermark handoff")
+
+    expect(await store.markCompleted({jobId: first.jobId, workerId: "retention-worker", ...handoff})).toEqual(true)
+
+    nowMs += retentionMs + 1
+
+    expect(await store.pruneTerminalJobs({batchSize: 100, completedTtlMs: retentionMs})).toEqual(1)
+    expect(await store.getJob(first.jobId)).toEqual(null)
+
+    const watermarkAfterPrune = await store._withDb(async (db) =>
+      await store._scheduleOrderWatermark(db, "event:retained-watermark")
+    )
+
+    expect(watermarkAfterPrune).toEqual(firstOrder)
+
+    const second = await store.replaceScheduled({
+      scheduleKey: "event:retained-watermark",
+      jobName: "EventReminderJob",
+      args: ["second"]
+    })
+    const secondJob = await getJobOrFail(store, second.jobId)
+
+    expect(secondJob.scheduleOrder).toBeGreaterThan(firstOrder)
+  })
+
+  it("wakes only a future queued owner while preserving retry lineage", async () => {
+    let nowMs = 1_000
+    const store = new BackgroundJobsStore({configuration: dummyConfiguration, clock: {now: () => nowMs}})
+    const replacement = await store.replaceScheduled({
+      scheduleKey: "event:retry-wake",
+      jobName: "EventReminderJob",
+      args: ["retry"],
+      options: {maxRetries: 1}
+    })
+    const handoff = await store.markHandedOff({jobId: replacement.jobId, workerId: "wake-worker"})
+
+    if (!handoff) throw new Error("Expected stable retry handoff")
+
+    nowMs += 1_000
+    expect(await store.markFailed({jobId: replacement.jobId, error: "planned retry", workerId: "wake-worker", ...handoff})).toMatchObject({
+      attempts: 1,
+      id: replacement.jobId,
+      lastError: "planned retry",
+      scheduledAtMs: nowMs + 10_000,
+      status: "queued"
+    })
+    expect(await store.wakeScheduled("event:retry-wake")).toEqual({jobId: replacement.jobId, outcome: "woken"})
+    expect(await store.getJob(replacement.jobId)).toMatchObject({
+      args: ["retry"],
+      attempts: 1,
+      id: replacement.jobId,
+      lastError: "planned retry",
+      scheduleKey: "event:retry-wake",
+      scheduledAtMs: nowMs,
+      status: "queued"
+    })
+    expect(await store.wakeScheduled("event:retry-wake")).toEqual({jobId: replacement.jobId, outcome: "already_due"})
+
+    const secondHandoff = await store.markHandedOff({jobId: replacement.jobId, workerId: "wake-worker-2"})
+
+    if (!secondHandoff) throw new Error("Expected woken stable retry handoff")
+
+    expect(await store.wakeScheduled("event:retry-wake")).toEqual({jobId: replacement.jobId, outcome: "handed_off"})
+    expect(await store.markCompleted({jobId: replacement.jobId, workerId: "wake-worker-2", ...secondHandoff})).toEqual(true)
+    expect(await store.wakeScheduled("event:retry-wake")).toEqual({jobId: null, outcome: "not_found"})
+
+    const rows = await store.listJobs({jobName: "EventReminderJob", limit: 100})
+
+    expect(rows.filter((job) => job.scheduleKey === "event:retry-wake").map((job) => job.id)).toEqual([replacement.jobId])
   })
 
   it("reports handed-off replacement without claiming the running job stopped", async () => {

@@ -64,5 +64,22 @@ export default class BackgroundJobsClient {
     cancelScheduled({ scheduleKey }: {
         scheduleKey: string;
     }): Promise<import("./types.js").BackgroundJobCancellationResult>;
+    /**
+     * Reads current stable ownership and optional terminal history.
+     * @param {{scheduleKey: string, includeLatestTerminal?: boolean}} args - Lookup request.
+     * @returns {Promise<import("./types.js").BackgroundJobScheduledLookupResult>} - Normalized stable schedule jobs.
+     */
+    getScheduledJob({ scheduleKey, includeLatestTerminal }: {
+        scheduleKey: string;
+        includeLatestTerminal?: boolean;
+    }): Promise<import("./types.js").BackgroundJobScheduledLookupResult>;
+    /**
+     * Expedites a future queued stable owner without changing job identity.
+     * @param {{scheduleKey: string}} args - Wake request.
+     * @returns {Promise<import("./types.js").BackgroundJobWakeResult>} - Wake result.
+     */
+    wakeScheduled({ scheduleKey }: {
+        scheduleKey: string;
+    }): Promise<import("./types.js").BackgroundJobWakeResult>;
 }
 //# sourceMappingURL=client.d.ts.map

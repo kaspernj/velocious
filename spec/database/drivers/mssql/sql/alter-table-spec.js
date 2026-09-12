@@ -1,6 +1,6 @@
 // @ts-check
 
-import {describe, expect, it} from "../../../../../src/testing/test.js"
+import { describe, expect, it } from "../../../../../src/testing/test.js"
 import MssqlDriver from "../../../../../src/database/drivers/mssql/index.js"
 import TableData from "../../../../../src/database/table-data/index.js"
 
@@ -34,6 +34,19 @@ describe("database/drivers/mssql/sql/alter-table", {databaseCleaning: {transacti
 
     expect(sqls).toEqual([
       "ALTER TABLE [background_jobs] ADD [child_received_at_ms] BIGINT, [child_started_at_ms] BIGINT, [child_instance_id] NVARCHAR(255), [child_pid] INTEGER"
+    ])
+  })
+
+  it("emits one DROP COLUMN clause for a multi-column migration rollback", async () => {
+    const tableData = new TableData("background_jobs")
+
+    tableData.addColumn("schedule_key", {dropColumn: true})
+    tableData.addColumn("schedule_order", {dropColumn: true})
+
+    const sqls = await buildDriver().alterTableSQLs(tableData)
+
+    expect(sqls).toEqual([
+      "ALTER TABLE [background_jobs] DROP COLUMN [schedule_key], [schedule_order]"
     ])
   })
 })

@@ -52,22 +52,37 @@ export default class LocalBackgroundJobsAdapter extends BackgroundJobsAdapter {
         options?: import("./types.js").BackgroundJobOptions;
     }): Promise<string>;
     /**
-     * Rejects stable-key cancellation, which is outside the local adapter contract.
-     * @param {string} _scheduleKey - Unsupported stable key.
-     * @returns {Promise<import("./types.js").BackgroundJobCancellationResult>} - Never resolves.
+     * Cancels or detaches the current owner of a stable schedule key.
+     * @param {string} scheduleKey - Stable schedule key.
+     * @returns {Promise<import("./types.js").BackgroundJobCancellationResult>} - Cancellation result.
      */
-    cancelScheduled(_scheduleKey: string): Promise<import("./types.js").BackgroundJobCancellationResult>;
+    cancelScheduled(scheduleKey: string): Promise<import("./types.js").BackgroundJobCancellationResult>;
     /**
-     * Rejects stable-key replacement, which is outside the local adapter contract.
-     * @param {{scheduleKey: string, jobName: string, args: Array<ReturnType<typeof JSON.parse>>, options?: import("./types.js").BackgroundJobOptions}} _args - Unsupported request.
-     * @returns {Promise<import("./types.js").BackgroundJobReplacementResult>} - Never resolves.
+     * Replaces the current owner of a stable schedule key.
+     * @param {{scheduleKey: string, jobName: string, args: Array<ReturnType<typeof JSON.parse>>, options?: import("./types.js").BackgroundJobOptions}} args - Replacement request.
+     * @returns {Promise<import("./types.js").BackgroundJobReplacementResult>} - Replacement result.
      */
-    replaceScheduled(_args: {
+    replaceScheduled(args: {
         scheduleKey: string;
         jobName: string;
         args: Array<ReturnType<typeof JSON.parse>>;
         options?: import("./types.js").BackgroundJobOptions;
     }): Promise<import("./types.js").BackgroundJobReplacementResult>;
+    /**
+     * Reads stable ownership and optional terminal history.
+     * @param {string} scheduleKey - Stable schedule key.
+     * @param {{includeLatestTerminal?: boolean}} [options] - Lookup options.
+     * @returns {Promise<import("./types.js").BackgroundJobScheduledLookupResult>} - Normalized local jobs.
+     */
+    getScheduledJob(scheduleKey: string, options?: {
+        includeLatestTerminal?: boolean;
+    }): Promise<import("./types.js").BackgroundJobScheduledLookupResult>;
+    /**
+     * Makes a future queued stable owner due without replacing it.
+     * @param {string} scheduleKey - Stable schedule key.
+     * @returns {Promise<import("./types.js").BackgroundJobWakeResult>} - Exact wake result.
+     */
+    wakeScheduled(scheduleKey: string): Promise<import("./types.js").BackgroundJobWakeResult>;
     /**
      * Finds the next eligible local job.
      * @returns {Promise<import("./types.js").BackgroundJobRow | null>} - Next eligible job.

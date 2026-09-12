@@ -37,5 +37,22 @@ export default class BackgroundJobsAdapterClient {
     cancelScheduled({ scheduleKey }: {
         scheduleKey: string;
     }): Promise<import("./types.js").BackgroundJobCancellationResult>;
+    /**
+     * Reads a stable schedule through the configured adapter.
+     * @param {{scheduleKey: string, includeLatestTerminal?: boolean}} args - Lookup request.
+     * @returns {Promise<import("./types.js").BackgroundJobScheduledLookupResult>} - Normalized stable schedule jobs.
+     */
+    getScheduledJob({ scheduleKey, includeLatestTerminal }: {
+        scheduleKey: string;
+        includeLatestTerminal?: boolean;
+    }): Promise<import("./types.js").BackgroundJobScheduledLookupResult>;
+    /**
+     * Wakes a stable schedule through the configured adapter.
+     * @param {{scheduleKey: string}} args - Wake request.
+     * @returns {Promise<import("./types.js").BackgroundJobWakeResult>} - Wake result.
+     */
+    wakeScheduled({ scheduleKey }: {
+        scheduleKey: string;
+    }): Promise<import("./types.js").BackgroundJobWakeResult>;
 }
 //# sourceMappingURL=adapter-client.d.ts.map

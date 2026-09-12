@@ -257,4 +257,146 @@ describe("BackgroundJobsClient transport", {databaseCleaning: {transaction: fals
       await harness.close()
     }
   })
+
+  it("rejects incomplete rows, invalid nullable fields, and jobs in the wrong scheduled-lookup slot", async () => {
+    const normalizedJob = {
+      args: [],
+      attempts: 0,
+      childInstanceId: null,
+      childPid: null,
+      childReceivedAtMs: null,
+      childStartedAtMs: null,
+      completedAtMs: null,
+      concurrencyKey: null,
+      createdAtMs: 1_000,
+      executionMode: "pooled",
+      failedAtMs: null,
+      handedOffAtMs: null,
+      handoffId: null,
+      id: "normalized-job",
+      jobName: "TransportTestJob",
+      lastError: null,
+      maxConcurrency: null,
+      maxRetries: 3,
+      orphanedAtMs: null,
+      queue: "default",
+      scheduleKey: "transport:strict-row",
+      scheduleOrder: null,
+      scheduledAtMs: 2_000,
+      status: "queued",
+      timeoutMs: null,
+      workerId: null
+    }
+    const harness = await startTcpServer((socket) => {
+      const jsonSocket = new JsonSocket(socket)
+
+      jsonSocket.on("error", () => {})
+      jsonSocket.on("message", (message) => {
+        if (message?.type !== "get-scheduled-job") return
+
+        if (message.scheduleKey === "plausible-partial") {
+          jsonSocket.send({
+            type: "scheduled-job",
+            currentJob: {
+              args: [],
+              executionMode: "pooled",
+              id: "partial-job",
+              jobName: "TransportTestJob",
+              queue: "default",
+              scheduleKey: "plausible-partial",
+              scheduledAtMs: 2_000,
+              status: "queued"
+            },
+            latestTerminalJob: null
+          })
+          return
+        }
+
+        if (message.scheduleKey === "invalid-nullable-fields") {
+          jsonSocket.send({
+            type: "scheduled-job",
+            currentJob: {...normalizedJob, attempts: "0", handoffId: 42},
+            latestTerminalJob: null
+          })
+          return
+        }
+
+        if (message.scheduleKey === "terminal-in-current") {
+          jsonSocket.send({type: "scheduled-job", currentJob: {...normalizedJob, status: "completed"}, latestTerminalJob: null})
+          return
+        }
+
+        jsonSocket.send({type: "scheduled-job", currentJob: null, latestTerminalJob: normalizedJob})
+      })
+    })
+
+    try {
+      dummyConfiguration.setBackgroundJobsConfig({host: "127.0.0.1", port: harness.port})
+      const client = new BackgroundJobsClient({configuration: dummyConfiguration})
+      const results = await Promise.allSettled([
+        client.getScheduledJob({scheduleKey: "plausible-partial", includeLatestTerminal: true}),
+        client.getScheduledJob({scheduleKey: "invalid-nullable-fields", includeLatestTerminal: true}),
+        client.getScheduledJob({scheduleKey: "terminal-in-current", includeLatestTerminal: true}),
+        client.getScheduledJob({scheduleKey: "nonterminal-in-latest-terminal", includeLatestTerminal: true})
+      ])
+
+      expect(results.map((result) => result.status)).toEqual(["rejected", "rejected", "rejected", "rejected"])
+      for (const result of results) {
+        if (result.status === "rejected") expect(result.reason.message).toMatch(/Invalid getScheduledJob response/)
+      }
+    } finally {
+      await harness.close()
+    }
+  })
+
+  it("rejects unknown and malformed stable-schedule responses and settles once on the first terminal response", async () => {
+    const harness = await startTcpServer((socket) => {
+      const jsonSocket = new JsonSocket(socket)
+
+      jsonSocket.on("error", () => {})
+      jsonSocket.on("message", (message) => {
+        if (message?.type === "get-scheduled-job" && message.scheduleKey === "unknown-response") {
+          jsonSocket.send({type: "unexpected-stable-schedule-response"})
+          return
+        }
+
+        if (message?.type === "get-scheduled-job" && message.scheduleKey === "malformed-response") {
+          jsonSocket.send({type: "scheduled-job", currentJob: "raw-store-row", latestTerminalJob: null})
+          return
+        }
+
+        if (message?.type === "wake-scheduled" && message.scheduleKey === "unknown-wake-response") {
+          jsonSocket.send({type: "unexpected-stable-wake-response"})
+          return
+        }
+
+        if (message?.type === "wake-scheduled" && message.scheduleKey === "malformed-wake-response") {
+          jsonSocket.send({type: "schedule-woken", jobId: null, outcome: "woken"})
+          return
+        }
+
+        if (message?.type === "wake-scheduled") {
+          jsonSocket.send({type: "schedule-woken", jobId: "stable-job", outcome: "woken"})
+          jsonSocket.send({type: "wake-scheduled-error", error: "late duplicate terminal response"})
+        }
+      })
+    })
+
+    try {
+      dummyConfiguration.setBackgroundJobsConfig({host: "127.0.0.1", port: harness.port})
+      const client = new BackgroundJobsClient({configuration: dummyConfiguration})
+      const unknown = await rejectionFrom(client.getScheduledJob({scheduleKey: "unknown-response", includeLatestTerminal: true}))
+      const malformed = await rejectionFrom(client.getScheduledJob({scheduleKey: "malformed-response", includeLatestTerminal: true}))
+      const unknownWake = await rejectionFrom(client.wakeScheduled({scheduleKey: "unknown-wake-response"}))
+      const malformedWake = await rejectionFrom(client.wakeScheduled({scheduleKey: "malformed-wake-response"}))
+
+      expect(unknown.message).toMatch(/Unexpected getScheduledJob response/)
+      expect(malformed.message).toMatch(/Invalid getScheduledJob response/)
+      expect(unknownWake.message).toMatch(/Unexpected wakeScheduled response/)
+      expect(malformedWake.message).toMatch(/Invalid wakeScheduled response/)
+      expect(await client.wakeScheduled({scheduleKey: "first-terminal-wins"})).toEqual({jobId: "stable-job", outcome: "woken"})
+    } finally {
+      await harness.close()
+    }
+  })
 })

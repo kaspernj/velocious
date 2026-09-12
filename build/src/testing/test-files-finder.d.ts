@@ -4,6 +4,7 @@ export default class TestFilesFinder {
     logger: Logger;
     directories: string[];
     findingCount: number;
+    filePattern: RegExp | undefined;
     processArgs: string[];
     /**
      * Narrows the runtime value to the documented type.
@@ -44,11 +45,13 @@ export default class TestFilesFinder {
      * @param {object} args - Options object.
      * @param {string} args.directory - Directory path.
      * @param {string[]} [args.directories] - Directories.
+     * @param {RegExp} [args.filePattern] - Test-file pattern override.
      * @param {string[]} args.processArgs - Process args.
      */
-    constructor({ directory, directories, processArgs, ...restArgs }: {
+    constructor({ directory, directories, filePattern, processArgs, ...restArgs }: {
         directory: string;
         directories?: string[];
+        filePattern?: RegExp;
         processArgs: string[];
     });
     /**

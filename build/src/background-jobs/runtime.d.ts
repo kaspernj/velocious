@@ -79,4 +79,43 @@ export declare function cancelScheduledBackgroundJobForConfiguration({ configura
     configuration: import("../configuration.js").default;
     scheduleKey: string;
 }): Promise<import("./types.js").BackgroundJobCancellationResult>;
+/**
+ * Reads stable schedule ownership in background mode.
+ * @param {string} scheduleKey - Stable logical schedule key.
+ * @param {{includeLatestTerminal?: boolean}} [options] - Lookup options.
+ * @returns {Promise<import("./types.js").BackgroundJobScheduledLookupResult>} - Normalized stable schedule jobs.
+ */
+export declare function getScheduledBackgroundJob(scheduleKey: string, options?: {
+    includeLatestTerminal?: boolean;
+}): Promise<import("./types.js").BackgroundJobScheduledLookupResult>;
+/**
+ * Reads stable schedule ownership using an explicitly resolved configuration.
+ * @param {object} args - Lookup request.
+ * @param {import("../configuration.js").default} args.configuration - Configuration.
+ * @param {string} args.scheduleKey - Stable logical schedule key.
+ * @param {boolean} [args.includeLatestTerminal] - Whether to include latest terminal history.
+ * @returns {Promise<import("./types.js").BackgroundJobScheduledLookupResult>} - Normalized stable schedule jobs.
+ */
+export declare function getScheduledBackgroundJobForConfiguration({ configuration, scheduleKey, includeLatestTerminal }: {
+    configuration: import("../configuration.js").default;
+    scheduleKey: string;
+    includeLatestTerminal?: boolean;
+}): Promise<import("./types.js").BackgroundJobScheduledLookupResult>;
+/**
+ * Wakes a stable schedule owner in background mode.
+ * @param {string} scheduleKey - Stable logical schedule key.
+ * @returns {Promise<import("./types.js").BackgroundJobWakeResult>} - Wake result.
+ */
+export declare function wakeScheduledBackgroundJob(scheduleKey: string): Promise<import("./types.js").BackgroundJobWakeResult>;
+/**
+ * Wakes a stable schedule owner using an explicitly resolved configuration.
+ * @param {object} args - Wake request.
+ * @param {import("../configuration.js").default} args.configuration - Configuration.
+ * @param {string} args.scheduleKey - Stable logical schedule key.
+ * @returns {Promise<import("./types.js").BackgroundJobWakeResult>} - Wake result.
+ */
+export declare function wakeScheduledBackgroundJobForConfiguration({ configuration, scheduleKey }: {
+    configuration: import("../configuration.js").default;
+    scheduleKey: string;
+}): Promise<import("./types.js").BackgroundJobWakeResult>;
 //# sourceMappingURL=runtime.d.ts.map

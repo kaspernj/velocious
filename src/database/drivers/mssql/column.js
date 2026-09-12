@@ -1,7 +1,7 @@
 // @ts-check
 
 import BaseColumn from "../base-column.js"
-import {digg} from "diggerize"
+import { digg } from "diggerize"
 
 export default class VelociousDatabaseDriversMssqlColumn extends BaseColumn {
   /**
@@ -37,6 +37,6 @@ export default class VelociousDatabaseDriversMssqlColumn extends BaseColumn {
     }
   }
 
-  getPrimaryKey() { return digg(this, "data", "isIdentity") === 1 }
+  getPrimaryKey() { return digg(this, "data", "isPrimaryKey") === 1 }
   getType() { return digg(this, "data", "DATA_TYPE") }
 }

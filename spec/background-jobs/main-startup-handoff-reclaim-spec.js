@@ -13,6 +13,27 @@ import { describe, expect, it } from "../../src/testing/test.js"
 
 const MAX_TIMER_MS = 2_147_483_647
 
+class ManualStartupClock {
+  nextTimerId = 1
+  /** @type {Map<number, () => void>} */
+  timers = new Map()
+
+  /** @param {number} timerId - Timer identifier. @returns {void} */
+  clearTimeout(timerId) { this.timers.delete(timerId) }
+
+  /** @returns {number} - Fixed current time. */
+  now() { return 1_000 }
+
+  /** @param {() => void} callback - Timer callback. @param {number} delayMs - Timer delay. @returns {number} - Timer identifier. */
+  setTimeout(callback, delayMs) {
+    void delayMs
+    const timerId = this.nextTimerId++
+
+    this.timers.set(timerId, callback)
+    return timerId
+  }
+}
+
 class ControlledAdoptionStore extends BackgroundJobsStore {
   /** @param {ConstructorParameters<typeof BackgroundJobsStore>[0]} args - Store options. */
   constructor(args) {
@@ -32,6 +53,22 @@ class ControlledAdoptionStore extends BackgroundJobsStore {
     if (this.adoptionError) throw this.adoptionError
 
     return handoffs
+  }
+}
+
+class ControlledStartupStore extends BackgroundJobsStore {
+  /** @param {ConstructorParameters<typeof BackgroundJobsStore>[0]} args - Store options. */
+  constructor(args) {
+    super(args)
+    this.scheduledLookupStarted = deferred()
+    this.scheduledLookupCanFinish = deferred()
+  }
+
+  /** @returns {Promise<import("../../src/background-jobs/types.js").BackgroundJobRow | undefined>} - Next scheduled job. */
+  async nextScheduledJob() {
+    this.scheduledLookupStarted.resolve(undefined)
+    await this.scheduledLookupCanFinish.promise
+    return await super.nextScheduledJob()
   }
 }
 
@@ -67,12 +104,23 @@ async function createControlledAdoptionStore() {
   return store
 }
 
+/** @returns {Promise<ControlledStartupStore>} - Empty store with a controlled startup lookup. */
+async function createControlledStartupStore() {
+  await dummyConfiguration.closeBackgroundJobsAdapter()
+  dummyConfiguration.setCurrent()
+  const store = new ControlledStartupStore({configuration: dummyConfiguration})
+
+  await store.clearAll()
+  return store
+}
+
 /**
  * @param {import("../../src/background-jobs/store.js").default} store - Startup store.
  * @param {number} workerReconnectGraceMs - Reconnect grace.
+ * @param {ManualStartupClock} [clock] - Deterministic lifecycle clock.
  * @returns {Promise<BackgroundJobsMain>} - Started main.
  */
-async function startMain(store, workerReconnectGraceMs) {
+async function startMain(store, workerReconnectGraceMs, clock) {
   dummyConfiguration.setBackgroundJobsConfig({
     adapter: store,
     dispatchStrategy: "beacon",
@@ -81,6 +129,13 @@ async function startMain(store, workerReconnectGraceMs) {
   const main = new BackgroundJobsMain({
     closeDatabaseConnectionsOnStop: false,
     configuration: dummyConfiguration,
+    clock: clock
+      ? {
+          clearTimeout: (timerId) => clock.clearTimeout(Number(timerId)),
+          now: () => clock.now(),
+          setTimeout: (callback, delayMs) => clock.setTimeout(callback, delayMs)
+        }
+      : undefined,
     host: "127.0.0.1",
     port: 0,
     workerReconnectGraceMs
@@ -132,6 +187,27 @@ async function runStartupReclaimNow(main) {
 }
 
 describe("Background jobs - main startup handoff reclaim", {databaseCleaning: {transaction: false, truncate: true}}, () => {
+  it("starts reconnect grace only after active ownership startup completes", async () => {
+    const store = await createControlledStartupStore()
+    const jobId = await store.enqueue({args: [], jobName: "StartupBoundaryJob"})
+    const handoff = await store.markHandedOff({jobId, workerId: "startup-boundary-worker"})
+    const clock = new ManualStartupClock()
+    const startup = startMain(store, 100, clock)
+    let main
+
+    try {
+      if (!handoff) throw new Error("Expected the startup boundary handoff")
+
+      await timeout({timeout: 1000}, async () => await store.scheduledLookupStarted.promise)
+      expect(clock.timers.size).toEqual(0)
+    } finally {
+      store.scheduledLookupCanFinish.resolve(undefined)
+      main = await startup
+      await main.stop()
+      await dummyConfiguration.closeBackgroundJobsAdapter()
+    }
+  })
+
   it("reclaims an unchanged pre-start lease after grace and wakes concurrency-blocked work", async () => {
     const store = await createStore()
     const concurrency = {concurrencyKey: "run-queued-builds", maxConcurrency: 1}
@@ -184,7 +260,7 @@ describe("Background jobs - main startup handoff reclaim", {databaseCleaning: {t
     const store = await createControlledAdoptionStore()
     const jobId = await store.enqueue({args: [], jobName: "SurvivingJob"})
     const handoff = await store.markHandedOff({jobId, workerId: "surviving-worker"})
-    const main = await startMain(store, 100)
+    const main = await startMain(store, MAX_TIMER_MS)
     const worker = new ControllableWorkerSocket()
 
     try {
@@ -206,7 +282,7 @@ describe("Background jobs - main startup handoff reclaim", {databaseCleaning: {t
       store.adoptionCanFinish.resolve(undefined)
       await main._drainWorkerHandoffAdoptions()
       expect(main.reconnectedWorkerIds.has("surviving-worker")).toEqual(true)
-      await waitForStartupReclaim(main)
+      await runStartupReclaimNow(main)
 
       expect(main.workerHandoffs.get(worker)?.get(jobId)).toEqual(handoff.handoffId)
       expect(await store.getJob(jobId)).toMatchObject({
@@ -233,7 +309,7 @@ describe("Background jobs - main startup handoff reclaim", {databaseCleaning: {t
     const store = await createControlledAdoptionStore()
     const jobId = await store.enqueue({args: [], jobName: "SlowAdoptionJob"})
     const handoff = await store.markHandedOff({jobId, workerId: "slow-adoption-worker"})
-    const main = await startMain(store, 200)
+    const main = await startMain(store, MAX_TIMER_MS)
     const worker = new ControllableWorkerSocket()
 
     try {
@@ -251,10 +327,7 @@ describe("Background jobs - main startup handoff reclaim", {databaseCleaning: {t
       })).toEqual("worker")
       await store.adoptionStarted.promise
       expect(main._startupHandoffGraceElapsed).toEqual(false)
-      await timeout({timeout: 1000}, async () => {
-        while (!main._startupHandoffGraceElapsed) await wait(1)
-      })
-      await wait(25)
+      const startupReclaim = runStartupReclaimNow(main)
 
       expect(main._startupHandoffGraceElapsed).toEqual(true)
       expect(await store.getJob(jobId)).toMatchObject({
@@ -266,7 +339,7 @@ describe("Background jobs - main startup handoff reclaim", {databaseCleaning: {t
 
       store.adoptionCanFinish.resolve(undefined)
       await main._drainWorkerHandoffAdoptions()
-      await waitForStartupReclaim(main)
+      await startupReclaim
       expect(main.reconnectedWorkerIds.has("slow-adoption-worker")).toEqual(true)
       expect(await store.getJob(jobId)).toMatchObject({
         attempts: 0,

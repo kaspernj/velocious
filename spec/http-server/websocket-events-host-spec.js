@@ -6,6 +6,16 @@ import dummyConfiguration from "../dummy/src/config/configuration.js"
 import {VelociousHttpServerWebsocketEventsHost} from "../../src/http-server/websocket-events-host.js"
 
 /**
+ * Runs a fake configuration callback in its unchanged context.
+ * @template T
+ * @param {() => T | Promise<T>} callback - Callback to run.
+ * @returns {Promise<T>} - Callback result.
+ */
+async function runWithTestSharedConnectionContexts(callback) {
+  return await callback()
+}
+
+/**
  * Test host that gates event persistence per channel through explicit
  * deferred signals so tests control exactly when queued publish work
  * proceeds — without sleeps or runtime instance overrides.
@@ -129,11 +139,13 @@ describe("HttpServer - websocket events host", {databaseCleaning: {transaction: 
     const host = new VelociousHttpServerWebsocketEventsHost()
     const configurationA = {
       withoutCurrentConnectionContexts: async (callback) => await callback(),
-      withoutCurrentTestDatabaseAccessScope: async (callback) => await callback()
+      withoutCurrentTestDatabaseAccessScope: async (callback) => await callback(),
+      runWithTestSharedConnectionContexts
     }
     const configurationB = {
       withoutCurrentConnectionContexts: async (callback) => await callback(),
-      withoutCurrentTestDatabaseAccessScope: async (callback) => await callback()
+      withoutCurrentTestDatabaseAccessScope: async (callback) => await callback(),
+      runWithTestSharedConnectionContexts
     }
     const deliveries = []
 
@@ -175,7 +187,8 @@ describe("HttpServer - websocket events host", {databaseCleaning: {transaction: 
     const host = new GatedPersistEventsHost()
     const configuration = {
       withoutCurrentConnectionContexts: async (callback) => await callback(),
-      withoutCurrentTestDatabaseAccessScope: async (callback) => await callback()
+      withoutCurrentTestDatabaseAccessScope: async (callback) => await callback(),
+      runWithTestSharedConnectionContexts
     }
     /** @type {Array<string>} */
     const deliveries = []
@@ -210,7 +223,8 @@ describe("HttpServer - websocket events host", {databaseCleaning: {transaction: 
     const contextEntries = {connection: 0, testDatabaseAccessScope: 0}
     const configurationA = {
       withoutCurrentConnectionContexts: async (callback) => await callback(),
-      withoutCurrentTestDatabaseAccessScope: async (callback) => await callback()
+      withoutCurrentTestDatabaseAccessScope: async (callback) => await callback(),
+      runWithTestSharedConnectionContexts
     }
     const configurationB = {
       withoutCurrentConnectionContexts: async (callback) => {
@@ -220,7 +234,8 @@ describe("HttpServer - websocket events host", {databaseCleaning: {transaction: 
       withoutCurrentTestDatabaseAccessScope: async (callback) => {
         contextEntries.testDatabaseAccessScope += 1
         return await callback()
-      }
+      },
+      runWithTestSharedConnectionContexts
     }
 
     host.register(/** @type {ReturnType<typeof JSON.parse>} */ ({
@@ -247,15 +262,35 @@ describe("HttpServer - websocket events host", {databaseCleaning: {transaction: 
     expect(contextEntries).toEqual({connection: 1, testDatabaseAccessScope: 1})
   })
 
+  it("rejoins the test shared connection after detaching queued persistence from its publisher", async () => {
+    const host = new GatedPersistEventsHost()
+    let sharedConnectionContextEntries = 0
+    const configuration = {
+      withoutCurrentConnectionContexts: async (callback) => await callback(),
+      withoutCurrentTestDatabaseAccessScope: async (callback) => await callback(),
+      runWithTestSharedConnectionContexts: async (callback) => {
+        sharedConnectionContextEntries += 1
+        return await callback()
+      }
+    }
+
+    host.broadcastV2({body: {n: 1}, broadcastParams: {}, channel: "SharedTestConnection", configuration})
+    await host.awaitPendingBroadcasts()
+
+    expect(sharedConnectionContextEntries).toEqual(1)
+  })
+
   it("keeps exact FIFO persistence and delivery on a channel shared by legacy publish and V2 broadcasts", async () => {
     const host = new GatedPersistEventsHost()
     const configurationA = {
       withoutCurrentConnectionContexts: async (callback) => await callback(),
-      withoutCurrentTestDatabaseAccessScope: async (callback) => await callback()
+      withoutCurrentTestDatabaseAccessScope: async (callback) => await callback(),
+      runWithTestSharedConnectionContexts
     }
     const configurationB = {
       withoutCurrentConnectionContexts: async (callback) => await callback(),
-      withoutCurrentTestDatabaseAccessScope: async (callback) => await callback()
+      withoutCurrentTestDatabaseAccessScope: async (callback) => await callback(),
+      runWithTestSharedConnectionContexts
     }
     /** @type {Array<string>} */
     const deliveries = []
@@ -294,7 +329,8 @@ describe("HttpServer - websocket events host", {databaseCleaning: {transaction: 
     const host = new GatedPersistEventsHost()
     const configuration = {
       withoutCurrentConnectionContexts: async (callback) => await callback(),
-      withoutCurrentTestDatabaseAccessScope: async (callback) => await callback()
+      withoutCurrentTestDatabaseAccessScope: async (callback) => await callback(),
+      runWithTestSharedConnectionContexts
     }
     /** @type {Array<string>} */
     const deliveries = []

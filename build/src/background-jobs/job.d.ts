@@ -43,5 +43,20 @@ export default class VelociousJob<TArgs extends Array<ReturnType<typeof JSON.par
      * @returns {Promise<import("./types.js").BackgroundJobCancellationResult>} - Cancellation result.
      */
     static cancelScheduled(scheduleKey: string): Promise<import("./types.js").BackgroundJobCancellationResult>;
+    /**
+     * Reads current ownership and optional terminal history for a stable key.
+     * @param {string} scheduleKey - Stable logical schedule key.
+     * @param {{includeLatestTerminal?: boolean}} [options] - Lookup options.
+     * @returns {Promise<import("./types.js").BackgroundJobScheduledLookupResult>} - Normalized stable schedule jobs.
+     */
+    static getScheduledJob(scheduleKey: string, options?: {
+        includeLatestTerminal?: boolean;
+    }): Promise<import("./types.js").BackgroundJobScheduledLookupResult>;
+    /**
+     * Expedites a future queued owner without creating another job.
+     * @param {string} scheduleKey - Stable logical schedule key.
+     * @returns {Promise<import("./types.js").BackgroundJobWakeResult>} - Wake result.
+     */
+    static wakeScheduled(scheduleKey: string): Promise<import("./types.js").BackgroundJobWakeResult>;
 }
 //# sourceMappingURL=job.d.ts.map

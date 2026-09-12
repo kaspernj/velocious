@@ -73,8 +73,10 @@ async function captureSerializationResources(controller, callback) {
   return resourcesByModelClassName
 }
 
-describe("FrontendModel serialization resource metadata", {databaseCleaning: {transaction: true}}, () => {
+describe("FrontendModel serialization resource metadata", {databaseCleaning: {transaction: true}, tags: ["dummy"]}, () => {
   it("reuses the same resource instance for multiple models of the same class", async () => {
+    expect(Dummy.current().application).toBeTruthy()
+
     await Dummy.run(async () => {
       const project = await Project.create({name: "Shared resource project"})
       const taskOne = await Task.create({name: "Task one", project})

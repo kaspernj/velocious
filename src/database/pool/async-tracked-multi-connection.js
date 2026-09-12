@@ -998,7 +998,8 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
     if (!actualCallback) throw new Error("withConnection requires a callback")
 
-    const testSharedConnection = this.activeTestSharedConnection()
+    const connectionContextSuppressed = this.asyncLocalStorage.getStore() === SUPPRESSED_CONNECTION_CONTEXT
+    const testSharedConnection = connectionContextSuppressed ? undefined : this.activeTestSharedConnection()
     if (testSharedConnection && this.connectionMatchesCurrentConfiguration(testSharedConnection)) {
       return await this.asyncLocalStorage.run(testSharedConnection.getIdSeq(), async () => {
         return await actualCallback(testSharedConnection)

@@ -159,7 +159,9 @@ export class VelociousHttpServerWebsocketEventsHost {
 
     if (configuration) {
       queuedPublish = previousTail.then(() => configuration.withoutCurrentTestDatabaseAccessScope(() => {
-        return configuration.withoutCurrentConnectionContexts(callback)
+        return configuration.withoutCurrentConnectionContexts(() => {
+          return configuration.runWithTestSharedConnectionContexts(callback)
+        })
       }))
     } else {
       queuedPublish = previousTail.then(callback)

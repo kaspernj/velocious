@@ -5,31 +5,39 @@ import UUID from "pure-uuid"
 import TableData from "../database/table-data/index.js"
 import TableIndex from "../database/table-data/table-index.js"
 import sha256Hex from "../utils/sha256-hex.js"
+import VelociousError from "../velocious-error.js"
 import normalizeBackgroundJobError from "./normalize-error.js"
 import {
+  BACKGROUND_JOB_TERMINAL_STATUSES,
   DEFAULT_BACKGROUND_JOB_QUEUE,
   QUEUE_CONCURRENCY_KEY_PREFIX,
   normalizeBackgroundJobConcurrency,
   normalizeBackgroundJobExecutionMode,
   normalizeBackgroundJobMaxRetries,
   normalizeBackgroundJobQueue,
+  normalizeBackgroundJobScheduleKey,
   normalizeBackgroundJobScheduledAtMs,
+  normalizeBackgroundJobStatus,
   rescheduledBackgroundJobAtMs,
   retryDelayMs
 } from "./job-semantics.js"
 
 export const LOCAL_BACKGROUND_JOBS_TABLE = "velocious_local_background_jobs"
 export const LOCAL_BACKGROUND_JOB_CONCURRENCY_TABLE = "velocious_local_background_job_concurrency"
+export const LOCAL_BACKGROUND_JOB_SCHEDULE_KEYS_TABLE = "velocious_local_background_job_schedule_keys"
 const MIGRATIONS_TABLE = "velocious_internal_migrations"
 const MIGRATION_SCOPE = "local_background_jobs"
-const MIGRATION_VERSION = "1"
+const MIGRATION_VERSIONS = ["1", "2", "3"]
 const LOCAL_EXECUTION_MODES = [/** @type {const} */ ("inline")]
 export const LOCAL_BACKGROUND_JOBS_INDEX_NAMES = [
   "index_velocious_local_background_jobs_due",
   "index_velocious_local_background_jobs_queue_status",
   "index_velocious_local_background_jobs_deduplication",
-  "index_velocious_local_background_jobs_concurrency"
+  "index_velocious_local_background_jobs_concurrency",
+  "index_velocious_local_background_jobs_schedule_history",
+  "index_velocious_local_background_jobs_schedule_order"
 ]
+export const LOCAL_BACKGROUND_JOB_SCHEDULE_KEYS_INDEX_NAMES = ["index_velocious_local_background_job_schedule_keys_job"]
 const EXPECTED_JOB_COLUMNS = [
   "id",
   "job_name",
@@ -37,6 +45,8 @@ const EXPECTED_JOB_COLUMNS = [
   "args_digest",
   "execution_mode",
   "queue",
+  "schedule_key",
+  "schedule_order",
   "max_retries",
   "attempts",
   "status",
@@ -56,6 +66,7 @@ const EXPECTED_JOB_COLUMNS = [
   "child_pid"
 ]
 const EXPECTED_CONCURRENCY_COLUMNS = ["concurrency_key", "max_concurrency", "active_count"]
+const EXPECTED_SCHEDULE_KEY_COLUMNS = ["schedule_key", "job_id"]
 /** @type {WeakMap<import("../configuration.js").default, Map<string, Promise<void>>>} */
 const deduplicatedEnqueueChains = new WeakMap()
 
@@ -190,7 +201,8 @@ export default class LocalBackgroundJobsStore {
   }
 
   /**
-   * Creates or repairs version-one tables and indexes.
+   * Creates or upgrades the versioned local tables and indexes without
+   * rebuilding persisted queue data.
    * @param {import("../database/drivers/base.js").default} db - Local SQLite connection.
    * @returns {Promise<boolean>} - Whether schema state changed.
    */
@@ -217,20 +229,19 @@ export default class LocalBackgroundJobsStore {
       await this._assertColumns(db, LOCAL_BACKGROUND_JOB_CONCURRENCY_TABLE, EXPECTED_CONCURRENCY_COLUMNS)
     }
 
+    if (!(await db.tableExists(LOCAL_BACKGROUND_JOB_SCHEDULE_KEYS_TABLE))) {
+      await db.createTable(this._scheduleKeysTableData())
+      changed = true
+    } else {
+      await this._assertColumns(db, LOCAL_BACKGROUND_JOB_SCHEDULE_KEYS_TABLE, EXPECTED_SCHEDULE_KEY_COLUMNS)
+    }
+
     if (await this._ensureIndexes(db)) changed = true
 
-    if (!(await this._hasMigration(db))) {
-      await db.upsert({
-        tableName: MIGRATIONS_TABLE,
-        data: {
-          applied_at_ms: this.clock.now(),
-          key: this._migrationKey(),
-          scope: MIGRATION_SCOPE,
-          version: MIGRATION_VERSION
-        },
-        conflictColumns: ["key"],
-        updateColumns: ["scope", "version", "applied_at_ms"]
-      })
+    for (const version of MIGRATION_VERSIONS) {
+      if (await this._hasMigration(db, version)) continue
+
+      await this._recordMigration(db, version)
       changed = true
     }
 
@@ -303,6 +314,8 @@ export default class LocalBackgroundJobsStore {
     table.string("args_digest", {maxLength: 64, null: false})
     table.string("execution_mode", {null: false})
     table.string("queue", {null: false})
+    table.string("schedule_key", {null: true})
+    table.bigint("schedule_order", {null: true})
     table.integer("max_retries", {null: false})
     table.integer("attempts", {null: false})
     table.string("status", {null: false})
@@ -324,6 +337,8 @@ export default class LocalBackgroundJobsStore {
     table.addIndex(new TableIndex(["queue", "status", "created_at_ms"], {name: LOCAL_BACKGROUND_JOBS_INDEX_NAMES[1]}))
     table.addIndex(new TableIndex(["args_digest"], {name: LOCAL_BACKGROUND_JOBS_INDEX_NAMES[2]}))
     table.addIndex(new TableIndex(["status", "concurrency_key", "scheduled_at_ms"], {name: LOCAL_BACKGROUND_JOBS_INDEX_NAMES[3]}))
+    table.addIndex(new TableIndex(["schedule_key", "created_at_ms", "id"], {name: LOCAL_BACKGROUND_JOBS_INDEX_NAMES[4]}))
+    table.addIndex(new TableIndex(["schedule_key", "schedule_order", "created_at_ms", "id"], {name: LOCAL_BACKGROUND_JOBS_INDEX_NAMES[5]}))
     return table
   }
 
@@ -337,6 +352,19 @@ export default class LocalBackgroundJobsStore {
     table.string("concurrency_key", {null: false, primaryKey: true})
     table.integer("max_concurrency", {null: false})
     table.integer("active_count", {null: false})
+    return table
+  }
+
+  /**
+   * Builds the stable schedule-owner table definition.
+   * @returns {TableData} - Stable owner table definition.
+   */
+  _scheduleKeysTableData() {
+    const table = new TableData(LOCAL_BACKGROUND_JOB_SCHEDULE_KEYS_TABLE, {ifNotExists: true})
+
+    table.string("schedule_key", {null: false, primaryKey: true})
+    table.string("job_id", {null: false})
+    table.addIndex(new TableIndex(["job_id"], {name: LOCAL_BACKGROUND_JOB_SCHEDULE_KEYS_INDEX_NAMES[0]}))
     return table
   }
 
@@ -368,25 +396,33 @@ export default class LocalBackgroundJobsStore {
    */
   async _ensureIndexes(db) {
     db.clearSchemaCache()
-    const jobsTable = await db.getTableByNameOrFail(LOCAL_BACKGROUND_JOBS_TABLE)
-    const existingNames = new Set((await jobsTable.getIndexes()).map((index) => index.getName()))
     let changed = false
+    /** @type {Array<[string, TableData]>} */
+    const definitions = [
+      [LOCAL_BACKGROUND_JOBS_TABLE, this._jobsTableData()],
+      [LOCAL_BACKGROUND_JOB_SCHEDULE_KEYS_TABLE, this._scheduleKeysTableData()]
+    ]
 
-    for (const index of this._jobsTableData().getIndexes()) {
-      const indexName = index.getName()
+    for (const [tableName, tableData] of definitions) {
+      const table = await db.getTableByNameOrFail(tableName)
+      const existingNames = new Set((await table.getIndexes()).map((index) => index.getName()))
 
-      if (!indexName || existingNames.has(indexName)) continue
+      for (const index of tableData.getIndexes()) {
+        const indexName = index.getName()
 
-      const sqls = await db.createIndexSQLs({
-        columns: index.getColumns(),
-        ifNotExists: true,
-        name: indexName,
-        tableName: LOCAL_BACKGROUND_JOBS_TABLE,
-        unique: index.getUnique()
-      })
+        if (!indexName || existingNames.has(indexName)) continue
 
-      for (const sql of sqls) await db.query(sql)
-      changed = true
+        const sqls = await db.createIndexSQLs({
+          columns: index.getColumns(),
+          ifNotExists: true,
+          name: indexName,
+          tableName,
+          unique: index.getUnique()
+        })
+
+        for (const sql of sqls) await db.query(sql)
+        changed = true
+      }
     }
 
     if (changed) db.clearSchemaCache()
@@ -396,13 +432,14 @@ export default class LocalBackgroundJobsStore {
   /**
    * Checks whether the current local schema version is recorded.
    * @param {import("../database/drivers/base.js").default} db - Connection.
-   * @returns {Promise<boolean>} - Whether version one is recorded.
+   * @param {string} version - Local schema version.
+   * @returns {Promise<boolean>} - Whether the version is recorded.
    */
-  async _hasMigration(db) {
+  async _hasMigration(db, version) {
     const rows = await db
       .newQuery()
       .from(MIGRATIONS_TABLE)
-      .where({key: this._migrationKey()})
+      .where({key: this._migrationKey(version)})
       .limit(1)
       .results()
 
@@ -410,10 +447,31 @@ export default class LocalBackgroundJobsStore {
   }
 
   /**
+   * Records one local schema version after its additive changes are present.
+   * @param {import("../database/drivers/base.js").default} db - Connection.
+   * @param {string} version - Local schema version.
+   * @returns {Promise<void>} - Resolves after recording.
+   */
+  async _recordMigration(db, version) {
+    await db.upsert({
+      tableName: MIGRATIONS_TABLE,
+      data: {
+        applied_at_ms: this.clock.now(),
+        key: this._migrationKey(version),
+        scope: MIGRATION_SCOPE,
+        version
+      },
+      conflictColumns: ["key"],
+      updateColumns: ["scope", "version", "applied_at_ms"]
+    })
+  }
+
+  /**
    * Builds the scoped migration key.
+   * @param {string} version - Local schema version.
    * @returns {string} - Scoped migration key.
    */
-  _migrationKey() { return `${MIGRATION_SCOPE}:${MIGRATION_VERSION}` }
+  _migrationKey(version) { return `${MIGRATION_SCOPE}:${version}` }
 
   /**
    * Enqueues a local job in the caller's active transaction when present.
@@ -467,6 +525,180 @@ export default class LocalBackgroundJobsStore {
 
     if (options.deduplicateWhileQueued) return await this._serializeDeduplicatedEnqueue(preparedJob, mutate)
     return await mutate()
+  }
+
+  /**
+   * Replaces the queued owner of a stable schedule key with a new local job.
+   * A handed-off owner remains runnable but is detached from future ownership.
+   * @param {object} args - Replacement request.
+   * @param {string} args.scheduleKey - Stable logical schedule key.
+   * @param {string} args.jobName - Registered job name.
+   * @param {Array<ReturnType<typeof JSON.parse>>} args.args - Serialized job arguments.
+   * @param {import("./types.js").BackgroundJobOptions} [args.options] - Job options.
+   * @returns {Promise<import("./types.js").BackgroundJobReplacementResult>} - Replacement result.
+   */
+  async replaceScheduled({scheduleKey, jobName, args, options = {}}) {
+    await this.ensureReady()
+
+    const normalizedScheduleKey = normalizeBackgroundJobScheduleKey(scheduleKey)
+    const preparedJob = this._prepareJob({args, jobName, options})
+
+    return await this._withDb(async (connection) => await this._mutate(connection, async (db) => {
+      await this._lockScheduleKey(db, normalizedScheduleKey)
+      const ownerJob = await this._scheduledOwnerJob(db, normalizedScheduleKey)
+      /** @type {import("./types.js").BackgroundJobReplacementPreviousStatus} */
+      let previousStatus = null
+      let previousJobId = null
+
+      if (ownerJob?.status === "queued") {
+        const affectedRows = await this._updateAffectedRows(db, {
+          conditions: {id: ownerJob.id, status: "queued"},
+          data: {status: "cancelled"},
+          tableName: LOCAL_BACKGROUND_JOBS_TABLE
+        })
+
+        if (affectedRows === 1) {
+          previousJobId = ownerJob.id
+          previousStatus = "queued"
+        } else {
+          const currentOwnerJob = await this._getJob(db, ownerJob.id)
+
+          if (currentOwnerJob?.status === "handed_off") {
+            previousJobId = currentOwnerJob.id
+            previousStatus = "handed_off"
+          }
+        }
+      } else if (ownerJob?.status === "handed_off") {
+        previousJobId = ownerJob.id
+        previousStatus = "handed_off"
+      }
+
+      const scheduleOrder = await this._nextScheduleOrder(db, normalizedScheduleKey)
+
+      if (preparedJob.concurrency) await this._ensureConcurrency(db, preparedJob.concurrency)
+      await this._insertPreparedJob(db, preparedJob, normalizedScheduleKey, scheduleOrder)
+      await db.upsert({
+        conflictColumns: ["schedule_key"],
+        data: {job_id: preparedJob.jobId, schedule_key: normalizedScheduleKey},
+        tableName: LOCAL_BACKGROUND_JOB_SCHEDULE_KEYS_TABLE,
+        updateColumns: ["job_id"]
+      })
+      await this._wakeDispatcherAfterCommit(db)
+
+      return {jobId: preparedJob.jobId, previousJobId, previousStatus}
+    }))
+  }
+
+  /**
+   * Cancels a queued stable owner or detaches an active handoff truthfully.
+   * @param {string} scheduleKey - Stable logical schedule key.
+   * @returns {Promise<import("./types.js").BackgroundJobCancellationResult>} - Cancellation result.
+   */
+  async cancelScheduled(scheduleKey) {
+    await this.ensureReady()
+
+    const normalizedScheduleKey = normalizeBackgroundJobScheduleKey(scheduleKey)
+
+    return await this._withDb(async (connection) => await this._mutate(connection, async (db) => {
+      await this._lockScheduleKey(db, normalizedScheduleKey)
+      const ownerJob = await this._scheduledOwnerJob(db, normalizedScheduleKey)
+
+      if (!ownerJob) {
+        await this._releaseScheduleOwnership(db, {jobId: null, scheduleKey: normalizedScheduleKey})
+        return {jobId: null, outcome: "not_found"}
+      }
+
+      if (ownerJob.status === "queued") {
+        const affectedRows = await this._updateAffectedRows(db, {
+          conditions: {id: ownerJob.id, status: "queued"},
+          data: {status: "cancelled"},
+          tableName: LOCAL_BACKGROUND_JOBS_TABLE
+        })
+
+        if (affectedRows === 1) {
+          await this._releaseScheduleOwnership(db, {jobId: ownerJob.id, scheduleKey: normalizedScheduleKey})
+          await this._wakeDispatcherAfterCommit(db)
+          return {jobId: ownerJob.id, outcome: "cancelled"}
+        }
+      }
+
+      const currentJob = await this._scheduledOwnerJob(db, normalizedScheduleKey)
+
+      await this._releaseScheduleOwnership(db, {jobId: ownerJob.id, scheduleKey: normalizedScheduleKey})
+      await this._wakeDispatcherAfterCommit(db)
+      if (currentJob?.status === "handed_off") return {jobId: currentJob.id, outcome: "handed_off"}
+      return {jobId: null, outcome: "not_found"}
+    }))
+  }
+
+  /**
+   * Reads stable ownership and optional latest terminal history in one transaction.
+   * @param {string} scheduleKey - Stable logical schedule key.
+   * @param {{includeLatestTerminal?: boolean}} [options] - Lookup options.
+   * @returns {Promise<import("./types.js").BackgroundJobScheduledLookupResult>} - Normalized local jobs.
+   */
+  async getScheduledJob(scheduleKey, {includeLatestTerminal = false} = {}) {
+    await this.ensureReady()
+
+    const normalizedScheduleKey = normalizeBackgroundJobScheduleKey(scheduleKey)
+
+    if (typeof includeLatestTerminal !== "boolean") {
+      throw VelociousError.safe("background job includeLatestTerminal must be a boolean")
+    }
+
+    return await this._withDb(async (connection) => await this._mutate(connection, async (db) => {
+      return await this._scheduledJobLookup(db, {
+        includeLatestTerminal,
+        scheduleKey: normalizedScheduleKey
+      })
+    }))
+  }
+
+  /**
+   * Moves only a future queued stable owner to the current time.
+   * @param {string} scheduleKey - Stable logical schedule key.
+   * @returns {Promise<import("./types.js").BackgroundJobWakeResult>} - Exact wake outcome.
+   */
+  async wakeScheduled(scheduleKey) {
+    await this.ensureReady()
+
+    const normalizedScheduleKey = normalizeBackgroundJobScheduleKey(scheduleKey)
+
+    return await this._withDb(async (connection) => await this._mutate(connection, async (db) => {
+      await this._lockScheduleKey(db, normalizedScheduleKey)
+      const job = await this._scheduledOwnerJob(db, normalizedScheduleKey)
+
+      if (!job || (job.status !== "queued" && job.status !== "handed_off")) return {jobId: null, outcome: "not_found"}
+      if (job.status === "handed_off") return {jobId: job.id, outcome: "handed_off"}
+
+      const nowMs = this.clock.now()
+
+      if (Number(job.scheduledAtMs) <= nowMs) {
+        await this._wakeDispatcherAfterCommit(db)
+        return {jobId: job.id, outcome: "already_due"}
+      }
+
+      const affectedRows = await this._updateAffectedRows(db, {
+        conditions: {id: job.id, scheduled_at_ms: job.scheduledAtMs, status: "queued"},
+        data: {scheduled_at_ms: nowMs},
+        tableName: LOCAL_BACKGROUND_JOBS_TABLE
+      })
+
+      if (affectedRows === 1) {
+        await this._wakeDispatcherAfterCommit(db)
+        return {jobId: job.id, outcome: "woken"}
+      }
+
+      const currentJob = await this._scheduledOwnerJob(db, normalizedScheduleKey)
+
+      if (currentJob?.status === "handed_off") return {jobId: currentJob.id, outcome: "handed_off"}
+      if (currentJob?.status === "queued" && Number(currentJob.scheduledAtMs) <= nowMs) {
+        await this._wakeDispatcherAfterCommit(db)
+        return {jobId: currentJob.id, outcome: "already_due"}
+      }
+
+      return {jobId: null, outcome: "not_found"}
+    }))
   }
 
   /**
@@ -559,9 +791,11 @@ export default class LocalBackgroundJobsStore {
    * Inserts one prepared local job row and its concurrency metadata.
    * @param {import("../database/drivers/base.js").default} db - Local SQLite connection.
    * @param {import("./types.js").PreparedLocalBackgroundJob} preparedJob - Prepared row data.
+   * @param {string | null} [scheduleKey] - Stable schedule history key.
+   * @param {number | null} [scheduleOrder] - Monotonic stable ownership order.
    * @returns {Promise<void>} - Resolves after insertion.
    */
-  async _insertPreparedJob(db, preparedJob) {
+  async _insertPreparedJob(db, preparedJob, scheduleKey = null, scheduleOrder = null) {
     await db.insert({
       tableName: LOCAL_BACKGROUND_JOBS_TABLE,
       data: {
@@ -581,6 +815,8 @@ export default class LocalBackgroundJobsStore {
         max_concurrency: preparedJob.concurrency?.maxConcurrency || null,
         max_retries: preparedJob.maxRetries,
         queue: preparedJob.queue,
+        schedule_key: scheduleKey,
+        schedule_order: scheduleOrder,
         scheduled_at_ms: preparedJob.scheduledAtMs,
         status: "queued",
         worker_id: null
@@ -847,6 +1083,7 @@ export default class LocalBackgroundJobsStore {
 
       if (affectedRows !== 1) return false
       await this._releaseConcurrency(db, job.concurrencyKey)
+      await this._releaseScheduleOwnershipForJob(db, job)
       return true
     }))
   }
@@ -976,6 +1213,7 @@ export default class LocalBackgroundJobsStore {
   async clearAll() {
     await this.ensureReady()
     await this._withDb(async (connection) => await this._mutate(connection, async (db) => {
+      await db.query(`DELETE FROM ${db.quoteTable(LOCAL_BACKGROUND_JOB_SCHEDULE_KEYS_TABLE)}`)
       await db.query(`DELETE FROM ${db.quoteTable(LOCAL_BACKGROUND_JOBS_TABLE)}`)
       await db.query(`DELETE FROM ${db.quoteTable(LOCAL_BACKGROUND_JOB_CONCURRENCY_TABLE)}`)
     }))
@@ -1020,6 +1258,7 @@ export default class LocalBackgroundJobsStore {
 
     if (affectedRows !== 1) return null
     await this._releaseConcurrency(db, job.concurrencyKey)
+    if (!willRetry) await this._releaseScheduleOwnershipForJob(db, job)
 
     return {
       ...job,
@@ -1198,6 +1437,137 @@ export default class LocalBackgroundJobsStore {
   }
 
   /**
+   * Reads the job currently named by one stable owner row.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {string} scheduleKey - Validated stable schedule key.
+   * @returns {Promise<import("./types.js").BackgroundJobRow | null>} - Normalized owner job.
+   */
+  async _scheduledOwnerJob(db, scheduleKey) {
+    const ownerRows = await db
+      .newQuery()
+      .from(LOCAL_BACKGROUND_JOB_SCHEDULE_KEYS_TABLE)
+      .where({schedule_key: scheduleKey})
+      .limit(1)
+      .results()
+    const ownerRow = ownerRows[0]
+
+    if (!ownerRow) return null
+
+    return await this._getJob(db, String(ownerRow.job_id))
+  }
+
+  /**
+   * Assigns the next ownership order after SQLite write serialization is held.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {string} scheduleKey - Validated stable schedule key.
+   * @returns {Promise<number>} - Next monotonic ownership order.
+   */
+  async _nextScheduleOrder(db, scheduleKey) {
+    const rows = await db
+      .newQuery()
+      .from(LOCAL_BACKGROUND_JOBS_TABLE)
+      .select("schedule_order")
+      .where({schedule_key: scheduleKey})
+      .where(`${db.quoteColumn("schedule_order")} IS NOT NULL`)
+      .order("schedule_order DESC")
+      .limit(1)
+      .results()
+    const currentOrder = this._numberOrNull(/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (rows[0] || {}).schedule_order)
+
+    if (currentOrder === null) return 1
+    if (!Number.isSafeInteger(currentOrder) || currentOrder < 1 || currentOrder >= Number.MAX_SAFE_INTEGER) {
+      throw new Error(`Invalid local background job schedule ownership order: ${currentOrder}`)
+    }
+
+    return currentOrder + 1
+  }
+
+  /**
+   * Builds a stable-schedule lookup exclusively from normalized local jobs.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {object} args - Lookup options.
+   * @param {boolean} args.includeLatestTerminal - Whether terminal history is requested.
+   * @param {string} args.scheduleKey - Validated stable schedule key.
+   * @returns {Promise<import("./types.js").BackgroundJobScheduledLookupResult>} - Normalized local jobs.
+   */
+  async _scheduledJobLookup(db, {includeLatestTerminal, scheduleKey}) {
+    const ownerJob = await this._scheduledOwnerJob(db, scheduleKey)
+    const currentJob = ownerJob && (ownerJob.status === "queued" || ownerJob.status === "handed_off") ? ownerJob : null
+
+    if (!includeLatestTerminal) return {currentJob, latestTerminalJob: null}
+
+    const terminalStatuses = BACKGROUND_JOB_TERMINAL_STATUSES.map((status) => db.quote(status)).join(", ")
+    const terminalRows = await db
+      .newQuery()
+      .from(LOCAL_BACKGROUND_JOBS_TABLE)
+      .where({schedule_key: scheduleKey})
+      .where(`${db.quoteColumn("status")} IN (${terminalStatuses})`)
+      .order(`CASE WHEN ${db.quoteColumn("schedule_order")} IS NULL THEN 0 ELSE 1 END DESC`)
+      .order("schedule_order DESC")
+      .order("created_at_ms DESC")
+      .order("id DESC")
+      .limit(1)
+      .results()
+    const latestTerminalJob = terminalRows[0] ? this._normalizeRow(terminalRows[0]) : null
+
+    return {currentJob, latestTerminalJob}
+  }
+
+  /**
+   * Releases ownership only when the key still points at the expected job.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {object} args - Ownership identity.
+   * @param {string | null} args.jobId - Expected owner job id, or null for a dangling owner.
+   * @param {string} args.scheduleKey - Stable schedule key.
+   * @returns {Promise<void>} - Resolves when deleted or already superseded.
+   */
+  async _releaseScheduleOwnership(db, {jobId, scheduleKey}) {
+    const conditions = jobId === null
+      ? {schedule_key: scheduleKey}
+      : {job_id: jobId, schedule_key: scheduleKey}
+
+    await db.delete({conditions, tableName: LOCAL_BACKGROUND_JOB_SCHEDULE_KEYS_TABLE})
+  }
+
+  /**
+   * Releases a terminal job's stable ownership when still current.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {import("./types.js").BackgroundJobRow} job - Terminal job.
+   * @returns {Promise<void>} - Resolves when deleted or not applicable.
+   */
+  async _releaseScheduleOwnershipForJob(db, job) {
+    if (!job.scheduleKey) return
+
+    await this._releaseScheduleOwnership(db, {jobId: job.id, scheduleKey: job.scheduleKey})
+  }
+
+  /**
+   * Acquires SQLite's transaction write serialization before reading a stable
+   * owner. A zero-row update still establishes the write boundary for a new key.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {string} scheduleKey - Validated stable schedule key.
+   * @returns {Promise<void>} - Resolves after write serialization is acquired.
+   */
+  async _lockScheduleKey(db, scheduleKey) {
+    const table = db.quoteTable(LOCAL_BACKGROUND_JOB_SCHEDULE_KEYS_TABLE)
+    const jobId = db.quoteColumn("job_id")
+
+    await db.query(
+      `UPDATE ${table} SET ${jobId} = ${jobId} ` +
+      `WHERE ${db.quoteColumn("schedule_key")} = ${db.quote(scheduleKey)}`
+    )
+  }
+
+  /**
+   * Registers the local dispatch poke on the surrounding transaction commit.
+   * @param {import("../database/drivers/base.js").default} db - Transaction connection.
+   * @returns {Promise<void>} - Resolves after registration.
+   */
+  async _wakeDispatcherAfterCommit(db) {
+    if (this.onCommittedEnqueue) await db.afterCommit(this.onCommittedEnqueue)
+  }
+
+  /**
    * Normalizes one raw local database row.
    * @param {Record<string, ReturnType<typeof JSON.parse>>} row - Raw row.
    * @returns {import("./types.js").BackgroundJobRow} - Normalized row.
@@ -1230,9 +1600,10 @@ export default class LocalBackgroundJobsStore {
       maxRetries: this._numberOrNull(row.max_retries),
       orphanedAtMs: null,
       queue: row.queue ? String(row.queue) : DEFAULT_BACKGROUND_JOB_QUEUE,
-      scheduleKey: null,
+      scheduleKey: row.schedule_key === null || row.schedule_key === undefined ? null : String(row.schedule_key),
+      scheduleOrder: this._numberOrNull(row.schedule_order),
       scheduledAtMs: this._numberOrNull(row.scheduled_at_ms),
-      status: row.status ? String(row.status) : "queued",
+      status: normalizeBackgroundJobStatus(row.status ? String(row.status) : "queued"),
       timeoutMs: null,
       workerId: row.worker_id === null || row.worker_id === undefined ? null : String(row.worker_id)
     }

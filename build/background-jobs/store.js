@@ -10,6 +10,7 @@ import normalizeBackgroundJobError from "./normalize-error.js"
 import { coordinateSharedTransactionConnection } from "../testing/shared-transaction-connection-coordinator.js"
 import stableJsonStringify from "../utils/stable-json.js"
 import {
+  BACKGROUND_JOB_TERMINAL_STATUSES,
   BACKGROUND_JOB_EXECUTION_MODES,
   DEFAULT_BACKGROUND_JOB_EXECUTION_MODE,
   DEFAULT_BACKGROUND_JOB_QUEUE,
@@ -18,7 +19,9 @@ import {
   normalizeBackgroundJobExecutionMode,
   normalizeBackgroundJobMaxRetries,
   normalizeBackgroundJobQueue,
+  normalizeBackgroundJobScheduleKey,
   normalizeBackgroundJobScheduledAtMs,
+  normalizeBackgroundJobStatus,
   rescheduledBackgroundJobAtMs,
   retryDelayMs
 } from "./job-semantics.js"
@@ -100,6 +103,9 @@ const JOBS_INDEX_COLUMN_NAMES = [
 ]
 const IDEMPOTENCY_KEYS_TABLE = "background_job_idempotency_keys"
 const SCHEDULE_KEYS_TABLE = "background_job_schedule_keys"
+const SCHEDULE_ORDER_WATERMARKS_TABLE = "background_job_schedule_order_watermarks"
+const SCHEDULE_ORDER_WATERMARK_MIGRATION_VERSION = "20260911120000"
+const SCHEDULE_HISTORY_ORDER_INDEX = "index_background_jobs_schedule_history_order"
 const CONCURRENCY_TABLE = "background_job_concurrency"
 const COUNTS_REVISION_TABLE = "background_job_count_revisions"
 const COUNTS_REVISION_KEY = "counts"
@@ -918,7 +924,9 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
         previousStatus = "handed_off"
       }
 
-      await this._insertPreparedJob(db, {preparedJob, scheduleKey: normalizedScheduleKey})
+      const scheduleOrder = await this._nextScheduleOrder(db, normalizedScheduleKey)
+
+      await this._insertPreparedJob(db, {preparedJob, scheduleKey: normalizedScheduleKey, scheduleOrder})
       await db.upsert({
         tableName: SCHEDULE_KEYS_TABLE,
         data: {schedule_key: normalizedScheduleKey, job_id: preparedJob.jobId},
@@ -980,6 +988,78 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       await this._releaseScheduleOwnership(db, {jobId, scheduleKey: normalizedScheduleKey})
 
       if (currentJob?.status === "handed_off") return {jobId, outcome: "handed_off"}
+      return {jobId: null, outcome: "not_found"}
+    }, {
+      advisoryLock: {
+        failureMessage: "Failed to acquire background job schedule-key lock",
+        name: this._scheduleKeyLockName(normalizedScheduleKey)
+      }
+    })
+  }
+
+  /**
+   * Reads stable ownership and optional latest terminal history in one fenced transaction.
+   * @param {string} scheduleKey - Stable logical schedule key.
+   * @param {{includeLatestTerminal?: boolean}} [options] - Lookup options.
+   * @returns {Promise<import("./types.js").BackgroundJobScheduledLookupResult>} - Normalized public jobs.
+   */
+  async getScheduledJob(scheduleKey, {includeLatestTerminal = false} = {}) {
+    await this.ensureReady()
+
+    const normalizedScheduleKey = this._normalizeScheduleKey(scheduleKey)
+
+    if (typeof includeLatestTerminal !== "boolean") {
+      throw VelociousError.safe("background job includeLatestTerminal must be a boolean")
+    }
+
+    return await this._serializedCountMutation(async (db) => {
+      return await this._scheduledJobLookup(db, {
+        includeLatestTerminal,
+        scheduleKey: normalizedScheduleKey
+      })
+    }, {
+      advisoryLock: {
+        failureMessage: "Failed to acquire background job schedule-key lock",
+        name: this._scheduleKeyLockName(normalizedScheduleKey)
+      }
+    })
+  }
+
+  /**
+   * Moves only a future queued stable owner to the current time.
+   * @param {string} scheduleKey - Stable logical schedule key.
+   * @returns {Promise<import("./types.js").BackgroundJobWakeResult>} - Exact wake outcome.
+   */
+  async wakeScheduled(scheduleKey) {
+    await this.ensureReady()
+
+    const normalizedScheduleKey = this._normalizeScheduleKey(scheduleKey)
+
+    return await this._serializedCountMutation(async (db) => {
+      const job = await this._scheduledOwnerJob(db, normalizedScheduleKey)
+
+      if (!job || (job.status !== "queued" && job.status !== "handed_off")) return {jobId: null, outcome: "not_found"}
+      if (job.status === "handed_off") return {jobId: job.id, outcome: "handed_off"}
+
+      const nowMs = this.clock.now()
+
+      if (Number(job.scheduledAtMs) <= nowMs) return {jobId: job.id, outcome: "already_due"}
+
+      const affectedRows = await this._updateAffectedRows(db, {
+        tableName: JOBS_TABLE,
+        data: {scheduled_at_ms: nowMs},
+        conditions: {id: job.id, scheduled_at_ms: job.scheduledAtMs, status: "queued"}
+      })
+
+      if (affectedRows === 1) return {jobId: job.id, outcome: "woken"}
+
+      const currentJob = await this._scheduledOwnerJob(db, normalizedScheduleKey)
+
+      if (currentJob?.status === "handed_off") return {jobId: currentJob.id, outcome: "handed_off"}
+      if (currentJob?.status === "queued" && Number(currentJob.scheduledAtMs) <= nowMs) {
+        return {jobId: currentJob.id, outcome: "already_due"}
+      }
+
       return {jobId: null, outcome: "not_found"}
     }, {
       advisoryLock: {
@@ -1764,6 +1844,22 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       if (await db.tableExists(MAIL_DELIVERY_OPERATIONS_TABLE)) await db.query(`DELETE FROM ${db.quoteTable(MAIL_DELIVERY_OPERATIONS_TABLE)}`)
       if (await db.tableExists(IDEMPOTENCY_KEYS_TABLE)) await db.query(`DELETE FROM ${db.quoteTable(IDEMPOTENCY_KEYS_TABLE)}`)
       if (await db.tableExists(SCHEDULE_KEYS_TABLE)) await db.query(`DELETE FROM ${db.quoteTable(SCHEDULE_KEYS_TABLE)}`)
+      if (await db.tableExists(SCHEDULE_ORDER_WATERMARKS_TABLE)) {
+        const watermarkRows = await db
+          .newQuery()
+          .from(SCHEDULE_ORDER_WATERMARKS_TABLE)
+          .select("schedule_key")
+          .results()
+
+        for (const watermarkRow of watermarkRows) {
+          await db.delete({
+            tableName: SCHEDULE_ORDER_WATERMARKS_TABLE,
+            conditions: {
+              schedule_key: String(/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (watermarkRow).schedule_key)
+            }
+          })
+        }
+      }
       await db.query(`DELETE FROM ${db.quoteTable(JOBS_TABLE)}`)
       if (await db.tableExists(CONCURRENCY_TABLE)) await db.query(`DELETE FROM ${db.quoteTable(CONCURRENCY_TABLE)}`)
       const deltas = Object.fromEntries(Object.entries(snapshot.counts).map(([key, value]) => [key, -value]))
@@ -1858,9 +1954,10 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
    * @param {object} args - Insert input.
    * @param {PreparedBackgroundJob} args.preparedJob - Prepared job.
    * @param {string | null} args.scheduleKey - Historical stable key.
+   * @param {number | null} [args.scheduleOrder] - Monotonic stable ownership order.
    * @returns {Promise<void>} - Resolves after insertion.
    */
-  async _insertPreparedJob(db, {preparedJob, scheduleKey}) {
+  async _insertPreparedJob(db, {preparedJob, scheduleKey, scheduleOrder = null}) {
     const {concurrency} = preparedJob
 
     if (concurrency) {
@@ -1885,6 +1982,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
         scheduled_at_ms: preparedJob.scheduledAtMs,
         created_at_ms: preparedJob.createdAtMs,
         schedule_key: scheduleKey,
+        schedule_order: scheduleOrder,
         concurrency_key: concurrency?.concurrencyKey || null,
         max_concurrency: concurrency?.maxConcurrency || null,
         timeout_ms: preparedJob.timeoutMs,
@@ -1936,9 +2034,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
    * @returns {string} - Validated key.
    */
   _normalizeScheduleKey(scheduleKey) {
-    if (typeof scheduleKey === "string" && scheduleKey.length > 0 && scheduleKey.length <= 255) return scheduleKey
-
-    throw VelociousError.safe("background job scheduleKey must be a non-empty string of at most 255 characters")
+    return normalizeBackgroundJobScheduleKey(scheduleKey)
   }
 
   /**
@@ -2118,6 +2214,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
     table.bigint("scheduled_at_ms", {null: false, index: true})
     table.bigint("created_at_ms", {null: false, index: true})
     table.string("schedule_key", {null: true, index: true})
+    table.bigint("schedule_order", {null: true})
     table.bigint("handed_off_at_ms", {null: true, index: true})
     table.string("handoff_id", {null: true})
     table.bigint("completed_at_ms", {null: true})
@@ -2224,6 +2321,8 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
 
     await this._ensureQueueColumn(db)
     await this._ensureScheduleKeyColumn(db)
+    await this._ensureScheduleOrderColumn(db)
+    await this._ensureScheduleOrderWatermarksTable(db)
     await this._ensureJobTimeoutColumn(db)
     await this._ensureChildAcceptanceColumns(db)
     await this._ensureJobsTableIndexesOnce(db)
@@ -2372,6 +2471,117 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       }
     } finally {
       await db.releaseAdvisoryLock(lockName)
+    }
+  }
+
+  /**
+   * Idempotently adds monotonic schedule ownership history and its lookup index.
+   * Existing rows remain null and use the documented legacy fallback ordering.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<void>} - Resolves when ensured.
+   */
+  async _ensureScheduleOrderColumn(db) {
+    const lockName = `${MIGRATION_SCOPE}:schedule_order_column`
+    const acquired = await db.acquireAdvisoryLock(lockName)
+
+    if (!acquired) throw new Error("Failed to acquire background jobs schedule-order schema lock")
+
+    try {
+      db.clearSchemaCache()
+      let table = await db.getTableByNameOrFail(JOBS_TABLE)
+
+      if (!(await table.getColumnByName("schedule_order"))) {
+        const tableData = new TableData(JOBS_TABLE)
+
+        tableData.bigint("schedule_order", {null: true})
+        for (const sql of await db.alterTableSQLs(tableData)) await db.query(sql)
+        db.clearSchemaCache()
+        table = await db.getTableByNameOrFail(JOBS_TABLE)
+      }
+
+      const indexNames = new Set((await table.getIndexes()).map((index) => index.getName()))
+
+      if (!indexNames.has(SCHEDULE_HISTORY_ORDER_INDEX)) {
+        const sqls = await db.createIndexSQLs({
+          columns: ["schedule_key", "schedule_order", "created_at_ms", "id"],
+          ifNotExists: db.getType() === "sqlite",
+          name: SCHEDULE_HISTORY_ORDER_INDEX,
+          tableName: JOBS_TABLE
+        })
+
+        for (const sql of sqls) await db.query(sql)
+        db.clearSchemaCache()
+      }
+    } finally {
+      await db.releaseAdvisoryLock(lockName)
+    }
+  }
+
+  /**
+   * Creates the retention-independent schedule-order high-water table and
+   * initializes it from the greatest retained ordered row for every key.
+   * Legacy rows whose order is null deliberately do not establish a watermark.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<void>} - Resolves when ensured and backfilled.
+   */
+  async _ensureScheduleOrderWatermarksTable(db) {
+    const migrationVersion = SCHEDULE_ORDER_WATERMARK_MIGRATION_VERSION
+    const migrationKey = this._migrationKey(migrationVersion)
+    const tableExists = await db.tableExists(SCHEDULE_ORDER_WATERMARKS_TABLE)
+
+    if (tableExists && await this._hasMigration(db, migrationVersion)) return
+
+    const acquired = await db.acquireAdvisoryLock(migrationKey)
+
+    if (!acquired) throw new Error("Failed to acquire background jobs schedule-order watermark schema lock")
+
+    try {
+      db.clearSchemaCache()
+      const lockedTableExists = await db.tableExists(SCHEDULE_ORDER_WATERMARKS_TABLE)
+      const alreadyApplied = await this._hasMigration(db, migrationVersion)
+
+      if (!lockedTableExists) {
+        const table = new TableData(SCHEDULE_ORDER_WATERMARKS_TABLE, {ifNotExists: true})
+
+        table.string("schedule_key", {primaryKey: true})
+        table.bigint("high_water_mark", {null: false})
+        await db.createTable(table)
+        db.clearSchemaCache()
+      }
+
+      // Rebuild a missing table even when its migration ledger survived. The
+      // retained job rows are the only compatible source for that recovery;
+      // once rows are pruned, normal schema durability protects the watermark.
+      if (!lockedTableExists || !alreadyApplied) await this._backfillScheduleOrderWatermarks(db)
+      if (!alreadyApplied) await this._recordMigration(db, migrationVersion)
+    } finally {
+      await db.releaseAdvisoryLock(migrationKey)
+    }
+  }
+
+  /**
+   * Backfills each key from its greatest retained non-legacy ownership order.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<void>} - Resolves after all retained keys are represented.
+   */
+  async _backfillScheduleOrderWatermarks(db) {
+    const keyRows = await db
+      .newQuery()
+      .from(JOBS_TABLE)
+      .select("schedule_key")
+      .whereNot({schedule_key: null})
+      .whereNot({schedule_order: null})
+      .distinct()
+      .results()
+
+    for (const keyRow of keyRows) {
+      const scheduleKey = String(/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (keyRow).schedule_key)
+      const retainedOrder = await this._greatestRetainedScheduleOrder(db, scheduleKey)
+      const currentWatermark = await this._scheduleOrderWatermark(db, scheduleKey)
+
+      if (retainedOrder === null) continue
+      if (currentWatermark !== null && currentWatermark >= retainedOrder) continue
+      await this._writeScheduleOrderWatermark(db, {scheduleKey, scheduleOrder: retainedOrder})
     }
   }
 
@@ -2558,6 +2768,163 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
   }
 
   /**
+   * Reads the job currently named by one stable owner row.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {string} scheduleKey - Validated stable schedule key.
+   * @returns {Promise<import("./types.js").BackgroundJobRow | null>} - Normalized owner job.
+   */
+  async _scheduledOwnerJob(db, scheduleKey) {
+    const ownerRows = await db
+      .newQuery()
+      .from(SCHEDULE_KEYS_TABLE)
+      .where({schedule_key: scheduleKey})
+      .limit(1)
+      .results()
+    const ownerRow = ownerRows[0]
+
+    if (!ownerRow) return null
+
+    return await this._getJobRowById(db, String(ownerRow.job_id))
+  }
+
+  /**
+   * Assigns the next ownership order while the caller holds the schedule-key
+   * advisory lock and count-revision transaction fence. The independent
+   * watermark survives both ownership release and terminal-history pruning.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {string} scheduleKey - Validated stable schedule key.
+   * @returns {Promise<number>} - Next monotonic ownership order.
+   */
+  async _nextScheduleOrder(db, scheduleKey) {
+    const durableOrder = await this._scheduleOrderWatermark(db, scheduleKey)
+    const retainedOrder = await this._greatestRetainedScheduleOrder(db, scheduleKey)
+    let currentOrder = durableOrder
+
+    if (retainedOrder !== null && (currentOrder === null || retainedOrder > currentOrder)) currentOrder = retainedOrder
+    const nextOrder = currentOrder === null ? 1 : currentOrder + 1
+
+    if (!Number.isSafeInteger(nextOrder)) {
+      throw new Error(`Background job schedule ownership order exhausted for ${scheduleKey}`)
+    }
+
+    await this._writeScheduleOrderWatermark(db, {scheduleKey, scheduleOrder: nextOrder})
+
+    return nextOrder
+  }
+
+  /**
+   * Finds the greatest retained non-legacy ownership order for migration and
+   * rolling-upgrade compatibility. It is never the sole durability boundary.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {string} scheduleKey - Validated stable schedule key.
+   * @returns {Promise<number | null>} - Greatest retained order, or null.
+   */
+  async _greatestRetainedScheduleOrder(db, scheduleKey) {
+    const rows = await db
+      .newQuery()
+      .from(JOBS_TABLE)
+      .select("schedule_order")
+      .where({schedule_key: scheduleKey})
+      .whereNot({schedule_order: null})
+      .order("schedule_order DESC")
+      .limit(1)
+      .results()
+    const row = rows[0]
+
+    if (!row) return null
+
+    return this._validatedScheduleOrder(
+      /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (row).schedule_order
+    )
+  }
+
+  /**
+   * Reads and validates one retention-independent schedule-order watermark.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {string} scheduleKey - Validated stable schedule key.
+   * @returns {Promise<number | null>} - Current watermark, or null before first ownership.
+   */
+  async _scheduleOrderWatermark(db, scheduleKey) {
+    const rows = await db
+      .newQuery()
+      .from(SCHEDULE_ORDER_WATERMARKS_TABLE)
+      .select("high_water_mark")
+      .where({schedule_key: scheduleKey})
+      .limit(1)
+      .results()
+    const row = rows[0]
+
+    if (!row) return null
+
+    return this._validatedScheduleOrder(
+      /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (row).high_water_mark
+    )
+  }
+
+  /**
+   * Persists one schedule-order watermark without exposing it as a job row.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {object} args - Watermark identity and value.
+   * @param {string} args.scheduleKey - Validated stable schedule key.
+   * @param {number} args.scheduleOrder - Validated monotonic order.
+   * @returns {Promise<void>} - Resolves after persistence.
+   */
+  async _writeScheduleOrderWatermark(db, {scheduleKey, scheduleOrder}) {
+    await db.upsert({
+      tableName: SCHEDULE_ORDER_WATERMARKS_TABLE,
+      data: {high_water_mark: scheduleOrder, schedule_key: scheduleKey},
+      conflictColumns: ["schedule_key"],
+      updateColumns: ["high_water_mark"]
+    })
+  }
+
+  /**
+   * Validates an ownership order loaded from durable storage.
+   * @param {ReturnType<typeof JSON.parse>} value - Stored order.
+   * @returns {number} - Positive safe integer ownership order.
+   */
+  _validatedScheduleOrder(value) {
+    const scheduleOrder = this._normalizeNumber(value)
+
+    if (scheduleOrder === null || !Number.isSafeInteger(scheduleOrder) || scheduleOrder < 1) {
+      throw new Error(`Invalid background job schedule ownership order: ${scheduleOrder}`)
+    }
+
+    return scheduleOrder
+  }
+
+  /**
+   * Builds a stable-schedule lookup exclusively from normalized job rows.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {object} args - Lookup options.
+   * @param {boolean} args.includeLatestTerminal - Whether terminal history is requested.
+   * @param {string} args.scheduleKey - Validated stable schedule key.
+   * @returns {Promise<import("./types.js").BackgroundJobScheduledLookupResult>} - Normalized public jobs.
+   */
+  async _scheduledJobLookup(db, {includeLatestTerminal, scheduleKey}) {
+    const ownerJob = await this._scheduledOwnerJob(db, scheduleKey)
+    const currentJob = ownerJob && (ownerJob.status === "queued" || ownerJob.status === "handed_off") ? ownerJob : null
+
+    if (!includeLatestTerminal) return {currentJob, latestTerminalJob: null}
+
+    const terminalStatuses = BACKGROUND_JOB_TERMINAL_STATUSES.map((status) => db.quote(status)).join(", ")
+    const terminalRows = await db
+      .newQuery()
+      .from(JOBS_TABLE)
+      .where({schedule_key: scheduleKey})
+      .where(`${db.quoteColumn("status")} IN (${terminalStatuses})`)
+      .order(`CASE WHEN ${db.quoteColumn("schedule_order")} IS NULL THEN 0 ELSE 1 END DESC`)
+      .order("schedule_order DESC")
+      .order("created_at_ms DESC")
+      .order("id DESC")
+      .limit(1)
+      .results()
+    const latestTerminalJob = terminalRows[0] ? this._normalizeJobRow(terminalRows[0]) : null
+
+    return {currentJob, latestTerminalJob}
+  }
+
+  /**
    * Releases ownership only when the key still points at the expected job.
    * @param {import("../database/drivers/base.js").default} db - Database connection.
    * @param {object} args - Ownership identity.
@@ -2738,7 +3105,8 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       executionMode,
       queue: row.queue ? String(row.queue) : DEFAULT_BACKGROUND_JOB_QUEUE,
       scheduleKey: row.schedule_key ? String(row.schedule_key) : null,
-      status: row.status ? String(row.status) : "queued",
+      scheduleOrder: this._normalizeNumber(row.schedule_order),
+      status: normalizeBackgroundJobStatus(row.status ? String(row.status) : "queued"),
       attempts: this._normalizeNumber(row.attempts),
       maxRetries: this._normalizeNumber(row.max_retries),
       scheduledAtMs: this._normalizeNumber(row.scheduled_at_ms),

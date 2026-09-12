@@ -75,6 +75,7 @@ Example list response:
       "id": "…",
       "jobName": "FailingJob",
       "scheduleKey": "event:42:reminder:24h",
+      "scheduleOrder": 1,
       "status": "failed",
       "attempts": 1,
       "maxRetries": 0,
@@ -96,7 +97,7 @@ Example list response:
 }
 ```
 
-`scheduleKey` is the historical logical schedule key, or `null` for legacy/unkeyed jobs. It remains visible after replacement, cancellation, completion, failure, or orphaning even though terminal jobs no longer own that key.
+`scheduleKey` is the historical logical schedule key, or `null` for legacy/unkeyed jobs. It remains visible after replacement, cancellation, completion, failure, or orphaning even though terminal jobs no longer own that key. `scheduleOrder` is its transaction-assigned monotonic ownership order, or `null` for legacy/unkeyed rows.
 
 Velocious jobs don't have Sidekiq-style named queues; they have a `job_name`
 (the job class) and a `status`. The dashboard groups and filters by those.

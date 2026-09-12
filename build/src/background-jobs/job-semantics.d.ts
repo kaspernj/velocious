@@ -4,6 +4,24 @@ export declare const DEFAULT_BACKGROUND_JOB_QUEUE = "default";
 export declare const QUEUE_CONCURRENCY_KEY_PREFIX = "queue:";
 /** @type {import("./types.js").BackgroundJobExecutionMode[]} */
 export declare const BACKGROUND_JOB_EXECUTION_MODES: import("./types.js").BackgroundJobExecutionMode[];
+/** @type {import("./types.js").BackgroundJobActiveStatus[]} */
+export declare const BACKGROUND_JOB_ACTIVE_STATUSES: import("./types.js").BackgroundJobActiveStatus[];
+/** @type {import("./types.js").BackgroundJobTerminalStatus[]} */
+export declare const BACKGROUND_JOB_TERMINAL_STATUSES: import("./types.js").BackgroundJobTerminalStatus[];
+/** @type {import("./types.js").BackgroundJobStatus[]} */
+export declare const BACKGROUND_JOB_STATUSES: import("./types.js").BackgroundJobStatus[];
+/**
+ * Normalizes persisted or transported job status vocabulary.
+ * @param {string} value - Candidate status.
+ * @returns {import("./types.js").BackgroundJobStatus} - Known status.
+ */
+export declare function normalizeBackgroundJobStatus(value: string): import("./types.js").BackgroundJobStatus;
+/**
+ * Validates a stable logical schedule key at every persistence boundary.
+ * @param {string} scheduleKey - Stable schedule key.
+ * @returns {string} - Validated key.
+ */
+export declare function normalizeBackgroundJobScheduleKey(scheduleKey: string): string;
 /**
  * Normalizes a job queue.
  * @param {import("./types.js").BackgroundJobOptions} [options] - Job options.

@@ -16,9 +16,10 @@ export default class TestFilesFinder {
    * @param {object} args - Options object.
    * @param {string} args.directory - Directory path.
    * @param {string[]} [args.directories] - Directories.
+   * @param {RegExp} [args.filePattern] - Test-file pattern override.
    * @param {string[]} args.processArgs - Process args.
    */
-  constructor({directory, directories, processArgs, ...restArgs}) {
+  constructor({directory, directories, filePattern, processArgs, ...restArgs}) {
     restArgsError(restArgs)
 
     this.directory = path.resolve(directory)
@@ -35,6 +36,7 @@ export default class TestFilesFinder {
     }
 
     this.findingCount = 0
+    this.filePattern = filePattern
     this.processArgs = processArgs
 
     /**
@@ -234,7 +236,10 @@ export default class TestFilesFinder {
    * @returns {boolean} - Whether looks like test file.
    */
   looksLikeTestFile(file) {
+    if (this.filePattern) return Boolean(file.match(this.filePattern))
+
     return Boolean(file.match(/-(spec|test)\.(m|)js$/))
+      && !file.match(/\.browser-(spec|test)\.(m|)js$/)
   }
 
   /**

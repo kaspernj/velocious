@@ -71,6 +71,8 @@ async function verifyExecutionLane({executionMode, expectedChildCount = 1, retir
       await expect(async () => await retiredClient.enqueue({args: [], jobName: "RetiredOrdinaryEnqueueJob"})).toThrow("Background jobs generation is retired")
       await expect(async () => await retiredClient.replaceScheduled({args: [], jobName: "RetiredOrdinaryEnqueueJob", scheduleKey: "retired-schedule"})).toThrow("Background jobs generation is retired")
       await expect(async () => await retiredClient.cancelScheduled({scheduleKey: "retired-schedule"})).toThrow("Background jobs generation is retired")
+      await expect(async () => await retiredClient.getScheduledJob({scheduleKey: "retired-schedule"})).toThrow("Background jobs generation is retired")
+      await expect(async () => await retiredClient.wakeScheduled({scheduleKey: "retired-schedule"})).toThrow("Background jobs generation is retired")
       await expect(async () => await retiredClient.enqueue({
         args: [],
         jobName: "RetiredMalformedOwnedEnqueueJob",

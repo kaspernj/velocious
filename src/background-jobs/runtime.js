@@ -161,3 +161,61 @@ export async function cancelScheduledBackgroundJobForConfiguration({configuratio
 
   return await client.cancelScheduled({scheduleKey})
 }
+
+/**
+ * Reads stable schedule ownership in background mode.
+ * @param {string} scheduleKey - Stable logical schedule key.
+ * @param {{includeLatestTerminal?: boolean}} [options] - Lookup options.
+ * @returns {Promise<import("./types.js").BackgroundJobScheduledLookupResult>} - Normalized stable schedule jobs.
+ */
+export async function getScheduledBackgroundJob(scheduleKey, options = {}) {
+  const configuration = currentConfiguration()
+
+  return await getScheduledBackgroundJobForConfiguration({configuration, scheduleKey, ...options})
+}
+
+/**
+ * Reads stable schedule ownership using an explicitly resolved configuration.
+ * @param {object} args - Lookup request.
+ * @param {import("../configuration.js").default} args.configuration - Configuration.
+ * @param {string} args.scheduleKey - Stable logical schedule key.
+ * @param {boolean} [args.includeLatestTerminal] - Whether to include latest terminal history.
+ * @returns {Promise<import("./types.js").BackgroundJobScheduledLookupResult>} - Normalized stable schedule jobs.
+ */
+export async function getScheduledBackgroundJobForConfiguration({configuration, scheduleKey, includeLatestTerminal}) {
+  if (configuration.getBackgroundJobsConfig().mode === "inline") {
+    throw new Error("getScheduledJob is not supported in inline mode")
+  }
+
+  const client = configuration.getEnvironmentHandler().backgroundJobsClient({configuration})
+
+  return await client.getScheduledJob({scheduleKey, includeLatestTerminal})
+}
+
+/**
+ * Wakes a stable schedule owner in background mode.
+ * @param {string} scheduleKey - Stable logical schedule key.
+ * @returns {Promise<import("./types.js").BackgroundJobWakeResult>} - Wake result.
+ */
+export async function wakeScheduledBackgroundJob(scheduleKey) {
+  const configuration = currentConfiguration()
+
+  return await wakeScheduledBackgroundJobForConfiguration({configuration, scheduleKey})
+}
+
+/**
+ * Wakes a stable schedule owner using an explicitly resolved configuration.
+ * @param {object} args - Wake request.
+ * @param {import("../configuration.js").default} args.configuration - Configuration.
+ * @param {string} args.scheduleKey - Stable logical schedule key.
+ * @returns {Promise<import("./types.js").BackgroundJobWakeResult>} - Wake result.
+ */
+export async function wakeScheduledBackgroundJobForConfiguration({configuration, scheduleKey}) {
+  if (configuration.getBackgroundJobsConfig().mode === "inline") {
+    throw new Error("wakeScheduled is not supported in inline mode")
+  }
+
+  const client = configuration.getEnvironmentHandler().backgroundJobsClient({configuration})
+
+  return await client.wakeScheduled({scheduleKey})
+}
