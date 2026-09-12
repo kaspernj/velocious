@@ -10,6 +10,15 @@ import InProcessHandler from "../../src/http-server/worker-handler/in-process.js
 import ServerClient from "../../src/http-server/server-client.js"
 import WorkerThreadHandler from "../../src/http-server/worker-handler/worker-thread.js"
 
+/**
+ * @template T
+ * @param {() => T} callback - Callback to run.
+ * @returns {T} - Callback result.
+ */
+function runWithTestSharedConnectionContexts(callback) {
+  return callback()
+}
+
 class BlockedWriteSocket extends EventEmitter {
   remoteAddress = "127.0.0.1"
   destroyed = false
@@ -604,7 +613,8 @@ describe("HttpServer - worker handler", {databaseCleaning: {transaction: true}},
       configuration: {
         debug: false,
         withoutCurrentConnectionContexts: (callback) => callback(),
-        withoutCurrentTestDatabaseAccessScope: (callback) => callback()
+        withoutCurrentTestDatabaseAccessScope: (callback) => callback(),
+        runWithTestSharedConnectionContexts
       },
       workerCount: 1
     })
@@ -672,12 +682,14 @@ describe("HttpServer - worker handler", {databaseCleaning: {transaction: true}},
     const configurationA = {
       debug: false,
       withoutCurrentConnectionContexts: (callback) => callback(),
-      withoutCurrentTestDatabaseAccessScope: (callback) => callback()
+      withoutCurrentTestDatabaseAccessScope: (callback) => callback(),
+      runWithTestSharedConnectionContexts
     }
     const configurationB = {
       debug: false,
       withoutCurrentConnectionContexts: (callback) => callback(),
-      withoutCurrentTestDatabaseAccessScope: (callback) => callback()
+      withoutCurrentTestDatabaseAccessScope: (callback) => callback(),
+      runWithTestSharedConnectionContexts
     }
     const handlers = [
       new WorkerHandler({configuration: configurationA, workerCount: 1}),
