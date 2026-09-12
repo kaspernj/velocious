@@ -1,1 +1,1 @@
-Fix persistent test infrastructure reusing an attempt-owned shared database transaction while connection contexts are suppressed.
+Fix persistent test infrastructure reusing an attempt-owned shared database transaction while connection contexts are suppressed, while keeping in-process lifecycle broadcasts on the active test transaction.

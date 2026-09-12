@@ -49,8 +49,10 @@ class CompositeTask extends FrontendModelBase {
 
 FrontendModelBase.registerModel(CompositeTask)
 
-describe("Frontend models - composite primary key HTTP integration", {databaseCleaning: {transaction: true}}, () => {
+describe("Frontend models - composite primary key HTTP integration", {databaseCleaning: {transaction: true}, tags: ["dummy"]}, () => {
   it("creates, finds, updates, rekeys, and destroys a composite-identity model", async () => {
+    expect(Dummy.current().application).toBeTruthy()
+
     await Dummy.run(async () => {
       const originalProject = await ProjectRecord.create({name: "Composite frontend original project"})
       const replacementProject = await ProjectRecord.create({name: "Composite frontend replacement project"})

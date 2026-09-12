@@ -3336,11 +3336,13 @@ export default class VelociousConfiguration {
       }
       const previousDelivery = this._localBroadcastDeliveryTails.get(subscription)
       const delivery = this.withoutCurrentConnectionContexts(() => {
-        return (previousDelivery || Promise.resolve())
-          .then(() => this._deliverWebsocketChannelBroadcast(subscription, body, deliveryMetadata))
-          .catch((error) => {
-            console.error(`broadcastToChannel: ${name} subscription ${subscription.subscriptionId} deliverBroadcast threw`, error)
-          })
+        return this.runWithTestSharedConnectionContexts(() => {
+          return (previousDelivery || Promise.resolve())
+            .then(() => this._deliverWebsocketChannelBroadcast(subscription, body, deliveryMetadata))
+            .catch((error) => {
+              console.error(`broadcastToChannel: ${name} subscription ${subscription.subscriptionId} deliverBroadcast threw`, error)
+            })
+        })
       })
 
       this._localBroadcastDeliveryTails.set(subscription, delivery)
