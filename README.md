@@ -125,7 +125,7 @@ Maintainers cutting a package release must follow the [Velocious release runbook
 
 # Docker development environment
 
-The checked-in root `Dockerfile` and `compose.yml` define one canonical `dev` service used by humans, CI, and agent systems alike (see [docs/docker-development-environment.md](docs/docker-development-environment.md)). The image is Ubuntu 26.04 LTS (pinned by digest) with Node.js 24.x from signed NodeSource, the universal apt coding/debugging baseline, and the newest published provider CLIs; it is source-independent — no project source is copied and no project dependencies are installed at image build time.
+The checked-in root `Dockerfile` and `compose.yml` define one canonical `dev` service used by humans, CI, and agent systems alike (see [docs/docker-development-environment.md](docs/docker-development-environment.md)). The image is Ubuntu 26.04 LTS (pinned by digest) with Node.js 24.x from signed NodeSource, the universal apt coding/debugging baseline, the newest published retained provider CLIs, and owner-pinned native Qwen Code 0.23.3; it is source-independent — no project source is copied and no project dependencies are installed at image build time.
 
 Prerequisites: Docker with the Compose v2 plugin, and this repository checked out at `$DEV_HOME_PATH/velocious` (default `DEV_HOME_PATH`: `/home/dev`).
 

@@ -1,6 +1,6 @@
 # Docker development environment
 
-The checked-in root `Dockerfile` and `compose.yml` define one canonical `dev` service used by humans, CI, and agent systems alike. The image is Ubuntu 26.04 LTS (pinned by the approved digest) with Node.js 24.x from signed NodeSource (verified key checksum), the universal apt coding/debugging baseline, and the newest published provider CLIs installed from bare unversioned npm specs. It is source-independent — no project source is copied and no project dependencies are installed at image build time.
+The checked-in root `Dockerfile` and `compose.yml` define one canonical `dev` service used by humans, CI, and agent systems alike. The image is Ubuntu 26.04 LTS (pinned by the approved digest) with Node.js 24.x from signed NodeSource (verified key checksum), the universal apt coding/debugging baseline, the newest published retained provider CLIs installed from bare unversioned npm specs, and owner-pinned native Qwen Code 0.23.3. It is source-independent — no project source is copied and no project dependencies are installed at image build time.
 
 ## Prerequisites and first-use setup
 
@@ -98,7 +98,7 @@ COMPOSE_PROJECT_NAME=velocious-review DEV_HOME_PATH=/srv/dev-homes/review \
 
 The provider runtime is mounted read/write at the same stable absolute path `/opt/hermes-dind-shared/auth/provider-runtime`. The exact agent-context bundle is mounted read-only at `/opt/hermes-agent-context`. Their resolved source paths must not contain one another, or the context would remain writable through the runtime bind. Both use long-form bind syntax with `bind.create_host_path: false`, so Compose cannot create missing host paths. GitHub CLI config remains read-only at `/home/dev/.config/gh`, with `GH_CONFIG_DIR` pointing there. The normal dev service must not mount npm credentials, SSH keys, `/opt/data`, mutable `current`, broad shared roots, or any additional credential path.
 
-Threadwire is not installed in the image or project; it remains parent orchestration resolved through unversioned `npx` outside the container. `THREADWIRE_CODEX_BIN`, `THREADWIRE_KIMI_BIN`, and `THREADWIRE_OPENCODE_BIN` explicitly select the provider CLIs installed at `/usr/local/bin`, avoiding host-only fallback adapters. `KIMI_CODE_HOME=/home/dev/.kimi-code` selects the durable Kimi home.
+Threadwire is not installed in the image or project; parent orchestration resolves unversioned `npx --yes threadwire@latest run` inside the container. Native Qwen launches use provider `qwen`, the admitted unprefixed `local-coder-*` model, and an exact task/session-owned `QWEN_HOME` beneath `/home/dev/.threadwire`; gateway credentials are passed transiently from the external runtime. Never use provider-binary overrides or a global shared `~/.qwen`. Retained provider CLIs remain installed but do not activate their routes.
 
 ## Contract verification
 
