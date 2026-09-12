@@ -4456,16 +4456,36 @@ export default class FrontendModelController extends Controller {
 
       try {
         let indexPayload = {}
+        let hasLegacyAuthenticationToken = false
+        let legacyAuthenticationToken
 
         if (commandType === "index") {
+          let indexPayloadInput = payload
+
+          if (isPlainObject(payload) && Object.hasOwn(payload, "authenticationToken")) {
+            const {authenticationToken, ...payloadWithoutAuthenticationToken} = payload
+
+            hasLegacyAuthenticationToken = true
+            legacyAuthenticationToken = authenticationToken
+            indexPayloadInput = payloadWithoutAuthenticationToken
+          }
+
           try {
-            indexPayload = assertFrontendModelIndexPayload(payload)
+            indexPayload = assertFrontendModelIndexPayload(indexPayloadInput)
           } catch (error) {
             throwFrontendModelQueryErrorForParserError(error)
           }
         }
 
-        const requestContext = captureFrontendModelRemoteRequestContext(requestEntry?.requestContext)
+        let requestContext = captureFrontendModelRemoteRequestContext(requestEntry?.requestContext)
+
+        if (hasLegacyAuthenticationToken && !Object.hasOwn(requestContext, "authenticationToken")) {
+          requestContext = captureFrontendModelRemoteRequestContext({
+            ...requestContext,
+            authenticationToken: legacyAuthenticationToken
+          })
+        }
+
         let responsePayload
 
         if (isBuiltInCommand) {
