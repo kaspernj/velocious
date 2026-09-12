@@ -716,6 +716,32 @@ describe("database - pool - async tracked multi connection reuse", {databaseClea
     }
   })
 
+  it("does not reuse the test shared connection while connection contexts are suppressed", async () => {
+    const {cleanup, configuration} = await createCloseTrackingConfiguration("velocious-pool-test-shared-suppressed")
+
+    try {
+      const pool = configuration.getDatabasePool("default")
+
+      if (!(pool instanceof AsyncTrackedMultiConnection)) throw new Error("Expected an AsyncTrackedMultiConnection pool")
+
+      await pool.withConnection(async (sharedConnection) => {
+        const registration = pool.setTestSharedConnection(sharedConnection)
+
+        try {
+          await pool.withoutCurrentConnectionContext(async () => {
+            await pool.withConnection(async (startupConnection) => {
+              expect(startupConnection).not.toBe(sharedConnection)
+            })
+          })
+        } finally {
+          pool.clearTestSharedConnection(registration)
+        }
+      })
+    } finally {
+      await cleanup()
+    }
+  })
+
   it("clears a test shared connection provider only for its owning registration", async () => {
     const {cleanup, configuration} = await createCloseTrackingConfiguration("velocious-pool-test-shared-provider-owner")
 
