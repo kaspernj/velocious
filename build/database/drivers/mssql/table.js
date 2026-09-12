@@ -3,7 +3,7 @@
 import BaseTable from "../base-table.js"
 import Column from "./column.js"
 import ColumnsIndex from "./columns-index.js"
-import {digg} from "diggerize"
+import { digg } from "diggerize"
 import ForeignKey from "./foreign-key.js"
 import { normalizeIndexMetadataRow } from "../index-metadata.js"
 
@@ -67,10 +67,24 @@ export default class VelociousDatabaseDriversMssqlTable extends BaseTable {
     return await this.getDriver()._cachedTableSchemaMetadata(this.getName(), "columns", async () => {
       const result = await this.driver.query(`
         SELECT
-          *,
-          COLUMNPROPERTY(object_id(TABLE_SCHEMA + '.' + TABLE_NAME), COLUMN_NAME, 'IsIdentity') AS isIdentity
-        FROM [INFORMATION_SCHEMA].[COLUMNS]
-        WHERE [TABLE_NAME] = ${this.driver.quote(this.getName())}
+          columns.*,
+          COLUMNPROPERTY(object_id(columns.TABLE_SCHEMA + '.' + columns.TABLE_NAME), columns.COLUMN_NAME, 'IsIdentity') AS isIdentity,
+          CASE WHEN keyColumnUsage.COLUMN_NAME IS NOT NULL THEN 1 ELSE 0 END AS isPrimaryKey
+        FROM [INFORMATION_SCHEMA].[COLUMNS] AS columns
+        LEFT JOIN [INFORMATION_SCHEMA].[TABLE_CONSTRAINTS] AS tableConstraints ON
+          tableConstraints.CONSTRAINT_TYPE = 'PRIMARY KEY' AND
+          tableConstraints.TABLE_CATALOG = columns.TABLE_CATALOG AND
+          tableConstraints.TABLE_SCHEMA = columns.TABLE_SCHEMA AND
+          tableConstraints.TABLE_NAME = columns.TABLE_NAME
+        LEFT JOIN [INFORMATION_SCHEMA].[KEY_COLUMN_USAGE] AS keyColumnUsage ON
+          keyColumnUsage.CONSTRAINT_CATALOG = tableConstraints.CONSTRAINT_CATALOG AND
+          keyColumnUsage.CONSTRAINT_SCHEMA = tableConstraints.CONSTRAINT_SCHEMA AND
+          keyColumnUsage.CONSTRAINT_NAME = tableConstraints.CONSTRAINT_NAME AND
+          keyColumnUsage.TABLE_CATALOG = columns.TABLE_CATALOG AND
+          keyColumnUsage.TABLE_SCHEMA = columns.TABLE_SCHEMA AND
+          keyColumnUsage.TABLE_NAME = columns.TABLE_NAME AND
+          keyColumnUsage.COLUMN_NAME = columns.COLUMN_NAME
+        WHERE columns.TABLE_NAME = ${this.driver.quote(this.getName())}
       `)
       const columns = []
 

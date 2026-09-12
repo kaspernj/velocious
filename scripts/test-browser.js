@@ -282,6 +282,7 @@ async function resolveTests(processArgs) {
   const testFilesFinder = new TestFilesFinder({
     directory,
     directories,
+    filePattern: browserTestPattern(),
     processArgs: filteredProcessArgs
   })
   const testFiles = await testFilesFinder.findTestFiles()

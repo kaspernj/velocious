@@ -1,0 +1,1 @@
+Serialize server-origin `SyncPublisher` reconciliation/upserts by their complete null-safe resource and scope identity, preventing concurrent after-commit publishers from creating duplicate feed rows across supported databases, repairing matching duplicates left by earlier releases on the next publication, and keeping actor/device-origin rows distinct.

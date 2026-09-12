@@ -166,13 +166,13 @@ describe("Background jobs - stable schedule store", {databaseCleaning: {transact
         .from("background_job_schedule_order_watermarks")
         .order("schedule_key")
         .results()
+      const watermarkKeys = watermarkRows.map((row) => String(row.schedule_key))
 
       expect((await table.getColumnByName("schedule_key"))?.getPrimaryKey()).toEqual(true)
       expect(ownerRows).toMatchObject([{job_id: ownedSecond.jobId}])
-      expect(watermarkRows).toEqual([
-        {high_water_mark: 2, schedule_key: "migration:owned"},
-        {high_water_mark: 2, schedule_key: "migration:terminal"}
-      ])
+      expect(watermarkKeys).toEqual(["migration:owned", "migration:terminal"])
+      expect(await upgradedStore._scheduleOrderWatermark(db, "migration:owned")).toEqual(2)
+      expect(await upgradedStore._scheduleOrderWatermark(db, "migration:terminal")).toEqual(2)
     })
 
     const legacyReplacement = await upgradedStore.replaceScheduled({
@@ -347,14 +347,10 @@ describe("Background jobs - stable schedule store", {databaseCleaning: {transact
     expect(await store.getJob(first.jobId)).toEqual(null)
 
     const watermarkAfterPrune = await store._withDb(async (db) =>
-      await db
-        .newQuery()
-        .from("background_job_schedule_order_watermarks")
-        .where({schedule_key: "event:retained-watermark"})
-        .results()
+      await store._scheduleOrderWatermark(db, "event:retained-watermark")
     )
 
-    expect(watermarkAfterPrune).toEqual([{high_water_mark: firstOrder, schedule_key: "event:retained-watermark"}])
+    expect(watermarkAfterPrune).toEqual(firstOrder)
 
     const second = await store.replaceScheduled({
       scheduleKey: "event:retained-watermark",

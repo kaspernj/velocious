@@ -1,1 +1,1 @@
-Start the Node background-job enqueue acknowledgement deadline only after the request is sent, while retaining an independently bounded connection/generation-handshake phase, so valid handshake latency cannot consume the durable acknowledgement budget.
+Start the Node background-job enqueue acknowledgement deadline only after the request is sent, while retaining an independently bounded connection/generation-handshake phase, and expose ambiguous post-send expiry as a safe typed TimeoutError with frozen attempt history without changing the single eligible owned replay.

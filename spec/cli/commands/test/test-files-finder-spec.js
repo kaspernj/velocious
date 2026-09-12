@@ -3,7 +3,7 @@
 import fs from "fs/promises"
 import os from "os"
 import path from "path"
-import {describe, expect, it} from "../../../../src/testing/test.js"
+import { describe, expect, it } from "../../../../src/testing/test.js"
 import TestFilesFinder from "../../../../src/testing/test-files-finder.js"
 
 describe("Cli - Commands - test - TestFilesFinder", () => {
@@ -34,6 +34,50 @@ describe("Cli - Commands - test - TestFilesFinder", () => {
 
       expect(testFiles).toContain(testFile)
       expect(testFiles).toContain(nestedFile)
+    } finally {
+      await fs.rm(tempDirectory, {recursive: true, force: true})
+    }
+  })
+
+  it("keeps browser-only specs out of backend directory discovery", async () => {
+    const tempDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-test-files-"))
+
+    try {
+      const specDir = path.join(tempDirectory, "spec")
+      const backendTestFile = path.join(specDir, "sample-spec.js")
+      const browserTestFile = path.join(specDir, "sample.browser-spec.js")
+
+      await fs.mkdir(specDir, {recursive: true})
+      await fs.writeFile(backendTestFile, "")
+      await fs.writeFile(browserTestFile, "")
+
+      const testFilesFinder = new TestFilesFinder({directory: tempDirectory, processArgs: ["test", "spec"]})
+
+      expect(await testFilesFinder.findTestFiles()).toEqual([backendTestFile])
+    } finally {
+      await fs.rm(tempDirectory, {recursive: true, force: true})
+    }
+  })
+
+  it("discovers browser-only specs when given the browser runner pattern", async () => {
+    const tempDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-test-files-"))
+
+    try {
+      const specDir = path.join(tempDirectory, "spec")
+      const backendTestFile = path.join(specDir, "sample-spec.js")
+      const browserTestFile = path.join(specDir, "sample.browser-spec.js")
+
+      await fs.mkdir(specDir, {recursive: true})
+      await fs.writeFile(backendTestFile, "")
+      await fs.writeFile(browserTestFile, "")
+
+      const testFilesFinder = new TestFilesFinder({
+        directory: tempDirectory,
+        filePattern: /\.browser-(spec|test)\.(m|)js$/,
+        processArgs: ["test", "spec"]
+      })
+
+      expect(await testFilesFinder.findTestFiles()).toEqual([browserTestFile])
     } finally {
       await fs.rm(tempDirectory, {recursive: true, force: true})
     }

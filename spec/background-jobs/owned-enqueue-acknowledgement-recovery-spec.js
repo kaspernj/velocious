@@ -19,22 +19,31 @@ import { describe, expect, it } from "../../src/testing/test.js"
  * @property {() => Promise<void>} close - Closes the proxy and its connections.
  * @property {number} connectionCount - Number of accepted client connections.
  * @property {Array<import("../../src/background-jobs/types.js").BackgroundJobEnqueueMessage>} enqueueMessages - Forwarded enqueue messages.
+ * @property {string[]} enqueueRequestPayloads - Exact enqueue request lines received on the wire.
  * @property {string | undefined} withheldJobId - Durable id from the dropped acknowledgement.
  * @property {number} port - Bound proxy port.
  */
 
 /**
- * Forwards the generation protocol but drops the first successful enqueue
- * acknowledgement after the real main has durably committed it, closing that
- * connection so the client observes the loss only after the commit boundary.
+ * Forwards the generation protocol but withholds the first successful enqueue
+ * acknowledgement after the real main has durably committed it, either closing
+ * that connection or waiting for the client deadline after the commit boundary.
  * @param {number} mainPort - Real generation main port.
+ * @param {object} [args] - Proxy timing behavior.
+ * @param {number} [args.generationAcknowledgementDelayMs] - Delay before forwarding each generation acceptance.
+ * @param {number} [args.replayAcknowledgementDelayMs] - Delay before forwarding the replay acknowledgement.
+ * @param {boolean} [args.withholdFirstAcknowledgementUntilTimeout] - Keep the first connection open until the client deadline.
  * @returns {Promise<AcknowledgementProxy>} - Started proxy.
  */
-async function startAcknowledgementProxy(mainPort) {
+async function startAcknowledgementProxy(mainPort, {generationAcknowledgementDelayMs = 0, replayAcknowledgementDelayMs = 0, withholdFirstAcknowledgementUntilTimeout = false} = {}) {
   /** @type {Set<net.Socket>} */
   const sockets = new Set()
+  /** @type {Set<ReturnType<typeof setTimeout>>} */
+  const timers = new Set()
   /** @type {Array<import("../../src/background-jobs/types.js").BackgroundJobEnqueueMessage>} */
   const enqueueMessages = []
+  /** @type {string[]} */
+  const enqueueRequestPayloads = []
   let connectionCount = 0
   let withheldJobId
   const server = net.createServer((downstreamSocket) => {
@@ -43,6 +52,23 @@ async function startAcknowledgementProxy(mainPort) {
     const upstreamSocket = net.createConnection({host: "127.0.0.1", port: mainPort})
     const downstream = new JsonSocket(downstreamSocket)
     const upstream = new JsonSocket(upstreamSocket)
+    let downstreamBuffer = ""
+
+    downstreamSocket.on("data", (chunk) => {
+      downstreamBuffer += String(chunk)
+
+      while (true) {
+        const newlineIndex = downstreamBuffer.indexOf("\n")
+
+        if (newlineIndex === -1) return
+
+        const line = downstreamBuffer.slice(0, newlineIndex)
+
+        downstreamBuffer = downstreamBuffer.slice(newlineIndex + 1)
+        if (!line) continue
+        if (JSON.parse(line)?.type === "enqueue") enqueueRequestPayloads.push(line)
+      }
+    })
 
     sockets.add(downstreamSocket)
     sockets.add(upstreamSocket)
@@ -52,7 +78,7 @@ async function startAcknowledgementProxy(mainPort) {
     })
     upstreamSocket.once("close", () => {
       sockets.delete(upstreamSocket)
-      if (!withholdAcknowledgement) downstreamSocket.end()
+      if (!withholdAcknowledgement && replayAcknowledgementDelayMs === 0) downstreamSocket.end()
     })
     downstream.on("error", () => upstreamSocket.destroy())
     upstream.on("error", () => downstreamSocket.destroy())
@@ -61,10 +87,32 @@ async function startAcknowledgementProxy(mainPort) {
       upstream.send(message)
     })
     upstream.on("message", (message) => {
+      if (message?.type === "generation-accepted" && generationAcknowledgementDelayMs > 0) {
+        const timer = setTimeout(() => {
+          timers.delete(timer)
+          if (!downstreamSocket.destroyed) downstream.send(message)
+        }, generationAcknowledgementDelayMs)
+
+        timers.add(timer)
+        return
+      }
+
       if (withholdAcknowledgement && message?.type === "enqueued") {
         withheldJobId = message.jobId
+        if (withholdFirstAcknowledgementUntilTimeout) return
+
         downstreamSocket.end()
         upstreamSocket.destroy()
+        return
+      }
+
+      if (!withholdAcknowledgement && message?.type === "enqueued" && replayAcknowledgementDelayMs > 0) {
+        const timer = setTimeout(() => {
+          timers.delete(timer)
+          if (!downstreamSocket.destroyed) downstream.send(message)
+        }, replayAcknowledgementDelayMs)
+
+        timers.add(timer)
         return
       }
 
@@ -82,6 +130,7 @@ async function startAcknowledgementProxy(mainPort) {
 
   return {
     close: async () => {
+      for (const timer of timers) clearTimeout(timer)
       for (const socket of sockets) socket.destroy()
       await new Promise((resolve) => server.close(() => resolve(undefined)))
     },
@@ -89,6 +138,7 @@ async function startAcknowledgementProxy(mainPort) {
       return connectionCount
     },
     enqueueMessages,
+    enqueueRequestPayloads,
     get withheldJobId() {
       return withheldJobId
     },
@@ -172,6 +222,78 @@ describe("BackgroundJobsClient owned enqueue acknowledgement recovery", {databas
         pooledRunnerCount: 1,
         port: main.getPort(),
         workerInstanceId: "a3582ca8-e4c4-4aa3-b741-927724619317"
+      })
+      await worker.start()
+      await workerReady.waiting
+      await updates.waitForUpdate(jobId)
+
+      expect(JSON.parse(await fs.readFile(outputPath, "utf8"))).toEqual(["once"])
+      expect(await store.countJobs({jobName: "AppendJob"})).toEqual(1)
+    } finally {
+      await worker?.stop()
+      await proxy.close()
+      await main.stop()
+      await fs.rm(outputPath, {force: true})
+    }
+  })
+
+  it("gives the exact owned replay fresh handshake and acknowledgement budgets without duplicating its side effect", async () => {
+    const generationId = "owned-ack-delayed-recovery"
+    const store = new SqlBackgroundJobsAdapter({configuration: dummyConfiguration})
+    const workerReady = promiseBarrier()
+    /** @type {ReturnType<typeof createBackgroundJobUpdateObserver> | null} */
+    let updates = null
+    const {main} = await startGenerationMain({
+      generationId,
+      initialGenerationState: "active",
+      onJobUpdated: (update) => updates?.onJobUpdated(update),
+      onWorkerReady: workerReady.entered,
+      store
+    })
+    updates = createBackgroundJobUpdateObserver({store})
+    const proxy = await startAcknowledgementProxy(main.getPort(), {
+      generationAcknowledgementDelayMs: 300,
+      replayAcknowledgementDelayMs: 300,
+      withholdFirstAcknowledgementUntilTimeout: true
+    })
+    const outputPath = await outputPathFor("owned-enqueue-delayed-ack-recovery")
+    /** @type {BackgroundJobsWorker | undefined} */
+    let worker
+
+    try {
+      const producer = await createOwnedProducer({generationId, jobName: "DelayedOwnedAckProducerJob", store})
+      dummyConfiguration.setBackgroundJobsConfig({generationId, host: "127.0.0.1", port: proxy.port})
+      const client = new BackgroundJobsClient({
+        configuration: dummyConfiguration,
+        enqueueTimeoutMs: 500,
+        generationHandshakeTimeoutMs: 1000,
+        generationId
+      })
+      const jobId = await client.enqueue({
+        args: ["once", outputPath],
+        jobName: "AppendJob",
+        options: {executionMode: "inline"},
+        producerInvocationId: "owned-delayed-ack-invocation",
+        producerProof: producer.proof
+      })
+
+      expect(jobId).toEqual(proxy.withheldJobId)
+      expect(proxy.connectionCount).toEqual(2)
+      expect(proxy.enqueueMessages).toHaveLength(2)
+      expect(proxy.enqueueMessages[1]).toEqual(proxy.enqueueMessages[0])
+      expect(proxy.enqueueRequestPayloads).toHaveLength(2)
+      expect(proxy.enqueueRequestPayloads[1]).toEqual(proxy.enqueueRequestPayloads[0])
+      expect(await store.countJobs({jobName: "AppendJob"})).toEqual(1)
+
+      worker = new BackgroundJobsWorker({
+        closeDatabaseConnectionsOnStop: false,
+        configuration: dummyConfiguration,
+        generationId,
+        host: "127.0.0.1",
+        maxConcurrentInlineJobs: 1,
+        pooledRunnerCount: 1,
+        port: main.getPort(),
+        workerInstanceId: "bff1c3a2-fcc6-49dd-9ef1-64ff9bebd346"
       })
       await worker.start()
       await workerReady.waiting

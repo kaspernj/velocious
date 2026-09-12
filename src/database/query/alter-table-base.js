@@ -33,6 +33,7 @@ export default class VelociousDatabaseQueryAlterTableBase extends QueryBase {
     let sql = `ALTER TABLE ${options.quoteTableName(tableData.getName())} `
     let actionCount = 0
     let previousActionWasMssqlColumnAdd = false
+    let previousActionWasMssqlColumnDrop = false
 
     for (const column of tableData.getColumns()) {
       if (actionCount > 0) sql += ", "
@@ -46,6 +47,7 @@ export default class VelociousDatabaseQueryAlterTableBase extends QueryBase {
 
         sql += column.getSQL({driver: this.getDriver(), forAlterTable: false})
         previousActionWasMssqlColumnAdd = databaseType == "mssql"
+        previousActionWasMssqlColumnDrop = false
       } else if (column.getNewName()) {
         const newColumnName = column.getNewName()
 
@@ -53,9 +55,13 @@ export default class VelociousDatabaseQueryAlterTableBase extends QueryBase {
 
         sql += `RENAME COLUMN ${options.quoteColumnName(column.getName())} TO ${options.quoteColumnName(newColumnName)}`
         previousActionWasMssqlColumnAdd = false
+        previousActionWasMssqlColumnDrop = false
       } else if (column.getDropColumn()) {
-        sql += `DROP COLUMN ${options.quoteColumnName(column.getName())}`
+        if (databaseType != "mssql" || !previousActionWasMssqlColumnDrop) sql += "DROP COLUMN "
+
+        sql += options.quoteColumnName(column.getName())
         previousActionWasMssqlColumnAdd = false
+        previousActionWasMssqlColumnDrop = databaseType == "mssql"
       } else {
         if (databaseType == "mssql" || databaseType == "pgsql") {
           sql += "ALTER COLUMN "
@@ -65,6 +71,7 @@ export default class VelociousDatabaseQueryAlterTableBase extends QueryBase {
 
         sql += column.getSQL({driver: this.getDriver(), forAlterTable: true})
         previousActionWasMssqlColumnAdd = false
+        previousActionWasMssqlColumnDrop = false
       }
 
 

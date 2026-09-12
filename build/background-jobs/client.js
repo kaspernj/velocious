@@ -1,11 +1,12 @@
 // @ts-check
 
-import timeout from "awaitery/build/timeout.js"
+import timeout, { TimeoutError } from "awaitery/build/timeout.js"
 import configurationResolver from "../configuration-resolver.js"
 import isPlainObject from "../utils/plain-object.js"
+import BackgroundJobEnqueueAcknowledgementTimeoutError from "./enqueue-acknowledgement-timeout-error.js"
 import BackgroundJobsSocketRequest from "./socket-request.js"
 import { DEFAULT_GENERATION_HANDSHAKE_TIMEOUT_MS, validateGenerationHandshakeTimeoutMs } from "./generation-handshake-timeout-error.js"
-import {BACKGROUND_JOB_ACTIVE_STATUSES, BACKGROUND_JOB_EXECUTION_MODES, BACKGROUND_JOB_STATUSES, BACKGROUND_JOB_TERMINAL_STATUSES} from "./job-semantics.js"
+import { BACKGROUND_JOB_ACTIVE_STATUSES, BACKGROUND_JOB_EXECUTION_MODES, BACKGROUND_JOB_STATUSES, BACKGROUND_JOB_TERMINAL_STATUSES } from "./job-semantics.js"
 
 const DEFAULT_ENQUEUE_TIMEOUT_MS = 5000
 const BACKGROUND_JOB_WAKE_OUTCOMES = ["woken", "already_due", "handed_off", "not_found"]
@@ -127,17 +128,36 @@ export default class BackgroundJobsClient {
       ...(producerInvocationId ? {producerInvocationId} : {}),
       ...(producerProof ? {producerProof} : {})
     }
-    const acknowledgement = {explicitlyRejected: false, generationFenced: false, requestSent: false}
+    /**
+     * Creates safe observations for one attempt without retaining request data.
+     * @param {object} args - Attempt identity.
+     * @param {"initial" | "owned_replay"} args.attemptKind - Initial attempt or owned replay.
+     * @param {number} args.attemptNumber - One-based attempt number.
+     * @returns {import("./enqueue-acknowledgement-timeout-error.js").BackgroundJobEnqueueAttempt} - Mutable attempt observations.
+     */
+    const newAttemptObservation = ({attemptKind, attemptNumber}) => ({
+      acknowledgementWaitElapsedMs: 0,
+      attemptElapsedMs: 0,
+      attemptKind,
+      attemptNumber,
+      explicitlyRejected: false,
+      generationFenced: false,
+      requestSent: false
+    })
     /**
      * Sends one enqueue attempt. An owned caller may replay this exact message
      * once when transport acknowledgement remains ambiguous after send.
-     * @param {{explicitlyRejected: boolean, generationFenced: boolean, requestSent: boolean} | undefined} attemptAcknowledgement - First-attempt observations.
+     * @param {import("./enqueue-acknowledgement-timeout-error.js").BackgroundJobEnqueueAttempt} attemptObservation - Mutable attempt observations.
+     * @param {Readonly<Array<import("./enqueue-acknowledgement-timeout-error.js").BackgroundJobEnqueueAttempt>>} previousAttempts - Earlier timed-out attempts.
      * @returns {Promise<string>} - Job id.
      */
-    const enqueueAttempt = async (attemptAcknowledgement) => {
+    const enqueueAttempt = async (attemptObservation, previousAttempts) => {
+      const attemptStartedAtMs = Date.now()
       const request = await this._request()
       const requestAbortController = new AbortController()
       const timeoutErrorMessage = `Background job enqueue acknowledgement timed out after ${this.enqueueTimeoutMs}ms`
+      /** @type {number | undefined} */
+      let requestSentAtMs
       /**
        * Resolves the pre-send phase when the mutation has entered the socket.
        * @type {() => void}
@@ -169,10 +189,9 @@ export default class BackgroundJobsClient {
         signal: requestAbortController.signal,
         onConnect: (jsonSocket) => {
           jsonSocket.send(message)
-          if (attemptAcknowledgement) {
-            attemptAcknowledgement.generationFenced = Boolean(request.generationId)
-            attemptAcknowledgement.requestSent = true
-          }
+          attemptObservation.generationFenced = Boolean(request.generationId)
+          attemptObservation.requestSent = true
+          requestSentAtMs = Date.now()
           markRequestSent()
         },
         onMessage: ({message, resolve, reject}) => {
@@ -182,7 +201,7 @@ export default class BackgroundJobsClient {
           }
 
           if (message?.type === "enqueue-error") {
-            if (attemptAcknowledgement) attemptAcknowledgement.explicitlyRejected = true
+            attemptObservation.explicitlyRejected = true
             reject(new Error(message.error || "Failed to enqueue job"))
           }
         }
@@ -190,16 +209,43 @@ export default class BackgroundJobsClient {
 
       await withEnqueueTimeout(async () => await Promise.race([requestSent, requestPromise]))
 
-      return await withEnqueueTimeout(async () => await requestPromise)
+      try {
+        return await withEnqueueTimeout(async () => await requestPromise)
+      } catch (error) {
+        if (!(error instanceof TimeoutError)) throw error
+        if (requestSentAtMs === undefined) throw new Error("Background job enqueue acknowledgement wait started before the request was sent", {cause: error})
+
+        const timedOutAtMs = Date.now()
+        // The fired timer proves its logical deadline even when the adjustable wall clock reports a shorter interval.
+        const acknowledgementWaitElapsedMs = Math.max(this.enqueueTimeoutMs, timedOutAtMs - requestSentAtMs)
+
+        attemptObservation.acknowledgementWaitElapsedMs = acknowledgementWaitElapsedMs
+        attemptObservation.attemptElapsedMs = Math.max(acknowledgementWaitElapsedMs, timedOutAtMs - attemptStartedAtMs)
+
+        throw new BackgroundJobEnqueueAcknowledgementTimeoutError({
+          acknowledgementTimeoutMs: this.enqueueTimeoutMs,
+          attemptHistory: [...previousAttempts, attemptObservation],
+          cause: error,
+          generationId: request.generationId,
+          jobName,
+          producerInvocationId,
+          producerProofPresent: Boolean(producerProof)
+        })
+      }
     }
+
+    const initialAttempt = newAttemptObservation({attemptKind: "initial", attemptNumber: 1})
 
     try {
-      return await enqueueAttempt(acknowledgement)
+      return await enqueueAttempt(initialAttempt, [])
     } catch (error) {
-      if (!producerInvocationId || !producerProof || !acknowledgement.generationFenced || !acknowledgement.requestSent || acknowledgement.explicitlyRejected) throw error
-    }
+      if (!producerInvocationId || !producerProof || !initialAttempt.generationFenced || !initialAttempt.requestSent || initialAttempt.explicitlyRejected) throw error
 
-    return await enqueueAttempt(undefined)
+      const previousAttempts = error instanceof BackgroundJobEnqueueAcknowledgementTimeoutError ? error.attemptHistory : []
+      const replayAttempt = newAttemptObservation({attemptKind: "owned_replay", attemptNumber: 2})
+
+      return await enqueueAttempt(replayAttempt, previousAttempts)
+    }
   }
 
   /**

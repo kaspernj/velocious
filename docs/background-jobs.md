@@ -295,6 +295,22 @@ producer call and tears down its one-shot socket. Persistence may already have
 committed after the send, so a post-send rejection is deliberately an ambiguous
 outcome, not proof that no job exists.
 
+Only the post-send acknowledgement deadline raises the public
+`BackgroundJobEnqueueAcknowledgementTimeoutError`, which extends Awaitery's
+`TimeoutError` and has code
+`BACKGROUND_JOB_ENQUEUE_ACKNOWLEDGEMENT_TIMEOUT`. Import it from
+`velocious/build/src/background-jobs/enqueue-acknowledgement-timeout-error.js`
+when a consumer must distinguish ambiguous acknowledgement timeout from a
+connection, handshake, generation-fencing, explicit enqueue rejection,
+ownership, or programming failure. Its safe metadata contains
+`acknowledgementTimeoutMs`, a frozen `attemptHistory`, `generationId`, `jobName`,
+`producerInvocationId`, and `producerProofPresent`. Each attempt records only
+its number/kind, elapsed timing, request-sent and generation-fenced booleans,
+and explicit-rejection boolean. It never retains job arguments/options, raw
+producer proof, environment, endpoint, connection, or credential data. The
+typed error proves that each recorded request entered its socket and then timed
+out; it cannot prove whether the durable store committed the enqueue.
+
 An enqueue made by a currently executing generation-owned job already carries
 an internal producer handoff proof and a per-call invocation identity. If its
 first request was sent after an accepted generation handshake but no `enqueued`
@@ -306,6 +322,8 @@ handshake/generation rejection before send, an explicit enqueue rejection, an
 ordinary enqueue without this internal identity, or any legacy/default enqueue
 even if execution context supplied producer metadata. The recovery does not
 change `idempotencyKey` semantics and does not raise the acknowledgement timeout.
+If both acknowledgement waits expire, the final typed timeout contains both
+safe attempt records. There is no retry loop.
 
 For an ordinary enqueue, replay the same request with the same
 `idempotencyKey`: durable ownership returns the already-persisted job id instead

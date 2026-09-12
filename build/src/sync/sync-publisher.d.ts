@@ -153,13 +153,20 @@ export default class SyncPublisher {
     /**
      * Upserts the published server-origin sync row for a resource identity:
      * server-origin rows carry a null actor column (no device to echo the
-     * change back to), so repeated server changes to one resource reuse and
-     * re-sequence one feed row.
+     * change back to), so repeated server changes to one complete resource and
+     * scope identity reuse and re-sequence one feed row. A database advisory
+     * lock serializes reconciliation plus the shared upsert because unique
+     * constraints containing nullable actor/scope columns do not enforce this
+     * identity portably across supported databases. Reconciliation retains the
+     * row with the newest feed sequence (then lowest id for a deterministic tie)
+     * and removes older matching server-origin rows before applying the current
+     * mutation.
      * @param {Record<string, ReturnType<typeof JSON.parse>>} attributes - Snapshotted sync row attributes.
      * @param {ReturnType<typeof JSON.parse>} syncModel - Operation-bound or static Sync model interface.
+     * @param {string[]} scopeColumnNames - Persisted scope columns participating in the complete identity.
      * @returns {Promise<ReturnType<typeof JSON.parse>>} Upserted sync row.
      */
-    upsertPublishedSyncRow(attributes: Record<string, ReturnType<typeof JSON.parse>>, syncModel?: ReturnType<typeof JSON.parse>): Promise<ReturnType<typeof JSON.parse>>;
+    upsertPublishedSyncRow(attributes: Record<string, ReturnType<typeof JSON.parse>>, syncModel?: ReturnType<typeof JSON.parse>, scopeColumnNames?: string[]): Promise<ReturnType<typeof JSON.parse>>;
     /**
      * Returns the broadcaster delivering declared broadcasts: the injected one,
      * or the configuration's channel broadcast awaited through the pending
