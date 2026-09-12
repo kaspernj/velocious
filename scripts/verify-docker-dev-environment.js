@@ -18,6 +18,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 
 const APPROVED_BASE_DIGEST = "sha256:3131b4cc82a783df6c9df078f86e01819a13594b865c2cad47bd1bca2b7063bb"
 const PROVIDER_PACKAGES = ["@moonshot-ai/kimi-code", "@openai/codex", "@anthropic-ai/claude-code", "opencode-ai"]
+const QWEN_CODE_SPEC = "@qwen-code/qwen-code@0.23.3"
 const COMPOSE_CREDENTIAL_VALUE_PATTERN = /^\s+[A-Z][A-Z0-9_]*(?:API_KEY|TOKEN|SECRET|PASSWORD|CREDENTIALS?)[A-Z0-9_]*:\s*\S.*$/mu
 
 // The complete universal apt coding/debugging baseline shared with the
@@ -198,7 +199,18 @@ function verifyDockerfile(content) {
     problems.push("Missing --allow-scripts lifecycle-script allowlisting")
   }
 
-  for (const probe of ["kimi --version", "codex --version", "claude --version", "opencode --version"]) {
+  if (!content.includes("@qwen-code/audio-capture")) {
+    problems.push("Missing Qwen audio-capture lifecycle-script allowlisting")
+  }
+
+  if (!content.includes(`"${QWEN_CODE_SPEC}"`)) {
+    problems.push(`Missing owner-pinned Qwen Code install spec: ${QWEN_CODE_SPEC}`)
+  }
+  if (!content.includes('test "$(qwen --version)" = "0.23.3"')) {
+    problems.push("Missing exact Qwen Code 0.23.3 verification")
+  }
+
+  for (const probe of ["kimi --version", "codex --version", "claude --version", "opencode --version", "qwen --version"]) {
     if (!content.includes(probe)) {
       problems.push(`Missing provider CLI command probe: ${probe}`)
     }

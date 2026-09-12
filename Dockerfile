@@ -103,14 +103,16 @@ ADD https://registry.npmjs.org/opencode-ai/latest /tmp/provider-cli-metadata/ope
 
 # Newest published provider CLIs from bare unversioned npm specs.
 RUN npm install --global --prefix /usr/local \
-    --allow-scripts="@anthropic-ai/claude-code,@moonshot-ai/kimi-code,node-pty,opencode-ai" \
+    --allow-scripts="@anthropic-ai/claude-code,@moonshot-ai/kimi-code,@qwen-code/audio-capture,node-pty,opencode-ai" \
     --strict-allow-scripts \
     "@moonshot-ai/kimi-code" \
     "@openai/codex" \
+    "@qwen-code/qwen-code@0.23.3" \
     "@anthropic-ai/claude-code" \
     "opencode-ai" \
   && kimi --version \
   && codex --version \
+  && test "$(qwen --version)" = "0.23.3" \
   && claude --version \
   && opencode --version \
   && rm -rf /tmp/provider-cli-metadata
