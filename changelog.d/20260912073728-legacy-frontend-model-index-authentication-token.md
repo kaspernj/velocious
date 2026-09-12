@@ -1,0 +1,1 @@
+- Accept legacy frontend-model index authentication tokens without weakening strict query-payload validation.
