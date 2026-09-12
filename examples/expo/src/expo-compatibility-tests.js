@@ -1,4 +1,4 @@
-import {configuration, ExpoCompatibilityTask, SqliteDriver, useCreatedEvent} from "./velocious-runtime"
+import {configuration, ExpoCompatibilityRecord, ExpoCompatibilityTask, SqliteDriver, useCreatedEvent} from "./velocious-runtime"
 
 function assertEqual(actual, expected, message) {
   if (actual !== expected) {
@@ -41,6 +41,7 @@ async function testSqliteDriverQueryPath() {
 
 export default async function runExpoCompatibilityTests() {
   assertEqual(configuration.getEnvironment(), "development", "Configuration should initialize inside Expo")
+  assertEqual(ExpoCompatibilityRecord.getModelName(), "ExpoCompatibilityRecord", "Database record should import inside Expo")
   assertEqual(ExpoCompatibilityTask.getModelName(), "ExpoCompatibilityTask", "Frontend model should expose stable model name")
   assertEqual(ExpoCompatibilityTask.primaryKey(), "id", "Frontend model should expose primary key")
   assertTrue(typeof useCreatedEvent === "function", "Frontend model event hooks should import inside Expo")
