@@ -268,7 +268,7 @@ async function resolveConfiguration({testFilesRequireContextCallback} = {}) {
 
 /**
  * @param {string[]} processArgs - Process args.
- * @returns {Promise<{directory: string, testFiles: string[], lineFilters: Record<string, number[]>, includeTags: string[], excludeTags: string[], examplePatterns: RegExp[]}>} - Test data.
+ * @returns {Promise<{directory: string, testFiles: string[], lineFilters: Record<string, number[]>, includeTags: string[], excludeTags: string[], examplePatterns: RegExp[], retries: number | undefined, setupFiles: string[], timeoutMs: number | undefined}>} - Test data.
  */
 async function resolveTests(processArgs) {
   const directory = process.env.VELOCIOUS_TEST_DIR
@@ -278,7 +278,15 @@ async function resolveTests(processArgs) {
     ? [directory]
     : [`${rootDir}/__tests__`, `${rootDir}/tests`, `${rootDir}/spec`]
 
-  const {includeTags, excludeTags, examplePatterns, filteredProcessArgs} = parseFilters(processArgs)
+  const {
+    includeTags,
+    excludeTags,
+    examplePatterns,
+    filteredProcessArgs,
+    retries,
+    setupFiles,
+    timeoutMs
+  } = parseFilters(processArgs)
   const testFilesFinder = new TestFilesFinder({
     directory,
     directories,
@@ -298,7 +306,10 @@ async function resolveTests(processArgs) {
     lineFilters: testFilesFinder.getLineFiltersByFile(),
     includeTags,
     excludeTags,
-    examplePatterns: normalizeExamplePatterns(examplePatterns)
+    examplePatterns: normalizeExamplePatterns(examplePatterns),
+    retries,
+    setupFiles: setupFiles.map((setupFile) => path.resolve(process.cwd(), setupFile)),
+    timeoutMs
   }
 }
 
@@ -372,9 +383,18 @@ async function runBrowserTests() {
 
   await buildBrowserTestApp()
 
-  const {testFiles, lineFilters, includeTags, excludeTags, examplePatterns} = await resolveTests(processArgs)
+  const {
+    testFiles,
+    lineFilters,
+    includeTags,
+    excludeTags,
+    examplePatterns,
+    retries,
+    setupFiles,
+    timeoutMs
+  } = await resolveTests(processArgs)
   const configuration = await resolveConfiguration({
-    testFilesRequireContextCallback: async () => createTestFilesRequireContext(testFiles)
+    testFilesRequireContextCallback: async () => createTestFilesRequireContext([...setupFiles, ...testFiles])
   })
   const testRunner = new TestRunner({
     configuration,
@@ -382,7 +402,10 @@ async function runBrowserTests() {
     includeTags,
     testFiles,
     lineFilters,
-    examplePatterns
+    examplePatterns,
+    retries,
+    setupFiles,
+    timeoutMs
   })
   /** @type {BrowserTestSession | undefined} */
   let browserTestSession

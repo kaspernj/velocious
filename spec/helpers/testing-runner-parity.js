@@ -16,6 +16,9 @@ import buildTestingConfiguration from "./testing-configuration.js"
  * @property {RegExp[]} [examplePatterns] - Full-name filters for the run.
  * @property {string[] | string} [includeTags] - Tags included in the run.
  * @property {Record<string, number[]>} [lineFilters] - Declaration lines included in the run.
+ * @property {number} [retries] - Default retry count.
+ * @property {string[]} [setupFiles] - Setup files imported before test files.
+ * @property {number} [timeoutMs] - Default lifecycle timeout.
  */
 
 export {default as buildTestingConfiguration} from "./testing-configuration.js"

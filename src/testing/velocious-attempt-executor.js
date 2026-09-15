@@ -148,10 +148,16 @@ export default class VelociousAttemptExecutor {
       await testRunner.registerTransactionalTenant(args, transactionalTenantRegistrations)
     }
     const profiler = testRunner._profiler
+    const profileTestData = {
+      ...test,
+      filePath: testData.filePath,
+      line: testData.line,
+      ownerFilePath: testData.ownerFilePath ?? metadata.ownerFilePath
+    }
     const profileAttempt = profiler?.startAttempt({
       descriptions,
       attemptNumber,
-      testData,
+      testData: profileTestData,
       testDescription
     })
 

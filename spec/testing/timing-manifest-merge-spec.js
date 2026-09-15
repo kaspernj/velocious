@@ -55,7 +55,7 @@ function profile({
   }
 }
 
-describe("timing manifest profile aggregation", () => {
+describe("timing manifest profile aggregation", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("merges a complete compatible shard set into one sorted plain manifest", () => {
     const merged = mergeTestProfileTimingManifests([
       {profile: profile({groupNumber: 2, timingManifest: {"spec/b-spec.js": 20}}), source: "shard-2.json"},

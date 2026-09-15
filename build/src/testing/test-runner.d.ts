@@ -309,6 +309,9 @@ export default class TestRunner {
     _lineFilters: Record<string, number[]>;
     _examplePatterns: RegExp[];
     _profiler: import("./test-profiler.js").default | undefined;
+    _retries: number | undefined;
+    _setupFiles: string[];
+    _timeoutMs: number | undefined;
     _abortRemainingTests: boolean;
     _failedTests: number;
     _successfulTests: number;
@@ -402,8 +405,11 @@ export default class TestRunner {
      * @param {Record<string, number[]>} [args.lineFilters] - Line filters by file.
      * @param {RegExp[]} [args.examplePatterns] - Example patterns.
      * @param {import("./test-profiler.js").default} [args.profiler] - Opt-in profiler.
+     * @param {number} [args.retries] - Default retry count.
+     * @param {string[]} [args.setupFiles] - Setup files imported before test files.
+     * @param {number} [args.timeoutMs] - Default lifecycle timeout.
      */
-    constructor({ configuration, context, excludeTags, includeTags, testFiles, lineFilters, examplePatterns, profiler, ...restArgs }: {
+    constructor({ configuration, context, excludeTags, includeTags, testFiles, lineFilters, examplePatterns, profiler, retries, setupFiles, timeoutMs, ...restArgs }: {
         configuration: import("../configuration.js").default;
         context?: PackageTestContext;
         excludeTags?: string[] | string;
@@ -412,6 +418,9 @@ export default class TestRunner {
         lineFilters?: Record<string, number[]>;
         examplePatterns?: RegExp[];
         profiler?: import("./test-profiler.js").default;
+        retries?: number;
+        setupFiles?: string[];
+        timeoutMs?: number;
     });
     /**
      * Gets the package declaration context.

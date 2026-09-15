@@ -6,7 +6,7 @@ import path from "node:path"
 import { describe, expect, it } from "../../../src/testing/test.js"
 import { loadTimingManifest } from "../../../src/environment-handlers/node/cli/commands/test.js"
 
-describe("test timing manifest loading", () => {
+describe("test timing manifest loading", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("loads and validates a canonical plain timing map", async () => {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-timing-loader-"))
     const manifestPath = path.join(directory, "timings.json")

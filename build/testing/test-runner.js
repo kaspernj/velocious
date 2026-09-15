@@ -2,19 +2,20 @@
 
 import fs from "node:fs/promises"
 import path from "path"
-import {AsyncLocalStorage} from "node:async_hooks"
-import {createTestContext, defaultTestContext} from "@velocious/testing"
-import {TestRunner as PackageTestRunner} from "@velocious/testing/runner"
+import { AsyncLocalStorage } from "node:async_hooks"
+import { createTestContext, defaultTestContext } from "@velocious/testing"
+import { slowestTestResults } from "@velocious/testing/reporters"
+import { TestRunner as PackageTestRunner } from "@velocious/testing/runner"
 import Application from "../../src/application.js"
 import RequestClient from "./request-client.js"
 import picocolors from "picocolors"
 import restArgsError from "../utils/rest-args-error.js"
-import {testConfig} from "./test.js"
-import {fileURLToPath, pathToFileURL} from "url"
+import { testConfig } from "./test.js"
+import { fileURLToPath, pathToFileURL } from "url"
 import SharedTransactionBroker from "./shared-transaction-broker.js"
 import { SHARED_TRANSACTION_BROKER_ENV } from "./shared-transaction-proxy-driver.js"
 import VelociousAttemptExecutor from "./velocious-attempt-executor.js"
-import VelociousRunnerReporter, {AbortRemainingTestsError} from "./velocious-runner-reporter.js"
+import VelociousRunnerReporter, { AbortRemainingTestsError } from "./velocious-runner-reporter.js"
 import VelociousSuiteHookExecutor from "./velocious-suite-hook-executor.js"
 import VelociousTestArguments from "./velocious-test-arguments.js"
 
@@ -177,8 +178,11 @@ export default class TestRunner {
    * @param {Record<string, number[]>} [args.lineFilters] - Line filters by file.
    * @param {RegExp[]} [args.examplePatterns] - Example patterns.
    * @param {import("./test-profiler.js").default} [args.profiler] - Opt-in profiler.
+   * @param {number} [args.retries] - Default retry count.
+   * @param {string[]} [args.setupFiles] - Setup files imported before test files.
+   * @param {number} [args.timeoutMs] - Default lifecycle timeout.
    */
-  constructor({configuration, context = defaultTestContext, excludeTags, includeTags, testFiles, lineFilters, examplePatterns, profiler, ...restArgs}) {
+  constructor({configuration, context = defaultTestContext, excludeTags, includeTags, testFiles, lineFilters, examplePatterns, profiler, retries, setupFiles, timeoutMs, ...restArgs}) {
     restArgsError(restArgs)
 
     if (!configuration) throw new Error("configuration is required")
@@ -193,6 +197,9 @@ export default class TestRunner {
     this._lineFilters = lineFilters || {}
     this._examplePatterns = examplePatterns || []
     this._profiler = profiler
+    this._retries = retries
+    this._setupFiles = setupFiles || []
+    this._timeoutMs = timeoutMs
     this._abortRemainingTests = false
 
     this._failedTests = 0
@@ -1124,6 +1131,15 @@ export default class TestRunner {
    * @returns {Array<{fullDescription: string, filePath: string, line: number, durationMs: number}>} - Slowest tests, slowest first.
    */
   getSlowestTests(limit = 10) {
+    if (this._packageResult) {
+      return slowestTestResults(this._packageResult, {limit}).map((result) => ({
+        fullDescription: result.fullName,
+        filePath: result.filePath ?? "<unknown>",
+        line: result.line ?? 0,
+        durationMs: result.durationMs
+      }))
+    }
+
     const sorted = [...this._testDurations].sort((testA, testB) => testB.durationMs - testA.durationMs)
 
     return limit > 0 ? sorted.slice(0, limit) : sorted
@@ -1160,6 +1176,12 @@ export default class TestRunner {
     const testingConfigPath = this.getConfiguration().getTesting()
 
     await context.describe("", {databaseCleaning: {transaction: true}}, async () => {
+      if (this._setupFiles.length > 0) {
+        await this.runProfileSpan({phase: "testing config/global setup"}, async () => {
+          await this.getConfiguration().getEnvironmentHandler().importTestFiles(this._setupFiles)
+        })
+      }
+
       if (testingConfigPath) {
         await this.runProfileSpan({phase: "testing config/global setup"}, async () => {
           await this.getConfiguration().getEnvironmentHandler().importTestingConfigPath()
@@ -1549,7 +1571,7 @@ export default class TestRunner {
    * @returns {number} - Effective retry count.
    */
   retryCount(test) {
-    const value = test.options.retries ?? test.options.retry ?? this.getTestContext().config.retries
+    const value = test.options.retries ?? test.options.retry ?? this._retries ?? this.getTestContext().config.retries
     return typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0
   }
 
@@ -1650,7 +1672,9 @@ export default class TestRunner {
       attemptExecutor: (input) => this._attemptExecutor.execute(input),
       testArgumentResolver: (input) => this._testArguments.resolve(input),
       suiteHookExecutor: (input) => this._suiteHookExecutor.execute(input),
-      reporter: this._runnerReporter
+      reporter: this._runnerReporter,
+      retries: this._retries,
+      timeoutMs: this._timeoutMs
     })
     const failureStart = this._suiteHookFailures.length
     const restoreRetryOptions = this.normalizePackageRetriesForExecution()

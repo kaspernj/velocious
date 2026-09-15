@@ -156,15 +156,22 @@ count, exactly one profile for every group `1..groups`, and identical path base,
 pre-shard discovered count, and file-set hash. It rejects invalid paths,
 normalized collisions, duplicate files, mismatched per-shard counts, and a
 merged key set that is not the complete pre-shard universe. Failed, focused,
-interrupted, no-test, and error profiles therefore cannot update timing history.
-Profiles may come from different times when these suite and selection invariants
-still match; there is intentionally no run ID.
+filtered, interrupted, malformed, and incomplete profiles therefore cannot update
+timing history. A `no-tests` profile is accepted only for a structurally empty shard
+within an otherwise complete compatible shard set. Profiles may come from different
+times when these suite and selection invariants still match; there is intentionally
+no run ID.
 
 All inputs are read and validated before output starts. Success atomically
 replaces `--output` with the existing plain `{path: duration}` format (sorted,
 two-space JSON, trailing newline), so existing splitter consumers remain
 compatible. Failure leaves an existing output untouched.
 
-The filesystem-free validation and aggregation primitives are also available as
-the public deep import `velocious/build/src/testing/timing-manifest.js`. They are
-not added to the package root export.
+`@velocious/testing` `0.0.14` owns the framework-neutral collector, profile output,
+portable timing-manifest validation, and strict shard aggregation. Its Node-only
+APIs are exported from `@velocious/testing/node`; browser-safe activity validation is
+exported from `@velocious/testing/profiling`. The published
+`velocious/build/src/testing/timing-manifest.js`, `test-profile-output.js`, and
+`test-profile-activity.js` paths remain thin compatibility re-exports. Velocious keeps
+only the environment async-context bridge, database/pool instrumentation, framework
+phase spans, and CLI report translation required by its runtime.

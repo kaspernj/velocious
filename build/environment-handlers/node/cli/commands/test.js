@@ -1,19 +1,22 @@
 // @ts-check
 
 import BaseCommand from "../../../../cli/base-command.js"
-import fs from "fs/promises"
 import path from "node:path"
 import picocolors from "picocolors"
 import TestFilesFinder from "../../../../testing/test-files-finder.js"
 import TestProfiler from "../../../../testing/test-profiler.js"
-import { formatTestProfileSummary, writeTestProfileOutputs } from "../../../../testing/test-profile-output.js"
+import {
+  formatTestProfileSummary,
+  loadTimingManifest,
+  resolveTestProfileOptions,
+  writeTestProfileOutputs
+} from "../../../../testing/test-profile-output.js"
 import TestRunner from "../../../../testing/test-runner.js"
 import TestSuiteSplitter from "../../../../testing/test-suite-splitter.js"
 import { normalizeExamplePatterns, parseFilters } from "../../../../testing/test-filter-parser.js"
 import {
   canonicalTimingManifestPath,
-  timingManifestFileSetHash,
-  validateTimingManifest
+  timingManifestFileSetHash
 } from "../../../../testing/timing-manifest.js"
 import { prepareSourcePeerPackage } from "../../source-peer-package.js"
 
@@ -44,8 +47,11 @@ export default class VelociousCliCommandsTest extends BaseCommand {
       groupNumber,
       profile,
       profileJsonPath,
+      retries,
+      setupFiles,
       timingManifestPath,
-      timingManifestOutputPath
+      timingManifestOutputPath,
+      timeoutMs
     } = parseFilters(this.processArgs || [])
     const profileOptions = resolveTestProfileOptions({
       cwd: process.cwd(),
@@ -70,7 +76,7 @@ export default class VelociousCliCommandsTest extends BaseCommand {
 
     /**
      * Finalizes requested outputs once for every command outcome.
-     * @param {string} status - Run status.
+     * @param {import("@velocious/testing/node").TestProfileStatus} status - Run status.
      * @returns {Promise<void>} - Resolves after requested outputs are written.
      */
     const finalizeProfile = async (status) => {
@@ -157,7 +163,10 @@ export default class VelociousCliCommandsTest extends BaseCommand {
         testFiles,
         lineFilters: testFilesFinder.getLineFiltersByFile(),
         examplePatterns: normalizeExamplePatterns(examplePatterns),
-        profiler
+        profiler,
+        retries,
+        setupFiles: setupFiles.map((setupFile) => path.resolve(process.cwd(), setupFile)),
+        timeoutMs
       })
       const activeTestRunner = testRunner
       let signalHandled = false
@@ -272,68 +281,7 @@ export default class VelociousCliCommandsTest extends BaseCommand {
   }
 }
 
-/**
- * Resolves and validates profiling paths before test discovery starts.
- * @param {object} args - Raw profiling options.
- * @param {string} args.cwd - Command working directory.
- * @param {boolean} args.profile - Whether console profiling was requested.
- * @param {string} [args.profileJsonPath] - Rich profile output path.
- * @param {string} [args.timingManifestPath] - Timing manifest input path.
- * @param {string} [args.timingManifestOutputPath] - Timing manifest output path.
- * @returns {{profile: boolean, profileJsonPath: string | undefined, timingManifestPath: string | undefined, timingManifestOutputPath: string | undefined}} - Resolved profiling options.
- */
-export function resolveTestProfileOptions({cwd, profile, profileJsonPath, timingManifestPath, timingManifestOutputPath}) {
-  const resolvedProfileJsonPath = profileJsonPath ? path.resolve(cwd, profileJsonPath) : undefined
-  const resolvedTimingManifestPath = timingManifestPath ? path.resolve(cwd, timingManifestPath) : undefined
-  const resolvedTimingManifestOutputPath = timingManifestOutputPath
-    ? path.resolve(cwd, timingManifestOutputPath)
-    : undefined
-
-  if (resolvedProfileJsonPath && resolvedTimingManifestOutputPath && resolvedProfileJsonPath === resolvedTimingManifestOutputPath) {
-    throw new Error("Test profiling output paths must be different")
-  }
-
-  if (resolvedTimingManifestPath && (
-    resolvedProfileJsonPath === resolvedTimingManifestPath ||
-    resolvedTimingManifestOutputPath === resolvedTimingManifestPath
-  )) {
-    throw new Error("Test profiling outputs must not overwrite --timing-manifest input")
-  }
-
-  return {
-    profile: profile || Boolean(resolvedProfileJsonPath || resolvedTimingManifestOutputPath),
-    profileJsonPath: resolvedProfileJsonPath,
-    timingManifestPath: resolvedTimingManifestPath,
-    timingManifestOutputPath: resolvedTimingManifestOutputPath
-  }
-}
-
-/**
- * Loads and validates an explicitly supplied plain JSON timing manifest.
- * @param {string | undefined} timingManifestPath - Timing manifest path.
- * @returns {Promise<Record<string, number> | undefined>} - Canonical manifest, or undefined when not requested.
- */
-export async function loadTimingManifest(timingManifestPath) {
-  if (!timingManifestPath) return undefined
-
-  let content
-
-  try {
-    content = await fs.readFile(timingManifestPath, "utf8")
-  } catch (error) {
-    throw new Error(`Failed to read timing manifest: ${timingManifestPath}`, {cause: error})
-  }
-
-  let parsed
-
-  try {
-    parsed = JSON.parse(content)
-  } catch (error) {
-    throw new Error(`Failed to parse timing manifest: ${timingManifestPath}`, {cause: error})
-  }
-
-  return validateTimingManifest(parsed, {source: `Timing manifest ${timingManifestPath}`})
-}
+export { loadTimingManifest, resolveTestProfileOptions }
 
 /**
  * Resolves how many slowest tests to report from the `VELOCIOUS_SLOW_TEST_COUNT`

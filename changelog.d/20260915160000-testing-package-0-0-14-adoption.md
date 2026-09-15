@@ -1,0 +1,1 @@
+Adopt `@velocious/testing` 0.0.14 as the single owner of framework-neutral discovery, filtering, execution, reporting, deterministic grouping, profiling, and timing manifests while retaining thin Velocious compatibility facades and framework-specific lifecycle adapters.
