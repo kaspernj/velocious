@@ -11,12 +11,23 @@ import Logger from "../logger.js"
  * @property {Date | string} created_at - Creation time.
  * @property {string} id - Event id.
  * @property {string} payload_json - Serialized payload.
+ * @property {string | null} params_json - Serialized broadcast params, or null when the publish carried none.
  * @property {number | string} sequence - Sequence number.
  */
 /**
  * WebsocketReplayChannelRow type.
  * @typedef {object} WebsocketReplayChannelRow
  * @property {string} channel - Channel name.
+ */
+/**
+ * Normalized persisted websocket event.
+ * @typedef {object} WebsocketPersistedEvent
+ * @property {string} channel - Channel name.
+ * @property {string} createdAt - ISO creation time.
+ * @property {string} id - Event id.
+ * @property {Record<string, ReturnType<typeof JSON.parse>> | null} params - Persisted broadcast params, or null when the publish carried none.
+ * @property {ReturnType<typeof JSON.parse>} payload - Event payload.
+ * @property {number} sequence - Sequence number.
  */
 const EVENTS_TABLE = "websocket_channel_events"
 const REPLAY_CHANNELS_TABLE = "websocket_replay_channels"
@@ -100,12 +111,29 @@ export default class VelociousHttpServerWebsocketEventLogStore {
 
   /**
    * Runs schema present.
-   * @returns {Promise<boolean>} - Whether both event-log tables physically exist.
+   * @returns {Promise<boolean>} - Whether both event-log tables exist and the events table carries every required column.
    */
   async _schemaPresent() {
     return await this._withDb(async (db) =>
-      await db.tableExists(EVENTS_TABLE) && await db.tableExists(REPLAY_CHANNELS_TABLE)
+      (await db.tableExists(EVENTS_TABLE) && await db.tableExists(REPLAY_CHANNELS_TABLE))
+      && (await this._columnPresent(db, EVENTS_TABLE, "params_json"))
     )
+  }
+
+  /**
+   * Runs column present.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @param {string} tableName - Table name.
+   * @param {string} columnName - Column name.
+   * @returns {Promise<boolean>} - Whether the column exists on the table.
+   */
+  async _columnPresent(db, tableName, columnName) {
+    const tables = await db.getTables()
+    const table = tables.find((candidate) => candidate.getName() == tableName)
+
+    if (!table) return false
+
+    return (await table.getColumnByName(columnName)) !== undefined
   }
 
   /**
@@ -113,9 +141,10 @@ export default class VelociousHttpServerWebsocketEventLogStore {
    * @param {object} args - Options.
    * @param {string} args.channel - Channel name.
    * @param {ReturnType<typeof JSON.parse>} args.payload - Event payload.
-   * @returns {Promise<{channel: string, createdAt: string, id: string, payload: ReturnType<typeof JSON.parse>}>} - Persisted event row.
+   * @param {Record<string, ReturnType<typeof JSON.parse>> | null} [args.params] - Broadcast params to persist for stream-scoped replay, or null when the publish carried none.
+   * @returns {Promise<WebsocketPersistedEvent>} - Persisted event row.
    */
-  async appendEvent({channel, payload}) {
+  async appendEvent({channel, params = null, payload}) {
     await this.ensureReady()
 
     const id = randomUUID()
@@ -128,10 +157,11 @@ export default class VelociousHttpServerWebsocketEventLogStore {
           channel,
           created_at: createdAt,
           id,
+          params_json: params === null ? null : JSON.stringify(params),
           payload_json: JSON.stringify(payload)
         }
       })
-      return {channel, createdAt: createdAt.toISOString(), id, payload}
+      return {channel, createdAt: createdAt.toISOString(), id, params, payload}
     })
   }
 
@@ -139,8 +169,13 @@ export default class VelociousHttpServerWebsocketEventLogStore {
    * Runs mark channel interested.
    * @param {string} channel - Channel name.
    * @returns {Promise<void>} - Resolves when the channel interest was persisted.
+   * @throws {Error} When the channel is registered live-only, which forbids replay persistence.
    */
   async markChannelInterested(channel) {
+    if (this.configuration.isWebsocketChannelLiveOnly(channel)) {
+      throw new Error(`Websocket channel "${channel}" is registered live-only and cannot be marked interested in replay persistence`)
+    }
+
     await this.ensureReady()
 
     const interestedUntil = new Date(Date.now() + this.retentionMs)
@@ -158,6 +193,12 @@ export default class VelociousHttpServerWebsocketEventLogStore {
    * @returns {Promise<boolean>} - Whether the channel should be persisted for replay.
    */
   async shouldPersistChannel(channel) {
+    // A channel re-registered live-only can still hold cached or durable
+    // interest state from before the re-registration; the live-only
+    // contract must hold at the persistence decision, not only at
+    // interest marking.
+    if (this.configuration.isWebsocketChannelLiveOnly(channel)) return false
+
     if (this._channelInterestCached(channel)) return true
     if (this._interestedChannels.size === 0) return false
 
@@ -197,7 +238,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
    * @param {object} args - Options.
    * @param {string} args.channel - Channel name.
    * @param {string} args.id - Event id.
-   * @returns {Promise<{channel: string, createdAt: string, id: string, payload: ReturnType<typeof JSON.parse>, sequence: number} | null>} - Event row or null.
+   * @returns {Promise<WebsocketPersistedEvent | null>} - Event row or null.
    */
   async getEventById({channel, id}) {
     await this.ensureReady()
@@ -237,7 +278,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
    * @param {string} args.channel - Channel name.
    * @param {number} args.sequence - Lower bound sequence.
    * @param {number | null | undefined} [args.upToSequence] - Inclusive ceiling sequence.
-   * @returns {Promise<Array<{channel: string, createdAt: string, id: string, payload: ReturnType<typeof JSON.parse>, sequence: number}>>} - Ordered events.
+   * @returns {Promise<WebsocketPersistedEvent[]>} - Ordered events.
    */
   async getEventsAfter({channel, sequence, upToSequence}) {
     await this.ensureReady()
@@ -312,22 +353,53 @@ export default class VelociousHttpServerWebsocketEventLogStore {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async _ensureEventsTable(db) {
-    this.logger.info("Applying websocket event-log schema")
-
     if (await db.tableExists(EVENTS_TABLE)) {
-      this.logger.info("Websocket event-log table already exists - skipping create")
+      await this._ensureEventsTableColumns(db)
       return
     }
+
+    this.logger.info("Applying websocket event-log schema")
 
     const eventTable = new TableData(EVENTS_TABLE, {ifNotExists: true})
 
     eventTable.integer("sequence", {autoIncrement: true, null: false, primaryKey: true})
     eventTable.string("id", {index: true, null: false})
     eventTable.string("channel", {index: true, null: false})
+    eventTable.text("params_json", {null: true})
     eventTable.text("payload_json", {null: false})
     eventTable.datetime("created_at", {index: true, null: false})
 
     await db.createTable(eventTable)
+  }
+
+  /**
+   * Adds columns the current schema requires to an events table created by an
+   * older framework version, so upgrades keep working without a manual ALTER.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<void>} - Resolves when the events table schema is current.
+   */
+  async _ensureEventsTableColumns(db) {
+    if (await this._columnPresent(db, EVENTS_TABLE, "params_json")) return
+
+    this.logger.info("Adding params_json column to websocket event-log table")
+
+    const tableData = new TableData(EVENTS_TABLE)
+
+    tableData.addColumn("params_json", {isNewColumn: true, null: true, type: "text"})
+
+    try {
+      for (const sql of await db.alterTableSQLs(tableData)) {
+        await db.query(sql)
+      }
+    } catch (error) {
+      // A concurrent process can add the column between the presence check
+      // and the ALTER (multi-worker or rolling upgrade); the
+      // duplicate-column failure is then the expected outcome, not a real
+      // error. Anything else re-checks as absent and rethrows.
+      if (await this._columnPresent(db, EVENTS_TABLE, "params_json")) return
+
+      throw error
+    }
   }
 
   /**
@@ -352,7 +424,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
    * @param {string} args.channel - Channel name.
    * @param {import("../database/drivers/base.js").default} args.db - Database connection.
    * @param {string} args.id - Event id.
-   * @returns {Promise<{channel: string, createdAt: string, id: string, payload: ReturnType<typeof JSON.parse>, sequence: number} | null>} - Event row or null.
+   * @returns {Promise<WebsocketPersistedEvent | null>} - Event row or null.
    */
   async _getEventById({channel, db, id}) {
     const rows = /** @type {WebsocketEventRow[]} */ (await db
@@ -370,7 +442,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
   /**
    * Runs normalize event row.
    * @param {WebsocketEventRow} row - Raw row.
-   * @returns {{channel: string, createdAt: string, id: string, payload: ReturnType<typeof JSON.parse>, sequence: number}} - Normalized row.
+   * @returns {WebsocketPersistedEvent} - Normalized row.
    */
   _normalizeEventRow(row) {
     const createdAtValue = row.created_at
@@ -379,6 +451,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
       channel: row.channel,
       createdAt: createdAtValue instanceof Date ? createdAtValue.toISOString() : new Date(createdAtValue).toISOString(),
       id: row.id,
+      params: row.params_json === null || row.params_json === undefined ? null : JSON.parse(row.params_json),
       payload: JSON.parse(row.payload_json),
       sequence: Number(row.sequence)
     }

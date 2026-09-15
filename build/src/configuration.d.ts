@@ -188,6 +188,12 @@ export default class VelociousConfiguration {
      * @type {Map<string, typeof import("./http-server/websocket-channel.js").default>} */
     _websocketChannelClasses: Map<string, typeof import("./http-server/websocket-channel.js").default>;
     /**
+     * Channel types registered with `{liveOnly: true}`: their traffic is
+     * never persisted for replay, and `markChannelInterested` rejects the
+     * name.
+     * @type {Set<string>} */
+    _liveOnlyWebsocketChannels: Set<string>;
+    /**
      * Stores the websocket channel subscriptions value.
      * @type {Map<string, Set<import("./http-server/websocket-channel.js").default>>} - channelType → live subscriptions across all sessions.
      */
@@ -1220,15 +1226,26 @@ export default class VelociousConfiguration {
      * Clients subscribe via `{type: "channel-subscribe", channelType: name, ...}`.
      * @param {string} name - Client-facing channel type name.
      * @param {typeof import("./http-server/websocket-channel.js").default} ChannelClass - Websocket channel class.
+     * @param {{liveOnly?: boolean}} [options] - Registration options.
      * @returns {void}
      */
-    registerWebsocketChannel(name: string, ChannelClass: typeof import("./http-server/websocket-channel.js").default): void;
+    registerWebsocketChannel(name: string, ChannelClass: typeof import("./http-server/websocket-channel.js").default, { liveOnly }?: {
+        liveOnly?: boolean;
+    }): void;
     /**
      * Runs get websocket channel class.
      * @param {string} name - Channel type name to look up.
      * @returns {typeof import("./http-server/websocket-channel.js").default | undefined} - Registered websocket channel class.
      */
     getWebsocketChannelClass(name: string): typeof import("./http-server/websocket-channel.js").default | undefined;
+    /**
+     * Whether a channel type was registered with `{liveOnly: true}`.
+     * Live-only channels are never persisted for replay: the event-log
+     * store's `markChannelInterested` throws for their names.
+     * @param {string} name - Channel type name to look up.
+     * @returns {boolean} - Whether the channel is declared live-only.
+     */
+    isWebsocketChannelLiveOnly(name: string): boolean;
     /**
      * Tracks a live channel subscription in the global routing registry.
      * Called by the session when `canSubscribe()` resolves truthy; the

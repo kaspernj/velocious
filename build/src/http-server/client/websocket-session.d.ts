@@ -537,8 +537,13 @@ export default class VelociousHttpServerClientWebsocketSession {
     _handleChannelSubscribe(message: Record<string, ReturnType<typeof JSON.parse>>): Promise<void>;
     /**
      * Replays missed events from the persistent event-log store for a
-     * channel subscription that provided `lastEventId`. Sends each
-     * missed event as a `channel-message` with `replayed: true`.
+     * channel subscription that provided `lastEventId`. Delivery is
+     * stream-scoped: each persisted event's broadcast params are
+     * re-applied through the subscription's `matches()` — the same routing
+     * decision live delivery uses — so the subscription only replays events
+     * from its own stream of the channel. A checkpoint that belongs to a
+     * different stream (or is no longer retained) yields
+     * `channel-replay-gap` instead of cross-stream replay.
      * @param {object} args - Options.
      * @param {string} args.channelType - Channel type name (event-log key).
      * @param {string} args.lastEventId - Client's last-seen event id.
@@ -550,6 +555,24 @@ export default class VelociousHttpServerClientWebsocketSession {
         lastEventId: string;
         subscription: import("../websocket-channel.js").default;
     }): Promise<void>;
+    /**
+     * Whether a persisted replay event belongs to this subscription's
+     * stream. A `matches()` failure means the stream membership cannot be
+     * proven, so the event is treated as not matching — the same isolation
+     * live delivery applies to a broken `matches()`.
+     * @param {object} args - Options.
+     * @param {string} args.channelType - Channel type name.
+     * @param {{params: Record<string, ReturnType<typeof JSON.parse>> | null}} args.event - Persisted replay event.
+     * @param {import("../websocket-channel.js").default} args.subscription - Live subscription.
+     * @returns {boolean} - Whether the event belongs to the subscription's stream.
+     */
+    _replayEventMatchesSubscription({ channelType, event, subscription }: {
+        channelType: string;
+        event: {
+            params: Record<string, ReturnType<typeof JSON.parse>> | null;
+        };
+        subscription: import("../websocket-channel.js").default;
+    }): boolean;
     /**
      * Handles `{type: "channel-unsubscribe"}` from the client — calls
      * `unsubscribed()` and sends `channel-unsubscribed`.

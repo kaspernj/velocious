@@ -95,6 +95,20 @@ export default class VelociousWebsocketChannel {
   matches(..._broadcastArgs) { return true }
 
   /**
+   * Returns the broadcast params that may be persisted for replay.
+   * Persisted params are re-applied through `matches(broadcastParams)`
+   * when replaying missed events, so they must be JSON-serializable and
+   * safe to store. Override when `broadcastParams` carries server-only
+   * values that must never reach the event log (e.g. authorization
+   * snapshots).
+   * @param {WebsocketParams | null | undefined} broadcastParams - Params passed to `broadcastToChannel`.
+   * @returns {WebsocketParams | null} - Params to persist, or null to store none.
+   */
+  static replayableBroadcastParams(broadcastParams) {
+    return broadcastParams ?? null
+  }
+
+  /**
    * Whether replaying a persisted broadcast would require a client resync.
    * Subclasses override this when replay storage deliberately omits metadata
    * required to deliver an event safely.

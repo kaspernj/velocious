@@ -23,6 +23,7 @@ import TaskFrontendModelAbilityResource from "../resources/task-frontend-model-a
 import UserFrontendModelAbilityResource from "../resources/user-frontend-model-ability-resource.js"
 import CounterChannel from "../channels/counter-channel.js"
 import EchoConnection from "../connections/echo-connection.js"
+import LiveOnlyWebsocketChannel from "../channels/live-only-websocket-channel.js"
 import TestWebsocketChannel from "../channels/test-websocket-channel.js"
 
 
@@ -204,6 +205,7 @@ configuration.registerWebsocketConnection("Echo", EchoConnection)
 
 // Register test websocket channels (Phase 1B).
 configuration.registerWebsocketChannel("Counter", CounterChannel)
+configuration.registerWebsocketChannel("live-only", LiveOnlyWebsocketChannel, {liveOnly: true})
 configuration.registerWebsocketChannel("test", TestWebsocketChannel)
 
 export default configuration

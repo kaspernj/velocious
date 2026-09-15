@@ -17,6 +17,10 @@ export type WebsocketEventRow = {
      */
     payload_json: string;
     /**
+     * - Serialized broadcast params, or null when the publish carried none.
+     */
+    params_json: string | null;
+    /**
      * - Sequence number.
      */
     sequence: number | string;
@@ -26,6 +30,32 @@ export type WebsocketReplayChannelRow = {
      * - Channel name.
      */
     channel: string;
+};
+export type WebsocketPersistedEvent = {
+    /**
+     * - Channel name.
+     */
+    channel: string;
+    /**
+     * - ISO creation time.
+     */
+    createdAt: string;
+    /**
+     * - Event id.
+     */
+    id: string;
+    /**
+     * - Persisted broadcast params, or null when the publish carried none.
+     */
+    params: Record<string, ReturnType<typeof JSON.parse>> | null;
+    /**
+     * - Event payload.
+     */
+    payload: ReturnType<typeof JSON.parse>;
+    /**
+     * - Sequence number.
+     */
+    sequence: number;
 };
 /**
  * Runs the websocketEventLogStoreForConfiguration helper.
@@ -68,29 +98,35 @@ export default class VelociousHttpServerWebsocketEventLogStore {
     _schemaReady(): Promise<boolean>;
     /**
      * Runs schema present.
-     * @returns {Promise<boolean>} - Whether both event-log tables physically exist.
+     * @returns {Promise<boolean>} - Whether both event-log tables exist and the events table carries every required column.
      */
     _schemaPresent(): Promise<boolean>;
+    /**
+     * Runs column present.
+     * @param {import("../database/drivers/base.js").default} db - Database connection.
+     * @param {string} tableName - Table name.
+     * @param {string} columnName - Column name.
+     * @returns {Promise<boolean>} - Whether the column exists on the table.
+     */
+    _columnPresent(db: import("../database/drivers/base.js").default, tableName: string, columnName: string): Promise<boolean>;
     /**
      * Runs append event.
      * @param {object} args - Options.
      * @param {string} args.channel - Channel name.
      * @param {ReturnType<typeof JSON.parse>} args.payload - Event payload.
-     * @returns {Promise<{channel: string, createdAt: string, id: string, payload: ReturnType<typeof JSON.parse>}>} - Persisted event row.
+     * @param {Record<string, ReturnType<typeof JSON.parse>> | null} [args.params] - Broadcast params to persist for stream-scoped replay, or null when the publish carried none.
+     * @returns {Promise<WebsocketPersistedEvent>} - Persisted event row.
      */
-    appendEvent({ channel, payload }: {
+    appendEvent({ channel, params, payload }: {
         channel: string;
         payload: ReturnType<typeof JSON.parse>;
-    }): Promise<{
-        channel: string;
-        createdAt: string;
-        id: string;
-        payload: ReturnType<typeof JSON.parse>;
-    }>;
+        params?: Record<string, ReturnType<typeof JSON.parse>> | null;
+    }): Promise<WebsocketPersistedEvent>;
     /**
      * Runs mark channel interested.
      * @param {string} channel - Channel name.
      * @returns {Promise<void>} - Resolves when the channel interest was persisted.
+     * @throws {Error} When the channel is registered live-only, which forbids replay persistence.
      */
     markChannelInterested(channel: string): Promise<void>;
     /**
@@ -110,18 +146,12 @@ export default class VelociousHttpServerWebsocketEventLogStore {
      * @param {object} args - Options.
      * @param {string} args.channel - Channel name.
      * @param {string} args.id - Event id.
-     * @returns {Promise<{channel: string, createdAt: string, id: string, payload: ReturnType<typeof JSON.parse>, sequence: number} | null>} - Event row or null.
+     * @returns {Promise<WebsocketPersistedEvent | null>} - Event row or null.
      */
     getEventById({ channel, id }: {
         channel: string;
         id: string;
-    }): Promise<{
-        channel: string;
-        createdAt: string;
-        id: string;
-        payload: ReturnType<typeof JSON.parse>;
-        sequence: number;
-    } | null>;
+    }): Promise<WebsocketPersistedEvent | null>;
     /**
      * Runs latest sequence.
      * @param {string} channel - Channel name.
@@ -134,19 +164,13 @@ export default class VelociousHttpServerWebsocketEventLogStore {
      * @param {string} args.channel - Channel name.
      * @param {number} args.sequence - Lower bound sequence.
      * @param {number | null | undefined} [args.upToSequence] - Inclusive ceiling sequence.
-     * @returns {Promise<Array<{channel: string, createdAt: string, id: string, payload: ReturnType<typeof JSON.parse>, sequence: number}>>} - Ordered events.
+     * @returns {Promise<WebsocketPersistedEvent[]>} - Ordered events.
      */
     getEventsAfter({ channel, sequence, upToSequence }: {
         channel: string;
         sequence: number;
         upToSequence?: number | null | undefined;
-    }): Promise<Array<{
-        channel: string;
-        createdAt: string;
-        id: string;
-        payload: ReturnType<typeof JSON.parse>;
-        sequence: number;
-    }>>;
+    }): Promise<WebsocketPersistedEvent[]>;
     /**
      * Runs cleanup expired.
      * @param {object} [args] - Options.
@@ -164,6 +188,13 @@ export default class VelociousHttpServerWebsocketEventLogStore {
      */
     _ensureEventsTable(db: import("../database/drivers/base.js").default): Promise<void>;
     /**
+     * Adds columns the current schema requires to an events table created by an
+     * older framework version, so upgrades keep working without a manual ALTER.
+     * @param {import("../database/drivers/base.js").default} db - Database connection.
+     * @returns {Promise<void>} - Resolves when the events table schema is current.
+     */
+    _ensureEventsTableColumns(db: import("../database/drivers/base.js").default): Promise<void>;
+    /**
      * Runs ensure replay channels table.
      * @param {import("../database/drivers/base.js").default} db - Database connection.
      * @returns {Promise<void>} - Resolves when complete.
@@ -175,31 +206,19 @@ export default class VelociousHttpServerWebsocketEventLogStore {
      * @param {string} args.channel - Channel name.
      * @param {import("../database/drivers/base.js").default} args.db - Database connection.
      * @param {string} args.id - Event id.
-     * @returns {Promise<{channel: string, createdAt: string, id: string, payload: ReturnType<typeof JSON.parse>, sequence: number} | null>} - Event row or null.
+     * @returns {Promise<WebsocketPersistedEvent | null>} - Event row or null.
      */
     _getEventById({ channel, db, id }: {
         channel: string;
         db: import("../database/drivers/base.js").default;
         id: string;
-    }): Promise<{
-        channel: string;
-        createdAt: string;
-        id: string;
-        payload: ReturnType<typeof JSON.parse>;
-        sequence: number;
-    } | null>;
+    }): Promise<WebsocketPersistedEvent | null>;
     /**
      * Runs normalize event row.
      * @param {WebsocketEventRow} row - Raw row.
-     * @returns {{channel: string, createdAt: string, id: string, payload: ReturnType<typeof JSON.parse>, sequence: number}} - Normalized row.
+     * @returns {WebsocketPersistedEvent} - Normalized row.
      */
-    _normalizeEventRow(row: WebsocketEventRow): {
-        channel: string;
-        createdAt: string;
-        id: string;
-        payload: ReturnType<typeof JSON.parse>;
-        sequence: number;
-    };
+    _normalizeEventRow(row: WebsocketEventRow): WebsocketPersistedEvent;
     /**
      * Runs upsert replay channel interest.
      * @param {import("../database/drivers/base.js").default} db - Database connection.

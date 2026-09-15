@@ -4,6 +4,7 @@ import {describe, expect, it} from "../../src/testing/test.js"
 import {deferred, timeout} from "awaitery"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import {VelociousHttpServerWebsocketEventsHost} from "../../src/http-server/websocket-events-host.js"
+import {websocketEventLogStoreForConfiguration} from "../../src/http-server/websocket-event-log-store.js"
 
 /**
  * Runs a fake configuration callback in its unchanged context.
@@ -138,11 +139,13 @@ describe("HttpServer - websocket events host", {databaseCleaning: {transaction: 
   it("isolates configuration-local broadcasts and deduplicates shared in-process handlers", async () => {
     const host = new VelociousHttpServerWebsocketEventsHost()
     const configurationA = {
+      isWebsocketChannelLiveOnly: () => false,
       withoutCurrentConnectionContexts: async (callback) => await callback(),
       withoutCurrentTestDatabaseAccessScope: async (callback) => await callback(),
       runWithTestSharedConnectionContexts
     }
     const configurationB = {
+      isWebsocketChannelLiveOnly: () => false,
       withoutCurrentConnectionContexts: async (callback) => await callback(),
       withoutCurrentTestDatabaseAccessScope: async (callback) => await callback(),
       runWithTestSharedConnectionContexts
@@ -392,5 +395,25 @@ describe("HttpServer - websocket events host", {databaseCleaning: {transaction: 
     await host.awaitPendingBroadcasts()
 
     expect(host.observedAccessScope).toEqual(undefined)
+  })
+
+  it("persists the broadcast params of an interested V2 channel for stream-scoped replay", async () => {
+    const host = new VelociousHttpServerWebsocketEventsHost()
+    const store = websocketEventLogStoreForConfiguration(dummyConfiguration)
+
+    host.register(/** @type {ReturnType<typeof JSON.parse>} */ ({
+      configuration: dummyConfiguration,
+      dispatchWebsocketV2Broadcast: () => {},
+      websocketV2BroadcastDispatchKey: () => dummyConfiguration
+    }))
+
+    await store.markChannelInterested("test")
+    host.broadcastV2({body: {headline: "persisted-params"}, broadcastParams: {channel: "news"}, channel: "test", configuration: dummyConfiguration})
+    await host.awaitPendingBroadcasts()
+
+    const events = await store.getEventsAfter({channel: "test", sequence: 0})
+    const event = events.find((entry) => entry.payload?.headline === "persisted-params")
+
+    expect(event?.params).toEqual({channel: "news"})
   })
 })
