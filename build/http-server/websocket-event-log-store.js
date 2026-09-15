@@ -193,6 +193,12 @@ export default class VelociousHttpServerWebsocketEventLogStore {
    * @returns {Promise<boolean>} - Whether the channel should be persisted for replay.
    */
   async shouldPersistChannel(channel) {
+    // A channel re-registered live-only can still hold cached or durable
+    // interest state from before the re-registration; the live-only
+    // contract must hold at the persistence decision, not only at
+    // interest marking.
+    if (this.configuration.isWebsocketChannelLiveOnly(channel)) return false
+
     if (this._channelInterestCached(channel)) return true
     if (this._interestedChannels.size === 0) return false
 
@@ -381,8 +387,18 @@ export default class VelociousHttpServerWebsocketEventLogStore {
 
     tableData.addColumn("params_json", {isNewColumn: true, null: true, type: "text"})
 
-    for (const sql of await db.alterTableSQLs(tableData)) {
-      await db.query(sql)
+    try {
+      for (const sql of await db.alterTableSQLs(tableData)) {
+        await db.query(sql)
+      }
+    } catch (error) {
+      // A concurrent process can add the column between the presence check
+      // and the ALTER (multi-worker or rolling upgrade); the
+      // duplicate-column failure is then the expected outcome, not a real
+      // error. Anything else re-checks as absent and rethrows.
+      if (await this._columnPresent(db, EVENTS_TABLE, "params_json")) return
+
+      throw error
     }
   }
 

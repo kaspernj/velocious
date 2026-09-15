@@ -32,6 +32,7 @@
 * Per-record ability checks via `.abilities(...)` on frontend queries + `record.can(action)` (see [docs/abilities.md](docs/abilities.md))
 * Translated model attributes with current-locale relationship sorting (see [docs/translations.md](docs/translations.md))
 * Cross-process broadcast bus for `broadcastToChannel` via `velocious beacon`, including background job runner processes (see [docs/beacon.md](docs/beacon.md))
+* Websocket channel primitives for 1:N pub/sub over the shared session socket (`channel-subscribe` protocol): `matches()`-routed streams, interest-gated event-log persistence with 10-minute retention, stream-scoped `lastEventId` replay with `channel-replay-gap` gap reporting, and `{liveOnly: true}` channels that never reach the replay log (see [docs/websocket-channels.md](docs/websocket-channels.md))
 * Rails-style application process initializer teardown with immutable process identity, reverse idempotent shutdown, and explicit HTTP/background-job ownership (see [docs/application-process-lifecycle.md](docs/application-process-lifecycle.md))
 * Configurable HTTP server worker handlers plus backpressured, descriptor-only file responses with completion callbacks (see [docs/http-server.md](docs/http-server.md))
 * Explicit database-free in-process HTTP applications with optional request and buffered-response byte limits (see [docs/http-server.md](docs/http-server.md#database-free-applications))
@@ -2223,6 +2224,16 @@ socket.send(JSON.stringify({
   params: {token: "secret"}
 }))
 ```
+
+### V2 channel registration, replay, and live-only channels
+
+`configuration.registerWebsocketChannel(name, ChannelClass)` registers a channel class for the `channel-subscribe` protocol — distinct from the `websocketChannelResolver` above, which serves the legacy `{type: "subscribe"}` path. Subscribers are routed by the class's `matches(broadcastParams)`, and publishers emit with `configuration.broadcastToChannel(name, broadcastParams, body)`.
+
+- **Stream-scoped replay.** Delivered `channel-message` frames carry the server `eventId`; a client can pass its last-seen `lastEventId` on (re)subscribe and the server replays only the persisted events belonging to that subscription's stream (10-minute retention, written only while the channel is interested). A checkpoint that expired or belongs to a different stream reports `channel-replay-gap` and the subscription continues with live delivery.
+- **Live-only channels.** `registerWebsocketChannel(name, ChannelClass, {liveOnly: true})` declares a channel that must never reach the replay event log; marking one interested throws, and the persistence decision rejects it even if stale interest state exists.
+- **Replayable params.** Channel classes can override the static `replayableBroadcastParams(broadcastParams)` hook to control which broadcast params are persisted for replay (for example, stripping server-only values).
+
+See [docs/websocket-channels.md](docs/websocket-channels.md) for the full wire protocol, V1/V2 gap semantics, and lifecycle guarantees.
 
 ## Raw websocket handlers
 

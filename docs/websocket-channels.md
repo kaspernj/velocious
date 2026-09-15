@@ -175,7 +175,7 @@ The framework keeps a short persistent log of channel broadcasts so reconnecting
 `configuration.registerWebsocketChannel(name, ChannelClass, {liveOnly: true})` declares a channel that must never reach the replay event log — for high-frequency or ephemeral streams where a per-broadcast database write is pure overhead, or for internal transport traffic that carries nothing replayable.
 
 - The registration is explicit and typed: the flag is a `registerWebsocketChannel` option, checked through `configuration.isWebsocketChannelLiveOnly(name)`.
-- Enforcement is single-pointed: the event-log store's `markChannelInterested(channel)` throws for live-only channels, which is the only path by which a channel becomes persistable. A V1 `{type: "subscribe"}` against a live-only name therefore fails loudly through the normal subscription error path instead of silently creating log traffic.
+- Enforcement covers both sides of persistence: the event-log store's `markChannelInterested(channel)` throws for live-only channels (the only path by which a channel becomes interested), and `shouldPersistChannel(channel)` returns `false` for them, so stale in-memory or durable interest state from before a channel was declared live-only can never resurrect log writes. A V1 `{type: "subscribe"}` against a live-only name therefore fails loudly through the normal subscription error path instead of silently creating log traffic.
 - Live-only channels behave exactly like normal channels for live delivery, session handling, and ordering; the only difference is the absence of the event log.
 
 ## Follow-up: end-to-end frontend-models replay activation (out of scope)

@@ -139,11 +139,13 @@ describe("HttpServer - websocket events host", {databaseCleaning: {transaction: 
   it("isolates configuration-local broadcasts and deduplicates shared in-process handlers", async () => {
     const host = new VelociousHttpServerWebsocketEventsHost()
     const configurationA = {
+      isWebsocketChannelLiveOnly: () => false,
       withoutCurrentConnectionContexts: async (callback) => await callback(),
       withoutCurrentTestDatabaseAccessScope: async (callback) => await callback(),
       runWithTestSharedConnectionContexts
     }
     const configurationB = {
+      isWebsocketChannelLiveOnly: () => false,
       withoutCurrentConnectionContexts: async (callback) => await callback(),
       withoutCurrentTestDatabaseAccessScope: async (callback) => await callback(),
       runWithTestSharedConnectionContexts
