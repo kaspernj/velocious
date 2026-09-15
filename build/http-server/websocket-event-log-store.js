@@ -169,8 +169,13 @@ export default class VelociousHttpServerWebsocketEventLogStore {
    * Runs mark channel interested.
    * @param {string} channel - Channel name.
    * @returns {Promise<void>} - Resolves when the channel interest was persisted.
+   * @throws {Error} When the channel is registered live-only, which forbids replay persistence.
    */
   async markChannelInterested(channel) {
+    if (this.configuration.isWebsocketChannelLiveOnly(channel)) {
+      throw new Error(`Websocket channel "${channel}" is registered live-only and cannot be marked interested in replay persistence`)
+    }
+
     await this.ensureReady()
 
     const interestedUntil = new Date(Date.now() + this.retentionMs)

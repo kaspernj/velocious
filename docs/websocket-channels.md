@@ -60,8 +60,12 @@ Register:
 
 ```js
 configuration.registerWebsocketChannel("GameChat", GameChatChannel)
+
+// Live-only: the channel's traffic must never reach the replay event log.
+configuration.registerWebsocketChannel("InternalTelemetry", InternalTelemetryChannel, {liveOnly: true})
 ```
 
+- `registerWebsocketChannel(name, ChannelClass, {liveOnly})` — `liveOnly: true` opts the channel out of the replay event log entirely (see [Live-only channels](#live-only-channels)). Any attempt to mark a live-only channel interested in persistence throws.
 - A channel class can override the static `replayableBroadcastParams(broadcastParams)` hook to control which broadcast params are persisted for its stream-scoped replay. The base implementation persists them verbatim; override when `broadcastParams` carries server-only values that must never reach the log (the built-in frontend-models channel uses this to strip its destroy-authorization snapshot).
 
 Publish:
@@ -166,6 +170,14 @@ The framework keeps a short persistent log of channel broadcasts so reconnecting
 - **Gap asymmetry between V1 and V2 is intentional.** The legacy V1 path (`{type: "subscribe"}`) reports an unknown/expired checkpoint with `replay-gap` and *rejects the subscription* — the client must resubscribe fresh. The V2 path (`channel-subscribe`) reports the same situation with `channel-replay-gap`, *keeps the subscription*, and continues with live delivery: the V2 client already owns its checkpoint and can decide how to resync (e.g. refetch state), so killing the subscription would be strictly worse.
 - Events that a channel class declares unreplayable via `_requiresReplayGap(body)` (the built-in frontend-models channel does this for destroys, whose safe delivery requires the pre-delete authorization snapshot) also terminate replay with `channel-replay-gap` rather than being delivered.
 
+## Live-only channels
+
+`configuration.registerWebsocketChannel(name, ChannelClass, {liveOnly: true})` declares a channel that must never reach the replay event log — for high-frequency or ephemeral streams where a per-broadcast database write is pure overhead, or for internal transport traffic that carries nothing replayable.
+
+- The registration is explicit and typed: the flag is a `registerWebsocketChannel` option, checked through `configuration.isWebsocketChannelLiveOnly(name)`.
+- Enforcement is single-pointed: the event-log store's `markChannelInterested(channel)` throws for live-only channels, which is the only path by which a channel becomes persistable. A V1 `{type: "subscribe"}` against a live-only name therefore fails loudly through the normal subscription error path instead of silently creating log traffic.
+- Live-only channels behave exactly like normal channels for live delivery, session handling, and ordering; the only difference is the absence of the event log.
+
 ## Follow-up: end-to-end frontend-models replay activation (out of scope)
 
 The replay machinery above is stream-capable and covered by specs, but end-to-end frontend-models replay is **not activated** yet. Two pieces remain, both intentionally deferred:
@@ -173,4 +185,4 @@ The replay machinery above is stream-capable and covered by specs, but end-to-en
 - **Interest marking in the V2 path.** The V1 frontend-models path marks its channel interested through `subscribeToChannel`; the V2 `frontend-models` channel path must do the same (e.g. from its `subscribed()` hook) before its broadcasts are persisted.
 - **Client-side checkpoint tracking in snapreq.** The server already stamps delivered `channel-message` frames with `eventId`, but the frontend-models client does not yet track the last-seen `eventId` per subscription and send it back as `lastEventId` on reconnect.
 
-Performance consideration for activation: every frontend-model lifecycle event (create/update/destroy) becomes a database write to the event log per interested process, with rows retained for 10 minutes. Evaluate that write volume before enabling interest marking for the `frontend-models` channel in a high-churn app.
+Performance consideration for activation: every frontend-model lifecycle event (create/update/destroy) becomes a database write to the event log per interested process, with rows retained for 10 minutes. Evaluate that write volume before enabling interest marking for the `frontend-models` channel in a high-churn app; the live-only registration exists as the opt-out for channels where the cost is not worth it.

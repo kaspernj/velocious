@@ -409,6 +409,13 @@ export default class VelociousConfiguration {
     this._websocketChannelClasses = new Map()
 
     /**
+     * Channel types registered with `{liveOnly: true}`: their traffic is
+     * never persisted for replay, and `markChannelInterested` rejects the
+     * name.
+     * @type {Set<string>} */
+    this._liveOnlyWebsocketChannels = new Set()
+
+    /**
      * Stores the websocket channel subscriptions value.
      * @type {Map<string, Set<import("./http-server/websocket-channel.js").default>>} - channelType → live subscriptions across all sessions.
      */
@@ -1126,6 +1133,7 @@ export default class VelociousConfiguration {
     }
 
     return {
+      liveOnlyChannels: Array.from(this._liveOnlyWebsocketChannels),
       pausedSessions: this._pausedWebsocketSessions.size,
       registeredChannels: Array.from(this._websocketChannelClasses.keys()),
       registeredConnections: Array.from(this._websocketConnectionClasses.keys()),
@@ -2966,12 +2974,15 @@ export default class VelociousConfiguration {
    * Clients subscribe via `{type: "channel-subscribe", channelType: name, ...}`.
    * @param {string} name - Client-facing channel type name.
    * @param {typeof import("./http-server/websocket-channel.js").default} ChannelClass - Websocket channel class.
+   * @param {{liveOnly?: boolean}} [options] - Registration options.
    * @returns {void}
    */
-  registerWebsocketChannel(name, ChannelClass) {
+  registerWebsocketChannel(name, ChannelClass, {liveOnly = false} = {}) {
     if (!name) throw new Error("Channel name is required")
     if (!ChannelClass) throw new Error("ChannelClass is required")
     this._websocketChannelClasses.set(name, ChannelClass)
+
+    if (liveOnly) this._liveOnlyWebsocketChannels.add(name)
   }
 
   /**
@@ -2981,6 +2992,17 @@ export default class VelociousConfiguration {
    */
   getWebsocketChannelClass(name) {
     return this._websocketChannelClasses.get(name)
+  }
+
+  /**
+   * Whether a channel type was registered with `{liveOnly: true}`.
+   * Live-only channels are never persisted for replay: the event-log
+   * store's `markChannelInterested` throws for their names.
+   * @param {string} name - Channel type name to look up.
+   * @returns {boolean} - Whether the channel is declared live-only.
+   */
+  isWebsocketChannelLiveOnly(name) {
+    return this._liveOnlyWebsocketChannels.has(name)
   }
 
   /**

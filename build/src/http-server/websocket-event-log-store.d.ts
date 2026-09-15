@@ -126,6 +126,7 @@ export default class VelociousHttpServerWebsocketEventLogStore {
      * Runs mark channel interested.
      * @param {string} channel - Channel name.
      * @returns {Promise<void>} - Resolves when the channel interest was persisted.
+     * @throws {Error} When the channel is registered live-only, which forbids replay persistence.
      */
     markChannelInterested(channel: string): Promise<void>;
     /**

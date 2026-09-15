@@ -1,0 +1,1 @@
+Add `registerWebsocketChannel(name, ChannelClass, {liveOnly: true})` for declaring websocket channels that must never reach the replay event log. The event-log store now throws when a live-only channel is marked interested in replay persistence, and because that is the only interest-marking path, live-only channels can never create log rows.
