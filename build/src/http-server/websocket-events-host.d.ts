@@ -77,12 +77,14 @@ export declare class VelociousHttpServerWebsocketEventsHost {
      * Runs persist v2 event if needed.
      * @param {object} args - Options.
      * @param {ReturnType<typeof JSON.parse>} args.body - Event body.
+     * @param {Record<string, ReturnType<typeof JSON.parse>>} args.broadcastParams - Routing filter params.
      * @param {string} args.channel - Channel name.
      * @param {import("../configuration.js").default} args.configuration - Originating configuration.
      * @returns {Promise<{createdAt: string, id: string} | null>} - Persisted event metadata when storage is enabled.
      */
-    _persistV2EventIfNeeded({ body, channel, configuration }: {
+    _persistV2EventIfNeeded({ body, broadcastParams, channel, configuration }: {
         body: ReturnType<typeof JSON.parse>;
+        broadcastParams: Record<string, ReturnType<typeof JSON.parse>>;
         channel: string;
         configuration: import("../configuration.js").default;
     }): Promise<{
@@ -104,14 +106,19 @@ export declare class VelociousHttpServerWebsocketEventsHost {
         id: string;
     } | null>;
     /**
-     * Runs persist channel event if needed.
+     * Runs persist channel event if needed. Persists the broadcast's routing
+     * params (sanitized through the channel class's
+     * `replayableBroadcastParams`) so replay can re-apply `matches()` per
+     * stream instead of delivering the whole channel's log.
      * @param {object} args - Options object.
+     * @param {Record<string, ReturnType<typeof JSON.parse>> | null} [args.broadcastParams] - Broadcast params to persist for stream-scoped replay.
      * @param {string} args.channel - Channel name.
      * @param {ReturnType<typeof JSON.parse>} args.payload - Payload data.
      * @param {import("../configuration.js").default} [args.configuration] - Configuration owning the event store.
      * @returns {Promise<{createdAt: string, id: string} | null>} - Persisted event metadata.
      */
-    _persistChannelEventIfNeeded({ channel, payload, configuration }: {
+    _persistChannelEventIfNeeded({ broadcastParams, channel, configuration, payload }: {
+        broadcastParams?: Record<string, ReturnType<typeof JSON.parse>> | null;
         channel: string;
         payload: ReturnType<typeof JSON.parse>;
         configuration?: import("../configuration.js").default;

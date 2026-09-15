@@ -390,6 +390,24 @@ export default class FrontendModelWebsocketChannel extends VelociousWebsocketCha
   }
 
   /**
+   * Drops the server-only destroy-authorization snapshot before replay
+   * persistence. The snapshot is what makes replayed destroy events
+   * require a client resync, and the pre-delete row it captures must
+   * never be stored.
+   * @param {Record<string, import("./query.js").FrontendModelTransportValue> | null | undefined} broadcastParams - Params from `broadcastToChannel`.
+   * @returns {Record<string, import("./query.js").FrontendModelTransportValue> | null} - Persistable routing params.
+   */
+  static replayableBroadcastParams(broadcastParams) {
+    if (!broadcastParams) return null
+
+    const replayableParams = {...broadcastParams}
+
+    delete replayableParams.destroyAuthorizationRecord
+
+    return replayableParams
+  }
+
+  /**
    * Runs debug snapshot.
    * @returns {Record<string, ReturnType<typeof JSON.parse>>} Debug-safe subscription details.
    */

@@ -12,18 +12,20 @@ The existing `{type: "subscribe"}` wire message + `FrontendModelWebsocketChannel
 
 ```json
 // client → server
-{"type": "channel-subscribe",   "subscriptionId": "s1", "channelType": "GameChat", "params": {"gameId": "abc"}}
+{"type": "channel-subscribe",   "subscriptionId": "s1", "channelType": "GameChat", "params": {"gameId": "abc"}, "lastEventId": "evt-42"}
 {"type": "channel-unsubscribe", "subscriptionId": "s1"}
 
 // server → client
 {"type": "channel-subscribed",  "subscriptionId": "s1"}
-{"type": "channel-message",     "subscriptionId": "s1", "body": {...}}
+{"type": "channel-message",     "subscriptionId": "s1", "body": {...}, "eventId": "evt-43"}
 {"type": "channel-unsubscribed","subscriptionId": "s1"}
+{"type": "channel-replay-gap",  "subscriptionId": "s1", "lastEventId": "evt-42"}
 {"type": "channel-error",       "subscriptionId": "s1", "message": "..."}
 ```
 
 - `subscriptionId` is client-generated and unique within the session.
 - `channelType` is the name the server registered the class under.
+- `lastEventId` (optional) is the id of the last event the client processed. When present, the server replays the channel's persisted events after that checkpoint — scoped to the subscription's own stream — before sending `channel-subscribed`. Delivered `channel-message` frames carry the server-side `eventId` so the client can track its checkpoint across reconnects.
 
 ## Backend API
 
@@ -59,6 +61,8 @@ Register:
 ```js
 configuration.registerWebsocketChannel("GameChat", GameChatChannel)
 ```
+
+- A channel class can override the static `replayableBroadcastParams(broadcastParams)` hook to control which broadcast params are persisted for its stream-scoped replay. The base implementation persists them verbatim; override when `broadcastParams` carries server-only values that must never reach the log (the built-in frontend-models channel uses this to strip its destroy-authorization snapshot).
 
 Publish:
 
@@ -150,4 +154,23 @@ Client behavior:
 - A rejected resume is fresh-session recovery, not a successful resume. When the server responds with `session-gone`, SnapReq promotes the already-established fresh session, reopens still-live [one-to-one connection handles](websocket-connections.md), and re-subscribes still-live channel handles. The same public handles remain usable, and channel readiness resolves again after the fresh server acknowledges the replacement subscription. Handles explicitly closed before or during reconnect stay closed and are not reopened or re-subscribed.
 - Frontend-model lifecycle channels use one live handle per model class and captured request-context value. Registrations with equal contexts retain filter/callback multiplexing, while distinct contexts remain separate through reconnect, unsubscribe, and failed acknowledgement cleanup. The context is ordinary tenant-resolver input and does not weaken channel authorization.
 - `unsubscribed()` fires exactly once: on client-initiated `channel-unsubscribe` OR on session teardown (socket drop, Phase 2 covers grace-period resumption).
-- There is no persistent event log or replay. Live handles can survive or recover across reconnect as described above, but subscribers do not receive messages they missed while disconnected.
+- Reconnect survival of live handles is independent of replay: a subscription that misses events while disconnected is still resubmitted or resumed as described above, and with `lastEventId` it can additionally recover the missed window from the [replay event log](#replay-event-log).
+
+## Replay event log
+
+The framework keeps a short persistent log of channel broadcasts so reconnecting subscribers can recover the events they missed.
+
+- **Interest-gated persistence.** Events are written to the `websocket_channel_events` table only while the channel is *interested*: a V2 channel marks interest from its `subscribed()` hook, and the legacy V1 `{type: "subscribe"}` path marks interest for every subscription it accepts. No interest → no writes, so channels with no replay need pay nothing.
+- **Retention.** Rows are retained for 10 minutes and removed by `cleanupExpired()`. A `lastEventId` checkpoint that has expired (or was never persisted) cannot be replayed.
+- **Stream-scoped replay (V2).** Each persisted event stores the broadcast's routing params (sanitized through the channel class's `replayableBroadcastParams`), alongside the channel-wide `sequence` that orders the log. On `channel-subscribe` with `lastEventId`, the server first validates the checkpoint: if the checkpoint event belongs to a *different stream* of the channel (its stored params fail the subscription's `matches()`), or is no longer retained, it sends `channel-replay-gap` and then proceeds with live delivery. Otherwise it replays only the events after the checkpoint whose stored params match the subscription's stream — the same `matches()` decision live delivery uses — and only then sends `channel-subscribed`. Everything before the confirmation is replayed; everything after is live.
+- **Gap asymmetry between V1 and V2 is intentional.** The legacy V1 path (`{type: "subscribe"}`) reports an unknown/expired checkpoint with `replay-gap` and *rejects the subscription* — the client must resubscribe fresh. The V2 path (`channel-subscribe`) reports the same situation with `channel-replay-gap`, *keeps the subscription*, and continues with live delivery: the V2 client already owns its checkpoint and can decide how to resync (e.g. refetch state), so killing the subscription would be strictly worse.
+- Events that a channel class declares unreplayable via `_requiresReplayGap(body)` (the built-in frontend-models channel does this for destroys, whose safe delivery requires the pre-delete authorization snapshot) also terminate replay with `channel-replay-gap` rather than being delivered.
+
+## Follow-up: end-to-end frontend-models replay activation (out of scope)
+
+The replay machinery above is stream-capable and covered by specs, but end-to-end frontend-models replay is **not activated** yet. Two pieces remain, both intentionally deferred:
+
+- **Interest marking in the V2 path.** The V1 frontend-models path marks its channel interested through `subscribeToChannel`; the V2 `frontend-models` channel path must do the same (e.g. from its `subscribed()` hook) before its broadcasts are persisted.
+- **Client-side checkpoint tracking in snapreq.** The server already stamps delivered `channel-message` frames with `eventId`, but the frontend-models client does not yet track the last-seen `eventId` per subscription and send it back as `lastEventId` on reconnect.
+
+Performance consideration for activation: every frontend-model lifecycle event (create/update/destroy) becomes a database write to the event log per interested process, with rows retained for 10 minutes. Evaluate that write volume before enabling interest marking for the `frontend-models` channel in a high-churn app.

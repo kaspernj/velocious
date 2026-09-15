@@ -67,6 +67,35 @@ describe("websocket event log store", {tags: ["dummy"], databaseCleaning: {trunc
     expect(retrieved?.payload?.key).toEqual("value")
   })
 
+  it("persists and returns broadcast params for stream-scoped replay", async () => {
+    const store = websocketEventLogStoreForConfiguration(dummyConfiguration)
+
+    const appended = await store.appendEvent({channel: "params-test", payload: {order: 1}, params: {channel: "news"}})
+
+    expect(appended.params).toEqual({channel: "news"})
+
+    const byId = await store.getEventById({channel: "params-test", id: appended.id})
+
+    expect(byId?.params).toEqual({channel: "news"})
+
+    const events = await store.getEventsAfter({channel: "params-test", sequence: 0})
+    const event = events.find((entry) => entry.id === appended.id)
+
+    expect(event?.params).toEqual({channel: "news"})
+  })
+
+  it("stores null params when the publish carried no broadcast params", async () => {
+    const store = websocketEventLogStoreForConfiguration(dummyConfiguration)
+
+    const appended = await store.appendEvent({channel: "null-params-test", payload: {order: 1}})
+
+    expect(appended.params).toEqual(null)
+
+    const byId = await store.getEventById({channel: "null-params-test", id: appended.id})
+
+    expect(byId?.params).toEqual(null)
+  })
+
   it("returns the latest sequence for a channel", async () => {
     const store = websocketEventLogStoreForConfiguration(dummyConfiguration)
 

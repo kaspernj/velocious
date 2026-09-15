@@ -1843,8 +1843,13 @@ export default class VelociousHttpServerClientWebsocketSession {
 
   /**
    * Replays missed events from the persistent event-log store for a
-   * channel subscription that provided `lastEventId`. Sends each
-   * missed event as a `channel-message` with `replayed: true`.
+   * channel subscription that provided `lastEventId`. Delivery is
+   * stream-scoped: each persisted event's broadcast params are
+   * re-applied through the subscription's `matches()` — the same routing
+   * decision live delivery uses — so the subscription only replays events
+   * from its own stream of the channel. A checkpoint that belongs to a
+   * different stream (or is no longer retained) yields
+   * `channel-replay-gap` instead of cross-stream replay.
    * @param {object} args - Options.
    * @param {string} args.channelType - Channel type name (event-log key).
    * @param {string} args.lastEventId - Client's last-seen event id.
@@ -1858,7 +1863,7 @@ export default class VelociousHttpServerClientWebsocketSession {
 
     const checkpoint = await store.getEventById({channel: channelType, id: lastEventId})
 
-    if (!checkpoint) {
+    if (!checkpoint || !this._replayEventMatchesSubscription({channelType, event: checkpoint, subscription})) {
       this.sendJson({
         type: "channel-replay-gap",
         subscriptionId: subscription.subscriptionId,
@@ -1880,6 +1885,8 @@ export default class VelociousHttpServerClientWebsocketSession {
     for (const event of events) {
       if (subscription.isClosed()) break
 
+      if (!this._replayEventMatchesSubscription({channelType, event, subscription})) continue
+
       if (await subscription._requiresReplayGap(event.payload)) {
         this.sendJson({
           type: "channel-replay-gap",
@@ -1891,8 +1898,38 @@ export default class VelociousHttpServerClientWebsocketSession {
 
       await subscription.deliverBroadcast(
         /** @type {import("../websocket-channel.js").WebsocketJsonValue} */ (event.payload),
-        {eventId: event.id}
+        {
+          ...(event.params !== null ? {broadcastParams: event.params} : {}),
+          eventId: event.id
+        }
       )
+    }
+  }
+
+  /**
+   * Whether a persisted replay event belongs to this subscription's
+   * stream. A `matches()` failure means the stream membership cannot be
+   * proven, so the event is treated as not matching — the same isolation
+   * live delivery applies to a broken `matches()`.
+   * @param {object} args - Options.
+   * @param {string} args.channelType - Channel type name.
+   * @param {{params: Record<string, ReturnType<typeof JSON.parse>> | null}} args.event - Persisted replay event.
+   * @param {import("../websocket-channel.js").default} args.subscription - Live subscription.
+   * @returns {boolean} - Whether the event belongs to the subscription's stream.
+   */
+  _replayEventMatchesSubscription({channelType, event, subscription}) {
+    try {
+      return Boolean(subscription.matches(event.params || {}))
+    } catch (caughtError) {
+      const error = this._reportUnexpectedDispatchError(caughtError, {
+        channelType,
+        stage: "websocket-channel-replay",
+        subscriptionId: subscription.subscriptionId
+      })
+
+      this.logger.error(() => [`Websocket replay subscription ${subscription.subscriptionId} matches() threw`, error])
+
+      return false
     }
   }
 

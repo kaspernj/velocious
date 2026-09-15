@@ -9,15 +9,27 @@ import dummyConfiguration from "../dummy/src/config/configuration.js"
 import { websocketEventLogStoreForConfiguration } from "../../src/http-server/websocket-event-log-store.js"
 
 describe("FrontendModelWebsocketChannel replay", {databaseCleaning: {transaction: true}, tags: ["dummy"]}, () => {
+  it("excludes the destroy authorization snapshot from replayable broadcast params", () => {
+    const replayable = FrontendModelWebsocketChannel.replayableBroadcastParams({
+      destroyAuthorizationRecord: {name: "pre-delete-row"},
+      model: "Task"
+    })
+
+    expect(replayable).toEqual({model: "Task"})
+    expect(FrontendModelWebsocketChannel.replayableBroadcastParams(null)).toEqual(null)
+  })
+
   it("reports a replay gap when a destroyed record has no authorization snapshot", async () => {
     const store = websocketEventLogStoreForConfiguration(dummyConfiguration)
     const checkpoint = await store.appendEvent({
       channel: "frontend-models",
+      params: {model: "Task"},
       payload: {action: "update", id: "checkpoint-task", model: "Task"}
     })
 
     await store.appendEvent({
       channel: "frontend-models",
+      params: {model: "Task"},
       payload: {action: "destroy", id: "destroyed-task", model: "Task"}
     })
 
