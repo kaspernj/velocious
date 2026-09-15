@@ -82,7 +82,7 @@ function buildConfiguration() {
   })
 }
 
-describe("test profiler pool metrics", () => {
+describe("test profiler pool metrics", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("records lifecycle telemetry and attributes aggregate deltas to the active span", async () => {
     const configuration = buildConfiguration()
     const pool = new DeterministicProfilePool({configuration, identifier: "default"})

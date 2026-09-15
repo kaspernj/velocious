@@ -6,7 +6,7 @@ import path from "path"
 import { describe, expect, it } from "../../../../src/testing/test.js"
 import TestFilesFinder from "../../../../src/testing/test-files-finder.js"
 
-describe("Cli - Commands - test - TestFilesFinder", () => {
+describe("Cli - Commands - test - TestFilesFinder", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("finds the correct test files", async () => {
     const directory = await fs.realpath(`${process.cwd()}/../..`)
     const testFilesFinder = new TestFilesFinder({directory, processArgs: ["test"]})

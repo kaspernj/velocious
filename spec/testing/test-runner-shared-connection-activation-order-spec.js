@@ -86,7 +86,10 @@ describe("TestRunner shared connection activation order", {databaseCleaning: {tr
     class ObservedEnvironmentHandler extends EnvironmentHandlerNode {
       async importTestingConfigPath() { order.push("testing config") }
 
-      async importTestFiles() { order.push("test files") }
+      /** @param {string[]} filePaths - Paths requested for import. */
+      async importTestFiles(filePaths) {
+        order.push(filePaths.includes("example-setup.js") ? "setup files" : "test files")
+      }
     }
 
     const environmentHandler = new ObservedEnvironmentHandler()
@@ -105,13 +108,14 @@ describe("TestRunner shared connection activation order", {databaseCleaning: {tr
     const testRunner = new TestRunner({
       configuration,
       context: createTestContext(),
+      setupFiles: ["example-setup.js"],
       testFiles: ["example-spec.js"]
     })
 
     await testRunner.prepare()
 
     expect(defaultTestContext.registry).toBe(outerRegistry)
-    expect(order).toEqual(["testing config", "test files"])
+    expect(order).toEqual(["setup files", "testing config", "test files"])
   })
 
   it("runs afterEach hooks from the inner scope to the outer scope", async () => {

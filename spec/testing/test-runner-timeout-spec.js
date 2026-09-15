@@ -8,6 +8,51 @@ import wait from "awaitery/build/wait.js"
 
 describe("TestRunner timeouts", {databaseCleaning: {transaction: false, truncate: false}}, () => {
 
+  it("uses the package CLI timeout default", async () => {
+    const environmentHandler = new EnvironmentHandlerNode()
+    const configuration = new Configuration({
+      database: {test: {}},
+      directory: process.cwd(),
+      environment: "test",
+      environmentHandler,
+      initializeModels: async () => {},
+      locale: "en",
+      localeFallbacks: {en: ["en"]},
+      locales: ["en"]
+    })
+    const testRunner = new TestRunner({configuration, testFiles: [], timeoutMs: 10})
+    /** @type {ReturnType<typeof JSON.parse>} */
+    let eventPayload
+    const handler = (payload) => { eventPayload = payload }
+
+    testEvents.on("testFailed", handler)
+
+    try {
+      await testRunner.runTests({
+        afterEaches: [],
+        beforeEaches: [],
+        descriptions: [],
+        indentLevel: 0,
+        tests: {
+          args: {},
+          afterEaches: [],
+          beforeEaches: [],
+          subs: {},
+          tests: {
+            "uses the CLI timeout": {
+              args: {},
+              function: async () => { await wait(50) }
+            }
+          }
+        }
+      })
+    } finally {
+      testEvents.off("testFailed", handler)
+    }
+
+    expect(eventPayload.error.message).toContain("Timed out after 0.01s")
+  })
+
   it("times out tests using the configured default", async () => {
     const previousTimeoutSeconds = testConfig.defaultTimeoutSeconds
     const environmentHandler = new EnvironmentHandlerNode()

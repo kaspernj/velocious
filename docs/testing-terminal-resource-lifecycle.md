@@ -1,6 +1,6 @@
 # Testing terminal resource lifecycle
 
-`@velocious/testing` `0.0.12` supports the `terminalResource` error contract for a
+`@velocious/testing` `0.0.14` supports the `terminalResource` error contract for a
 shared resource that makes the rest of a test run unsafe to continue. Use it with the
 matching Velocious release so the package runner and the Velocious reporter agree on
 the lifecycle.

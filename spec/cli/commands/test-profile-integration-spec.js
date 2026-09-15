@@ -115,7 +115,7 @@ async function runInterruptedTestCommand(args, readyOutput) {
   })
 }
 
-describe("test profile CLI integration", () => {
+describe("test profile CLI integration", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("writes pass profile and manifest outputs and prints the compact summary", async () => {
     const directory = await makeTestDirectory("velocious-profile-cli-pass-")
     const profilePath = path.join(directory, "profile.json")

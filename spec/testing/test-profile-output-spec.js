@@ -37,7 +37,7 @@ function buildProfile() {
   })
 }
 
-describe("test profile output", () => {
+describe("test profile output", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("atomically writes deterministic rich JSON and a splitter-compatible sorted manifest", async () => {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), "velocious-profile-output-"))
     const profileJsonPath = path.join(directory, "nested", "profile.json")

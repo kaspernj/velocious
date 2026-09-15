@@ -27,7 +27,7 @@ class ProfileMetricsDriver extends DatabaseDriverBase {
   async _affectedRowsActual() { return 1 }
 }
 
-describe("test profiler database metrics", () => {
+describe("test profiler database metrics", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("allowlists serialized SQL operations without exposing arbitrary leading tokens", async () => {
     const configuration = new Configuration({
       database: {test: {}},

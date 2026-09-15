@@ -4,7 +4,7 @@ import path from "node:path"
 import { describe, expect, it } from "../../../src/testing/test.js"
 import { resolveTestProfileOptions } from "../../../src/environment-handlers/node/cli/commands/test.js"
 
-describe("test profile CLI options", () => {
+describe("test profile CLI options", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("resolves relative output paths from the command cwd", () => {
     const cwd = path.join(path.sep, "workspace", "application")
     const options = resolveTestProfileOptions({

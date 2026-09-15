@@ -4,6 +4,32 @@ import {describe, expect, it} from "../../src/testing/test.js"
 import {buildTestingRunner, runTestingScope, testingScope} from "../helpers/testing-runner-parity.js"
 
 describe("TestRunner retry", {databaseCleaning: {transaction: false, truncate: false}}, () => {
+  it("uses the package CLI retry default when a test has no override", async () => {
+    const testRunner = buildTestingRunner({retries: 1})
+    let attempts = 0
+    const tests = {
+      args: {},
+      afterEaches: [],
+      beforeEaches: [],
+      subs: {},
+      tests: {
+        "uses the default retry": {
+          args: {},
+          function: async () => {
+            attempts++
+
+            if (attempts === 1) throw new Error("first attempt")
+          }
+        }
+      }
+    }
+
+    await runTestingScope(testRunner, testingScope(tests))
+
+    expect(attempts).toBe(2)
+    expect(testRunner.getSuccessfulTests()).toBe(1)
+  })
+
   it("retries a failing test until it succeeds", async () => {
     const testRunner = buildTestingRunner()
 

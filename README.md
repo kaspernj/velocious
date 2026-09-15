@@ -180,10 +180,13 @@ Baselines are generated against a fresh checkout (no generated dummy `configurat
 # Testing
 
 Application tests may import the testing DSL from the independent public package.
-`@velocious/testing` `0.0.12` is the declaration and execution engine. Compatible
-installed copies share one protocol-1/schema-3 default registry. Velocious adapts each
-package-owned attempt with its database, request, profiling, and cleanup behavior; the
-existing Velocious facade exports the same declaration DSL and remains supported.
+`@velocious/testing` `0.0.14` owns framework-neutral discovery, filtering,
+execution, reporting, deterministic weighted grouping, profiling, and timing
+manifests. Compatible installed copies share one protocol-1/schema-3 default registry.
+Velocious retains application/configuration startup, database and transaction
+lifecycle, browser execution, environment handling, framework profile spans, and
+report translation. Existing Velocious import paths remain supported as thin
+delegating compatibility facades.
 
 ```js
 import {describe, expect, it} from "@velocious/testing"
@@ -246,12 +249,18 @@ export default async function configureTesting() {
 }
 ```
 
-Retry flaky tests by setting a retry count on the test args.
+Retry flaky tests by setting a retry count on the test args, or set CLI defaults for
+retries and lifecycle timeout. Import repeatable global setup before the testing
+configuration and test declarations with `--setup`.
 
 ```js
 describe("Tasks", () => {
 it("retries a flaky check", {retry: 2}, async () => {})
 })
+```
+
+```bash
+npx velocious test --retry=2 --timeout=30000 --setup=spec/setup.js spec/
 ```
 
 Velocious prints the slowest tests after every run so suite hotspots are easy to spot. Each line shows the duration, full description and `file:line`.
@@ -296,7 +305,7 @@ npx velocious test:timing-manifest:merge --output tmp/test-timings.json \
 See [test profiling](docs/test-profiling.md) for lifecycle accounting, custom
 activity spans, schema, and privacy guarantees.
 
-Prefer waiting for a real signal or condition over sleeping a fixed duration. `waitForEvent(emitter, eventName, {timeoutMs, filter})` resolves the instant a matching event fires (a background job finishing, a model update, a websocket message) and rejects on timeout; for polling an arbitrary condition, use awaitery's `waitFor`. Both `@velocious/testing` and the backward-compatible `velocious/build/src/testing/test.js` facade are supported imports; the Velocious runner consumes public-package declarations and adds the framework-specific database, request, profiling, and cleanup behavior.
+Prefer waiting for a real signal or condition over sleeping a fixed duration. `waitForEvent(emitter, eventName, {timeoutMs, filter})` resolves the instant a matching event fires (a background job finishing, a model update, a websocket message) and rejects on timeout; for polling an arbitrary condition, use awaitery's `waitFor`. Both `@velocious/testing` and the backward-compatible `velocious/build/src/testing/test.js` facade are supported imports; the Velocious runner consumes public-package declarations and adds the framework-specific startup, database, request, browser, profile-span, and cleanup behavior.
 
 ```js
 import {waitForEvent} from "velocious/build/src/testing/test.js"

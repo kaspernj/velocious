@@ -28,13 +28,16 @@ run; the browser runner executes them normally.
 
 ## Package runner and Velocious compatibility
 
-Velocious uses `@velocious/testing` `0.0.12` as its framework-neutral declaration
-registry and execution engine. The package owns focus/tag/example/line selection,
-suite traversal, retries, console capture, structured runner events, and result
-accounting. Velocious adapts each package attempt with application/request arguments,
-database and tenant cleanup, shared-transaction brokers, pending broadcasts, dummy
-handling, timeout quarantine, and framework profiler spans. Framework effects run
-once per package attempt and are never replayed by a second runner.
+Velocious uses `@velocious/testing` `0.0.14` as the single owner of framework-neutral
+test discovery, CLI filtering, suite traversal and execution, retries, console
+capture, reporting, deterministic weighted grouping, profiling, and timing-manifest
+behavior. Velocious adapts package execution with application/configuration startup,
+application/request arguments, database and tenant cleanup, shared-transaction
+brokers, pending broadcasts, browser and environment handling, timeout quarantine,
+framework profiler spans, and report translation. Existing Velocious testing imports
+are narrow compatibility facades that delegate or re-export package behavior;
+framework effects run once per package attempt and are never replayed by a second
+runner.
 
 For terminal shared-resource failures and their effect on later selected tests, see
 [Testing terminal resource lifecycle](testing-terminal-resource-lifecycle.md).
@@ -267,6 +270,11 @@ For a phase breakdown, retry/hook attribution, database and pool aggregates, or
 reusable file weights, enable the opt-in [test profiler](test-profiling.md).
 `--profile` prints only the compact summary, while `--profile-json <path>` and
 `--timing-manifest-output <path>` also write atomic outputs and imply profiling.
+
+Framework-neutral CLI defaults also use the package parser: `--retry`/`--retries`
+sets the retry count, `--timeout` sets the lifecycle deadline in milliseconds, and
+repeatable `--setup` files load before the Velocious testing configuration and test
+declarations. These options accept space and equals syntax.
 
 ## Duration-aware parallel sharding
 Pass `--timing-manifest=<path>` together with `--groups` and `--group-number` to
