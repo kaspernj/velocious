@@ -87,7 +87,7 @@ describe("Test transaction session lifecycle", {databaseCleaning: {transaction: 
     expect(connection.calls).toEqual(["begin", "held", "rollback"])
     expect(releases).toEqual(1)
     expect(controlMessage.capability).toBeDefined()
-    expect(JSON.stringify(session.debugSnapshot())).not.toMatch(controlMessage.capability)
+    expect(JSON.stringify(session.debugSnapshot())).not.toContain(controlMessage.capability)
     await client.close()
   })
 })

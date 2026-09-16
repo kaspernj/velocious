@@ -612,6 +612,7 @@ describe("HttpServer - worker handler", {databaseCleaning: {transaction: true}},
     const handler = new WorkerHandler({
       configuration: {
         debug: false,
+        isWebsocketChannelLiveOnly: () => false,
         withoutCurrentConnectionContexts: (callback) => callback(),
         withoutCurrentTestDatabaseAccessScope: (callback) => callback(),
         runWithTestSharedConnectionContexts
@@ -681,12 +682,14 @@ describe("HttpServer - worker handler", {databaseCleaning: {transaction: true}},
     const originalHandlers = new Set(websocketEventsHost.handlers)
     const configurationA = {
       debug: false,
+      isWebsocketChannelLiveOnly: () => false,
       withoutCurrentConnectionContexts: (callback) => callback(),
       withoutCurrentTestDatabaseAccessScope: (callback) => callback(),
       runWithTestSharedConnectionContexts
     }
     const configurationB = {
       debug: false,
+      isWebsocketChannelLiveOnly: () => false,
       withoutCurrentConnectionContexts: (callback) => callback(),
       withoutCurrentTestDatabaseAccessScope: (callback) => callback(),
       runWithTestSharedConnectionContexts
