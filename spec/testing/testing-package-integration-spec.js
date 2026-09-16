@@ -35,8 +35,8 @@ describe("@velocious/testing integration", {databaseCleaning: {transaction: fals
     const packageJson = JSON.parse(await fs.readFile(path.join(repositoryDirectory, "package.json"), "utf8"))
 
     expect(packageJson.dependencies["@velocious/testing"]).toEqual(undefined)
-    expect(packageJson.peerDependencies["@velocious/testing"]).toEqual("^0.0.14")
-    expect(packageJson.devDependencies["@velocious/testing"]).toEqual("0.0.14")
+    expect(packageJson.peerDependencies["@velocious/testing"]).toEqual("0.0.15")
+    expect(packageJson.devDependencies["@velocious/testing"]).toEqual("0.0.15")
   })
 
   it("discovers facade and direct-package declarations in both import orders", async () => {
@@ -197,7 +197,10 @@ describe("@velocious/testing integration", {databaseCleaning: {transaction: fals
           'import {TestRunner} from "@velocious/testing/runner"',
           'import {slowestTestResults} from "@velocious/testing/reporters"',
           'import {validateTestActivityName} from "@velocious/testing/profiling"',
-          'globalThis.testing = {TestRunner, slowestTestResults, validateTestActivityName, waitForEvent}'
+          'import {expect as facadeExpect} from "./src/testing/test.js"',
+          'import DeepExpect from "./src/testing/expect.js"',
+          'import {matchObject as facadeMatchObject} from "./src/testing/expect-utils.js"',
+          'globalThis.testing = {DeepExpect, TestRunner, facadeExpect, facadeMatchObject, slowestTestResults, validateTestActivityName, waitForEvent}'
         ].join("\n"),
         loader: "js",
         resolveDir: repositoryDirectory,

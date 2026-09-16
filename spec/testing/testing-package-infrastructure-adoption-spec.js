@@ -82,9 +82,9 @@ describe("@velocious/testing infrastructure adoption", {databaseCleaning: {trans
     const packageLock = JSON.parse(await fs.readFile(path.join(repositoryDirectory, "package-lock.json"), "utf8"))
     const installed = packageLock.packages["node_modules/@velocious/testing"]
 
-    expect(installed.version).toBe("0.0.14")
-    expect(installed.resolved).toBe("https://registry.npmjs.org/@velocious/testing/-/testing-0.0.14.tgz")
-    expect(installed.integrity).toBe("sha512-os1dV9P3sxvIrqn/QDPs8uDOHBxnIWd0puUcO3eaWAwzDJEH55PWsvH7Q0yW3WgkuCeeELPA11xPGtcm+BNu7w==")
+    expect(installed.version).toBe("0.0.15")
+    expect(installed.resolved).toBe("https://registry.npmjs.org/@velocious/testing/-/testing-0.0.15.tgz")
+    expect(installed.integrity).toBe("sha512-JZbhkDVAT/I7jwrKrtz0LN+DXLeaD0eCSIahgtuOkePmR9XqOAfDKBKT7BfkBJwGPs31hj5IJ8X/Ahg4mf2znw==")
   })
 
   it("re-exports package-owned generic behavior through compatibility paths", () => {
