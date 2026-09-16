@@ -16,7 +16,9 @@ CREATE TABLE `background_job_idempotency_keys` (`scope_digest` VARCHAR(255) PRIM
 
 CREATE TABLE `background_job_schedule_keys` (`schedule_key` VARCHAR(255) PRIMARY KEY, `job_id` VARCHAR(255) NOT NULL);
 
-CREATE TABLE "background_jobs" (`id` VARCHAR(255) PRIMARY KEY, `job_name` VARCHAR(255) NOT NULL, `args_json` TEXT NOT NULL, `execution_mode` VARCHAR(255) NOT NULL, `queue` VARCHAR(255), `max_retries` INTEGER NOT NULL, `attempts` INTEGER NOT NULL, `status` VARCHAR(255) NOT NULL, `scheduled_at_ms` BIGINT NOT NULL, `created_at_ms` BIGINT NOT NULL, `handed_off_at_ms` BIGINT, `handoff_id` VARCHAR(255), `completed_at_ms` BIGINT, `failed_at_ms` BIGINT, `orphaned_at_ms` BIGINT, `worker_id` VARCHAR(255), `last_error` TEXT, `concurrency_key` VARCHAR(255), `max_concurrency` INTEGER, `schedule_key` VARCHAR(255));
+CREATE TABLE `background_job_schedule_order_watermarks` (`schedule_key` VARCHAR(255) PRIMARY KEY, `high_water_mark` BIGINT NOT NULL);
+
+CREATE TABLE "background_jobs" (`id` VARCHAR(255) PRIMARY KEY, `job_name` VARCHAR(255) NOT NULL, `args_json` TEXT NOT NULL, `execution_mode` VARCHAR(255) NOT NULL, `queue` VARCHAR(255), `max_retries` INTEGER NOT NULL, `attempts` INTEGER NOT NULL, `status` VARCHAR(255) NOT NULL, `scheduled_at_ms` BIGINT NOT NULL, `created_at_ms` BIGINT NOT NULL, `handed_off_at_ms` BIGINT, `handoff_id` VARCHAR(255), `completed_at_ms` BIGINT, `failed_at_ms` BIGINT, `orphaned_at_ms` BIGINT, `worker_id` VARCHAR(255), `last_error` TEXT, `concurrency_key` VARCHAR(255), `max_concurrency` INTEGER, `schedule_key` VARCHAR(255), `schedule_order` BIGINT, `timeout_ms` BIGINT, `child_received_at_ms` BIGINT, `child_started_at_ms` BIGINT, `child_instance_id` VARCHAR(255), `child_pid` INTEGER);
 
 CREATE TABLE `comments` (`id` INTEGER PRIMARY KEY NOT NULL, `task_id` BIGINT NOT NULL REFERENCES `tasks`(`id`), `body` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME);
 
@@ -62,6 +64,8 @@ CREATE TABLE `velocious_server_sequences` (`id` INTEGER PRIMARY KEY NOT NULL, `c
 
 CREATE TABLE `velocious_sync_scopes` (`id` VARCHAR(255) PRIMARY KEY NOT NULL, `scope_digest` VARCHAR(255) NOT NULL, `resource_type` VARCHAR(255) NOT NULL, `conditions_json` TEXT NOT NULL, `cursor_json` TEXT, `state` VARCHAR(255) NOT NULL, `created_at` DATETIME NOT NULL, `updated_at` DATETIME NOT NULL);
 
+CREATE INDEX `index_background_jobs_schedule_history_order` ON `background_jobs` (`schedule_key`, `schedule_order`, `created_at_ms`, `id`);
+
 CREATE INDEX `index_on_acts_as_list_items_project_id` ON `acts_as_list_items` (`project_id`);
 
 CREATE UNIQUE INDEX `index_on_acts_as_list_items_project_id_and_position` ON `acts_as_list_items` (`project_id`, `position`);
@@ -96,7 +100,7 @@ CREATE INDEX `index_on_background_jobs_orphaned_at_ms` ON `background_jobs` (`or
 
 CREATE INDEX `index_on_background_jobs_queue` ON `background_jobs` (`queue`);
 
-CREATE INDEX `index_on_background_jobs_schedule_key` ON "background_jobs" (`schedule_key`);
+CREATE INDEX `index_on_background_jobs_schedule_key` ON `background_jobs` (`schedule_key`);
 
 CREATE INDEX `index_on_background_jobs_scheduled_at_ms` ON `background_jobs` (`scheduled_at_ms`);
 

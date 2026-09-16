@@ -1,5 +1,6 @@
 // @ts-check
 
+import timeout from "awaitery/build/timeout.js"
 import BackgroundJobsStore, {BACKGROUND_JOB_COUNTS_CHANNEL} from "../../src/background-jobs/store.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import {afterEach, describe, expect, it} from "../../src/testing/test.js"
@@ -19,24 +20,32 @@ const registeredSubscriptions = new Set()
  * @returns {BackgroundJobsStore} Store.
  */
 function buildConcurrentPruneStore({events, ids, revision, selectBarrier}) {
+  let limit = Number.MAX_SAFE_INTEGER
   const query = {
     from: () => query,
-    limit: () => query,
+    limit: (/** @type {number} */ value) => {
+      limit = value
+      return query
+    },
+    order: () => query,
     select: () => query,
     where: () => query,
     results: async () => {
-      const selected = Array.from(ids).map((id) => ({id}))
+      // Capture the page before yielding to the barrier so a concurrent actor
+      // can make the captured candidates stale between selection and deletion.
+      const selected = Array.from(ids).slice(0, limit).map((id) => ({id}))
 
       await selectBarrier()
       return selected
     }
   }
   const db = /** @type {import("../../src/database/drivers/base.js").default} */ ({
-    affectedRows: async () => {
-      const deleted = ids.size
+    affectedRows: async (/** @type {string} */ sql) => {
+      const deleted = [...ids].filter((id) => sql.includes(`'${id}'`))
 
-      ids.clear()
-      return deleted
+      for (const id of deleted) ids.delete(id)
+
+      return deleted.length
     },
     newQuery: () => query,
     query: async () => {
@@ -209,5 +218,49 @@ describe("Background jobs - count deltas", {databaseCleaning: {truncate: true}},
     expect(deleted.reduce((sum, value) => sum + value, 0)).toEqual(2)
     expect(events).toEqual([{deltas: {all: -2, completed: -2}, revision: 1}])
     expect(revision.value).toEqual(1)
+  })
+
+  it("continues the pass after a concurrent actor steals part of a candidate page", async () => {
+    const ids = new Set(["job-1", "job-2", "job-3", "job-4"])
+    /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */
+    const events = []
+    const revision = {value: 0}
+
+    let releaseDelete = () => {}
+    const deleteGate = new Promise((resolve) => {
+      releaseDelete = resolve
+    })
+    let releaseSelection = () => {}
+    const selected = new Promise((resolve) => {
+      releaseSelection = resolve
+    })
+    let selectCalls = 0
+    const selectBarrier = async () => {
+      selectCalls += 1
+      if (selectCalls > 1) return
+
+      releaseSelection()
+      await deleteGate
+    }
+
+    const store = buildConcurrentPruneStore({events, ids, revision, selectBarrier})
+
+    const prune = store.pruneTerminalJobs({batchSize: 2, completedTtlMs: 1})
+    await timeout({errorMessage: "Retention candidate selection did not complete", timeout: 5000}, () => selected)
+
+    // A concurrent actor deletes one of the two selected candidates before this
+    // pruner's delete transaction runs.
+    ids.delete("job-1")
+    releaseDelete()
+
+    const deleted = await prune
+
+    expect(deleted).toEqual(3)
+    expect(ids.size).toEqual(0)
+    expect(events).toEqual([
+      {deltas: {all: -1, completed: -1}, revision: 1},
+      {deltas: {all: -2, completed: -2}, revision: 2}
+    ])
+    expect(revision.value).toEqual(2)
   })
 })

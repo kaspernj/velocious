@@ -1105,6 +1105,24 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     expect(job.childStartedAtMs).toBeNull()
   })
 
+  it("defers composite retention indexes from routine readiness", async () => {
+    const store = await createClearedStore()
+    const pool = dummyConfiguration.getDatabasePool(store.getDatabaseIdentifier())
+
+    await pool.withConnection({name: "Background jobs verify deferred retention indexes"}, async (db) => {
+      const jobsTable = await db.getTableByNameOrFail("background_jobs")
+      const indexNames = (await jobsTable.getIndexes()).map((index) => index.getName())
+
+      for (const name of [
+        "index_background_jobs_completed_retention",
+        "index_background_jobs_failed_retention",
+        "index_background_jobs_orphaned_retention"
+      ]) {
+        expect(indexNames.includes(name)).toEqual(false)
+      }
+    })
+  })
+
   it("keeps the concurrency counter consistent across every release path", async () => {
     // Regression for the deadlock lock-ordering fix: each release path now locks the shared
     // concurrency-counter row before the job row (matching markHandedOff's concurrency-then-job
