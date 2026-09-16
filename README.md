@@ -180,7 +180,7 @@ Baselines are generated against a fresh checkout (no generated dummy `configurat
 # Testing
 
 Application tests may import the testing DSL from the independent public package.
-`@velocious/testing` `0.0.16` owns framework-neutral expectations, matchers,
+`@velocious/testing` `0.0.17` owns framework-neutral expectations, matchers,
 equality, change observation, mocks, discovery, filtering, execution, reporting,
 deterministic weighted grouping, profiling, and timing manifests. Compatible
 installed copies share one protocol-1/schema-3 default registry.

@@ -28,7 +28,7 @@ run; the browser runner executes them normally.
 
 ## Package runner and Velocious compatibility
 
-Velocious uses `@velocious/testing` `0.0.16` as the single owner of framework-neutral
+Velocious uses `@velocious/testing` `0.0.17` as the single owner of framework-neutral
 expectations, matchers, equality, asymmetric and promise matching, mocks, change
 observation, test discovery, CLI filtering, suite traversal and execution, retries,
 console capture, reporting, deterministic weighted grouping, profiling, and
