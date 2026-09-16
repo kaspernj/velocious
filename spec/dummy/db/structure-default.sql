@@ -18,7 +18,7 @@ CREATE TABLE `background_job_schedule_keys` (`schedule_key` VARCHAR(255) PRIMARY
 
 CREATE TABLE `background_job_schedule_order_watermarks` (`schedule_key` VARCHAR(255) PRIMARY KEY, `high_water_mark` BIGINT NOT NULL);
 
-CREATE TABLE "background_jobs" (`id` VARCHAR(255) PRIMARY KEY, `job_name` VARCHAR(255) NOT NULL, `args_json` TEXT NOT NULL, `max_retries` INTEGER NOT NULL, `attempts` INTEGER NOT NULL, `status` VARCHAR(255) NOT NULL, `scheduled_at_ms` BIGINT NOT NULL, `created_at_ms` BIGINT NOT NULL, `handed_off_at_ms` BIGINT, `completed_at_ms` BIGINT, `failed_at_ms` BIGINT, `orphaned_at_ms` BIGINT, `worker_id` VARCHAR(255), `last_error` TEXT, `execution_mode` VARCHAR(255), `handoff_id` VARCHAR(255), `concurrency_key` VARCHAR(255), `max_concurrency` INTEGER, `queue` VARCHAR(255), `schedule_key` VARCHAR(255), `schedule_order` BIGINT, `timeout_ms` BIGINT, `child_received_at_ms` BIGINT, `child_started_at_ms` BIGINT, `child_instance_id` VARCHAR(255), `child_pid` INTEGER);
+CREATE TABLE "background_jobs" (`id` VARCHAR(255) PRIMARY KEY, `job_name` VARCHAR(255) NOT NULL, `args_json` TEXT NOT NULL, `execution_mode` VARCHAR(255) NOT NULL, `queue` VARCHAR(255), `max_retries` INTEGER NOT NULL, `attempts` INTEGER NOT NULL, `status` VARCHAR(255) NOT NULL, `scheduled_at_ms` BIGINT NOT NULL, `created_at_ms` BIGINT NOT NULL, `handed_off_at_ms` BIGINT, `handoff_id` VARCHAR(255), `completed_at_ms` BIGINT, `failed_at_ms` BIGINT, `orphaned_at_ms` BIGINT, `worker_id` VARCHAR(255), `last_error` TEXT, `concurrency_key` VARCHAR(255), `max_concurrency` INTEGER, `schedule_key` VARCHAR(255), `schedule_order` BIGINT, `timeout_ms` BIGINT, `child_received_at_ms` BIGINT, `child_started_at_ms` BIGINT, `child_instance_id` VARCHAR(255), `child_pid` INTEGER);
 
 CREATE TABLE `comments` (`id` INTEGER PRIMARY KEY NOT NULL, `task_id` BIGINT NOT NULL REFERENCES `tasks`(`id`), `body` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME);
 
@@ -56,15 +56,13 @@ CREATE TABLE `uuid_interactions` (`id` INTEGER PRIMARY KEY NOT NULL, `subject_id
 
 CREATE TABLE `uuid_items` (`id` UUID PRIMARY KEY NOT NULL, `title` VARCHAR(255), `created_at` DATETIME, `updated_at` DATETIME);
 
-CREATE TABLE `velocious_attachments` (`id` VARCHAR(255) PRIMARY KEY NOT NULL, `record_type` VARCHAR(255) NOT NULL, `record_id` TEXT NOT NULL, `record_id_digest` VARCHAR(64) NOT NULL, `name` VARCHAR(255) NOT NULL, `position` INTEGER NOT NULL, `filename` VARCHAR(255) NOT NULL, `content_type` VARCHAR(255), `byte_size` BIGINT NOT NULL, `driver` VARCHAR(255), `storage_key` VARCHAR(255), `content_base64` TEXT, `created_at_ms` BIGINT NOT NULL, `updated_at_ms` BIGINT NOT NULL);
+CREATE TABLE "velocious_attachments" (`id` VARCHAR(255) PRIMARY KEY NOT NULL, `record_type` VARCHAR(255) NOT NULL, `record_id` TEXT NOT NULL, `name` VARCHAR(255) NOT NULL, `position` INTEGER NOT NULL, `filename` VARCHAR(255) NOT NULL, `content_type` VARCHAR(255), `byte_size` BIGINT NOT NULL, `driver` VARCHAR(255), `storage_key` VARCHAR(255), `content_base64` TEXT, `created_at_ms` BIGINT NOT NULL, `updated_at_ms` BIGINT NOT NULL, `record_id_digest` VARCHAR(64) NOT NULL);
 
 CREATE TABLE `velocious_internal_migrations` (`key` VARCHAR(255) PRIMARY KEY NOT NULL, `scope` VARCHAR(255) NOT NULL, `version` VARCHAR(255) NOT NULL, `applied_at_ms` BIGINT NOT NULL);
 
-CREATE INDEX `index_background_jobs_completed_retention` ON `background_jobs` (`status`, `completed_at_ms`, `id`);
+CREATE TABLE `velocious_server_sequences` (`id` INTEGER PRIMARY KEY NOT NULL, `created_at` DATETIME NOT NULL);
 
-CREATE INDEX `index_background_jobs_failed_retention` ON `background_jobs` (`status`, `failed_at_ms`, `id`);
-
-CREATE INDEX `index_background_jobs_orphaned_retention` ON `background_jobs` (`status`, `orphaned_at_ms`, `id`);
+CREATE TABLE `velocious_sync_scopes` (`id` VARCHAR(255) PRIMARY KEY NOT NULL, `scope_digest` VARCHAR(255) NOT NULL, `resource_type` VARCHAR(255) NOT NULL, `conditions_json` TEXT NOT NULL, `cursor_json` TEXT, `state` VARCHAR(255) NOT NULL, `created_at` DATETIME NOT NULL, `updated_at` DATETIME NOT NULL);
 
 CREATE INDEX `index_background_jobs_schedule_history_order` ON `background_jobs` (`schedule_key`, `schedule_order`, `created_at_ms`, `id`);
 
@@ -149,6 +147,12 @@ CREATE INDEX `index_on_uuid_interactions_subject_id` ON `uuid_interactions` (`su
 CREATE INDEX `index_on_velocious_attachments_name` ON `velocious_attachments` (`name`);
 
 CREATE INDEX `index_on_velocious_attachments_record_type` ON `velocious_attachments` (`record_type`);
+
+CREATE INDEX `index_on_velocious_sync_scopes_resource_type` ON `velocious_sync_scopes` (`resource_type`);
+
+CREATE INDEX `index_on_velocious_sync_scopes_scope_digest` ON `velocious_sync_scopes` (`scope_digest`);
+
+CREATE INDEX `index_on_velocious_sync_scopes_state` ON `velocious_sync_scopes` (`state`);
 
 CREATE INDEX `index_velocious_attachments_on_record_type_and_record_id_digest` ON `velocious_attachments` (`record_type`, `record_id_digest`);
 INSERT INTO schema_migrations (version) VALUES ('20230728075328');

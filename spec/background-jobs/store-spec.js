@@ -1105,25 +1105,20 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     expect(job.childStartedAtMs).toBeNull()
   })
 
-  it("ensures ordered composite retention indexes for terminal status scans", async () => {
+  it("defers composite retention indexes from routine readiness", async () => {
     const store = await createClearedStore()
     const pool = dummyConfiguration.getDatabasePool(store.getDatabaseIdentifier())
-    /** @type {Array<{columns: string[], name: string}>} */
-    const expectedIndexes = [
-      {columns: ["status", "completed_at_ms", "id"], name: "index_background_jobs_completed_retention"},
-      {columns: ["status", "failed_at_ms", "id"], name: "index_background_jobs_failed_retention"},
-      {columns: ["status", "orphaned_at_ms", "id"], name: "index_background_jobs_orphaned_retention"}
-    ]
 
-    await pool.withConnection({name: "Background jobs verify retention indexes"}, async (db) => {
+    await pool.withConnection({name: "Background jobs verify deferred retention indexes"}, async (db) => {
       const jobsTable = await db.getTableByNameOrFail("background_jobs")
-      const indexes = await jobsTable.getIndexes()
+      const indexNames = (await jobsTable.getIndexes()).map((index) => index.getName())
 
-      for (const expectedIndex of expectedIndexes) {
-        const index = indexes.find((candidate) => !candidate.isPrimaryKey() && candidate.getName() === expectedIndex.name)
-
-        if (!index) throw new Error(`Expected background jobs retention index to exist: ${expectedIndex.name}`)
-        expect(index.getColumnNames()).toEqual(expectedIndex.columns)
+      for (const name of [
+        "index_background_jobs_completed_retention",
+        "index_background_jobs_failed_retention",
+        "index_background_jobs_orphaned_retention"
+      ]) {
+        expect(indexNames.includes(name)).toEqual(false)
       }
     })
   })

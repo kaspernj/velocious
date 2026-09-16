@@ -2897,6 +2897,8 @@ backgroundJobs: {
 
 `background-jobs-main` registers a built-in `velocious:prune-terminal-background-jobs` job on the scheduler when retention is enabled, so pruning runs as an ordinary scheduled/queued job (it needs a worker, appears in the job tables, and is bounded to one non-overlapping run). See [docs/background-jobs.md](docs/background-jobs.md#retention-pruning-old-job-rows).
 
+Candidate discovery is ordered by terminal timestamp and job id and runs outside the singleton count-revision mutation lock. Only the short transaction that revalidates and deletes the selected ids publishes a count delta, using the database's actual affected-row count, so a slow sweep or a concurrent pruner does not block enqueue acknowledgements or double-decrement counts. Queued and in-flight jobs never match retention deletion. Composite retention-index activation is intentionally staged for a later release because MariaDB online index DDL conflicts with schema inspection by older serving generations.
+
 ## Dashboard
 
 Velocious ships a mountable read-only HTTP API for inspecting jobs (queued, running, completed, failed, orphaned and scheduled), similar in spirit to `sidekiq-web`. Mount it in your routes file the way `Sidekiq::Web` is mounted in Rails:

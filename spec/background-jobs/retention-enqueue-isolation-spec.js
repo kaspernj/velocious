@@ -61,7 +61,12 @@ describe("Background jobs - retention enqueue isolation", {databaseCleaning: {tr
 
     const gatedStore = new BackgroundJobsStore({
       configuration: dummyConfiguration,
-      afterPruneCandidatesSelected: async () => {
+      afterPruneCandidatesSelected: async (metadata) => {
+        expect(Object.isFrozen(metadata)).toEqual(true)
+        expect(Object.isFrozen(metadata.candidates)).toEqual(true)
+        expect(metadata.candidates).toEqual([expiredJobId])
+        expect(metadata.status).toEqual("completed")
+        expect(metadata.column).toEqual("completed_at_ms")
         releaseSelected()
         await deleteGate
       }
