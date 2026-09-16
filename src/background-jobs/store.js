@@ -60,6 +60,16 @@ import {
  */
 
 /**
+ * BackgroundJobPruneCandidateMetadata type. Immutable metadata for one selected
+ * retention candidate batch, exposed to the optional prune barrier hook.
+ * @typedef {object} BackgroundJobPruneCandidateMetadata
+ * @property {string[]} candidates - Job ids selected for this batch.
+ * @property {string} status - Terminal status the candidates were selected by.
+ * @property {string} column - Terminal timestamp column compared against the cutoff.
+ * @property {number} cutoff - Cutoff timestamp the candidates were selected against.
+ */
+
+/**
  * BackgroundJobConcurrencyCountRow type.
  * @typedef {object} BackgroundJobConcurrencyCountRow
  * @property {number | string} active_count - Persisted or aggregated active count.
@@ -158,13 +168,15 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
    * @param {string} [args.databaseIdentifier] - Database identifier.
    * @param {{now: () => number}} [args.clock] - Injectable persistence clock.
    * @param {(producerProof: import("./types.js").BackgroundJobProducerProof) => void | Promise<void>} [args.afterOwnedProducerValidation] - Exact owned-enqueue validation hook.
+   * @param {(metadata: BackgroundJobPruneCandidateMetadata) => void | Promise<void>} [args.afterPruneCandidatesSelected] - Optional barrier invoked after one retention batch's candidate discovery and before its serialized delete transaction.
    */
-  constructor({configuration, databaseIdentifier, clock, afterOwnedProducerValidation}) {
+  constructor({configuration, databaseIdentifier, clock, afterOwnedProducerValidation, afterPruneCandidatesSelected}) {
     super()
     this.configuration = configuration
     this.databaseIdentifier = databaseIdentifier
     this.clock = clock || {now: () => Date.now()}
     this.afterOwnedProducerValidation = afterOwnedProducerValidation
+    this.afterPruneCandidatesSelected = afterPruneCandidatesSelected
     this.logger = new Logger(this)
     this._readyPromise = null
     this._queueConcurrencyReconciled = false
@@ -1813,6 +1825,15 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
           .results()
 
         if (rows.length === 0) return 0
+
+        if (this.afterPruneCandidatesSelected) {
+          await this.afterPruneCandidatesSelected({
+            candidates: rows.map((/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ row) => String(row.id)),
+            column,
+            cutoff,
+            status
+          })
+        }
 
         const ids = rows.map((/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ row) => db.quote(String(row.id))).join(", ")
 
