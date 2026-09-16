@@ -124,10 +124,15 @@ describe("HttpServer - websocket stream replay", {databaseCleaning: {transaction
 
         sportsSocket.addEventListener("message", sportsListener)
 
+        const newsSubscribedPromise = waitForSocketMessage(newsSocket, (message) => message.type === "channel-subscribed" && message.subscriptionId === "news-1")
+
         newsSocket.send(JSON.stringify({type: "channel-subscribe", channelType: "test", subscriptionId: "news-1", params: {subscribe: "news", token: "allow"}}))
+        await newsSubscribedPromise
+
+        const sportsSubscribedPromise = waitForSocketMessage(sportsSocket, (message) => message.type === "channel-subscribed" && message.subscriptionId === "sports-1")
+
         sportsSocket.send(JSON.stringify({type: "channel-subscribe", channelType: "test", subscriptionId: "sports-1", params: {subscribe: "sports", token: "allow"}}))
-        await waitForSocketMessage(newsSocket, (message) => message.type === "channel-subscribed" && message.subscriptionId === "news-1")
-        await waitForSocketMessage(sportsSocket, (message) => message.type === "channel-subscribed" && message.subscriptionId === "sports-1")
+        await sportsSubscribedPromise
 
         const firstNewsPromise = waitForSocketMessage(newsSocket, (message) => {
           return message.type === "channel-message" && message.subscriptionId === "news-1" && message.body?.headline === "news-one"
@@ -211,10 +216,15 @@ describe("HttpServer - websocket stream replay", {databaseCleaning: {transaction
         await waitForSocketOpen(sportsSocket)
         await client.connect()
 
+        const newsSubscribedPromise = waitForSocketMessage(newsSocket, (message) => message.type === "channel-subscribed" && message.subscriptionId === "news-1")
+
         newsSocket.send(JSON.stringify({type: "channel-subscribe", channelType: "test", subscriptionId: "news-1", params: {subscribe: "news", token: "allow"}}))
+        await newsSubscribedPromise
+
+        const sportsSubscribedPromise = waitForSocketMessage(sportsSocket, (message) => message.type === "channel-subscribed" && message.subscriptionId === "sports-1")
+
         sportsSocket.send(JSON.stringify({type: "channel-subscribe", channelType: "test", subscriptionId: "sports-1", params: {subscribe: "sports", token: "allow"}}))
-        await waitForSocketMessage(newsSocket, (message) => message.type === "channel-subscribed" && message.subscriptionId === "news-1")
-        await waitForSocketMessage(sportsSocket, (message) => message.type === "channel-subscribed" && message.subscriptionId === "sports-1")
+        await sportsSubscribedPromise
 
         const sportsEventPromise = waitForSocketMessage(sportsSocket, (message) => {
           return message.type === "channel-message" && message.subscriptionId === "sports-1" && message.body?.headline === "sports-checkpoint"
