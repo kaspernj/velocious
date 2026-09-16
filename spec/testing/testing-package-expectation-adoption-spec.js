@@ -50,6 +50,88 @@ describe("@velocious/testing expectation adoption", {databaseCleaning: {transact
     facadeExpect(localObjectContaining).toBe(packageObjectContaining)
   })
 
+  it("preserves loose top-level primitives and strict recursive equality", () => {
+    facadeExpect("1").toEqual(1)
+    facadeExpect({id: "1"}).not.toEqual({id: 1})
+  })
+
+  it("preserves loose attribute primitives and strict structured attributes", () => {
+    const record = {
+      count: () => 1,
+      details: () => ({count: 1})
+    }
+
+    new LocalExpect(record).toHaveAttributes({count: "1", details: {count: 1}})
+    new LocalExpect(record).not.toHaveAttributes({count: "1", details: {count: "1"}})
+  })
+
+  it("awaits chained asynchronous change probes sequentially", async () => {
+    const observations = []
+    let firstValue = 0
+    let secondValue = 0
+    let firstReads = 0
+    let secondReads = 0
+
+    const firstProbe = async () => {
+      const phase = firstReads++ === 0 ? "before" : "after"
+
+      observations.push(`first-${phase}-start`)
+      await Promise.resolve()
+      observations.push(`first-${phase}-end`)
+
+      return firstValue
+    }
+    const secondProbe = async () => {
+      const phase = secondReads++ === 0 ? "before" : "after"
+
+      observations.push(`second-${phase}-start`)
+      await Promise.resolve()
+      observations.push(`second-${phase}-end`)
+
+      return secondValue
+    }
+    const expectation = facadeExpect(async () => {
+      observations.push("action")
+      firstValue += 1
+      secondValue += 2
+    })
+
+    await expectation
+      .toChange(firstProbe)
+      .by(1)
+      .andChange(secondProbe)
+      .by(2)
+      .execute()
+
+    facadeExpect(observations).toEqual([
+      "first-before-start",
+      "first-before-end",
+      "second-before-start",
+      "second-before-end",
+      "action",
+      "first-after-start",
+      "first-after-end",
+      "second-after-start",
+      "second-after-end"
+    ])
+  })
+
+  it("does not coerce functions or structured values for loose compatibility", () => {
+    const firstFunction = () => 1
+    const secondFunction = () => 1
+    let coercions = 0
+    const structuredValue = {
+      [Symbol.toPrimitive]: () => {
+        coercions += 1
+        return "1"
+      }
+    }
+
+    facadeExpect(firstFunction).not.toEqual(secondFunction)
+    new LocalExpect(structuredValue).not.toEqual(1)
+    facadeExpect(coercions).toBe(0)
+  })
+
   it("contains no local generic expectation implementation", async () => {
     const sourceFiles = await fs.readdir(testingSourceDirectory)
     const facadeSource = await fs.readFile(path.join(testingSourceDirectory, "expect.js"), "utf8")
