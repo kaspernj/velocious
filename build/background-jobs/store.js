@@ -60,6 +60,16 @@ import {
  */
 
 /**
+ * BackgroundJobPruneCandidateMetadata type. Immutable metadata for one selected
+ * retention candidate batch, exposed to the optional prune barrier hook.
+ * @typedef {object} BackgroundJobPruneCandidateMetadata
+ * @property {string[]} candidates - Job ids selected for this batch.
+ * @property {string} status - Terminal status the candidates were selected by.
+ * @property {string} column - Terminal timestamp column compared against the cutoff.
+ * @property {number} cutoff - Cutoff timestamp the candidates were selected against.
+ */
+
+/**
  * BackgroundJobConcurrencyCountRow type.
  * @typedef {object} BackgroundJobConcurrencyCountRow
  * @property {number | string} active_count - Persisted or aggregated active count.
@@ -158,13 +168,15 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
    * @param {string} [args.databaseIdentifier] - Database identifier.
    * @param {{now: () => number}} [args.clock] - Injectable persistence clock.
    * @param {(producerProof: import("./types.js").BackgroundJobProducerProof) => void | Promise<void>} [args.afterOwnedProducerValidation] - Exact owned-enqueue validation hook.
+   * @param {(metadata: BackgroundJobPruneCandidateMetadata) => void | Promise<void>} [args.afterPruneCandidatesSelected] - Optional barrier invoked after one retention batch's candidate discovery and before its serialized delete transaction.
    */
-  constructor({configuration, databaseIdentifier, clock, afterOwnedProducerValidation}) {
+  constructor({configuration, databaseIdentifier, clock, afterOwnedProducerValidation, afterPruneCandidatesSelected}) {
     super()
     this.configuration = configuration
     this.databaseIdentifier = databaseIdentifier
     this.clock = clock || {now: () => Date.now()}
     this.afterOwnedProducerValidation = afterOwnedProducerValidation
+    this.afterPruneCandidatesSelected = afterPruneCandidatesSelected
     this.logger = new Logger(this)
     this._readyPromise = null
     this._queueConcurrencyReconciled = false
@@ -1790,7 +1802,14 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
 
   /**
    * Deletes rows of one terminal status older than a cutoff, batch by batch,
-   * until a page returns fewer than `batchSize` rows.
+   * until a candidate page returns fewer than `batchSize` rows. Candidate
+   * discovery runs on a plain connection — never inside the serialized count
+   * mutation — so a long scan cannot hold the count-revision lock and starve
+   * enqueue acknowledgements; only the short delete transaction is serialized.
+   * The delete revalidates status and cutoff for the selected ids, publishes
+   * the delta from the actual affected-row count, and a page whose candidates
+   * were already removed by a concurrent pruner still ends the pass only when
+   * the page itself is short.
    * @param {object} args - Options.
    * @param {string} args.status - Terminal status to prune.
    * @param {string} args.column - Timestamp column compared against the cutoff.
@@ -1802,22 +1821,37 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
     let deleted = 0
 
     for (;;) {
-      const removed = await this._serializedCountMutation(async (db) => {
-        const rows = await db
+      const candidates = await this._withDb(async (db) =>
+        await db
           .newQuery()
           .from(JOBS_TABLE)
           .select("id")
           .where({status})
           .where(`${db.quoteColumn(column)} <= ${db.quote(cutoff)}`)
+          .order({column, direction: "ASC"})
+          .order({column: "id", direction: "ASC"})
           .limit(batchSize)
           .results()
+      )
 
-        if (rows.length === 0) return 0
+      if (candidates.length === 0) break
 
-        const ids = rows.map((/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ row) => db.quote(String(row.id))).join(", ")
+      const candidateIds = candidates.map((/** @type {Record<string, ReturnType<typeof JSON.parse>>} */ row) => String(row.id))
+
+      if (this.afterPruneCandidatesSelected) {
+        await this.afterPruneCandidatesSelected({
+          candidates: candidateIds,
+          column,
+          cutoff,
+          status
+        })
+      }
+
+      const removed = await this._serializedCountMutation(async (db) => {
+        const ids = candidateIds.map((id) => db.quote(id)).join(", ")
 
         const removed = await db.affectedRows(
-          `DELETE FROM ${db.quoteTable(JOBS_TABLE)} WHERE ${db.quoteColumn("id")} IN (${ids})`
+          `DELETE FROM ${db.quoteTable(JOBS_TABLE)} WHERE ${db.quoteColumn("id")} IN (${ids}) AND ${db.quoteColumn("status")} = ${db.quote(status)} AND ${db.quoteColumn(column)} <= ${db.quote(cutoff)}`
         )
 
         await this._recordCountDelta(db, {all: -removed, [status]: -removed})
@@ -1826,7 +1860,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       })
 
       deleted += removed
-      if (removed < batchSize) break
+      if (candidates.length < batchSize) break
     }
 
     return deleted

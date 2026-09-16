@@ -65,6 +65,24 @@ export type BackgroundJobTransactionSerializationOptions = {
         name: string;
     };
 };
+export type BackgroundJobPruneCandidateMetadata = {
+    /**
+     * - Job ids selected for this batch.
+     */
+    candidates: string[];
+    /**
+     * - Terminal status the candidates were selected by.
+     */
+    status: string;
+    /**
+     * - Terminal timestamp column compared against the cutoff.
+     */
+    column: string;
+    /**
+     * - Cutoff timestamp the candidates were selected against.
+     */
+    cutoff: number;
+};
 export type BackgroundJobConcurrencyCountRow = {
     /**
      * - Persisted or aggregated active count.
@@ -94,6 +112,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
         now: () => number;
     };
     afterOwnedProducerValidation: ((producerProof: import("./types.js").BackgroundJobProducerProof) => void | Promise<void>) | undefined;
+    afterPruneCandidatesSelected: ((metadata: BackgroundJobPruneCandidateMetadata) => void | Promise<void>) | undefined;
     logger: Logger;
     _readyPromise: Promise<void> | null;
     _queueConcurrencyReconciled: boolean;
@@ -104,14 +123,16 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
      * @param {string} [args.databaseIdentifier] - Database identifier.
      * @param {{now: () => number}} [args.clock] - Injectable persistence clock.
      * @param {(producerProof: import("./types.js").BackgroundJobProducerProof) => void | Promise<void>} [args.afterOwnedProducerValidation] - Exact owned-enqueue validation hook.
+     * @param {(metadata: BackgroundJobPruneCandidateMetadata) => void | Promise<void>} [args.afterPruneCandidatesSelected] - Optional barrier invoked after one retention batch's candidate discovery and before its serialized delete transaction.
      */
-    constructor({ configuration, databaseIdentifier, clock, afterOwnedProducerValidation }: {
+    constructor({ configuration, databaseIdentifier, clock, afterOwnedProducerValidation, afterPruneCandidatesSelected }: {
         configuration: import("../configuration.js").default;
         databaseIdentifier?: string;
         clock?: {
             now: () => number;
         };
         afterOwnedProducerValidation?: (producerProof: import("./types.js").BackgroundJobProducerProof) => void | Promise<void>;
+        afterPruneCandidatesSelected?: (metadata: BackgroundJobPruneCandidateMetadata) => void | Promise<void>;
     });
     /**
      * Runs get database identifier.
@@ -740,7 +761,14 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
     }): Promise<number>;
     /**
      * Deletes rows of one terminal status older than a cutoff, batch by batch,
-     * until a page returns fewer than `batchSize` rows.
+     * until a candidate page returns fewer than `batchSize` rows. Candidate
+     * discovery runs on a plain connection — never inside the serialized count
+     * mutation — so a long scan cannot hold the count-revision lock and starve
+     * enqueue acknowledgements; only the short delete transaction is serialized.
+     * The delete revalidates status and cutoff for the selected ids, publishes
+     * the delta from the actual affected-row count, and a page whose candidates
+     * were already removed by a concurrent pruner still ends the pass only when
+     * the page itself is short.
      * @param {object} args - Options.
      * @param {string} args.status - Terminal status to prune.
      * @param {string} args.column - Timestamp column compared against the cutoff.
