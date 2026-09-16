@@ -1,0 +1,1 @@
+Adopt `@velocious/testing` 0.0.15 as the sole owner of generic expectations, equality, asymmetric and promise matching, mocks, and change observation while retaining package-backed Velocious compatibility paths and framework-specific lifecycle integration.

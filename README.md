@@ -180,13 +180,15 @@ Baselines are generated against a fresh checkout (no generated dummy `configurat
 # Testing
 
 Application tests may import the testing DSL from the independent public package.
-`@velocious/testing` `0.0.14` owns framework-neutral discovery, filtering,
-execution, reporting, deterministic weighted grouping, profiling, and timing
-manifests. Compatible installed copies share one protocol-1/schema-3 default registry.
+`@velocious/testing` `0.0.15` owns framework-neutral expectations, matchers,
+equality, change observation, mocks, discovery, filtering, execution, reporting,
+deterministic weighted grouping, profiling, and timing manifests. Compatible
+installed copies share one protocol-1/schema-3 default registry.
 Velocious retains application/configuration startup, database and transaction
 lifecycle, browser execution, environment handling, framework profile spans, and
 report translation. Existing Velocious import paths remain supported as thin
-delegating compatibility facades.
+delegating compatibility facades. Package diagnostics are canonical when legacy
+facades differ only in wording or formatting.
 
 ```js
 import {describe, expect, it} from "@velocious/testing"
@@ -2295,8 +2297,11 @@ npx velocious test
 
 Test declarations can be imported from `@velocious/testing`; the compatibility
 `velocious/build/src/testing/test.js` facade uses the same package registry and remains
-supported. Under Velocious, ordinary callbacks receive `testArgs`, while `it.each`
-callbacks receive their row arguments followed by `testArgs`.
+supported. Its `expect`, `arrayContaining`, and `objectContaining` exports, along
+with the retained deep `expect.js` and `expect-utils.js` paths, delegate directly
+to the browser-safe package implementation. Under Velocious, ordinary callbacks
+receive `testArgs`, while `it.each` callbacks receive their row arguments followed
+by `testArgs`.
 
 If you are developing on Velocious, you can run the tests with:
 
