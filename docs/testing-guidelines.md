@@ -28,16 +28,22 @@ run; the browser runner executes them normally.
 
 ## Package runner and Velocious compatibility
 
-Velocious uses `@velocious/testing` `0.0.14` as the single owner of framework-neutral
-test discovery, CLI filtering, suite traversal and execution, retries, console
-capture, reporting, deterministic weighted grouping, profiling, and timing-manifest
-behavior. Velocious adapts package execution with application/configuration startup,
-application/request arguments, database and tenant cleanup, shared-transaction
-brokers, pending broadcasts, browser and environment handling, timeout quarantine,
-framework profiler spans, and report translation. Existing Velocious testing imports
-are narrow compatibility facades that delegate or re-export package behavior;
-framework effects run once per package attempt and are never replayed by a second
-runner.
+Velocious uses `@velocious/testing` `0.0.17` as the single owner of framework-neutral
+expectations, matchers, equality, asymmetric and promise matching, mocks, change
+observation, test discovery, CLI filtering, suite traversal and execution, retries,
+console capture, reporting, deterministic weighted grouping, profiling, and
+timing-manifest behavior. Generic assertion fixes and specifications belong in that
+package so consumer frameworks cannot accumulate divergent matcher engines.
+
+Velocious adapts package execution with application/configuration startup,
+application/request arguments, database and tenant cleanup, model and resource
+lifecycle, shared-transaction brokers, pending broadcasts, browser and environment
+handling, timeout quarantine, framework profiler spans, and report translation.
+Factories, transaction coordination, browser fixtures, request clients, SQL.js
+setup, profiling context, and runner lifecycle remain here because they depend on
+those framework contracts. Existing Velocious testing imports are narrow
+compatibility facades that delegate or re-export package behavior; framework effects
+run once per package attempt and are never replayed by a second runner.
 
 For terminal shared-resource failures and their effect on later selected tests, see
 [Testing terminal resource lifecycle](testing-terminal-resource-lifecycle.md).
@@ -70,8 +76,13 @@ The compatibility contract is covered by
 The backward-compatible `velocious/build/src/testing/test.js` facade exports the
 package DSL and configuration functions, so facade-first and package-first imports
 declare into the same `defaultTestContext`. Its `tests` export is a deprecated,
-read-only inspection snapshot and never drives execution. Velocious keeps its
-legacy `expect` implementation and awaited `testEvents` in this migration slice.
+read-only inspection snapshot and never drives execution. Its `expect`,
+`arrayContaining`, and `objectContaining` exports are the package functions, while
+the retained `expect.js` and `expect-utils.js` deep paths are package re-exports.
+These shared entrypoints remain browser-safe and must not acquire Node-only imports.
+Velocious owns only the awaited `testEvents` and the framework integrations above.
+Assertion pass/fail compatibility is preserved; when old failure text differed only
+in wording or formatting, the package's documented diagnostic is canonical.
 
 Under Velocious, an ordinary callback receives exactly one `testArgs` object. An
 `it.each` callback receives `(...rowArguments, testArgs)`. The same derived

@@ -1,6 +1,4 @@
-import { afterAll, afterEach, beforeAll, beforeEach, configureTests, defaultTestContext, describe, fdescribe, fit, it, test, waitForEvent, xdescribe, xit, xtest } from "@velocious/testing";
-import Expect from "./expect.js";
-import { arrayContaining, objectContaining } from "./expect-utils.js";
+import { afterAll, afterEach, arrayContaining, beforeAll, beforeEach, configureTests, defaultTestContext, describe, expect, fdescribe, fit, it, objectContaining, test, waitForEvent, xdescribe, xit, xtest } from "@velocious/testing";
 export type PackageSuiteDeclaration = (typeof defaultTestContext.registry.suites)[number];
 export type VelociousTestConfig = {
     /**
@@ -29,16 +27,6 @@ export type VelociousTestConfig = {
  * @property {number} defaultTimeoutSeconds - Default timeout in seconds.
  * @property {number} failedConsoleOutputMaxLines - Maximum failed console lines to print inline.
  */
-/**
- * Runs expect.
- * @param {ReturnType<typeof JSON.parse>} arg - Arg.
- * @returns {Expect} - The expect.
- */
-declare function expect(arg: ReturnType<typeof JSON.parse>): Expect;
-declare namespace expect {
-    export { objectContaining };
-    export { arrayContaining };
-}
 /** Velocious-owned awaited compatibility events. */
 declare const testEvents: import("eventemitter3").EventEmitter<string | symbol, any>;
 /**
