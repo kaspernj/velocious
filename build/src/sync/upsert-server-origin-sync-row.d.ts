@@ -1,8 +1,9 @@
 /**
  * Atomically reconciles and upserts one server-origin sync row by its complete,
  * null-safe logical identity. The identity contains the null actor, resource
- * type/id, and every scope column declared by the sync model. A stable portable
- * advisory lock serializes runtime publication and maintenance/backfill calls;
+ * type/id, and either every scope column declared by the sync model or the
+ * caller's explicit effective scope columns for a supported legacy publisher.
+ * A stable portable advisory lock serializes runtime publication and maintenance/backfill calls;
  * legacy duplicates converge to the newest server sequence, then the lowest
  * immutable id, before the survivor is updated and re-sequenced.
  *
@@ -14,7 +15,7 @@
  * @param {string} [args.actorForeignKeyColumn] - Persisted actor foreign-key column.
  * @param {Record<string, ReturnType<typeof JSON.parse>>} args.attributes - Complete sync-row mutation attributes.
  * @param {ReturnType<typeof JSON.parse>} [args.persistenceModel] - Optional operation-bound model used for row reads/writes.
- * @param {string[]} [args.scopeColumnNames] - Additional persisted scope columns used by deprecated publisher declarations.
+ * @param {string[]} [args.scopeColumnNames] - Exact persisted scope columns overriding model declarations for a supported legacy publisher identity.
  * @param {ReturnType<typeof JSON.parse>} args.syncModel - Static sync model owning scope metadata and the advisory lock.
  * @returns {Promise<ReturnType<typeof JSON.parse>>} Created or reconciled sync row.
  */

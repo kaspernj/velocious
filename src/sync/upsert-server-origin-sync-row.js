@@ -10,8 +10,9 @@ import {declaredSyncScopeAttributes} from "./sync-scope-attributes.js"
 /**
  * Atomically reconciles and upserts one server-origin sync row by its complete,
  * null-safe logical identity. The identity contains the null actor, resource
- * type/id, and every scope column declared by the sync model. A stable portable
- * advisory lock serializes runtime publication and maintenance/backfill calls;
+ * type/id, and either every scope column declared by the sync model or the
+ * caller's explicit effective scope columns for a supported legacy publisher.
+ * A stable portable advisory lock serializes runtime publication and maintenance/backfill calls;
  * legacy duplicates converge to the newest server sequence, then the lowest
  * immutable id, before the survivor is updated and re-sequenced.
  *
@@ -23,7 +24,7 @@ import {declaredSyncScopeAttributes} from "./sync-scope-attributes.js"
  * @param {string} [args.actorForeignKeyColumn] - Persisted actor foreign-key column.
  * @param {Record<string, ReturnType<typeof JSON.parse>>} args.attributes - Complete sync-row mutation attributes.
  * @param {ReturnType<typeof JSON.parse>} [args.persistenceModel] - Optional operation-bound model used for row reads/writes.
- * @param {string[]} [args.scopeColumnNames] - Additional persisted scope columns used by deprecated publisher declarations.
+ * @param {string[]} [args.scopeColumnNames] - Exact persisted scope columns overriding model declarations for a supported legacy publisher identity.
  * @param {ReturnType<typeof JSON.parse>} args.syncModel - Static sync model owning scope metadata and the advisory lock.
  * @returns {Promise<ReturnType<typeof JSON.parse>>} Created or reconciled sync row.
  */
@@ -31,7 +32,7 @@ export async function upsertServerOriginSyncRow({
   actorForeignKeyColumn = "authentication_token_id",
   attributes,
   persistenceModel,
-  scopeColumnNames = [],
+  scopeColumnNames,
   syncModel,
   ...restArgs
 }) {
@@ -60,16 +61,18 @@ export async function upsertServerOriginSyncRow({
     resource_type: attributes.resource_type
   }
   const attributeToColumnName = syncModel.getAttributeNameToColumnNameMap()
-  const scopeColumns = new Set(scopeColumnNames)
+  const scopeColumns = new Set(scopeColumnNames || [])
 
-  for (const scopeAttribute of declaredSyncScopeAttributes(syncModel) || []) {
-    const columnName = attributeToColumnName[scopeAttribute]
+  if (scopeColumnNames === undefined) {
+    for (const scopeAttribute of declaredSyncScopeAttributes(syncModel) || []) {
+      const columnName = attributeToColumnName[scopeAttribute]
 
-    if (!columnName) {
-      throw new Error(`${syncModel.name} declares the sync scope attribute ${scopeAttribute} but has no matching column for it`)
+      if (!columnName) {
+        throw new Error(`${syncModel.name} declares the sync scope attribute ${scopeAttribute} but has no matching column for it`)
+      }
+
+      scopeColumns.add(columnName)
     }
-
-    scopeColumns.add(columnName)
   }
 
   for (const columnName of scopeColumns) {
