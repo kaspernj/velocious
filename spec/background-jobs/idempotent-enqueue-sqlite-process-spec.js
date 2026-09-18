@@ -92,14 +92,18 @@ describe("Background jobs - cross-process SQLite idempotent enqueue", {databaseC
       locales: ["en"]
     })
     const store = new BackgroundJobsStore({configuration})
-    const children = [0, 1].map(() => fork(CHILD_PATH, [], {
-      env: {VELOCIOUS_IDEMPOTENT_ENQUEUE_SQLITE_DIRECTORY: directory},
-      stdio: ["ignore", "inherit", "inherit", "ipc"]
-    }))
+    /** @type {import("node:child_process").ChildProcess[]} */
+    let children = []
 
     try {
       configuration.setCurrent()
       await store.clearAll()
+      // Keep schema setup outside the fixture: only the ownership claim should
+      // race across processes, not child SQLite version/schema initialization.
+      children = [0, 1].map(() => fork(CHILD_PATH, [], {
+        env: {VELOCIOUS_IDEMPOTENT_ENQUEUE_SQLITE_DIRECTORY: directory},
+        stdio: ["ignore", "inherit", "inherit", "ipc"]
+      }))
       await Promise.all(children.map(async (child) => await waitForChildMessage(child, "initialized")))
 
       const readyPromises = children.map(async (child) => await waitForChildMessage(child, "ready-to-claim"))

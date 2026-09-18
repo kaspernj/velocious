@@ -115,7 +115,12 @@ export default class ServerSequenceAllocator {
       // readiness pending for every later allocation in that same transaction;
       // otherwise its table-exists check would incorrectly cache readiness before
       // the outer transaction commits.
-      if (created && db.insideTransaction()) {
+      if (!created) {
+        if (!this._transactionalReadinessPending) this._isReady = true
+        return
+      }
+
+      if (db.insideTransaction()) {
         this._transactionalReadinessPending = true
 
         void db.transactionCompletion().then(() => {
@@ -124,9 +129,7 @@ export default class ServerSequenceAllocator {
           this._isReady = false
           this._transactionalReadinessPending = false
         })
-      }
-
-      if (!db.insideTransaction() || (!created && !this._transactionalReadinessPending)) {
+      } else {
         this._isReady = true
         this._transactionalReadinessPending = false
       }
