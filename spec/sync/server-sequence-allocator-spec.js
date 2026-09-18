@@ -84,7 +84,10 @@ describe("server sequence allocator", {tags: ["dummy"], databaseCleaning: {trans
     // cached readiness pointing at the dropped table.
     await expect(async () => {
       await SyncEntry.transaction(async () => {
-        await allocator.next()
+        const firstValue = await allocator.next()
+        const secondValue = await allocator.next()
+
+        expect(secondValue).toBeGreaterThan(firstValue)
         throw new Error("Rolls back the surrounding transaction")
       })
     }).toThrow("Rolls back the surrounding transaction")

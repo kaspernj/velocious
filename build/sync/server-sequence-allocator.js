@@ -38,6 +38,7 @@ export default class ServerSequenceAllocator {
     this.tableName = tableName
     this._memorySequence = 0
     this._isReady = false
+    this._transactionalReadinessPending = false
     /** @type {Promise<void> | null} */
     this._readyPromise = null
   }
@@ -110,10 +111,28 @@ export default class ServerSequenceAllocator {
       // DDL joins any transaction already open on this connection (the mixin's
       // beforeCreate allocation always runs inside the record save transaction),
       // and on transactional-DDL databases (MSSQL, PostgreSQL, SQLite) a rollback
-      // of that outer transaction removes the just-created table again. Only
-      // cache readiness when the table was not created inside an active
-      // transaction; otherwise the next allocation re-verifies the table.
-      if (!created || !db.insideTransaction()) this._isReady = true
+      // of that outer transaction removes the just-created table again. Keep
+      // readiness pending for every later allocation in that same transaction;
+      // otherwise its table-exists check would incorrectly cache readiness before
+      // the outer transaction commits.
+      if (!created) {
+        if (!this._transactionalReadinessPending) this._isReady = true
+        return
+      }
+
+      if (db.insideTransaction()) {
+        this._transactionalReadinessPending = true
+
+        void db.transactionCompletion().then(() => {
+          // The transaction may have committed or rolled back. Re-check once
+          // on the next allocation, then cache the durable outcome normally.
+          this._isReady = false
+          this._transactionalReadinessPending = false
+        })
+      } else {
+        this._isReady = true
+        this._transactionalReadinessPending = false
+      }
     }, connection)
 
     try {

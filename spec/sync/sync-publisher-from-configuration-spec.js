@@ -277,8 +277,29 @@ describe("sync publisher from configuration", () => {
 
     await publisher.start()
     await triggerLifecycle(PublishedScan, "afterCreate", buildRecord(PublishedScan, SCAN_ID, {id: SCAN_ID, ticketNr: "T-9"}))
+    await triggerLifecycle(PublishedScan, "afterCreate", buildRecord(PublishedScan, SCAN_ID, {id: SCAN_ID, ticketNr: "T-10"}))
 
     expect(syncModel.rows[0].attributes.event_id).toEqual("T-9")
+    expect(broadcasts[0].params).toEqual({eventId: "T-9", resourceType: "PublishedScan"})
+    expect(syncModel.rows[1].attributes.event_id).toEqual("T-10")
+    expect(broadcasts[1].params).toEqual({eventId: "T-10", resourceType: "PublishedScan"})
+  })
+
+  it("preserves a deprecated eventId-only identity when the sync model declares a different scope", async () => {
+    const PublishedScan = buildMetadataModelClass({
+      columns: SCAN_COLUMNS,
+      modelName: "PublishedScan",
+      sync: {publish: {eventId: "ticketNr", serialize: (/** @type {ReturnType<typeof JSON.parse>} */ scan) => ({id: scan.id()})}}
+    })
+    const {broadcasts, publisher, syncModel} = buildBroadcastingPublisher({modelClass: PublishedScan, scopeAttributes: ["accountId"]})
+
+    await publisher.start()
+    await triggerLifecycle(PublishedScan, "afterCreate", buildRecord(PublishedScan, SCAN_ID, {id: SCAN_ID, ticketNr: "T-9"}))
+
+    expect(syncModel.rows).toHaveLength(1)
+    expect(syncModel.rows[0].attributes.event_id).toEqual("T-9")
+    expect("account_id" in syncModel.rows[0].attributes).toEqual(false)
+    expect(broadcasts).toHaveLength(1)
     expect(broadcasts[0].params).toEqual({eventId: "T-9", resourceType: "PublishedScan"})
   })
 
