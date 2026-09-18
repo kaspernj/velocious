@@ -1126,10 +1126,6 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
    */
   getCurrentConnection() {
     this.assertDatabaseAccessAllowed()
-
-    const perTenantConnection = this.testSharedConnectionForCurrentTenant()
-    if (perTenantConnection) return perTenantConnection
-
     const id = this.asyncLocalStorage.getStore()
 
     if (id === undefined) return this.currentFallbackConnectionOrFail()
@@ -1141,6 +1137,12 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
     if (!currentConnection) {
       throw new Error(`Couldn't get current connection from that ID: ${id}`)
+    }
+
+    if (this._testSharedConnectionProviders.size > 0 && !this.connectionMatchesCurrentConfiguration(currentConnection)) {
+      const perTenantConnection = this.testSharedConnectionForCurrentTenant()
+
+      if (perTenantConnection) return perTenantConnection
     }
 
     return currentConnection

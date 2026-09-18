@@ -4,6 +4,7 @@ import dummyConfiguration from "../../dummy/src/config/configuration.js"
 import Dummy from "../../dummy/index.js"
 import {describe, expect, it} from "../../../src/testing/test.js"
 import AsyncTrackedMultiConnection from "../../../src/database/pool/async-tracked-multi-connection.js"
+import DatabaseRecord from "../../../src/database/record/index.js"
 import {createTenantTestConfiguration} from "../../helpers/tenant-test-helpers.js"
 
 function getPool() {
@@ -126,6 +127,62 @@ describe("AsyncTrackedMultiConnection context handling", {databaseCleaning: {tra
               })
             })
           })
+        })
+      })
+    } finally {
+      await cleanup()
+    }
+  })
+
+  it("keeps an explicitly fresh tenant connection context authoritative", async () => {
+    const {cleanup, configuration} = await createTenantTestConfiguration("velocious-pool-fresh-tenant-connection")
+    const pool = configuration.getDatabasePool("projectTenant")
+
+    class FreshContextValue extends DatabaseRecord {}
+
+    FreshContextValue.setTableName("fresh_context_values")
+    FreshContextValue.switchesTenantDatabase("projectTenant")
+    FreshContextValue.registerRecordClass({configuration})
+
+    if (!(pool instanceof AsyncTrackedMultiConnection)) throw new Error("Expected an AsyncTrackedMultiConnection pool")
+
+    try {
+      await configuration.runWithTenant({slug: "alpha"}, async () => {
+        await pool.withConnection(async (providerConnection) => {
+          await providerConnection.query("CREATE TABLE fresh_context_values(id integer PRIMARY KEY AUTOINCREMENT, value varchar(255) NOT NULL)")
+          await FreshContextValue.initializeRecord({configuration, connection: providerConnection})
+
+          const registration = pool.registerTestSharedConnectionProvider({
+            matches: () => configuration.getCurrentTenant()?.slug == "alpha",
+            provider: () => providerConnection
+          })
+
+          try {
+            await configuration.withoutCurrentConnectionContexts(async () => {
+              await pool.withConnection(async (freshConnection) => {
+                expect(freshConnection).not.toBe(providerConnection)
+
+                await freshConnection.startTransaction()
+
+                try {
+                  await freshConnection.query("INSERT INTO fresh_context_values(value) VALUES ('fresh-only')")
+
+                  const currentConnection = pool.getCurrentConnection()
+
+                  expect(currentConnection).toBe(freshConnection)
+                  expect(await currentConnection.query("SELECT value FROM fresh_context_values")).toEqual([{value: "fresh-only"}])
+
+                  const modelValue = await FreshContextValue.findBy({value: "fresh-only"})
+
+                  expect(modelValue?.readAttribute("value")).toEqual("fresh-only")
+                } finally {
+                  await freshConnection.rollbackTransaction()
+                }
+              })
+            })
+          } finally {
+            pool.clearTestSharedConnection(registration)
+          }
         })
       })
     } finally {
