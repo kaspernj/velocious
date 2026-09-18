@@ -1091,6 +1091,36 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
   }
 
   /**
+   * Resolves a test-shared connection from the per-tenant context providers only.
+   * Unlike {@link testSharedConnection}, this never falls back to the pool default or
+   * the per-configuration shared connection, so it is safe to consult from
+   * `getCurrentConnection` without changing behavior when no per-tenant provider
+   * matches (the production case, where the provider list is empty).
+   *
+   * The provider `matches()` callback may inspect the live tenant context, which is
+   * established during route resolution — after the request-runner installs the async
+   * connection context. This is what lets a test run enroll more than one tenant on a
+   * single pool and route each tenant's in-request queries to its own enrolled
+   * connection.
+   * @returns {import("../drivers/base.js").default | undefined} - Per-tenant shared connection.
+   */
+  testSharedConnectionForCurrentTenant() {
+    for (const {matches, provider} of this._testSharedConnectionProviders.values()) {
+      if (!matches()) continue
+
+      const connection = provider()
+
+      if (connection && !this.connectionMatchesCurrentConfiguration(connection)) {
+        throw new Error(`Test shared connection provider for ${this.identifier} returned a connection for a different database configuration`)
+      }
+
+      return connection
+    }
+
+    return undefined
+  }
+
+  /**
    * Runs get current connection.
    * @returns {import("../drivers/base.js").default} - The current connection.
    */
@@ -1107,6 +1137,12 @@ export default class VelociousDatabasePoolAsyncTrackedMultiConnection extends Ba
 
     if (!currentConnection) {
       throw new Error(`Couldn't get current connection from that ID: ${id}`)
+    }
+
+    if (this._testSharedConnectionProviders.size > 0 && !this.connectionMatchesCurrentConfiguration(currentConnection)) {
+      const perTenantConnection = this.testSharedConnectionForCurrentTenant()
+
+      if (perTenantConnection) return perTenantConnection
     }
 
     return currentConnection
