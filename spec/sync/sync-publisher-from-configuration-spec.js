@@ -277,9 +277,12 @@ describe("sync publisher from configuration", () => {
 
     await publisher.start()
     await triggerLifecycle(PublishedScan, "afterCreate", buildRecord(PublishedScan, SCAN_ID, {id: SCAN_ID, ticketNr: "T-9"}))
+    await triggerLifecycle(PublishedScan, "afterCreate", buildRecord(PublishedScan, SCAN_ID, {id: SCAN_ID, ticketNr: "T-10"}))
 
     expect(syncModel.rows[0].attributes.event_id).toEqual("T-9")
     expect(broadcasts[0].params).toEqual({eventId: "T-9", resourceType: "PublishedScan"})
+    expect(syncModel.rows[1].attributes.event_id).toEqual("T-10")
+    expect(broadcasts[1].params).toEqual({eventId: "T-10", resourceType: "PublishedScan"})
   })
 
   it("publishes record attributes with ISO dates through the default serializer when declared publish: true", async () => {

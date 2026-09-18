@@ -18,6 +18,7 @@ export default class ServerSequenceAllocator {
     tableName: string;
     _memorySequence: number;
     _isReady: boolean;
+    _transactionalReadinessPending: boolean;
     /** @type {Promise<void> | null} */
     _readyPromise: Promise<void> | null;
     /**

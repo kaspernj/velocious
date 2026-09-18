@@ -500,7 +500,28 @@ On the client, `syncClient().subscribeUserScope()` declares an empty-conditions 
 
 Mechanics mirror the client tracker: the payload is snapshotted through `serialize(record)` at mutation-callback time (later drift on the record cannot change what was committed), persisting and broadcasting defer through the model connection's `afterCommit` hook (rolled-back mutations never publish), and post-commit failures are reported loudly (`options.onError` or the publisher logger) without poisoning the driver's afterCommit chain. The sync row is upserted through the same shared primitive as the replay service's model-backed persistence (`src/sync/sync-change-fanout.js`): one server-origin row per complete publisher identity, comprising the null actor column (`authentication_token_id` by default — a server-origin change has no device to echo back to), resource type/id, and every persisted scope-partition column. Null actor and scope components participate as identity values; actor/device-origin rows remain distinct, as do otherwise-identical resources in different scopes.
 
-`SyncPublisher` serializes identity reconciliation and upsert under the framework's portable, dedicated-session advisory lock instead of relying on database uniqueness semantics for nullable columns. Concurrent after-commit publications of the same complete identity therefore leave one coherent row, with the last serialized publication's payload and metadata, reassigned and re-sequenced through `advanceServerSequence()` so feed cursors pick the change up again. If an earlier release already left multiple matching server-origin rows, the next publication keeps the row with the greatest server sequence (using its immutable id as a deterministic tie-break), removes only the other complete-identity matches, and applies the new mutation to that survivor. The lock implementation is shared across SQLite, MySQL/MariaDB, PostgreSQL, and Microsoft SQL Server. Persistence still completes before either framework or declared broadcasts, which use the same injected broadcaster shape as the replay service (defaulting to the configuration's channel broadcast). This guarantee requires no additional Sync-model column, unique index, or consumer database migration.
+`SyncPublisher` serializes identity reconciliation and upsert under the framework's portable, dedicated-session advisory lock instead of relying on database uniqueness semantics for nullable columns. Concurrent after-commit publications of the same complete identity therefore leave one coherent row, with the last serialized publication's payload and metadata, reassigned and re-sequenced through `advanceServerSequence()` so feed cursors pick the change up again. If an earlier release already left multiple matching server-origin rows, the next publication keeps the row with the greatest server sequence (using the lowest immutable id as a deterministic tie-break), removes only the other complete-identity matches, and applies the new mutation to that survivor. The lock implementation is shared across SQLite, MySQL/MariaDB, PostgreSQL, and Microsoft SQL Server. Persistence still completes before either framework or declared broadcasts, which use the same injected broadcaster shape as the replay service (defaulting to the configuration's channel broadcast). This guarantee requires no additional Sync-model column, unique index, or consumer database migration.
+
+Maintenance code that must create or repair the same canonical projection row uses the public persistence helper shared by `SyncPublisher`; do not reproduce its lock or check-then-create flow:
+
+```js
+import {upsertServerOriginSyncRow} from "velocious/build/src/sync/upsert-server-origin-sync-row.js"
+
+await upsertServerOriginSyncRow({
+  attributes: {
+    authentication_token_id: null,
+    client_updated_at: new Date(),
+    data: JSON.stringify(snapshot),
+    event_id: event.id(),
+    resource_id: event.id(),
+    resource_type: "Event",
+    sync_type: "update"
+  },
+  syncModel: Sync
+})
+```
+
+`attributes` use persisted column names and must include the actor column as `null`, non-empty `resource_id`/`resource_type`, and every persisted scope column derived from `syncModel.syncScopeAttributes`; incomplete or nested identity values fail before the lock is acquired. The helper holds the same stable dedicated-connection advisory lock as the runtime publisher, deterministically removes complete-identity duplicates, and either creates a sequenced row or updates and re-sequences the survivor. An optional `actorForeignKeyColumn` supports a non-default actor column, and an optional operation-bound `persistenceModel` keeps reads and writes inside an owning database operation while the static `syncModel` continues to own metadata and locking. The publisher alone also supplies `scopeColumnNames` for its deprecated pre-declaration scope forms; new maintenance callers should declare scope attributes on the sync model instead.
 
 Replayed device mutations never double-publish: the framework's routed replay apply marks every record it writes through `markServerApply(record)` for the duration of the replay-owned write — the replay keeps owning its own persistence, stale-guard, and broadcasts, while later server-side writes to the same record instance publish normally again. Code applying already-synced data outside the replay suppresses publishing the same way through the public API (`src/sync/sync-publish-suppression.js`):
 

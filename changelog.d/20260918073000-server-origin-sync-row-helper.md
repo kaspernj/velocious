@@ -1,0 +1,2 @@
+- Expose `upsertServerOriginSyncRow()` as the atomic, null-safe server-origin sync-row persistence boundary shared by `SyncPublisher` and maintenance/backfill callers, including deterministic legacy-duplicate reconciliation and monotonic resequencing.
+- Keep server-sequence table readiness pending across repeated allocations in a transaction that created the table, so rolling that transaction back cannot leave the allocator cached against a missing table.
