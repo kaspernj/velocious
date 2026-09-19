@@ -3,6 +3,7 @@
 import SystemTestBrowserHelper from "system-testing/build/system-test-browser-helper.js"
 import BrowserEnvironmentHandler from "../environment-handlers/browser.js"
 import runFrontendModelEventHookScenario from "./browser-frontend-model-event-hook-scenarios.js"
+import runFrontendTenantDatabasePersistenceScenario from "./browser-frontend-tenant-database-scenarios.js"
 import runUseDatabaseSelectionTransitionScenario from "./browser-use-database-hook-scenarios.js"
 
 const root = document.getElementById("root") || (() => {
@@ -29,6 +30,7 @@ systemTestBrowserHelper.enableOnBrowser()
 Object.assign(globalThis, {velociousBrowserTest: {
   BrowserEnvironmentHandler,
   runFrontendModelEventHookScenario,
+  runFrontendTenantDatabasePersistenceScenario,
   runUseDatabaseSelectionTransitionScenario,
   systemTestBrowserHelper
 }})

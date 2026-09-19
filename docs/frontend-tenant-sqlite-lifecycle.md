@@ -98,3 +98,25 @@ coordinate LRU state between processes, or expose raw pools/drivers. It provides
 the immutable handle consumed by tenant live queries and project-scoped
 `SyncClient`; applications remain responsible for constructing one client per
 active project and placing a scoped pin around unsynced work.
+
+## Repository proof coverage
+
+The browser acceptance spec
+`spec/tenants/frontend-tenant-browser-persistence.browser-spec.js` runs inside
+the repository's Selenium browser harness. It opens two distinct physical
+project databases through the normal SQL.js driver and browser persistence
+selection, performs repeated concurrent writes, flushes and closes both
+handles, then reinitializes them and proves that each database contains only
+its own records. No `getConnection` test injection is used.
+
+The Expo compatibility app applies the same public `Tenant.handle` lifecycle to
+two project databases. Its exported web app executes the proof against SQL.js,
+while native Metro bundles resolve the extensionless SQLite import to the real
+`expo-sqlite` driver. `npm run test:expo` builds all three platform bundles and
+executes the web export; it does not boot an Android/iOS device, so native
+runtime acceptance still belongs in a KVM/device lane.
+
+Focused Node specs separately cover forty-project residency churn, clean LRU
+eviction, dirty/pinned/in-use refusal, fail-closed unresolved identities,
+tenant-filtered live-query invalidations, and tenant-scoped sync queues,
+receipts, conflicts, cursors, pull applies, and reconnect catch-up.

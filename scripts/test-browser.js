@@ -95,6 +95,11 @@ async function buildBrowserTestApp() {
     sourcemap: true
   })
 
+  await fs.copyFile(
+    path.join(rootDir, "node_modules", "sql.js", "dist", "sql-wasm.wasm"),
+    path.join(distDir, "sql-wasm.wasm")
+  )
+
   const html = `<!doctype html>
 <html lang="en">
   <head>

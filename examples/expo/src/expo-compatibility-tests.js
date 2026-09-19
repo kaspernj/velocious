@@ -1,4 +1,4 @@
-import {configuration, ExpoCompatibilityRecord, ExpoCompatibilityTask, SqliteDriver, useCreatedEvent} from "./velocious-runtime"
+import { configuration, ExpoCompatibilityRecord, ExpoCompatibilityTask, runFrontendTenantDatabaseProof, SqliteDriver, useCreatedEvent } from "./velocious-runtime"
 
 function assertEqual(actual, expected, message) {
   if (actual !== expected) {
@@ -10,33 +10,6 @@ function assertTrue(value, message) {
   if (!value) {
     throw new Error(message)
   }
-}
-
-async function testSqliteDriverQueryPath() {
-  const queries = []
-  const connection = {
-    close: async () => {
-      queries.push("close")
-    },
-    query: async (sql) => {
-      queries.push(sql)
-
-      return [{answer: 42}]
-    }
-  }
-  const driver = new SqliteDriver({
-    getConnection: () => connection,
-    name: "expo-compatibility-test",
-    type: "sqlite"
-  }, configuration)
-
-  await driver.connect()
-  const rows = await driver.query("select 42 as answer")
-  await driver.close()
-
-  assertEqual(rows.length, 1, "SQLite driver should return one row")
-  assertEqual(rows[0].answer, 42, "SQLite driver should return query result")
-  assertEqual(queries.join("|"), "select 42 as answer|close", "SQLite driver should use the configured Expo/web connection")
 }
 
 export default async function runExpoCompatibilityTests() {
@@ -52,7 +25,11 @@ export default async function runExpoCompatibilityTests() {
   assertEqual(task.primaryKeyValue(), 123, "Frontend model instance should read primary key")
   assertEqual(task.readAttribute("name"), "Expo", "Frontend model instance should read assigned attributes")
 
-  await testSqliteDriverQueryPath()
+  const tenantProof = await runFrontendTenantDatabaseProof()
 
-  return "configuration, frontend models, hooks, and SQLite query path passed"
+  assertTrue(tenantProof.distinctDatabaseIdentities, "Project replicas should use distinct physical database identities")
+  assertEqual(tenantProof.alphaNames.join("|"), "alpha-only", "Alpha should reload only alpha records")
+  assertEqual(tenantProof.betaNames.join("|"), "beta-only", "Beta should reload only beta records")
+
+  return "configuration, frontend models, hooks, and two real tenant SQLite replicas passed"
 }
