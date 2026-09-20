@@ -1,0 +1,1 @@
+Added a reusable observable sync coordinator with single-flight replay/realtime/pull ordering, bounded injected retry scheduling, deterministic lifecycle teardown, privacy-safe conflict diagnostics, and explicit conflict resolution.
