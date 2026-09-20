@@ -880,6 +880,26 @@ describe("sync client", () => {
     expect(TrackedScan.lifecycleCallbacks.afterDestroy.length).toEqual(0)
   })
 
+  it("keeps start followed immediately by stop linearizable and reusable", async () => {
+    const TrackedScan = buildMetadataModelClass({columns: SCAN_COLUMNS, modelName: "TrackedScan", sync: {track: true}})
+    const harness = buildHarness({modelClasses: [TrackedScan]})
+
+    const starting = harness.client.start()
+    const stopping = harness.client.stop()
+
+    await Promise.all([starting, stopping])
+
+    expect(TrackedScan.lifecycleCallbacks.afterCreate || []).toHaveLength(0)
+    expect(TrackedScan.lifecycleCallbacks.afterUpdate || []).toHaveLength(0)
+    expect(TrackedScan.lifecycleCallbacks.afterDestroy || []).toHaveLength(0)
+
+    await harness.client.start()
+    expect(TrackedScan.lifecycleCallbacks.afterCreate).toHaveLength(1)
+
+    await harness.client.stop()
+    expect(TrackedScan.lifecycleCallbacks.afterCreate).toHaveLength(0)
+  })
+
   it("aborts an in-flight pull, waits for quiescence and resets only selected scope state", async () => {
     const harness = buildHarness()
     const selectedScope = {conditions: {partner_id: 5}, resourceType: "Ticket"}

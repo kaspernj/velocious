@@ -218,6 +218,35 @@ describe("sync coordinator", () => {
     expect(harness.calls).toContain("client:pull")
   })
 
+  it("preserves one manual rerun requested before an offline cycle drains", async () => {
+    const firstOnlineCheck = deferred()
+    const firstOnlineCheckStarted = deferred()
+    let onlineCheckCount = 0
+    const harness = buildHarness({
+      onlineCheck: async () => {
+        onlineCheckCount += 1
+        if (onlineCheckCount === 1) {
+          firstOnlineCheckStarted.resolve()
+
+          return await firstOnlineCheck.promise
+        }
+
+        return true
+      }
+    })
+
+    await harness.coordinator.start()
+    await firstOnlineCheckStarted.promise
+    const retry = harness.coordinator.retry()
+
+    firstOnlineCheck.resolve(false)
+    await retry
+
+    expect(onlineCheckCount).toEqual(2)
+    expect(harness.calls.filter((call) => call === "client:replay")).toHaveLength(1)
+    expect(harness.coordinator.status().state).toEqual("idle")
+  })
+
   it("uses bounded exponential retry for transient failures", async () => {
     const harness = buildHarness({
       classifyError: () => ({code: "temporarily_unavailable", retryable: true}),

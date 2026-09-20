@@ -67,6 +67,7 @@ export default class SyncClient {
     _lifecycleTransitionCount: number;
     /** @type {Promise<void>} */
     _lifecycleTransitionPromise: Promise<void>;
+    _trackingGeneration: number;
     _started: boolean;
     /**
      * Builds the sync client by deriving everything from the app's Velocious

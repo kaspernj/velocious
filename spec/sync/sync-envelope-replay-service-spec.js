@@ -254,6 +254,57 @@ describe("sync envelope replay service", () => {
     expect(existingSync.calls).toEqual([])
   })
 
+  it("deduplicates an exact retry from a durable receipt after the feed row advances", async () => {
+    const receipts = new Map()
+    let applyCount = 0
+    let existingSync = null
+    const service = new TestSyncEnvelopeReplayService({
+      authenticateReplay: async () => ({actor: {id: "actor-1"}, authenticated: true}),
+      applyReplayMutation: async ({mutation}) => {
+        applyCount += 1
+        mutation.data.serverStamped = "must not change the client intent fingerprint"
+
+        return {record: null}
+      },
+      findExistingReplaySync: async () => existingSync,
+      persistReplayMutation: async () => {}
+    }, {
+      replayReceiptStore: {
+        find: async ({mutation}) => receipts.get(mutation.clientMutationId) ?? null,
+        save: async ({mutation, receipt}) => {
+          receipts.set(mutation.clientMutationId, receipt)
+        }
+      }
+    })
+    const sync = {
+      clientMutationId: "client-mutation-1",
+      clientUpdatedAt: "2026-06-25T10:00:00.000Z",
+      data: {name: "Offline intent"},
+      id: "018ff6a1-0000-7000-8000-000000000012",
+      resourceId: "task-1",
+      resourceType: "Task",
+      syncType: "update"
+    }
+
+    expect(await service.replay({syncs: [sync]})).toEqual({
+      syncs: [{id: sync.id, syncState: "successful"}]
+    })
+
+    existingSync = {
+      clientUpdatedAt: () => new Date("2026-06-25T11:00:00.000Z"),
+      data: () => JSON.stringify({name: "Later authority"}),
+      syncType: () => "update"
+    }
+
+    expect(await service.replay({syncs: [sync]})).toEqual({
+      syncs: [{id: sync.id, serverVersion: null, syncState: "duplicate"}]
+    })
+    expect(await service.replay({syncs: [{...sync, data: {name: "Changed reuse"}}]})).toEqual({
+      syncs: [{id: sync.id, reason: "sync-client-mutation-id-reused", syncState: "failed"}]
+    })
+    expect(applyCount).toEqual(1)
+  })
+
   it("authenticates replay actors through a configured token model", async () => {
     const tokenRecord = {id: () => "token-row-1"}
     /** @type {Array<Record<string, ReturnType<typeof JSON.parse>>>} */

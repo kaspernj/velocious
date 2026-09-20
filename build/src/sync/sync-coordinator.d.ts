@@ -167,9 +167,9 @@ export default class SyncCoordinator {
     /**
      * Runs one replay, realtime-subscribe, and pull cycle.
      * @param {number} generation - Owning generation.
-     * @returns {Promise<boolean>} - Whether an immediate queued rerun may proceed.
+     * @returns {Promise<void>} - Resolves after this cycle settles.
      */
-    _runCycle(generation: number): Promise<boolean>;
+    _runCycle(generation: number): Promise<void>;
     /**
      * Publishes a classified failure and owns its bounded retry timer.
      * @param {Error} error - Cycle failure.

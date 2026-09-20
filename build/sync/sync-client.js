@@ -202,6 +202,7 @@ export default class SyncClient {
     this._lifecycleTransitionCount = 0
     /** @type {Promise<void>} */
     this._lifecycleTransitionPromise = Promise.resolve()
+    this._trackingGeneration = 0
     this._started = false
   }
 
@@ -214,7 +215,10 @@ export default class SyncClient {
    * @returns {Promise<void>}
    */
   async start() {
+    const trackingGeneration = this._trackingGeneration
+
     await this._lifecycleTransitionPromise
+    if (trackingGeneration !== this._trackingGeneration) return
     this.assertTenantReady()
     if (this._started) return
 
@@ -259,6 +263,8 @@ export default class SyncClient {
    * @returns {Promise<void>}
    */
   stop(options = {}) {
+    this._trackingGeneration += 1
+
     for (const {callback, callbackName, modelClass} of this._trackedCallbacks) {
       modelClass.unregisterLifecycleCallback(callbackName, callback)
     }

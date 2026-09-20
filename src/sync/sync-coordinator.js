@@ -375,16 +375,16 @@ export default class SyncCoordinator {
   async _drain(generation) {
     while (this._rerunRequested && this._ownsGeneration(generation)) {
       this._rerunRequested = false
-      const completed = await this._runCycle(generation)
+      await this._runCycle(generation)
 
-      if (!completed) this._rerunRequested = false
+      if (this._rerunRequested) this._clearRetryTimer()
     }
   }
 
   /**
    * Runs one replay, realtime-subscribe, and pull cycle.
    * @param {number} generation - Owning generation.
-   * @returns {Promise<boolean>} - Whether an immediate queued rerun may proceed.
+   * @returns {Promise<void>} - Resolves after this cycle settles.
    */
   async _runCycle(generation) {
     try {
@@ -398,7 +398,7 @@ export default class SyncCoordinator {
         this._publish({...this._status, ...inspection, failure: null, nextRetryAt: null, state: "offline"})
         await this._persistStatus(generation)
 
-        return false
+        return
       }
 
       this._publish({...this._status, nextRetryAt: null, state: "syncing"})
@@ -425,13 +425,11 @@ export default class SyncCoordinator {
       await this._persistStatus(generation)
       this._attempt = 0
 
-      return true
+      return
     } catch (error) {
-      if (!this._ownsGeneration(generation) || this.isLifecycleAbort(error) || this.syncClient.isLifecycleAbort(error)) return false
+      if (!this._ownsGeneration(generation) || this.isLifecycleAbort(error) || this.syncClient.isLifecycleAbort(error)) return
 
       await this._handleFailure(/** @type {Error} */ (error), generation)
-
-      return false
     }
   }
 
