@@ -72,12 +72,13 @@ export default class SyncApiClient {
    * @param {number} [args.batchSize] - Batch size.
    * @param {import("./sync-client-types.js").SyncClientConflictTrackingConfig} args.conflictTracking - Tracking configuration.
    * @param {(payload: {authenticationToken: string, syncs: Array<Record<string, ReturnType<typeof JSON.parse>>>}, options?: {signal?: AbortSignal}) => Promise<SyncReplayResponse>} args.postReplay - Transport boundary.
+   * @param {(args: {record: import("./local-mutation-log.js").LocalMutationLogRecord, result: SyncReplayItem}) => Promise<void>} [args.applyConflict] - Applies authoritative conflict state to the local replica before preserving the rejected intent.
    * @param {(identity: string) => number} args.remoteGeneration - Current remote generation.
    * @param {string} args.resourceType - Resource whose log records should drain.
    * @param {AbortSignal} [args.signal] - Lifecycle cancellation signal.
    * @returns {Promise<void>} Resolves when no ready intent remains.
    */
-  static async replayConflictTrackedSyncs({authenticationToken, batchSize, conflictTracking, postReplay, remoteGeneration, resourceType, signal}) {
+  static async replayConflictTrackedSyncs({applyConflict, authenticationToken, batchSize, conflictTracking, postReplay, remoteGeneration, resourceType, signal}) {
     const maxBatchSize = this.normalizedBatchSize(batchSize)
 
     while (true) {
@@ -109,6 +110,11 @@ export default class SyncApiClient {
         if (!result) throw new Error(`Sync response missing result for mutation ${group[0].mutation.clientMutationId}`)
         if (!["successful", "duplicate", "conflict", "failed", "rejected"].includes(result.syncState)) {
           throw new Error(`Invalid sync state returned for mutation ${group[0].mutation.clientMutationId}: ${result.syncState}`)
+        }
+
+        if (result.syncState === "conflict" && applyConflict) {
+          await applyConflict({record: group[0], result})
+          throwIfSyncAborted(signal)
         }
 
         for (const record of group) {

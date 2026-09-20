@@ -39,6 +39,8 @@ export default class SyncClient {
     _scopeStore: import("./sync-scope-store.js").default | null;
     /** @type {Promise<void> | null} */
     _scheduledReplay: Promise<void> | null;
+    /** @type {((reason: "mutation" | "realtime") => Promise<void>) | null} */
+    _coordinatorTrigger: ((reason: "mutation" | "realtime") => Promise<void>) | null;
     /** @type {Record<string, import("./sync-api-client-types.js").SyncResourceConfig> | null} */
     _pullResourceConfigs: Record<string, import("./sync-api-client-types.js").SyncResourceConfig> | null;
     /** @type {Array<{callback: (record: ReturnType<typeof JSON.parse>) => Promise<void> | void, callbackName: "afterCreate" | "afterUpdate" | "afterDestroy" | "beforeUpdate" | "beforeDestroy", modelClass: ReturnType<typeof JSON.parse>}>} */
@@ -255,6 +257,20 @@ export default class SyncClient {
      */
     setCurrent(): void;
     /**
+     * Attaches the one reusable coordinator that owns mutation and reconnect
+     * cycles for this client. The returned detach only removes the same owner.
+     * @param {(reason: "mutation" | "realtime") => Promise<void>} trigger - Coordinator trigger.
+     * @returns {() => void} Idempotent detach callback.
+     */
+    attachCoordinator(trigger: (reason: "mutation" | "realtime") => Promise<void>): () => void;
+    /**
+     * Routes framework-owned work through the attached coordinator, or returns
+     * null so the legacy direct scheduling owner may run.
+     * @param {"mutation" | "realtime"} reason - Trigger reason.
+     * @returns {Promise<void> | null} Coordinator flight, or null without an owner.
+     */
+    requestCoordinatorSync(reason: "mutation" | "realtime"): Promise<void> | null;
+    /**
      * Returns the app's current sync client.
      * @returns {SyncClient} Current sync client.
      */
@@ -355,6 +371,19 @@ export default class SyncClient {
      */
     subscribeUserScope(): Promise<void>;
     /**
+     * Declares and activates the server-enumerated user scope without starting
+     * realtime or pulling. Use this from SyncCoordinator.prepare() so the
+     * coordinator remains the sole network ordering owner.
+     * @returns {Promise<void>}
+     */
+    activateUserScope(): Promise<void>;
+    /**
+     * Activates the user scope under the current lifecycle generation.
+     * @param {AbortSignal} signal - Lifecycle cancellation signal.
+     * @returns {Promise<void>} - Resolves after the scope is durable.
+     */
+    _activateUserScope(signal: AbortSignal): Promise<void>;
+    /**
      * Declares and activates the user scope for every pullable resource, then
      * subscribes realtime and pulls.
      * @param {AbortSignal} signal - Lifecycle cancellation signal.
@@ -447,6 +476,36 @@ export default class SyncClient {
      * @returns {Promise<void>}
      */
     _replayPending(signal: AbortSignal): Promise<void>;
+    /**
+     * Applies an authoritative serverModel returned by a conflict through the
+     * same tenant-bound, tracking-suppressed applier used by pull/realtime.
+     * A conflict result without serverModel has no authoritative state to apply
+     * and remains diagnostic-only.
+     * @param {{record: import("./local-mutation-log.js").LocalMutationLogRecord, resourceType: string, result: import("./sync-api-client-types.js").SyncReplayItem}} args - Conflict result.
+     * @returns {Promise<void>}
+     */
+    applyConflictReplayResult({ record, resourceType, result }: {
+        record: import("./local-mutation-log.js").LocalMutationLogRecord;
+        resourceType: string;
+        result: import("./sync-api-client-types.js").SyncReplayItem;
+    }): Promise<void>;
+    /**
+     * Returns queue counts and privacy-safe conflicts for coordinator/UI status.
+     * Full local/server payloads remain only in the durable mutation log.
+     * @returns {Promise<import("./sync-coordinator-types.js").SyncClientInspection>} Durable sync state.
+     */
+    inspectSyncState(): Promise<import("./sync-coordinator-types.js").SyncClientInspection>;
+    /**
+     * Resolves a durable conflict on its declared resource log. Retry-local is
+     * scheduled through the current coordinator when attached.
+     * @param {{recordId: string, resolution: "keep-server" | "retry-local", resourceType: string}} args - Resolution.
+     * @returns {Promise<import("./local-mutation-log.js").LocalMutationLogRecord>} - Resolved durable record.
+     */
+    resolveConflict({ recordId, resolution, resourceType }: {
+        recordId: string;
+        resolution: "keep-server" | "retry-local";
+        resourceType: string;
+    }): Promise<import("./local-mutation-log.js").LocalMutationLogRecord>;
     /**
      * Records an authoritative remote observation so an in-flight acknowledgement
      * cannot rebase a successor across that observation.

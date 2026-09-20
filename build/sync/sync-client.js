@@ -180,6 +180,8 @@ export default class SyncClient {
     this._scopeStore = scopeStore || null
     /** @type {Promise<void> | null} */
     this._scheduledReplay = null
+    /** @type {((reason: "mutation" | "realtime") => Promise<void>) | null} */
+    this._coordinatorTrigger = null
     /** @type {Record<string, import("./sync-api-client-types.js").SyncResourceConfig> | null} */
     this._pullResourceConfigs = null
     /** @type {Array<{callback: (record: ReturnType<typeof JSON.parse>) => Promise<void> | void, callbackName: "afterCreate" | "afterUpdate" | "afterDestroy" | "beforeUpdate" | "beforeDestroy", modelClass: ReturnType<typeof JSON.parse>}>} */
@@ -640,6 +642,33 @@ export default class SyncClient {
   }
 
   /**
+   * Attaches the one reusable coordinator that owns mutation and reconnect
+   * cycles for this client. The returned detach only removes the same owner.
+   * @param {(reason: "mutation" | "realtime") => Promise<void>} trigger - Coordinator trigger.
+   * @returns {() => void} Idempotent detach callback.
+   */
+  attachCoordinator(trigger) {
+    if (typeof trigger !== "function") throw new Error("SyncClient coordinator trigger must be a function")
+    if (this._coordinatorTrigger) throw new Error("SyncClient already has an attached coordinator")
+
+    this._coordinatorTrigger = trigger
+
+    return () => {
+      if (this._coordinatorTrigger === trigger) this._coordinatorTrigger = null
+    }
+  }
+
+  /**
+   * Routes framework-owned work through the attached coordinator, or returns
+   * null so the legacy direct scheduling owner may run.
+   * @param {"mutation" | "realtime"} reason - Trigger reason.
+   * @returns {Promise<void> | null} Coordinator flight, or null without an owner.
+   */
+  requestCoordinatorSync(reason) {
+    return this._coordinatorTrigger ? this._coordinatorTrigger(reason) : null
+  }
+
+  /**
    * Returns the app's current sync client.
    * @returns {SyncClient} Current sync client.
    */
@@ -893,6 +922,26 @@ export default class SyncClient {
   }
 
   /**
+   * Declares and activates the server-enumerated user scope without starting
+   * realtime or pulling. Use this from SyncCoordinator.prepare() so the
+   * coordinator remains the sole network ordering owner.
+   * @returns {Promise<void>}
+   */
+  async activateUserScope() {
+    await this._runLifecycleWork(async (signal) => await this._activateUserScope(signal))
+  }
+
+  /**
+   * Activates the user scope under the current lifecycle generation.
+   * @param {AbortSignal} signal - Lifecycle cancellation signal.
+   * @returns {Promise<void>} - Resolves after the scope is durable.
+   */
+  async _activateUserScope(signal) {
+    await this.scopeStore().findOrCreateScope(await this.userScope())
+    this._throwIfLifecycleAborted(signal)
+  }
+
+  /**
    * Declares and activates the user scope for every pullable resource, then
    * subscribes realtime and pulls.
    * @param {AbortSignal} signal - Lifecycle cancellation signal.
@@ -902,8 +951,7 @@ export default class SyncClient {
     this._userScopeState = "subscribing"
 
     try {
-      await this.scopeStore().findOrCreateScope(await this.userScope())
-      this._throwIfLifecycleAborted(signal)
+      await this._activateUserScope(signal)
 
       await this.subscribeRealtime()
       this._throwIfLifecycleAborted(signal)
@@ -1087,6 +1135,7 @@ export default class SyncClient {
         if (!resourceConfig.conflictTracking) continue
 
         await SyncApiClient.replayConflictTrackedSyncs({
+          applyConflict: async ({record, result}) => await this.applyConflictReplayResult({record, result, resourceType}),
           authenticationToken: await this.config.authenticationToken(),
           batchSize: this.config.batchSize,
           conflictTracking: resourceConfig.conflictTracking,
@@ -1108,6 +1157,97 @@ export default class SyncClient {
     }))
 
     this._throwIfLifecycleAborted(signal)
+  }
+
+  /**
+   * Applies an authoritative serverModel returned by a conflict through the
+   * same tenant-bound, tracking-suppressed applier used by pull/realtime.
+   * A conflict result without serverModel has no authoritative state to apply
+   * and remains diagnostic-only.
+   * @param {{record: import("./local-mutation-log.js").LocalMutationLogRecord, resourceType: string, result: import("./sync-api-client-types.js").SyncReplayItem}} args - Conflict result.
+   * @returns {Promise<void>}
+   */
+  async applyConflictReplayResult({record, resourceType, result}) {
+    const conflict = result.conflict
+
+    if (!conflict || !Object.hasOwn(conflict, "serverModel")) return
+
+    const serverModel = conflict.serverModel
+
+    if (serverModel !== null && (typeof serverModel !== "object" || Array.isArray(serverModel))) {
+      throw new Error(`Sync conflict serverModel for ${resourceType} must be an object or null`)
+    }
+
+    const resourceId = record.mutation.payload?.resourceId
+
+    if (typeof resourceId !== "string" || resourceId.length === 0) throw new Error(`Sync conflict for ${resourceType} is missing resourceId`)
+
+    const sync = SyncApiClient.syncEnvelopeFromPayload({
+      data: serverModel,
+      resourceId,
+      resourceType,
+      syncType: serverModel === null ? "delete" : "update"
+    })
+
+    await this.remoteApplySync({source: "conflict server version"})(sync)
+  }
+
+  /**
+   * Returns queue counts and privacy-safe conflicts for coordinator/UI status.
+   * Full local/server payloads remain only in the durable mutation log.
+   * @returns {Promise<import("./sync-coordinator-types.js").SyncClientInspection>} Durable sync state.
+   */
+  async inspectSyncState() {
+    return await this._runLifecycleWork(async (signal) => {
+      this._throwIfLifecycleAborted(signal)
+      let pendingCount = 0
+      let rejectedCount = 0
+      /** @type {import("./sync-coordinator-types.js").SyncConflictDiagnostic[]} */
+      const conflicts = []
+
+      for (const [resourceType, resourceConfig] of Object.entries(this.config.resources)) {
+        if (!resourceConfig.conflictTracking) continue
+
+        for (const record of await resourceConfig.conflictTracking.mutationLog.records()) {
+          if (record.mutation.model !== resourceType) continue
+          if (["pending", "applied-locally", "peer-applied"].includes(record.status)) pendingCount += 1
+          if (record.status === "rejected") rejectedCount += 1
+          if (record.status === "conflict") conflicts.push(syncConflictDiagnostic(record))
+        }
+        this._throwIfLifecycleAborted(signal)
+      }
+
+      pendingCount += await this.withTenantOperation(async (operation) => {
+        const syncModel = operation ? operation.modelClass(this.config.syncModel) : this.config.syncModel
+        const pendingRows = await syncModel.preload({resource: true}).where({state: "pending"}).order("created_at").toArray()
+
+        return pendingRows.length
+      })
+      this._throwIfLifecycleAborted(signal)
+
+      return {conflicts, pendingCount, rejectedCount}
+    })
+  }
+
+  /**
+   * Resolves a durable conflict on its declared resource log. Retry-local is
+   * scheduled through the current coordinator when attached.
+   * @param {{recordId: string, resolution: "keep-server" | "retry-local", resourceType: string}} args - Resolution.
+   * @returns {Promise<import("./local-mutation-log.js").LocalMutationLogRecord>} - Resolved durable record.
+   */
+  async resolveConflict({recordId, resolution, resourceType}) {
+    return await this._runLifecycleWork(async (signal) => {
+      const conflictTracking = this.config.resources[resourceType]?.conflictTracking
+
+      if (!conflictTracking) throw new Error(`No conflict-tracked sync resource configured for: ${resourceType}`)
+
+      const record = await conflictTracking.mutationLog.resolveConflict({id: recordId, resolution})
+
+      this._throwIfLifecycleAborted(signal)
+      if (resolution === "retry-local") this.scheduleReplay()
+
+      return record
+    })
   }
 
   /**
@@ -1192,6 +1332,13 @@ export default class SyncClient {
    * @returns {void}
    */
   scheduleReplay() {
+    const coordinatorRun = this.requestCoordinatorSync("mutation")
+
+    if (coordinatorRun) {
+      this._scheduledReplay = coordinatorRun
+      return
+    }
+
     this._scheduledReplay = (async () => {
       try {
         await this.replayPending()
@@ -1412,6 +1559,41 @@ export default class SyncClient {
     this.assertRecordOwnership(record)
     operation.bindRecord(record)
   }
+}
+
+/**
+ * Builds privacy-safe conflict metadata from a durable record.
+ * @param {import("./local-mutation-log.js").LocalMutationLogRecord} record - Durable conflict record.
+ * @returns {import("./sync-coordinator-types.js").SyncConflictDiagnostic} - Safe diagnostic.
+ */
+function syncConflictDiagnostic(record) {
+  const conflict = record.syncResult?.conflict
+  const conflictObject = conflict && !(conflict instanceof Date) && typeof conflict === "object" && !Array.isArray(conflict)
+    ? /** @type {Record<string, unknown>} */ (conflict)
+    : {}
+  const resourceId = record.mutation.payload?.resourceId
+
+  if (typeof resourceId !== "string" || resourceId.length === 0) throw new Error(`Sync conflict ${record.id} is missing a safe resourceId`)
+
+  return {
+    baseVersion: safeConflictVersion(conflictObject.baseVersion ?? record.mutation.baseVersion ?? null),
+    clientMutationId: record.mutation.clientMutationId,
+    localVersion: safeConflictVersion(conflictObject.localVersion ?? null),
+    recordId: record.id,
+    resourceId,
+    resourceType: record.mutation.model,
+    serverVersion: safeConflictVersion(conflictObject.serverVersion ?? null),
+    versionAttribute: typeof conflictObject.versionAttribute === "string" ? conflictObject.versionAttribute : null
+  }
+}
+
+/**
+ * Restricts diagnostic versions to safe scalar values.
+ * @param {unknown} value - Version candidate.
+ * @returns {string | number | null} - Safe scalar version.
+ */
+function safeConflictVersion(value) {
+  return value === null || typeof value === "string" || typeof value === "number" ? value : null
 }
 
 /**

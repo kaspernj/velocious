@@ -400,6 +400,15 @@ export default class SyncRealtimeBridge {
     if (generation !== this._generation) return
     if (this.realtimeConfiguration()?.pullOnReconnect === false) return
 
+    const coordinatorRun = this.syncClient.requestCoordinatorSync("realtime")
+
+    if (coordinatorRun) {
+      this._scheduledPull ||= coordinatorRun.finally(() => {
+        this._scheduledPull = null
+      })
+      return
+    }
+
     this._scheduledPull ||= (async () => {
       try {
         await this.syncClient.pull()

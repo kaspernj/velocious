@@ -195,6 +195,18 @@ export default class LocalMutationLog {
         mutation: import("./device-identity.js").SyncMutation;
     }): Promise<LocalMutationLogRecord>;
     /**
+     * Resolves a durable conflict explicitly. Keeping the server acknowledges the
+     * preserved local intent without replaying it; retrying local intent rebases
+     * it onto the conflict's authoritative serverVersion and returns it to the
+     * pending queue. The prior conflict result stays attached as audit metadata.
+     * @param {{id: string, resolution: "keep-server" | "retry-local"}} args - Resolution.
+     * @returns {Promise<LocalMutationLogRecord>} Resolved record.
+     */
+    resolveConflict({ id, resolution }: {
+        id: string;
+        resolution: "keep-server" | "retry-local";
+    }): Promise<LocalMutationLogRecord>;
+    /**
      * Prunes terminal records that are no longer needed for replay dependencies.
      * @param {object} [args] - Compaction options.
      * @param {number} [args.maxTerminalRecords] - Maximum terminal records to retain.
