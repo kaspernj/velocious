@@ -360,7 +360,11 @@ export default class SyncCoordinator {
     await this.syncClient.resolveConflict(args)
     this._clearRetryTimer()
     this._attempt = 0
-    await this.trigger("conflict-resolution")
+    if (args.resolution === "retry-local") {
+      await this.syncClient.waitForScheduledReplay()
+    } else {
+      await this.trigger("conflict-resolution")
+    }
   }
 
   /**
@@ -384,7 +388,10 @@ export default class SyncCoordinator {
    */
   async _runCycle(generation) {
     try {
-      if (!await this.syncClient.isOnline()) {
+      const online = await this.syncClient.isOnline()
+
+      this._assertActive(generation)
+      if (!online) {
         const inspection = await this.syncClient.inspectSyncState()
 
         this._assertActive(generation)
@@ -447,21 +454,24 @@ export default class SyncCoordinator {
         await this.statusStore.save(this._status)
         this._assertActive(generation)
       } catch (persistenceError) {
+        this._assertActive(generation)
         classified = normalizeErrorClassification(this.classifyError(/** @type {Error} */ (persistenceError)))
         failureStatus = failureStatusFor({attempt: this._attempt, classified, failedAt, retryPolicy: this.retryPolicy, status: this._status})
         this._publish(failureStatus.status)
       }
     }
 
-    if (failureStatus.delayMs === null) return
+    if (failureStatus.delayMs !== null) {
+      this._assertActive(generation)
+      this._retryTimer = this.scheduler.setTimeout(() => {
+        this._retryTimer = null
+        if (!this._ownsGeneration(generation)) return
 
-    this._assertActive(generation)
-    this._retryTimer = this.scheduler.setTimeout(() => {
-      this._retryTimer = null
-      if (!this._ownsGeneration(generation)) return
+        void this.trigger("automatic-retry")
+      }, failureStatus.delayMs)
+    }
 
-      void this.trigger("automatic-retry")
-    }, failureStatus.delayMs)
+    this.syncClient.reportError(error)
   }
 
   /**
@@ -720,9 +730,11 @@ function requireCoordinatorClient(client) {
   requireFunction(client.isLifecycleAbort, "syncClient.isLifecycleAbort")
   requireFunction(client.isOnline, "syncClient.isOnline")
   requireFunction(client.pull, "syncClient.pull")
+  requireFunction(client.reportError, "syncClient.reportError")
   requireFunction(client.replayPending, "syncClient.replayPending")
   requireFunction(client.resolveConflict, "syncClient.resolveConflict")
   requireFunction(client.start, "syncClient.start")
   requireFunction(client.stop, "syncClient.stop")
   requireFunction(client.subscribeRealtime, "syncClient.subscribeRealtime")
+  requireFunction(client.waitForScheduledReplay, "syncClient.waitForScheduledReplay")
 }

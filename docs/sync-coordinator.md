@@ -67,7 +67,7 @@ Mutation queueing and realtime readiness/resume events route back through the at
 
 `start()` is idempotent. It attaches the client trigger, subscribes to connectivity, starts mutation tracking, runs `prepare`, and schedules the first cycle without awaiting that network work, so cached UI reads are never gated on network-only loading. `waitForCurrentRun()` exists for deterministic tests and controlled shutdown checks; product rendering should observe status instead.
 
-`stop()` is also idempotent. It generation-fences late work, cancels retry timers, removes connectivity/client triggers, aborts and drains `SyncClient`, and then runs the teardown returned by `prepare`. A failed partial start uses the same cleanup ownership. A stopped or replaced generation cannot publish status after a later lifecycle starts.
+`stop()` is also idempotent. It generation-fences late work, including the continuation after an asynchronous connectivity check, cancels retry timers, removes connectivity/client triggers, aborts and drains `SyncClient`, and then runs the teardown returned by `prepare`. A failed partial start uses the same cleanup ownership. A stopped or replaced generation cannot publish status or begin replay after a later lifecycle starts.
 
 ## Observable status
 
@@ -90,6 +90,8 @@ Full conflict payloads remain durable in `LocalMutationLog` for the app's explic
 
 Automatic retry defaults to four total consecutive attempts with exponential delays from 1 second up to 30 seconds. Configure `{initialDelayMs, maxDelayMs, maxAttempts}` under `retry`. `classifyError(error)` decides whether a failure is retryable and must return a stable, safe code; it must not return secrets or raw server payloads.
 
+Classification controls observable status and retry policy; it does not consume the original failure. Every unexpected replay, realtime, pull, inspection, or status-store failure is also passed once to the `SyncClient` background-error reporter (`sync.client.onError` when configured). An ordinary offline gate or a successfully inspected durable conflict is status, not a reported framework failure.
+
 The optional connectivity adapter is notification-only. `SyncClient.isOnline()` remains the authoritative check at the start of each cycle. Going offline cancels a retry timer and publishes `offline`; returning online resets the consecutive-attempt counter and triggers catch-up. `retry()` clears current backoff and requests a manual cycle through the same single-flight path. Retry never sleeps inside sync work.
 
 Tests can inject `{setTimeout, clearTimeout}` through `scheduler` and a deterministic `now()` clock. Advance the fake scheduler explicitly; do not use elapsed-time sleeps.
@@ -108,7 +110,7 @@ await coordinator.resolveConflict({
 })
 ```
 
-`keep-server` acknowledges the preserved intent only after that user/application decision. `retry-local` rebases the mutation onto the conflict's authoritative `serverVersion`, returns it to pending, and replays through the coordinator. A missing version or non-conflict record fails loudly.
+`keep-server` acknowledges the preserved intent only after that user/application decision and asks the coordinator to refresh status. `retry-local` rebases the mutation onto the conflict's authoritative `serverVersion`, returns it to pending, and lets `SyncClient` request exactly one immediate coordinator cycle. A missing version or non-conflict record fails loudly.
 
 ## Scope and non-goals
 

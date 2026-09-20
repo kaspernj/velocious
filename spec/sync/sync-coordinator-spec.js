@@ -47,6 +47,7 @@ function buildScheduler() {
 /** Builds a coordinator harness with explicit fake owners. @param {Record<string, ReturnType<typeof JSON.parse>>} [options] - Overrides. @returns {ReturnType<typeof JSON.parse>} Harness. */
 function buildHarness(options = {}) {
   const calls = []
+  const reports = []
   const scheduler = buildScheduler()
   const connectivity = {
     listener: null,
@@ -76,7 +77,7 @@ function buildHarness(options = {}) {
     },
     inspectSyncState: async () => syncState,
     isLifecycleAbort: () => false,
-    isOnline: async () => connectivity.online,
+    isOnline: async () => options.onlineCheck ? await options.onlineCheck() : connectivity.online,
     pull: async () => { calls.push("client:pull") },
     replayPending: async () => {
       calls.push("client:replay")
@@ -85,10 +86,18 @@ function buildHarness(options = {}) {
       if (error) throw error
       if (options.replay) await options.replay()
     },
-    resolveConflict: async (args) => { calls.push({args, method: "client:resolveConflict"}) },
+    reportError: (error) => { reports.push(error) },
+    resolveConflict: async (args) => {
+      calls.push({args, method: "client:resolveConflict"})
+      if (args.resolution === "retry-local") client.scheduledReplay = client.coordinatorTrigger("mutation")
+    },
+    scheduledReplay: null,
     start: async () => { calls.push("client:start") },
     stop: async () => { calls.push("client:stop") },
-    subscribeRealtime: async () => { calls.push("client:subscribeRealtime") }
+    subscribeRealtime: async () => { calls.push("client:subscribeRealtime") },
+    waitForScheduledReplay: async () => {
+      if (client.scheduledReplay) await client.scheduledReplay
+    }
   }
   const persisted = []
   const statusStore = options.statusStore || {
@@ -114,7 +123,7 @@ function buildHarness(options = {}) {
     syncClient: client
   })
 
-  return {calls, client, connectivity, coordinator, persisted, scheduler, syncState}
+  return {calls, client, connectivity, coordinator, persisted, reports, scheduler, syncState}
 }
 
 describe("sync coordinator", () => {
@@ -199,6 +208,7 @@ describe("sync coordinator", () => {
     expect(harness.coordinator.status().state).toEqual("offline")
     expect(harness.coordinator.status().pendingCount).toEqual(2)
     expect(harness.calls).not.toContain("client:replay")
+    expect(harness.reports).toEqual([])
 
     harness.connectivity.online = true
     harness.connectivity.listener(true)
@@ -269,24 +279,31 @@ describe("sync coordinator", () => {
     expect(harness.coordinator.status().state).toEqual("idle")
   })
 
-  it("routes explicit conflict resolution through an immediate single-flight retry", async () => {
-    const harness = buildHarness({
-      classifyError: () => ({code: "temporarily_unavailable", retryable: true}),
-      replayErrors: [new Error("temporarily unavailable")],
-      retry: {initialDelayMs: 100, maxDelayMs: 100, maxAttempts: 3}
-    })
+  it("gives retry-local one immediate cycle owner while keep-server refreshes status", async () => {
+    const harness = buildHarness()
 
     await harness.coordinator.start()
     await harness.coordinator.waitForCurrentRun()
 
-    expect(harness.coordinator.status().state).toEqual("backoff")
-    expect(harness.scheduler.size()).toEqual(1)
+    await harness.coordinator.resolveConflict({recordId: "log-1", resourceType: "Item", resolution: "keep-server"})
 
     await harness.coordinator.resolveConflict({recordId: "log-1", resourceType: "Item", resolution: "retry-local"})
 
     expect(harness.scheduler.size()).toEqual(0)
-    expect(harness.calls.filter((call) => call === "client:replay")).toHaveLength(2)
+    expect(harness.calls.filter((call) => call === "client:replay")).toHaveLength(3)
     expect(harness.coordinator.status().state).toEqual("idle")
+  })
+
+  it("reports an unexpected cycle failure exactly once after publishing its classified status", async () => {
+    const failure = new Error("database invariant failed")
+    const harness = buildHarness({replayErrors: [failure]})
+
+    await harness.coordinator.start()
+    await harness.coordinator.waitForCurrentRun()
+
+    expect(harness.coordinator.status().state).toEqual("failed")
+    expect(harness.coordinator.status().failure.code).toEqual("sync_failed")
+    expect(harness.reports).toEqual([failure])
   })
 
   it("bounds retry when durable status persistence itself stays unavailable", async () => {
@@ -311,6 +328,7 @@ describe("sync coordinator", () => {
     expect(harness.coordinator.status().state).toEqual("failed")
     expect(harness.coordinator.status().failure.attempt).toEqual(2)
     expect(harness.scheduler.size()).toEqual(0)
+    expect(harness.reports).toHaveLength(2)
   })
 
   it("publishes and persists immutable snapshots without conflict payload data", async () => {
@@ -340,6 +358,7 @@ describe("sync coordinator", () => {
     expect(Object.isFrozen(status.conflicts[0])).toEqual(true)
     expect(harness.persisted.at(-1).conflicts).toEqual([conflict])
     expect(observed.at(-1)).toEqual(status)
+    expect(harness.reports).toEqual([])
 
     unsubscribe()
   })
@@ -363,6 +382,23 @@ describe("sync coordinator", () => {
     expect(harness.calls).toContain("client:detach")
     expect(harness.calls).toContain("connectivity:unsubscribe")
     expect(harness.scheduler.size()).toEqual(0)
+  })
+
+  it("does not publish syncing or begin network work after a stopped online check resolves", async () => {
+    const onlineGate = deferred()
+    const harness = buildHarness({onlineCheck: async () => await onlineGate.promise})
+    const states = []
+
+    harness.coordinator.subscribe((status) => { states.push(status.state) })
+    await harness.coordinator.start()
+    const stopPromise = harness.coordinator.stop()
+
+    onlineGate.resolve(true)
+    await stopPromise
+
+    expect(harness.calls).not.toContain("client:replay")
+    expect(states).not.toContain("syncing")
+    expect(harness.coordinator.status().state).toEqual("stopped")
   })
 
   it("rolls back partial lifecycle ownership when preparation fails", async () => {
