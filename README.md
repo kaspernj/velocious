@@ -1881,6 +1881,8 @@ const firstTask = await Task.first()
 const lastTask = await Task.last()
 ```
 
+An explicitly set `order(...)` is preserved: `first()` reads from the front of the ordered result and `last()` from its end (reversing the effective direction without mutating the source query). When no order was set, a deterministic identity order is applied.
+
 ### Find by attributes
 
 ```js

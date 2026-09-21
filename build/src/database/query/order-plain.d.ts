@@ -9,6 +9,11 @@ export default class VelociousDatabaseQueryOrderPlain extends OrderBase {
      */
     constructor(query: import("./index.js").default, plain: string);
     setReverseOrder(): void;
+    /**
+     * Runs reversed copy.
+     * @returns {VelociousDatabaseQueryOrderPlain} - A new independent order reversing the effective (rendered) direction; a directionless plain order renders DESC.
+     */
+    reversedCopy(): VelociousDatabaseQueryOrderPlain;
     toSql(): string;
 }
 //# sourceMappingURL=order-plain.d.ts.map

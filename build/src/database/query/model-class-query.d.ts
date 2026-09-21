@@ -303,7 +303,9 @@ export default class VelociousDatabaseQueryModelClassQuery<MC extends typeof imp
      *
      * An explicitly set order is preserved and read from its end; the
      * deterministic identity order is only applied as a fallback when no order
-     * was set.
+     * was set. The clone shares its order instances with the source query, so
+     * the explicit orders are replaced by independent reversed copies instead
+     * of mutating the shared ones.
      * @returns {Promise<InstanceType<MC> | null>} - Resolves with the last.
      */
     last(): Promise<InstanceType<MC> | null>;

@@ -961,7 +961,9 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
    *
    * An explicitly set order is preserved and read from its end; the
    * deterministic identity order is only applied as a fallback when no order
-   * was set.
+   * was set. The clone shares its order instances with the source query, so
+   * the explicit orders are replaced by independent reversed copies instead
+   * of mutating the shared ones.
    * @returns {Promise<InstanceType<MC> | null>} - Resolves with the last.
    */
   async last() {
@@ -970,7 +972,9 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     if (newQuery.getOrders().length == 0) {
       newQuery.reorder(this._defaultIdentityOrder("DESC"))
     } else {
-      newQuery.reverseOrder()
+      const orders = newQuery.getOrders()
+
+      for (let i = 0; i < orders.length; i += 1) orders[i] = orders[i].reversedCopy()
     }
 
     const results = await newQuery.toArray()
