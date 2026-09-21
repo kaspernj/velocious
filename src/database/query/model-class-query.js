@@ -940,10 +940,17 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
   /**
    * Runs first.
+   *
+   * An explicitly set order is preserved; the deterministic identity order is
+   * only applied as a fallback when no order was set, so `LIMIT 1` never
+   * returns an arbitrary row.
    * @returns {Promise<InstanceType<MC> | null>} - Resolves with the first.
    */
   async first() {
-    const newQuery = this.clone().limit(1).reorder(this._defaultIdentityOrder("ASC"))
+    const newQuery = this.clone().limit(1)
+
+    if (newQuery.getOrders().length == 0) newQuery.reorder(this._defaultIdentityOrder("ASC"))
+
     const results = await newQuery.toArray()
 
     return results[0] || null
@@ -951,10 +958,22 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
 
   /**
    * Runs last.
+   *
+   * An explicitly set order is preserved and read from its end; the
+   * deterministic identity order is only applied as a fallback when no order
+   * was set.
    * @returns {Promise<InstanceType<MC> | null>} - Resolves with the last.
    */
   async last() {
-    const results = await this.clone().reorder(this._defaultIdentityOrder("DESC")).limit(1).toArray()
+    const newQuery = this.clone().limit(1)
+
+    if (newQuery.getOrders().length == 0) {
+      newQuery.reorder(this._defaultIdentityOrder("DESC"))
+    } else {
+      newQuery.reverseOrder()
+    }
+
+    const results = await newQuery.toArray()
 
     return results[0] || null
   }

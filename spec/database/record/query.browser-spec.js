@@ -149,6 +149,34 @@ describe("Record - query", {tags: ["dummy"]}, () => {
     expect(lastTask.id()).toEqual(taskIDs[4])
   })
 
+  it("preserves an explicit order when finding the first record", async () => {
+    const project = await Project.create()
+    const firstTask = await Task.create({name: "First", project})
+    const lastTask = await Task.create({name: "Last", project})
+
+    const byNameDesc = await Task.where({project_id: project.id()}).order({column: "name", direction: "DESC"}).first()
+
+    expect(byNameDesc.id()).toEqual(lastTask.id())
+
+    const byNameAsc = await Task.where({project_id: project.id()}).order({column: "name", direction: "ASC"}).first()
+
+    expect(byNameAsc.id()).toEqual(firstTask.id())
+  })
+
+  it("preserves an explicit order when finding the last record", async () => {
+    const project = await Project.create()
+    const firstTask = await Task.create({name: "First", project})
+    const lastTask = await Task.create({name: "Last", project})
+
+    const byNameDesc = await Task.where({project_id: project.id()}).order({column: "name", direction: "DESC"}).last()
+
+    expect(byNameDesc.id()).toEqual(firstTask.id())
+
+    const byNameAsc = await Task.where({project_id: project.id()}).order({column: "name", direction: "ASC"}).last()
+
+    expect(byNameAsc.id()).toEqual(lastTask.id())
+  })
+
   it("finds the record with joins and where hashes", async () => {
     const project1 = await Project.create({name: "Test project 1"})
     const project2 = await Project.create({name: "Test project 2"})
