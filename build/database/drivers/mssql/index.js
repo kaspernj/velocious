@@ -33,6 +33,8 @@ import UUID from "pure-uuid"
  * @type {number}
  */
 const APPLOCK_NOT_HELD_ERROR_NUMBER = 1223
+const DISABLE_FOREIGN_KEYS_SQL = "EXEC sp_MSforeachtable \"ALTER TABLE ? NOCHECK CONSTRAINT all\""
+const ENABLE_FOREIGN_KEYS_SQL = "EXEC sp_MSforeachtable @command1=\"print '?'\", @command2=\"ALTER TABLE ? WITH CHECK CHECK CONSTRAINT all\""
 
 export default class VelociousDatabaseDriversMssql extends Base{
   /** @type {import("mssql").Transaction | null} */
@@ -177,7 +179,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
    * @returns {Promise<void>} - Resolves when foreign keys are disabled.
    */
   async disableForeignKeys() {
-    await this._execConstraintToggle("EXEC sp_MSforeachtable \"ALTER TABLE ? NOCHECK CONSTRAINT all\"", "disableForeignKeys")
+    await this._execConstraintToggle(DISABLE_FOREIGN_KEYS_SQL, "disableForeignKeys")
   }
 
   /**
@@ -185,7 +187,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
    * @returns {Promise<void>} - Resolves when foreign keys are enabled.
    */
   async enableForeignKeys() {
-    await this._execConstraintToggle("EXEC sp_MSforeachtable @command1=\"print '?'\", @command2=\"ALTER TABLE ? WITH CHECK CHECK CONSTRAINT all\"", "enableForeignKeys")
+    await this._execConstraintToggle(ENABLE_FOREIGN_KEYS_SQL, "enableForeignKeys")
   }
 
   /**
@@ -515,12 +517,55 @@ export default class VelociousDatabaseDriversMssql extends Base{
   }
 
   /**
+   * Keeps constraint toggles and cleanup inside each physical SQL Server
+   * request so a pool cannot split lifecycle ownership across sessions.
+   * @protected
+   * @param {Array<import("../base-table.js").default>} tables - Eligible tables.
+   * @returns {Promise<void>} - Resolves after one cleanup attempt succeeds.
+   */
+  async _truncateAllTables(tables) {
+    await this._truncateAllTablesWithRetries(tables)
+  }
+
+  /**
+   * Runs one fail-loud cleanup batch with restoration on both success and
+   * failure. The outer retry owner refreshes stale table snapshots.
+   * @protected
+   * @param {Array<import("../base-table.js").default>} tables - Current eligible tables.
+   * @returns {Promise<void>} - Resolves after the batch completes.
+   */
+  async _truncateAllTablesAttempt(tables) {
+    const statements = [
+      "BEGIN TRY",
+      `  ${DISABLE_FOREIGN_KEYS_SQL};`,
+      ...this._truncateTableStatements(tables),
+      `  ${ENABLE_FOREIGN_KEYS_SQL};`,
+      "END TRY",
+      "BEGIN CATCH",
+      `  ${ENABLE_FOREIGN_KEYS_SQL};`,
+      "  THROW;",
+      "END CATCH;"
+    ]
+
+    await this.query(statements.join("\n"))
+  }
+
+  /**
    * Truncates all eligible tables in one SQL Server request, retaining the
    * recognized foreign-key fallback used by the per-table implementation.
    * @param {Array<import("../base-table.js").default>} tables - Eligible tables.
    * @returns {Promise<void>} - Resolves when the batch completes.
    */
   async truncateTables(tables) {
+    await this.query(this._truncateTableStatements(tables).join("\n"))
+  }
+
+  /**
+   * Builds the per-table truncate/delete-fallback statements.
+   * @param {Array<import("../base-table.js").default>} tables - Eligible tables.
+   * @returns {string[]} - SQL statements.
+   */
+  _truncateTableStatements(tables) {
     const statements = []
 
     for (const table of tables) {
@@ -543,7 +588,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
       )
     }
 
-    await this.query(statements.join("\n"))
+    return statements
   }
 
   async lastInsertID(options = {}) {

@@ -196,6 +196,42 @@ export default class LocalMutationLog {
   }
 
   /**
+   * Resolves a durable conflict explicitly. Keeping the server acknowledges the
+   * preserved local intent without replaying it; retrying local intent rebases
+   * it onto the conflict's authoritative serverVersion and returns it to the
+   * pending queue. The prior conflict result stays attached as audit metadata.
+   * @param {{id: string, resolution: "keep-server" | "retry-local"}} args - Resolution.
+   * @returns {Promise<LocalMutationLogRecord>} Resolved record.
+   */
+  async resolveConflict({id, resolution}) {
+    if (!["keep-server", "retry-local"].includes(resolution)) throw new Error(`Unknown local mutation conflict resolution '${resolution}'`)
+
+    return await withStorageKeyLock(this.storageKey, async () => {
+      const rawRecord = await this.storage.record(this.storageKey, id)
+
+      if (!rawRecord) throw new Error(`No local mutation log record '${id}'`)
+
+      const record = normalizeRecord(rawRecord)
+
+      if (record.status !== "conflict") throw new Error(`Cannot resolve ${record.status} local mutation '${id}' as a conflict`)
+
+      if (resolution === "keep-server") {
+        record.status = "synced"
+      } else {
+        const serverVersion = conflictServerVersion(record)
+
+        record.mutation = {...record.mutation, baseVersion: serverVersion}
+        record.status = "pending"
+      }
+
+      record.updatedAt = this.currentTimestamp()
+      await this.storage.updateRecord(this.storageKey, cloneRecord(record))
+
+      return restoreSyncResultTypes(cloneRecord(record))
+    })
+  }
+
+  /**
    * Prunes terminal records that are no longer needed for replay dependencies.
    * @param {object} [args] - Compaction options.
    * @param {number} [args.maxTerminalRecords] - Maximum terminal records to retain.
@@ -265,6 +301,23 @@ function validStorage(storage) {
     && typeof storageObject.record === "function"
     && typeof storageObject.records === "function"
     && typeof storageObject.updateRecord === "function"
+}
+
+/**
+ * Reads the authoritative version from a conflicted mutation.
+ * @param {LocalMutationLogRecord} record - Conflicted record.
+ * @returns {string | number | null} - Authoritative version.
+ */
+function conflictServerVersion(record) {
+  const conflict = record.syncResult?.conflict
+
+  if (!conflict || conflict instanceof Date || typeof conflict !== "object" || Array.isArray(conflict) || !Object.hasOwn(conflict, "serverVersion")) {
+    throw new Error(`Cannot retry local mutation '${record.id}' without a conflict serverVersion`)
+  }
+
+  const conflictMetadata = /** @type {Record<string, unknown>} */ (conflict)
+
+  return cloneBaseVersion(conflictMetadata.serverVersion)
 }
 
 /**

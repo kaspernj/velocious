@@ -42,12 +42,13 @@ export default class SyncApiClient {
      * @param {number} [args.batchSize] - Batch size.
      * @param {import("./sync-client-types.js").SyncClientConflictTrackingConfig} args.conflictTracking - Tracking configuration.
      * @param {(payload: {authenticationToken: string, syncs: Array<Record<string, ReturnType<typeof JSON.parse>>>}, options?: {signal?: AbortSignal}) => Promise<SyncReplayResponse>} args.postReplay - Transport boundary.
+     * @param {(args: {record: import("./local-mutation-log.js").LocalMutationLogRecord, result: SyncReplayItem}) => Promise<void>} [args.applyConflict] - Applies authoritative conflict state to the local replica before preserving the rejected intent.
      * @param {(identity: string) => number} args.remoteGeneration - Current remote generation.
      * @param {string} args.resourceType - Resource whose log records should drain.
      * @param {AbortSignal} [args.signal] - Lifecycle cancellation signal.
      * @returns {Promise<void>} Resolves when no ready intent remains.
      */
-    static replayConflictTrackedSyncs({ authenticationToken, batchSize, conflictTracking, postReplay, remoteGeneration, resourceType, signal }: {
+    static replayConflictTrackedSyncs({ applyConflict, authenticationToken, batchSize, conflictTracking, postReplay, remoteGeneration, resourceType, signal }: {
         authenticationToken: string;
         batchSize?: number;
         conflictTracking: import("./sync-client-types.js").SyncClientConflictTrackingConfig;
@@ -57,6 +58,10 @@ export default class SyncApiClient {
         }, options?: {
             signal?: AbortSignal;
         }) => Promise<SyncReplayResponse>;
+        applyConflict?: (args: {
+            record: import("./local-mutation-log.js").LocalMutationLogRecord;
+            result: SyncReplayItem;
+        }) => Promise<void>;
         remoteGeneration: (identity: string) => number;
         resourceType: string;
         signal?: AbortSignal;

@@ -40,6 +40,19 @@ import {scalarModelPrimaryKey, scalarModelPrimaryKeyValue} from "../utils/model-
  * @property {(args: Record<string, ReturnType<typeof JSON.parse>>) => ReturnType<typeof JSON.parse>} body - Broadcast body.
  * @property {(args: Record<string, ReturnType<typeof JSON.parse>>) => boolean} [when] - Optional gate; skipped when it returns false.
  */
+/**
+ * Private durable idempotency metadata stored outside an application's public change feed.
+ * @typedef {object} SyncReplayReceipt
+ * @property {string | number | null} acknowledgementVersion - Authoritative version returned for an exact retry.
+ * @property {string} clientMutationId - Stable client-owned mutation identity.
+ * @property {string} mutationFingerprint - Hash of the complete normalized mutation identity and intent.
+ */
+/**
+ * Application-owned durable receipt storage.
+ * @typedef {object} SyncReplayReceiptStore
+ * @property {(args: {actor: ReturnType<typeof JSON.parse>, context: Record<string, ReturnType<typeof JSON.parse>>, mutation: SyncReplayMutation}) => Promise<SyncReplayReceipt | null>} find - Finds a receipt in the already-authorized replay partition.
+ * @property {(args: {actor: ReturnType<typeof JSON.parse>, context: Record<string, ReturnType<typeof JSON.parse>>, mutation: SyncReplayMutation, receipt: SyncReplayReceipt}) => Promise<void>} save - Durably records a successful apply before its response is returned.
+ */
 
 /**
  * Replays client sync envelopes through project supplied authentication,
@@ -75,6 +88,7 @@ export default class SyncEnvelopeReplayService {
    * @param {import("../configuration.js").default} [args.configuration] - Configuration whose frontend-model registry routes mutations to resource classes.
    * @param {{strategy?: "optimisticVersion" | "serverWins", versionAttribute: string} | null} [args.conflictStrategy] - Optional base-version conflict detection for routed upserts. Only `optimisticVersion` and `serverWins` are supported for backend replay because the server does not have the client's base snapshot. When `strategy` is omitted it defaults to `optimisticVersion`, matching `resolveSyncConflict` and normalized resource config. When configured, a mutation whose baseVersion does not match the current server versionAttribute is rejected with a structured conflict result instead of being applied.
    * @param {Record<string, import("../configuration-types.js").FrontendModelResourceClassType | string>} [args.resourceTypeOverrides] - Per-resourceType routing overrides: a resource class, or a string alias resolved through the registry.
+   * @param {SyncReplayReceiptStore} [args.replayReceiptStore] - Private durable idempotency storage, separate from public sync/change rows.
    * @param {import("../authorization/ability.js").default} [args.ability] - Ability scoping routed record lookups and create membership checks.
    * @param {Record<string, ReturnType<typeof JSON.parse>>} [args.abilityContext] - Ability context passed to routed resources.
    * @param {Record<string, ReturnType<typeof JSON.parse>>} [args.locals] - Locals passed to routed resources.
@@ -94,6 +108,7 @@ export default class SyncEnvelopeReplayService {
     this.configuration = args.configuration || null
     this.conflictStrategy = args.conflictStrategy || null
     this.resourceTypeOverrides = args.resourceTypeOverrides || null
+    this.replayReceiptStore = args.replayReceiptStore || null
     this.ability = args.ability || null
     this.abilityContext = args.abilityContext || null
     this.locals = args.locals || null
@@ -105,6 +120,9 @@ export default class SyncEnvelopeReplayService {
     }
     if (this.broadcasts && !this.broadcaster) {
       throw new Error("SyncEnvelopeReplayService broadcasts require a broadcaster option delivering them")
+    }
+    if (this.replayReceiptStore && (typeof this.replayReceiptStore.find !== "function" || typeof this.replayReceiptStore.save !== "function")) {
+      throw new Error("SyncEnvelopeReplayService replayReceiptStore requires find and save functions")
     }
     if (this.conflictStrategy) {
       const supportedConflictStrategies = new Set(["optimisticVersion", "serverWins"])
@@ -163,6 +181,7 @@ export default class SyncEnvelopeReplayService {
       }
 
       const mutation = normalizedResult.mutation
+      const mutationFingerprint = this.replayMutationFingerprint(mutation)
       const accessResult = await this.authorizeReplayMutation({actor: actorResult.actor, context, mutation})
 
       if (!accessResult.allowed) {
@@ -175,8 +194,18 @@ export default class SyncEnvelopeReplayService {
       }
 
       const existingSync = await this.findExistingReplaySync({actor: actorResult.actor, context, mutation})
-      const shouldApply = await this.shouldApplyReplayMutation({actor: actorResult.actor, context, existingSync, mutation})
-      const duplicate = !shouldApply && this.isDuplicateReplayMutation({existingSync, mutation})
+      const replayReceipt = await this.findReplayReceipt({actor: actorResult.actor, context, mutation})
+      const receiptDuplicate = replayReceipt ? this.isDuplicateReplayReceipt({mutationFingerprint, mutation, receipt: replayReceipt}) : false
+
+      if (replayReceipt && !receiptDuplicate) {
+        syncResponses.push({id: mutation.id, reason: "sync-client-mutation-id-reused", syncState: "failed"})
+        continue
+      }
+
+      const shouldApply = receiptDuplicate
+        ? false
+        : await this.shouldApplyReplayMutation({actor: actorResult.actor, context, existingSync, mutation})
+      const duplicate = receiptDuplicate || (!shouldApply && this.isDuplicateReplayMutation({existingSync, mutation}))
 
       /** @type {ReturnType<typeof JSON.parse>} */
       let applyResult
@@ -184,7 +213,7 @@ export default class SyncEnvelopeReplayService {
       try {
         applyResult = shouldApply
           ? await this.applyReplayMutation({actor: actorResult.actor, context, existingSync, mutation})
-          : await this.skippedReplayMutation({actor: actorResult.actor, context, existingSync, mutation})
+          : await this.skippedReplayMutation({actor: actorResult.actor, context, duplicate, existingSync, mutation})
       } catch (error) {
         // Client-safe apply failures (schema validation, model validation,
         // authorization denials, unknown resource types) fail this sync and
@@ -212,12 +241,13 @@ export default class SyncEnvelopeReplayService {
       }
 
       await this.persistReplayMutation({actor: actorResult.actor, context, existingSync, applyResult, mutation, shouldApply})
+      if (shouldApply) await this.persistReplayReceipt({actor: actorResult.actor, context, mutation, mutationFingerprint, applyResult})
       await this.afterReplayMutation({actor: actorResult.actor, context, existingSync, applyResult, mutation, shouldApply})
 
       /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
       const successfulResponse = {id: mutation.id, syncState: duplicate ? "duplicate" : "successful"}
 
-      const persistedReplayMetadata = duplicate ? this.replayPersistedMetadata(existingSync) : null
+      const persistedReplayMetadata = duplicate ? replayReceipt ?? this.replayPersistedMetadata(existingSync) : null
 
       if (persistedReplayMetadata) {
         successfulResponse.serverVersion = persistedReplayMetadata.acknowledgementVersion
@@ -468,6 +498,75 @@ export default class SyncEnvelopeReplayService {
     if (!syncRecord) return null
 
     return decodeReplayPersistedData(this.replaySyncRecordValue(syncRecord, "data")).metadata
+  }
+
+  /**
+   * Loads private idempotency metadata from the application-owned durable store.
+   * @param {{actor: ReturnType<typeof JSON.parse>, context: Record<string, ReturnType<typeof JSON.parse>>, mutation: SyncReplayMutation}} args - Authorized replay context.
+   * @returns {Promise<SyncReplayReceipt | null>} Durable receipt or null.
+   */
+  async findReplayReceipt(args) {
+    if (!this.replayReceiptStore) return null
+
+    const receipt = await this.replayReceiptStore.find(args)
+
+    if (receipt === null) return null
+    if (!receipt || typeof receipt !== "object" || typeof receipt.clientMutationId !== "string" || typeof receipt.mutationFingerprint !== "string") {
+      throw new Error("Sync replay receipt store returned invalid receipt metadata")
+    }
+
+    return receipt
+  }
+
+  /**
+   * Checks an incoming normalized mutation against private receipt metadata.
+   * @param {{mutation: SyncReplayMutation, mutationFingerprint?: string, receipt: SyncReplayReceipt}} args - Mutation and durable receipt.
+   * @returns {boolean} Whether this is the exact mutation whose apply was acknowledged.
+   */
+  isDuplicateReplayReceipt({mutation, mutationFingerprint = this.replayMutationFingerprint(mutation), receipt}) {
+    return receipt.clientMutationId === String(mutation.clientMutationId || mutation.id)
+      && receipt.mutationFingerprint === mutationFingerprint
+  }
+
+  /**
+   * Hashes the complete normalized mutation intent without retaining its payload.
+   * @param {SyncReplayMutation} mutation - Normalized replay mutation.
+   * @returns {string} Stable SHA-256 fingerprint.
+   */
+  replayMutationFingerprint(mutation) {
+    return sha256Hex(stableJsonStringify({
+      baseVersion: mutation.baseVersion,
+      clientUpdatedAt: mutation.clientUpdatedAt.toISOString(),
+      data: mutation.data,
+      resourceId: mutation.resourceId,
+      resourceType: mutation.resourceType,
+      syncType: mutation.syncType
+    }))
+  }
+
+  /**
+   * Persists private receipt metadata after a successful apply and feed write.
+   * @param {{actor: ReturnType<typeof JSON.parse>, applyResult: ReturnType<typeof JSON.parse>, context: Record<string, ReturnType<typeof JSON.parse>>, mutation: SyncReplayMutation, mutationFingerprint: string}} args - Applied replay context.
+   * @returns {Promise<void>} Completion after the receipt is durable.
+   */
+  async persistReplayReceipt({actor, applyResult, context, mutation, mutationFingerprint}) {
+    if (!this.replayReceiptStore) return
+
+    let acknowledgementVersion = null
+    if (this.conflictStrategy && applyResult?.record) {
+      acknowledgementVersion = normalizeConflictValue(applyResult.record.readAttribute(this.conflictStrategy.versionAttribute))
+    }
+
+    await this.replayReceiptStore.save({
+      actor,
+      context,
+      mutation,
+      receipt: {
+        acknowledgementVersion,
+        clientMutationId: String(mutation.clientMutationId || mutation.id),
+        mutationFingerprint
+      }
+    })
   }
 
   /**
@@ -1059,11 +1158,11 @@ export default class SyncEnvelopeReplayService {
    * Resolves an apply result for stale mutations that should not touch domain models.
    * Exact duplicates resolve the current routed record so the acknowledgement
    * can include its authoritative version without applying the mutation again.
-   * @param {{actor: ReturnType<typeof JSON.parse>, context: Record<string, ReturnType<typeof JSON.parse>>, existingSync: ReturnType<typeof JSON.parse>, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation}} args - Actor, batch context, existing sync row, and mutation.
+   * @param {{actor: ReturnType<typeof JSON.parse>, context: Record<string, ReturnType<typeof JSON.parse>>, duplicate?: boolean, existingSync: ReturnType<typeof JSON.parse>, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation}} args - Actor, batch context, existing sync row, and duplicate decision.
    * @returns {Promise<ReturnType<typeof JSON.parse>>} Project-specific apply result.
    */
-  async skippedReplayMutation({actor, context, existingSync, mutation}) {
-    if (!this.isDuplicateReplayMutation({existingSync, mutation}) || !this.routingConfigured()) return null
+  async skippedReplayMutation({actor, context, duplicate = false, existingSync, mutation}) {
+    if ((!duplicate && !this.isDuplicateReplayMutation({existingSync, mutation})) || !this.routingConfigured()) return null
 
     const registration = this.replayResourceRegistration(mutation.resourceType)
 
@@ -1102,7 +1201,7 @@ export default class SyncEnvelopeReplayService {
       }
     }
 
-    if (this.conflictStrategy && shouldApply && mutation.baseVersion !== undefined && applyResult?.record) {
+    if (!this.replayReceiptStore && this.conflictStrategy && shouldApply && mutation.baseVersion !== undefined && applyResult?.record) {
       const publicPayload = decodeReplayPersistedData(attributes.data).payload
       const acknowledgementVersion = normalizeConflictValue(applyResult.record.readAttribute(this.conflictStrategy.versionAttribute))
 

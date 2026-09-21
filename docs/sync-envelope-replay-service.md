@@ -10,6 +10,7 @@ It is not a separate legacy sync framework. The service only owns the generic ba
 - compare client timestamps against an existing sync/change row
 - skip stale mutations without applying domain changes
 - return per-envelope success/failure responses
+- deduplicate exact retries through optional private durable receipts, independently of public feed-row churn
 - call app-supplied hooks for auth, access checks, persistence, side effects, and domain mutation dispatch
 
 Apps still own token lookup, actor/device policy, model-specific write handlers, and the sync/change table they persist into.
@@ -99,6 +100,8 @@ Override these methods as needed:
 - `persistReplayMutation({actor, context, existingSync, applyResult, mutation, shouldApply})`: optional sync/change persistence hook.
 - `afterReplayMutation({actor, context, existingSync, applyResult, mutation, shouldApply})`: optional side-effect hook after persistence.
 
+For replay endpoints whose public change row can later be replaced by ordinary server publication, configure `replayReceiptStore` with async `find({actor, context, mutation})` and `save({actor, context, mutation, receipt})` functions. Velocious fingerprints the complete normalized mutation before application code can add server-owned fields, stores only the client mutation id, SHA-256 fingerprint, and scalar acknowledgement version, and returns `syncState: "duplicate"` for an exact retry. Reusing the same client mutation id with a different resource identity, operation, base version, client timestamp, or data fails that item with `sync-client-mutation-id-reused`. The application owns the authorized partition and durable storage; receipt rows must remain private and must not be exposed as change-feed payloads.
+
 `existingReplaySyncClientUpdatedAt(existingSync)` accepts either a raw `clientUpdatedAt` property or a `clientUpdatedAt()` accessor. The value may be a `Date` or a parseable timestamp string.
 
 ## Model-backed defaults
@@ -136,6 +139,10 @@ new AppSyncReplayService({
   },
   persistExtraAttributes: ({applyResult}) => ({event_id: applyResult.appliedEventId}),
   persistSerializedData: ({applyResult}) => applyResult.serializedData,
+  replayReceiptStore: {
+    find: async ({actor, context, mutation}) => await ReceiptStore.find({actor, context, mutation}),
+    save: async ({actor, context, mutation, receipt}) => await ReceiptStore.save({actor, context, mutation, receipt})
+  },
   broadcaster: async ({channel, params, body}) => configuration.broadcastToChannel(channel, params, body),
   broadcasts: [{
     channel: "ticket-scans",
@@ -149,6 +156,7 @@ new AppSyncReplayService({
 - **Token auth**: with `authenticationTokenModel`, the default `authenticateReplay` looks the token up by `authenticationTokenColumn` from `params[authenticationTokenParam]` and returns the standard missing/invalid error codes.
 - **Apply-handler registry**: the default `applyReplayMutation` dispatches by `mutation.resourceType`; a mutation without a registered handler fails loudly. Declarative specs are executed by `SyncReplayUpsertApplier` (`src/sync/sync-replay-upsert-applier.js`), which owns present-key filtering, per-field coercion (`stringOrNull`, `booleanOrNull` incl. sqlite 0/1, `integerOrNull`, `floatOrNull`, `dateOrNull`, `raw`), unknown-key rejection (`restArgs: "ignore"` opts out), the find-or-create upsert, the delete branch, an optional `serialize` snapshot (landing on `applyResult.serializedData`), and the `afterApply` domain tail.
 - **Persist extension points**: `persistExtraAttributes` merges app columns (e.g. event scoping) into the model-backed persisted row; `persistSerializedData` overrides the persisted `data` payload (objects are JSON stringified).
+- **Private replay receipts**: `replayReceiptStore` separates durable duplicate detection from mutable public feed rows. When configured, conflict acknowledgement metadata is no longer embedded in `syncModel.data`; the store receives only safe receipt metadata and the already-authorized actor/context/mutation needed to partition it.
 - **Broadcast fan-out**: the default `afterReplayMutation` runs each declarative broadcast through the injected `broadcaster`; `when` gates skip irrelevant mutations. Configuring `broadcasts` without a `broadcaster` fails at construction time.
 
 ## Resource-routed replay

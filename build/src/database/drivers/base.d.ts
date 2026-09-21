@@ -1392,6 +1392,29 @@ export default class VelociousDatabaseDriversBase {
      */
     truncateAllTables(): Promise<void>;
     /**
+     * Owns the foreign-key boundary around every cleanup retry. Drivers that
+     * require one physical request for the full operation may override it.
+     * @protected
+     * @param {Array<import("./base-table.js").default>} tables - Eligible tables.
+     * @returns {Promise<void>} - Resolves after cleanup succeeds.
+     */
+    protected _truncateAllTables(tables: Array<import("./base-table.js").default>): Promise<void>;
+    /**
+     * Retries cleanup against refreshed schema snapshots. Drivers may override
+     * `_truncateAllTablesAttempt` to own a complete driver-specific attempt.
+     * @protected
+     * @param {Array<import("./base-table.js").default>} initialTables - Initial eligible tables.
+     * @returns {Promise<void>} - Resolves after one cleanup attempt succeeds.
+     */
+    protected _truncateAllTablesWithRetries(initialTables: Array<import("./base-table.js").default>): Promise<void>;
+    /**
+     * Runs one cleanup attempt while the default owner has constraints disabled.
+     * @protected
+     * @param {Array<import("./base-table.js").default>} tables - Current eligible tables.
+     * @returns {Promise<void>} - Resolves when the attempt completes.
+     */
+    protected _truncateAllTablesAttempt(tables: Array<import("./base-table.js").default>): Promise<void>;
+    /**
      * Runs update.
      * @param {UpdateSqlArgsType} args - Options object.
      * @returns {Promise<void>} - Resolves when complete.

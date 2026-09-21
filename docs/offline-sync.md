@@ -270,7 +270,7 @@ The implemented proof is documented in [`docs/awesome-tasks-offline-sync-proof.m
 
 ## Implemented slice: declarative sync client
 
-`SyncClient` implements the declarative client-side driver: query-declared sync scopes with per-scope cursors, pull paging/apply, declarative local queueing, and online-gated replay. See `docs/sync-client.md`.
+`SyncClient` implements the declarative client-side driver: query-declared sync scopes with per-scope cursors, pull paging/apply, declarative local queueing, and online-gated replay. `SyncCoordinator` adds the reusable application lifecycle that orders replay/realtime/pull, observes durable state, and owns bounded retry/teardown without duplicating those primitives. See [sync client](sync-client.md) and [sync coordinator](sync-coordinator.md).
 
 ## Implemented slice: auto-mounted server sync API
 

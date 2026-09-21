@@ -69,6 +69,39 @@ export type SyncReplayBroadcast = {
      */
     when?: (args: Record<string, ReturnType<typeof JSON.parse>>) => boolean;
 };
+export type SyncReplayReceipt = {
+    /**
+     * - Authoritative version returned for an exact retry.
+     */
+    acknowledgementVersion: string | number | null;
+    /**
+     * - Stable client-owned mutation identity.
+     */
+    clientMutationId: string;
+    /**
+     * - Hash of the complete normalized mutation identity and intent.
+     */
+    mutationFingerprint: string;
+};
+export type SyncReplayReceiptStore = {
+    /**
+     * - Finds a receipt in the already-authorized replay partition.
+     */
+    find: (args: {
+        actor: ReturnType<typeof JSON.parse>;
+        context: Record<string, ReturnType<typeof JSON.parse>>;
+        mutation: SyncReplayMutation;
+    }) => Promise<SyncReplayReceipt | null>;
+    /**
+     * - Durably records a successful apply before its response is returned.
+     */
+    save: (args: {
+        actor: ReturnType<typeof JSON.parse>;
+        context: Record<string, ReturnType<typeof JSON.parse>>;
+        mutation: SyncReplayMutation;
+        receipt: SyncReplayReceipt;
+    }) => Promise<void>;
+};
 /**
  * Resolved routed-resource registration for one replay resource type.
  * @typedef {object} SyncReplayResourceRegistration
@@ -95,6 +128,19 @@ export type SyncReplayBroadcast = {
  * @property {(args: Record<string, ReturnType<typeof JSON.parse>>) => Record<string, ReturnType<typeof JSON.parse>>} broadcastParams - Channel routing params.
  * @property {(args: Record<string, ReturnType<typeof JSON.parse>>) => ReturnType<typeof JSON.parse>} body - Broadcast body.
  * @property {(args: Record<string, ReturnType<typeof JSON.parse>>) => boolean} [when] - Optional gate; skipped when it returns false.
+ */
+/**
+ * Private durable idempotency metadata stored outside an application's public change feed.
+ * @typedef {object} SyncReplayReceipt
+ * @property {string | number | null} acknowledgementVersion - Authoritative version returned for an exact retry.
+ * @property {string} clientMutationId - Stable client-owned mutation identity.
+ * @property {string} mutationFingerprint - Hash of the complete normalized mutation identity and intent.
+ */
+/**
+ * Application-owned durable receipt storage.
+ * @typedef {object} SyncReplayReceiptStore
+ * @property {(args: {actor: ReturnType<typeof JSON.parse>, context: Record<string, ReturnType<typeof JSON.parse>>, mutation: SyncReplayMutation}) => Promise<SyncReplayReceipt | null>} find - Finds a receipt in the already-authorized replay partition.
+ * @property {(args: {actor: ReturnType<typeof JSON.parse>, context: Record<string, ReturnType<typeof JSON.parse>>, mutation: SyncReplayMutation, receipt: SyncReplayReceipt}) => Promise<void>} save - Durably records a successful apply before its response is returned.
  */
 /**
  * Replays client sync envelopes through project supplied authentication,
@@ -133,6 +179,7 @@ export default class SyncEnvelopeReplayService {
         versionAttribute: string;
     } | null;
     resourceTypeOverrides: Record<string, string | import("../configuration-types.js").UnboundFrontendModelResourceClassType> | null;
+    replayReceiptStore: SyncReplayReceiptStore | null;
     ability: import("../authorization/ability.js").default | null;
     abilityContext: Record<string, any> | null;
     locals: Record<string, any> | null;
@@ -162,6 +209,7 @@ export default class SyncEnvelopeReplayService {
      * @param {import("../configuration.js").default} [args.configuration] - Configuration whose frontend-model registry routes mutations to resource classes.
      * @param {{strategy?: "optimisticVersion" | "serverWins", versionAttribute: string} | null} [args.conflictStrategy] - Optional base-version conflict detection for routed upserts. Only `optimisticVersion` and `serverWins` are supported for backend replay because the server does not have the client's base snapshot. When `strategy` is omitted it defaults to `optimisticVersion`, matching `resolveSyncConflict` and normalized resource config. When configured, a mutation whose baseVersion does not match the current server versionAttribute is rejected with a structured conflict result instead of being applied.
      * @param {Record<string, import("../configuration-types.js").FrontendModelResourceClassType | string>} [args.resourceTypeOverrides] - Per-resourceType routing overrides: a resource class, or a string alias resolved through the registry.
+     * @param {SyncReplayReceiptStore} [args.replayReceiptStore] - Private durable idempotency storage, separate from public sync/change rows.
      * @param {import("../authorization/ability.js").default} [args.ability] - Ability scoping routed record lookups and create membership checks.
      * @param {Record<string, ReturnType<typeof JSON.parse>>} [args.abilityContext] - Ability context passed to routed resources.
      * @param {Record<string, ReturnType<typeof JSON.parse>>} [args.locals] - Locals passed to routed resources.
@@ -194,6 +242,7 @@ export default class SyncEnvelopeReplayService {
             versionAttribute: string;
         } | null;
         resourceTypeOverrides?: Record<string, import("../configuration-types.js").FrontendModelResourceClassType | string>;
+        replayReceiptStore?: SyncReplayReceiptStore;
         ability?: import("../authorization/ability.js").default;
         abilityContext?: Record<string, ReturnType<typeof JSON.parse>>;
         locals?: Record<string, ReturnType<typeof JSON.parse>>;
@@ -355,6 +404,44 @@ export default class SyncEnvelopeReplayService {
         clientMutationId: string;
         payloadFingerprint: string;
     } | null;
+    /**
+     * Loads private idempotency metadata from the application-owned durable store.
+     * @param {{actor: ReturnType<typeof JSON.parse>, context: Record<string, ReturnType<typeof JSON.parse>>, mutation: SyncReplayMutation}} args - Authorized replay context.
+     * @returns {Promise<SyncReplayReceipt | null>} Durable receipt or null.
+     */
+    findReplayReceipt(args: {
+        actor: ReturnType<typeof JSON.parse>;
+        context: Record<string, ReturnType<typeof JSON.parse>>;
+        mutation: SyncReplayMutation;
+    }): Promise<SyncReplayReceipt | null>;
+    /**
+     * Checks an incoming normalized mutation against private receipt metadata.
+     * @param {{mutation: SyncReplayMutation, mutationFingerprint?: string, receipt: SyncReplayReceipt}} args - Mutation and durable receipt.
+     * @returns {boolean} Whether this is the exact mutation whose apply was acknowledged.
+     */
+    isDuplicateReplayReceipt({ mutation, mutationFingerprint, receipt }: {
+        mutation: SyncReplayMutation;
+        mutationFingerprint?: string;
+        receipt: SyncReplayReceipt;
+    }): boolean;
+    /**
+     * Hashes the complete normalized mutation intent without retaining its payload.
+     * @param {SyncReplayMutation} mutation - Normalized replay mutation.
+     * @returns {string} Stable SHA-256 fingerprint.
+     */
+    replayMutationFingerprint(mutation: SyncReplayMutation): string;
+    /**
+     * Persists private receipt metadata after a successful apply and feed write.
+     * @param {{actor: ReturnType<typeof JSON.parse>, applyResult: ReturnType<typeof JSON.parse>, context: Record<string, ReturnType<typeof JSON.parse>>, mutation: SyncReplayMutation, mutationFingerprint: string}} args - Applied replay context.
+     * @returns {Promise<void>} Completion after the receipt is durable.
+     */
+    persistReplayReceipt({ actor, applyResult, context, mutation, mutationFingerprint }: {
+        actor: ReturnType<typeof JSON.parse>;
+        applyResult: ReturnType<typeof JSON.parse>;
+        context: Record<string, ReturnType<typeof JSON.parse>>;
+        mutation: SyncReplayMutation;
+        mutationFingerprint: string;
+    }): Promise<void>;
     /**
      * Applies one normalized mutation to domain models.
      *
@@ -615,12 +702,13 @@ export default class SyncEnvelopeReplayService {
      * Resolves an apply result for stale mutations that should not touch domain models.
      * Exact duplicates resolve the current routed record so the acknowledgement
      * can include its authoritative version without applying the mutation again.
-     * @param {{actor: ReturnType<typeof JSON.parse>, context: Record<string, ReturnType<typeof JSON.parse>>, existingSync: ReturnType<typeof JSON.parse>, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation}} args - Actor, batch context, existing sync row, and mutation.
+     * @param {{actor: ReturnType<typeof JSON.parse>, context: Record<string, ReturnType<typeof JSON.parse>>, duplicate?: boolean, existingSync: ReturnType<typeof JSON.parse>, mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation}} args - Actor, batch context, existing sync row, and duplicate decision.
      * @returns {Promise<ReturnType<typeof JSON.parse>>} Project-specific apply result.
      */
-    skippedReplayMutation({ actor, context, existingSync, mutation }: {
+    skippedReplayMutation({ actor, context, duplicate, existingSync, mutation }: {
         actor: ReturnType<typeof JSON.parse>;
         context: Record<string, ReturnType<typeof JSON.parse>>;
+        duplicate?: boolean;
         existingSync: ReturnType<typeof JSON.parse>;
         mutation: import("./sync-envelope-replay-service.js").SyncReplayMutation;
     }): Promise<ReturnType<typeof JSON.parse>>;

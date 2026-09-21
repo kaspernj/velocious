@@ -2742,32 +2742,66 @@ export default class VelociousDatabaseDriversBase {
    */
   async truncateAllTables() {
     this._assertNotReadOnly()
-    let tables = (await this.getTables()).filter((table) => table.getName() != "schema_migrations")
+    const tables = (await this.getTables()).filter((table) => table.getName() != "schema_migrations")
 
     if (tables.length == 0) return
 
-    await this.withDisabledForeignKeys(async () => {
-      for (let tries = 1; tries <= 6; tries++) {
-        try {
-          await this.truncateTables(tables)
-          return
-        } catch (error) {
-          console.error(error)
-
-          if (tries == 6) throw error
-
-          // A truncate failed — the schema cache may still list a table that was
-          // dropped out from under us (e.g. a db:rollback test that left the
-          // shared DB rolled back). Clear it so the next pass re-reads the live
-          // table list and no longer tries to truncate a table that is gone.
-          this.clearSchemaCache()
-          tables = (await this.getTables()).filter((table) => table.getName() != "schema_migrations")
-
-          if (tables.length == 0) return
-        }
-      }
-    })
+    await this._truncateAllTables(tables)
     await this.flushPendingWrites()
+  }
+
+  /**
+   * Owns the foreign-key boundary around every cleanup retry. Drivers that
+   * require one physical request for the full operation may override it.
+   * @protected
+   * @param {Array<import("./base-table.js").default>} tables - Eligible tables.
+   * @returns {Promise<void>} - Resolves after cleanup succeeds.
+   */
+  async _truncateAllTables(tables) {
+    await this.withDisabledForeignKeys(async () => {
+      await this._truncateAllTablesWithRetries(tables)
+    })
+  }
+
+  /**
+   * Retries cleanup against refreshed schema snapshots. Drivers may override
+   * `_truncateAllTablesAttempt` to own a complete driver-specific attempt.
+   * @protected
+   * @param {Array<import("./base-table.js").default>} initialTables - Initial eligible tables.
+   * @returns {Promise<void>} - Resolves after one cleanup attempt succeeds.
+   */
+  async _truncateAllTablesWithRetries(initialTables) {
+    let tables = initialTables
+
+    for (let tries = 1; tries <= 6; tries++) {
+      try {
+        await this._truncateAllTablesAttempt(tables)
+        return
+      } catch (error) {
+        console.error(error)
+
+        if (tries == 6) throw error
+
+        // A truncate failed — the schema cache may still list a table that was
+        // dropped out from under us (e.g. a db:rollback test that left the
+        // shared DB rolled back). Clear it so the next pass re-reads the live
+        // table list and no longer tries to truncate a table that is gone.
+        this.clearSchemaCache()
+        tables = (await this.getTables()).filter((table) => table.getName() != "schema_migrations")
+
+        if (tables.length == 0) return
+      }
+    }
+  }
+
+  /**
+   * Runs one cleanup attempt while the default owner has constraints disabled.
+   * @protected
+   * @param {Array<import("./base-table.js").default>} tables - Current eligible tables.
+   * @returns {Promise<void>} - Resolves when the attempt completes.
+   */
+  async _truncateAllTablesAttempt(tables) {
+    await this.truncateTables(tables)
   }
 
   /**

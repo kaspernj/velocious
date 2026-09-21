@@ -4,6 +4,8 @@ Project-scoped clients backed by separate SQLite replicas bind to an immutable t
 
 `SyncClient` (`src/sync/sync-client.js`) is the declarative client-side sync driver. Models declare sync, one configuration block carries the genuinely app-owned hooks, and Velocious derives everything else: the resource map, the sync endpoints, scope persistence, per-scope cursors, pull paging and apply, local queueing, and online-gated replay. There is no hand-written resource map, transport POSTer, or endpoint wiring in app code.
 
+For a complete application lifecycle around a tenant-bound client—single-flight replay/realtime/pull ordering, connectivity triggers, observable status, bounded retry, and teardown—use [`SyncCoordinator`](sync-coordinator.md). It composes this client rather than replacing its queue, cursor, apply, or subscription owners.
+
 ## Declaring sync on models
 
 Models opt in with `static sync`:
@@ -233,6 +235,8 @@ Automatic tracking covers ordinary creates/updates, so most models never call `q
 
 `queue()` persists a pending row on the derived `Sync` model (stripping local-only attributes, coercing booleans) and schedules an immediate background replay. Replays are single-flighted and online-gated; rows are marked successful only after the backend acknowledges them, so offline or rejected changes stay pending for the next attempt. Background failures go to the `sync.client.onError` hook (rethrown when none is configured). `waitForScheduledReplay()` awaits the last scheduled attempt (useful in tests and shutdown flows).
 
+When a `SyncCoordinator` is attached, mutation and realtime-reconnect scheduling route through its one replay → subscribe → pull cycle instead of starting independent replay/pull work. `activateUserScope()` declares the server-enumerated user scope without subscribing or pulling, making it suitable for the coordinator's `prepare` hook; the older `subscribeUserScope()` remains the combined convenience for clients without a coordinator.
+
 ### Durable base-version conflicts
 
 Shared/offline-editable resources can preserve every local intent instead of replacing one pending `Sync` row:
@@ -255,6 +259,8 @@ static sync = {
 Updates and deletes capture the configured version before the local write; creates use a null base. Each mutation is appended to `LocalMutationLog` with a per-record predecessor, so a create stays ahead of its edit and a conflicted/rejected predecessor blocks (but never deletes) later intent. Adjacent updates may share one transport mutation only when their payloads contain disjoint scalar fields and have the same base; every constituent log record remains inspectable.
 
 Replay sends stable client mutation ids and persists structured `conflict`/`failed` responses through the existing local-log result mapper. Per-record occurrence timestamps are strictly monotonic even when multiple intents are queued during one clock millisecond. Successful or duplicate acknowledgements may rebase the direct successor from the returned authoritative `serverVersion`; a pull/realtime observation while the predecessor is in flight prevents that rebase. With conflict-tracked model-backed replay, the sync row durably retains the original mutation identity, payload fingerprint, and acknowledgement version alongside its public change-feed data. An exact response-loss retry returns `syncState: "duplicate"` plus the version produced by the original apply—not a later record version—without applying twice; older distinct stale mutations retain the established successful no-op response. The server replay service must use the matching `conflictStrategy.versionAttribute` so successful responses carry an authoritative version and stale updates/deletes use the existing structured conflict contract.
+
+When a conflict response includes `serverModel`, the client applies that authoritative state through the same tenant-bound, tracking-suppressed applier used by pull/realtime before preserving the rejected intent as `conflict`. `inspectSyncState()` exposes counts and privacy-safe conflict identifiers/version metadata without copying model payloads. `resolveConflict({recordId, resourceType, resolution})` requires an explicit `keep-server` or `retry-local` decision; retry-local rebases from the persisted authoritative server version. The coordinator exposes the same resolution boundary and refreshes status/replay through its single flight; see [sync coordinator](sync-coordinator.md#conflict-application-and-resolution).
 
 ## Realtime
 

@@ -116,7 +116,9 @@ SQLite uses a native multi-statement script of `DELETE` statements, including th
 Expo/native and SQL.js paths; SQL.js marks the batch dirty and flushes its persisted
 bytes before cleanup resolves. SQL Server attempts `TRUNCATE` per table inside one
 guarded T-SQL batch and falls back to `DELETE` only for error 4712, the recognized
-foreign-key/reference restriction.
+foreign-key/reference restriction. Its constraint disable, table cleanup, and
+fail-loud constraint restoration are part of that same request, preventing a pooled
+session or another logical request from taking ownership between cleanup phases.
 
 MySQL and MariaDB use a single request only when the database connection already has
 `multipleStatements: true`. The option remains off by default; without it, cleanup

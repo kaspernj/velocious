@@ -210,12 +210,34 @@ export default class VelociousDatabaseDriversMssql extends Base {
      */
     getTables(): Promise<Array<import("../base-table.js").default>>;
     /**
+     * Keeps constraint toggles and cleanup inside each physical SQL Server
+     * request so a pool cannot split lifecycle ownership across sessions.
+     * @protected
+     * @param {Array<import("../base-table.js").default>} tables - Eligible tables.
+     * @returns {Promise<void>} - Resolves after one cleanup attempt succeeds.
+     */
+    protected _truncateAllTables(tables: Array<import("../base-table.js").default>): Promise<void>;
+    /**
+     * Runs one fail-loud cleanup batch with restoration on both success and
+     * failure. The outer retry owner refreshes stale table snapshots.
+     * @protected
+     * @param {Array<import("../base-table.js").default>} tables - Current eligible tables.
+     * @returns {Promise<void>} - Resolves after the batch completes.
+     */
+    protected _truncateAllTablesAttempt(tables: Array<import("../base-table.js").default>): Promise<void>;
+    /**
      * Truncates all eligible tables in one SQL Server request, retaining the
      * recognized foreign-key fallback used by the per-table implementation.
      * @param {Array<import("../base-table.js").default>} tables - Eligible tables.
      * @returns {Promise<void>} - Resolves when the batch completes.
      */
     truncateTables(tables: Array<import("../base-table.js").default>): Promise<void>;
+    /**
+     * Builds the per-table truncate/delete-fallback statements.
+     * @param {Array<import("../base-table.js").default>} tables - Eligible tables.
+     * @returns {string[]} - SQL statements.
+     */
+    _truncateTableStatements(tables: Array<import("../base-table.js").default>): string[];
     lastInsertID(options?: {}): Promise<any>;
     /**
      * Runs options.
