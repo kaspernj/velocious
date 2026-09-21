@@ -806,6 +806,16 @@ export default class FrontendModelBaseResource<TModelClass extends FrontendModel
      */
     primaryKey(): import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition;
     /**
+     * Runs database primary key.
+     *
+     * Declared scalar resource primary keys are client-facing aliases (for example
+     * a camelCase name for a legacy raw-column primary key). Database-facing identity
+     * operations must resolve the alias to the model's canonical attribute so where
+     * and pluck clauses hit real columns, while client-facing payloads keep the alias.
+     * @returns {import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition} - Primary key resolved to database-queryable attribute names.
+     */
+    databasePrimaryKey(): import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition;
+    /**
      * Runs authorized query.
      * @param {FrontendModelResourceAction} action - Ability action.
      * @param {FrontendModelResourceAuthorizedQueryOptions} [options] - Authorization query options.

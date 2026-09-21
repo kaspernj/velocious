@@ -699,7 +699,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
       ? ModelClass.accessibleFor(this.syncAbilityAction(forDelete ? "destroy" : "update"), ability)
       : ModelClass.where({})
 
-    return await query.findBy(modelPrimaryKeyConditions(this.primaryKey(), mutation.resourceId))
+    return await query.findBy(modelPrimaryKeyConditions(this.databasePrimaryKey(), mutation.resourceId))
   }
 
   /**
@@ -895,6 +895,25 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   }
 
   /**
+   * Runs database primary key.
+   *
+   * Declared scalar resource primary keys are client-facing aliases (for example
+   * a camelCase name for a legacy raw-column primary key). Database-facing identity
+   * operations must resolve the alias to the model's canonical attribute so where
+   * and pluck clauses hit real columns, while client-facing payloads keep the alias.
+   * @returns {import("../utils/model-primary-key.js").ModelPrimaryKeyDefinition} - Primary key resolved to database-queryable attribute names.
+   */
+  databasePrimaryKey() {
+    const primaryKey = this.primaryKey()
+
+    if (Array.isArray(primaryKey)) return primaryKey
+
+    const modelClass = this.databaseModelClass()
+
+    return modelClass.resolveAttributeName(primaryKey) || primaryKey
+  }
+
+  /**
    * Runs authorized query.
    * @param {FrontendModelResourceAction} action - Ability action.
    * @param {FrontendModelResourceAuthorizedQueryOptions} [options] - Authorization query options.
@@ -1027,7 +1046,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
       query = query.preload(preload)
     }
 
-    return await query.findBy(modelPrimaryKeyConditions(this.primaryKey(), id))
+    return await query.findBy(modelPrimaryKeyConditions(this.databasePrimaryKey(), id))
   }
 
   /**

@@ -1061,6 +1061,14 @@ export default class FrontendModelController extends Controller {
   }
 
   /**
+   * Runs frontend model database primary key.
+   * @returns {import("./utils/model-primary-key.js").ModelPrimaryKeyDefinition} - Primary key resolved to database-queryable attribute names.
+   */
+  frontendModelDatabasePrimaryKey() {
+    return this.frontendModelResourceInstance().databasePrimaryKey()
+  }
+
+  /**
    * Runs frontend model ability action.
    * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url"} action - Frontend action.
    * @returns {string} - Ability action configured for the frontend action.
@@ -1138,7 +1146,7 @@ export default class FrontendModelController extends Controller {
    * @returns {import("./utils/model-primary-key.js").ModelPrimaryKeyValue} - Primary key value.
    */
   frontendModelPrimaryKeyValue(model) {
-    const primaryKey = this.frontendModelPrimaryKey()
+    const primaryKey = this.frontendModelDatabasePrimaryKey()
 
     return readModelPrimaryKeyValue(primaryKey, (attributeName) => model.readAttribute(attributeName))
   }
@@ -1194,7 +1202,7 @@ export default class FrontendModelController extends Controller {
   async frontendModelFilterAuthorizedModels({action, models}) {
     if (models.length === 0) return models
 
-    const primaryKey = this.frontendModelPrimaryKey()
+    const primaryKey = this.frontendModelDatabasePrimaryKey()
 
     const identities = models.map((model) => this.frontendModelPrimaryKeyValue(model))
     const authorizedIds = await this.frontendModelAuthorizedIdentitySet({

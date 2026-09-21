@@ -280,6 +280,11 @@ export default class FrontendModelController extends Controller {
      */
     frontendModelPrimaryKey(): import("./utils/model-primary-key.js").ModelPrimaryKeyDefinition;
     /**
+     * Runs frontend model database primary key.
+     * @returns {import("./utils/model-primary-key.js").ModelPrimaryKeyDefinition} - Primary key resolved to database-queryable attribute names.
+     */
+    frontendModelDatabasePrimaryKey(): import("./utils/model-primary-key.js").ModelPrimaryKeyDefinition;
+    /**
      * Runs frontend model ability action.
      * @param {"index" | "find" | "create" | "update" | "destroy" | "attach" | "attachmentList" | "download" | "url"} action - Frontend action.
      * @returns {string} - Ability action configured for the frontend action.

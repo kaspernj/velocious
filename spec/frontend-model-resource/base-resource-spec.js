@@ -2,6 +2,7 @@
 
 import {describe, expect, it} from "../../src/testing/test.js"
 import FrontendModelBaseResource from "../../src/frontend-model-resource/base-resource.js"
+import {frontendModelResourceConfigurationFromDefinition} from "../../src/frontend-models/resource-definition.js"
 import FrontendModelBase from "../../src/frontend-models/base.js"
 import DatabaseRecord from "../../src/database/record/index.js"
 import Project from "../dummy/src/models/project.js"
@@ -26,6 +27,58 @@ describe("FrontendModelBaseResource", {databaseCleaning: {transaction: true}}, (
     const resource = new LegacyCompositeResource({modelName: "LegacyCompositeRecord", params: {}})
 
     expect(resource.primaryKey()).toEqual(["tenantId", "externalId"])
+  })
+
+  it("resolves declared scalar legacy primary key aliases for database identity queries", {databaseCleaning: {transaction: false, truncate: false}}, () => {
+    class LegacyAliasRecord extends DatabaseRecord {
+      /** @returns {string} - Raw database-column primary key. */
+      static primaryKey() { return "VA_ÜbAttKoordinatenID" }
+
+      /** @param {string} name - Attribute or column name. @returns {string | null} - Resolved attribute name. */
+      static resolveAttributeName(name) {
+        if (name === "VA_ÜbAttKoordinatenID" || name === "vAUebattkoordinatenid") return "vAUebattkoordinatenid"
+        return name.toLowerCase() === "vauebattkoordinatenid" ? "vAUebattkoordinatenid" : null
+      }
+    }
+
+    class LegacyAliasResource extends FrontendModelBaseResource {
+      static ModelClass = LegacyAliasRecord
+      static primaryKey = "vAUebAttKoordinatenID"
+    }
+
+    const resource = new LegacyAliasResource({
+      modelName: "LegacyAliasRecord",
+      params: {},
+      resourceConfiguration: frontendModelResourceConfigurationFromDefinition(LegacyAliasResource)
+    })
+
+    expect(resource.primaryKey()).toEqual("vAUebAttKoordinatenID")
+    expect(resource.databasePrimaryKey()).toEqual("vAUebattkoordinatenid")
+  })
+
+  it("keeps undeclared scalar primary keys stable for database identity queries", {databaseCleaning: {transaction: false, truncate: false}}, () => {
+    class PlainRecord extends DatabaseRecord {
+      /** @returns {string} - Raw database-column primary key. */
+      static primaryKey() { return "id" }
+
+      /** @param {string} name - Attribute or column name. @returns {string | null} - Resolved attribute name. */
+      static resolveAttributeName(name) {
+        return name === "id" ? "id" : null
+      }
+    }
+
+    class PlainResource extends FrontendModelBaseResource {
+      static ModelClass = PlainRecord
+    }
+
+    const resource = new PlainResource({
+      modelName: "PlainRecord",
+      params: {},
+      resourceConfiguration: frontendModelResourceConfigurationFromDefinition(PlainResource)
+    })
+
+    expect(resource.primaryKey()).toEqual("id")
+    expect(resource.databasePrimaryKey()).toEqual("id")
   })
 
   it("falls back to shared resource static config when environment resource omits it", () => {
