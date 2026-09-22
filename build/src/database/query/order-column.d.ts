@@ -31,6 +31,11 @@ export default class VelociousDatabaseQueryOrderColumn extends OrderBase {
      */
     setReverseOrder(reverseOrder?: boolean): void;
     /**
+     * Runs reversed copy.
+     * @returns {VelociousDatabaseQueryOrderColumn} - A new independent order reversing the effective (rendered) direction.
+     */
+    reversedCopy(): VelociousDatabaseQueryOrderColumn;
+    /**
      * Runs to sql.
      * @returns {string} - SQL string.
      */
