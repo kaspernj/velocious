@@ -63,6 +63,12 @@ Without a resource definition, frontend models should not silently work.
 - Resources that override `records()` opt out of aggregate `count()` automatically because Velocious cannot infer whether the default query still matches the custom records.
 - Override `count()` on the resource when a custom index needs frontend-model `count()` support.
 
+## Querying by attribute (`where`, `sort`, `search`, `group`, `pluck`)
+Query operations resolve the requested attribute key to the model's **canonical** attribute name (matching the exact attribute name, a camelize-normalized form, the raw column name, or a case-insensitive accessor match) and then require that canonical name to be present in the resource's declared `static attributes`. `select`/serialization instead match the **declared** key directly. Consequences:
+
+- When the declared key equals the canonical model attribute name (the common case), the attribute is both selectable and queryable.
+- When a resource declares an attribute under a differently-cased key than the model's canonical attribute (for example declaring `TicketID` for a model attribute `ticketID`), the attribute is **selectable and serializable under the declared name but not queryable** — neither `TicketID` nor `ticketID` matches a `where`/`sort`/`search` filter (the controller raises `Unknown where column …`). To make such a column filterable/sortable, declare it under the exact canonical attribute name (which changes the serialized name), or expose a backend quick-search column over the raw column.
+
 ## Custom commands
 - Declare custom commands on the resource with `collectionCommands` (class-level, e.g. `Model.refreshAll()`) and `memberCommands` (instance-level, e.g. `record.refresh()`), as arrays. The generator emits a method per command and the runtime derives each command's kebab-case route slug from the camelCase method name.
 - `onDestroy` is reserved for the generated class-level lifecycle hook and cannot be declared as a collection command.
@@ -93,6 +99,9 @@ async suspend(...commandArguments) { /* ... */ }
  */
 async refresh(age) { /* ... */ }
 ```
+
+### Command authorization
+Custom (member/collection) commands are **not** ability-gated by the framework. The controller resolves the registered command name and invokes the resource method directly; there is no `authorizedQuery` check the way the CRUD operations (`read`/`create`/`update`/`destroy`) receive one. Every command method therefore **must** enforce its own authorization from `getContext()` and throw a `VelociousError.safe("Access denied.", {code})` (or equivalent) when the context is not allowed. Note the asymmetry: the command's *return value* is ability-filtered on serialization, but the command *execution itself* is not gated — the guard belongs in the method body.
 
 ### Deriving a command's types from the resource method JSDoc
 - When a command is declared as a plain string (no explicit `{args, returnType}`), the generator derives its typed signature from the **backend resource method's own `@param`/`@returns` JSDoc**, so the type is declared once on the method and flows to the generated frontend method.
