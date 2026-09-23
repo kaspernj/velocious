@@ -27,6 +27,15 @@ export default class VelociousDatabaseQueryOrderBase {
     throw new Error("setReverseOrder not implemented")
   }
 
+  /**
+   * Runs reversed copy.
+   * @abstract
+   * @returns {import("./order-base.js").default} - A new independent order with the direction reversed.
+   */
+  reversedCopy() {
+    throw new Error("reversedCopy not implemented")
+  }
+
   toSql() {
     throw new Error("'toSql' wasn't implemented")
   }

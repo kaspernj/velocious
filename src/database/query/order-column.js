@@ -60,6 +60,16 @@ export default class VelociousDatabaseQueryOrderColumn extends OrderBase {
   }
 
   /**
+   * Runs reversed copy.
+   * @returns {VelociousDatabaseQueryOrderColumn} - A new independent order reversing the effective (rendered) direction.
+   */
+  reversedCopy() {
+    const direction = this.reverseOrder ? this.direction : reverseDirection(this.direction)
+
+    return new VelociousDatabaseQueryOrderColumn(this.query, {column: this.column, direction, tableName: this.tableName})
+  }
+
+  /**
    * Runs to sql.
    * @returns {string} - SQL string.
    */

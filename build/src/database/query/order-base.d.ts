@@ -17,6 +17,12 @@ export default class VelociousDatabaseQueryOrderBase {
      * @returns {void} - No return value.
      */
     setReverseOrder(_reverseOrder: boolean): void;
+    /**
+     * Runs reversed copy.
+     * @abstract
+     * @returns {import("./order-base.js").default} - A new independent order with the direction reversed.
+     */
+    reversedCopy(): import("./order-base.js").default;
     toSql(): void;
 }
 //# sourceMappingURL=order-base.d.ts.map
