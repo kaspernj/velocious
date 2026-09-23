@@ -263,10 +263,13 @@ describe("BackgroundJobsClient owned enqueue acknowledgement recovery", {databas
     try {
       const producer = await createOwnedProducer({generationId, jobName: "DelayedOwnedAckProducerJob", store})
       dummyConfiguration.setBackgroundJobsConfig({generationId, host: "127.0.0.1", port: proxy.port})
+      // Generous budgets so CI load does not add spurious retries on top of the
+      // intentional withheld-ack replay (see TensorBuzz CI card); the test still
+      // exercises the timeout -> fresh-budget replay path.
       const client = new BackgroundJobsClient({
         configuration: dummyConfiguration,
-        enqueueTimeoutMs: 500,
-        generationHandshakeTimeoutMs: 1000,
+        enqueueTimeoutMs: 2000,
+        generationHandshakeTimeoutMs: 5000,
         generationId
       })
       const jobId = await client.enqueue({

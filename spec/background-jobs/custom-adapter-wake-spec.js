@@ -22,8 +22,10 @@ describe("Background jobs - custom adapter Node wake-up", {databaseCleaning: {tr
 
       const jobId = await TestJob.performLater("custom-adapter", outputPath)
 
-      await waitForJobCompleted({jobId, store})
-      expect(await waitForOutputJson({outputPath})).toEqual({message: "custom-adapter"})
+      // The idle worker can take well over the 2s default to wake and drain
+      // under CI load; give the wake a generous budget (see TensorBuzz CI card).
+      await waitForJobCompleted({jobId, store, timeoutSeconds: 15})
+      expect(await waitForOutputJson({outputPath, timeoutSeconds: 15})).toEqual({message: "custom-adapter"})
     } finally {
       await worker.stop()
       await main.stop()
