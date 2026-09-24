@@ -4,7 +4,7 @@
   "private": true,
   "main": "index.js",
   "scripts": {
-    "export": "npx expo export --platform all --output-dir dist",
+    "export": "npx expo export --platform all --output-dir dist && node scripts/copy-sqljs-wasm.mjs",
     "start": "expo start",
     "test:dist": "node scripts/run-export-tests.mjs"
   },

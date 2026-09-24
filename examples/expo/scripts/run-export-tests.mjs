@@ -94,6 +94,10 @@ async function main() {
   try {
     await systemTest.start()
     systemTest.setBaseSelector("[data-testid='systemTestingComponent']")
+    await systemTest.waitForTestIDTextExcludes("expoCompatibilityTestStatus", "running", {
+      timeout: 30000,
+      useBaseSelector: false
+    })
 
     const status = await elementText(systemTest, "expoCompatibilityTestStatus")
     const details = await elementText(systemTest, "expoCompatibilityTestDetails")
