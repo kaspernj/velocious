@@ -63,6 +63,16 @@ export default class RootController extends Controller {
     await this.render()
   }
 
+  async rawBody() {
+    const rawBody = this.request().rawBody()
+
+    await this.render({json: {
+      base64: rawBody.toString("base64"),
+      byteLength: rawBody.byteLength,
+      queryValue: this.queryParameters().request
+    }})
+  }
+
   async slow() {
     const queryParameters = this.queryParameters()
     const waitSeconds = Number(queryParameters.waitSeconds || 0)

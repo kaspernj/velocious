@@ -356,14 +356,20 @@ export default class VelociousConfiguration {
     this._initializePromise = undefined
     /** @type {number | undefined} */
     this._initializePromiseGeneration = undefined
+    const requestBodyPolicyResolver = httpServer?.requestBodyPolicyResolver
     const websocketInboundQueue = httpServer?.websocketInboundQueue
     const websocketOutboundQueue = httpServer?.websocketOutboundQueue
+
+    if (requestBodyPolicyResolver !== undefined && typeof requestBodyPolicyResolver !== "function") {
+      throw new TypeError("httpServer.requestBodyPolicyResolver must be a function")
+    }
 
     this.httpServer = {
       ...(httpServer || {}),
       compression: normalizeHttpCompression(httpServer?.compression),
       maxBufferedResponseBodyBytes: optionalPositiveSafeInteger(httpServer?.maxBufferedResponseBodyBytes, "httpServer.maxBufferedResponseBodyBytes"),
       maxRequestBodyBytes: optionalPositiveSafeInteger(httpServer?.maxRequestBodyBytes, "httpServer.maxRequestBodyBytes"),
+      requestBodyPolicyResolver,
       websocketInboundQueue: {
         maxPendingBytes: positiveSafeInteger(websocketInboundQueue?.maxPendingBytes, "httpServer.websocketInboundQueue.maxPendingBytes", DEFAULT_WEBSOCKET_INBOUND_MAX_PENDING_BYTES),
         maxPendingMessages: positiveSafeInteger(websocketInboundQueue?.maxPendingMessages, "httpServer.websocketInboundQueue.maxPendingMessages", DEFAULT_WEBSOCKET_INBOUND_MAX_PENDING_MESSAGES)
@@ -682,6 +688,42 @@ export default class VelociousConfiguration {
    */
   getHttpServerMaxRequestBodyBytes() {
     return this.httpServer.maxRequestBodyBytes
+  }
+
+  /**
+   * Resolves request-body handling after the request line and headers are complete,
+   * before body bytes are retained or decoded.
+   * @param {import("./configuration-types.js").HttpRequestBodyPolicyResolverArgs} args - Parsed request head.
+   * @returns {import("./configuration-types.js").ResolvedHttpRequestBodyPolicy} - Effective request policy.
+   */
+  resolveHttpRequestBodyPolicy(args) {
+    const resolver = this.httpServer.requestBodyPolicyResolver
+    const configuredPolicy = resolver ? resolver(args) : undefined
+
+    if (configuredPolicy === undefined) {
+      return {maxRequestBodyBytes: this.httpServer.maxRequestBodyBytes, mode: "parsed"}
+    }
+
+    if (!configuredPolicy || typeof configuredPolicy !== "object" || Array.isArray(configuredPolicy)) {
+      throw new TypeError("httpServer.requestBodyPolicyResolver must return an object or undefined")
+    }
+
+    const {maxRequestBodyBytes, mode = "parsed", ...restPolicy} = configuredPolicy
+    const unknownKeys = Object.keys(restPolicy)
+
+    if (unknownKeys.length > 0) {
+      throw new TypeError(`httpServer.requestBodyPolicyResolver returned unknown keys: ${unknownKeys.join(", ")} (supported: maxRequestBodyBytes, mode)`)
+    }
+    if (mode !== "parsed" && mode !== "raw") {
+      throw new TypeError(`httpServer.requestBodyPolicyResolver mode must be "parsed" or "raw", got: ${String(mode)}`)
+    }
+
+    return {
+      maxRequestBodyBytes: maxRequestBodyBytes === undefined
+        ? this.httpServer.maxRequestBodyBytes
+        : optionalPositiveSafeInteger(maxRequestBodyBytes, "httpServer.requestBodyPolicyResolver maxRequestBodyBytes"),
+      mode
+    }
   }
 
   /**

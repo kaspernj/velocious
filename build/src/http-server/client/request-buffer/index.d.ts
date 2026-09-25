@@ -4,9 +4,10 @@ import Logger from "../../../logger.js";
 export default class RequestBuffer {
     configuration: import("../../../configuration.js").default;
     logger: Logger;
+    postBody: string | undefined;
+    formDataPart: FormDataPart | undefined;
     currentChunkBytesRead: number | undefined;
     currentChunkCrlfRead: number | undefined;
-    formDataPart: FormDataPart | undefined;
     contentLength: number | undefined;
     boundary: string | undefined;
     boundaryLine: string | undefined;
@@ -15,9 +16,13 @@ export default class RequestBuffer {
     httpMethod: string | undefined;
     httpVersion: string | undefined;
     path: string | undefined;
-    postBody: string | undefined;
     currentChunkSize: number | undefined;
     bodyLength: number;
+    /** @type {import("../../../configuration-types.js").ResolvedHttpRequestBodyPolicy | undefined} */
+    requestBodyPolicy: import("../../../configuration-types.js").ResolvedHttpRequestBodyPolicy | undefined;
+    /** @type {Buffer | undefined} */
+    rawBodyBuffer: Buffer | undefined;
+    destroyed: boolean;
     /** @type {Buffer[] | undefined} */
     postBodyBuffers: Buffer[] | undefined;
     /**
@@ -60,6 +65,11 @@ export default class RequestBuffer {
      */
     recordBodyBytes(bytes: number): void;
     destroy(): void;
+    /**
+     * Returns exact request body bytes for a completed request whose policy selected raw mode.
+     * @returns {Buffer} - A copy of the exact request body bytes.
+     */
+    getRawBody(): Buffer;
     /**
      * Runs feed.
      * @param {Buffer} data - Data payload.

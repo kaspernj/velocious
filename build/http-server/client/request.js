@@ -107,6 +107,11 @@ export default class VelociousHttpServerClientRequest {
       socketRemoteAddress: this.socketRemoteAddress()
     })
   }
+  /**
+   * Returns exact body bytes for requests whose header-stage body policy selected raw mode.
+   * @returns {Buffer} - A copy of the exact request body bytes.
+   */
+  rawBody() { return this.getRequestBuffer().getRawBody() }
   socketRemoteAddress() { return this.client?.remoteAddress }
 
   getRequestBuffer() { return this.getRequestParser().getRequestBuffer() }

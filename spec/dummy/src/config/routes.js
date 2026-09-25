@@ -61,6 +61,7 @@ routes.draw((route) => {
   route.post("current-user/update-password")
   route.get("current-user/update/details")
   route.get("params")
+  route.post("raw-body")
   route.get("slow")
   route.post("upload")
 })

@@ -1,0 +1,2 @@
+- Add a header-stage per-request HTTP body policy with route-specific byte limits and an exact public raw-body accessor, while preserving the existing parsed-body defaults.
+- Reject signed, partially parsed, prefixed, and unsafe chunk-size tokens, and enforce the decoded-body limit at the retention boundary so malformed framing cannot bypass per-request limits.

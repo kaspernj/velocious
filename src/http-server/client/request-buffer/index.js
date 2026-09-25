@@ -31,6 +31,14 @@ function truncatePreview(input, limit = 300) {
 export default class RequestBuffer {
   bodyLength = 0
 
+  /** @type {import("../../../configuration-types.js").ResolvedHttpRequestBodyPolicy | undefined} */
+  requestBodyPolicy = undefined
+
+  /** @type {Buffer | undefined} */
+  rawBodyBuffer = undefined
+
+  destroyed = false
+
   /** @type {Buffer[] | undefined} */
   postBodyBuffers = undefined
 
@@ -73,7 +81,7 @@ export default class RequestBuffer {
    * @returns {void}
    */
   assertRequestBodySize(actualBytes) {
-    const maxBytes = this.configuration.getHttpServerMaxRequestBodyBytes()
+    const maxBytes = this.requestBodyPolicy?.maxRequestBodyBytes ?? this.configuration.getHttpServerMaxRequestBodyBytes()
 
     if (maxBytes !== undefined && actualBytes > maxBytes) {
       throw new HttpRequestBodyTooLargeError({actualBytes, maxBytes})
@@ -93,7 +101,25 @@ export default class RequestBuffer {
   }
 
   destroy() {
-    // Do nothing for now...
+    this.destroyed = true
+    this.rawBodyBuffer = undefined
+    this.postBody = undefined
+    this.postBodyBuffers = undefined
+    this.chunkedBodyChars = undefined
+    this.data = []
+    this.formDataPart = undefined
+  }
+
+  /**
+   * Returns exact request body bytes for a completed request whose policy selected raw mode.
+   * @returns {Buffer} - A copy of the exact request body bytes.
+   */
+  getRawBody() {
+    if (this.destroyed) throw new Error("Raw request body is unavailable after request cleanup")
+    if (this.requestBodyPolicy?.mode !== "raw") throw new Error("Raw request body is available only when the request body policy selects raw mode")
+    if (!this.completed || !this.rawBodyBuffer) throw new Error("Raw request body is unavailable before request parsing completes")
+
+    return Buffer.from(this.rawBodyBuffer)
   }
 
   /**
@@ -210,6 +236,7 @@ export default class RequestBuffer {
         if (this.currentChunkSize === undefined) throw new Error("Chunk size not initialized")
         if (!chunkedBodyChars) throw new Error("Chunked body not initialized")
 
+        this.assertRequestBodySize(chunkedBodyChars.length + 1)
         chunkedBodyChars.push(char)
         /**
          * Current chunk bytes read.
@@ -429,6 +456,13 @@ export default class RequestBuffer {
       const httpMethod = this.httpMethod?.toUpperCase()
 
       if (!httpMethod) throw new Error("HTTP method not set")
+      if (!this.path) throw new Error("HTTP path not set")
+
+      this.requestBodyPolicy = this.configuration.resolveHttpRequestBodyPolicy({
+        headers: this.getHeadersHash(),
+        httpMethod,
+        path: this.path
+      })
 
       if (!this.expectsRequestBody(httpMethod)) {
         this.completeRequest()
@@ -446,7 +480,9 @@ export default class RequestBuffer {
           this.assertRequestBodySize(this.contentLength)
         }
 
-        const match = this.getHeader("content-type")?.value?.match(/^multipart\/form-data;\s*boundary=(.+)$/i)
+        const match = this.requestBodyPolicy.mode === "parsed"
+          ? this.getHeader("content-type")?.value?.match(/^multipart\/form-data;\s*boundary=(.+)$/i)
+          : null
 
         if (match) {
           this.boundary = match[1]
@@ -490,7 +526,13 @@ export default class RequestBuffer {
 
   postRequestDone() {
     if (this.postBodyBuffers) {
-      this.postBody = Buffer.concat(this.postBodyBuffers).toString("utf8")
+      const bodyBuffer = Buffer.concat(this.postBodyBuffers)
+
+      if (this.requestBodyPolicy?.mode === "raw") {
+        this.rawBodyBuffer = bodyBuffer
+      } else {
+        this.postBody = bodyBuffer.toString("utf8")
+      }
     }
 
     this.postBodyBuffers = undefined
@@ -542,9 +584,11 @@ export default class RequestBuffer {
 
     if (!sizeToken) throw new Error(`Invalid chunk size line: ${line}`)
 
+    if (!/^[0-9a-f]+$/iu.test(sizeToken)) throw new Error(`Invalid chunk size: ${sizeToken}`)
+
     const size = Number.parseInt(sizeToken, 16)
 
-    if (!Number.isFinite(size)) throw new Error(`Invalid chunk size: ${sizeToken}`)
+    if (!Number.isSafeInteger(size)) throw new Error(`Invalid chunk size: ${sizeToken}`)
 
     if (size === 0) {
       this.setState("chunked-trailer")
@@ -564,7 +608,13 @@ export default class RequestBuffer {
    */
   finishChunkedBody() {
     if (this.chunkedBodyChars) {
-      this.postBody = Buffer.from(this.chunkedBodyChars).toString("utf8")
+      const bodyBuffer = Buffer.from(this.chunkedBodyChars)
+
+      if (this.requestBodyPolicy?.mode === "raw") {
+        this.rawBodyBuffer = bodyBuffer
+      } else {
+        this.postBody = bodyBuffer.toString("utf8")
+      }
     }
 
     delete this.chunkedBodyChars
@@ -584,7 +634,9 @@ export default class RequestBuffer {
     this.state = "status" // Reset state to new request
     this.completed = true
 
-    if (this.getHeader("content-type")?.value?.startsWith("application/json")) {
+    if (this.requestBodyPolicy?.mode === "raw") {
+      this.rawBodyBuffer ||= Buffer.alloc(0)
+    } else if (this.getHeader("content-type")?.value?.startsWith("application/json")) {
       this.parseApplicationJsonParams()
     } else if (this.multiPartyFormData) {
       // Done after each new form data part

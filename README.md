@@ -2954,7 +2954,14 @@ implicit route connection checkout. Optional
 request bodies with a connection-closing `413` and oversized buffered responses
 with a reported, empty `500`. Both remain unbounded when omitted, and streamed
 `sendFile` responses are unaffected. The request limit is enforced while
-unframed multipart bodies accumulate. See [docs/http-server.md](docs/http-server.md#database-free-applications).
+unframed multipart bodies accumulate. A synchronous
+`httpServer.requestBodyPolicyResolver` can select a route-specific byte limit
+and `mode: "raw"` before body retention; raw routes receive exact bytes through
+the public `request.rawBody()` accessor without premature JSON/form decoding.
+Chunked parsing accepts complete unsigned hexadecimal sizes (and valid
+extensions), rejects signed or partially parsed sizes, and enforces the decoded
+byte limit again before retaining each body byte.
+See [docs/http-server.md](docs/http-server.md#buffered-body-limits).
 
 Buffered string and `Uint8Array` responses are compressed with Brotli (`br`) or gzip by default whenever request negotiation and response eligibility allow — no opt-in is required. Disable compression globally with `httpServer.compression: false` or `httpServer.compression: {enabled: false}`, and tune it with `threshold`/`brotliQuality`/`gzipLevel` overrides. Negotiation honors `Accept-Encoding` q-values, wildcards, and identity semantics (empty `406` when no acceptable representation exists), combines repeated `Accept-Encoding` header fields in wire order, and advertises a framework-owned `Vary: Accept-Encoding` on every framework-selected representation (transformed, identity, `406`, and file) so caches key on the field. Streamed `sendFile` responses are never buffered or re-encoded: they are sent identity, so when the client forbids identity the server answers with the same empty `406` without opening or streaming the file. Transformation also skips already-encoded or `no-transform` responses, server-sent events, partial/range responses, bodyless statuses, and non-allowlisted content types. Transformation is additionally excluded automatically for credentialed traffic and validator-carrying responses — requests with `Authorization`/`Cookie` and responses with `Set-Cookie`, `ETag`, `Digest`, or `Content-Digest` are never compressed (compression-oracle protection, and validators stay application-owned). Controllers opt out per response with `response.disableCompression()`, and HEAD requests compute GET-equivalent representation headers without emitting a body. See [docs/http-server.md](docs/http-server.md#response-compression).
 
