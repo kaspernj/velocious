@@ -1528,19 +1528,24 @@ export default class BackgroundJobsWorker {
     // observe a replacement slot before the failed jobs' reports are in flight.
     // The report promises remain tracked below; a slow retry must not hold the
     // newly freed runner capacity hostage.
-    if (state && state.started !== false) {
-      this._sendReadyIfRunning()
-    } else if (state) {
-      for (const entry of entries) {
-        if (entry.pooledJob) this._pooledStartupFailureJobs.add(entry.pooledJob)
-        const queueTracker = this.pooledJobQueueTrackers.get(entry.payload.id)
-        if (queueTracker) this._pooledStartupFailureJobs.add(queueTracker)
+    // A drained retirement already advertised its replacement capacity when
+    // the final job completed. Re-advertising here can restore a credit main
+    // consumed before its handoff reached the replacement child.
+    if (state?.shutdownReason !== "parent_retire_drained") {
+      if (state && state.started !== false) {
+        this._sendReadyIfRunning()
+      } else if (state) {
+        for (const entry of entries) {
+          if (entry.pooledJob) this._pooledStartupFailureJobs.add(entry.pooledJob)
+          const queueTracker = this.pooledJobQueueTrackers.get(entry.payload.id)
+          if (queueTracker) this._pooledStartupFailureJobs.add(queueTracker)
+        }
+        // A previous ready message may still have unconsumed pooled credits at the
+        // main. Revoke them authoritatively without suppressing valid inline or
+        // process-runner readiness; otherwise queued jobs can trigger a startup
+        // crash loop using the stale credits.
+        this._sendReadyIfRunning({revokePooledAdmission: true})
       }
-      // A previous ready message may still have unconsumed pooled credits at the
-      // main. Revoke them authoritatively without suppressing valid inline or
-      // process-runner readiness; otherwise queued jobs can trigger a startup
-      // crash loop using the stale credits.
-      this._sendReadyIfRunning({revokePooledAdmission: true})
     }
 
     await Promise.allSettled(failureReports)
@@ -1576,6 +1581,9 @@ export default class BackgroundJobsWorker {
         shutdownReason = "unexpected_exit"
       }
     }
+    const terminationReason = shutdownReason === "job_timeout"
+      ? "job-timeout"
+      : shutdownReason === "worker_stop" ? "worker-shutdown-timeout" : "unexpected"
     const workerLifecycle = this.shouldStop ? "stopping" : this.isRetiring ? "retiring" : "running"
     const runnerLifecycle = state.started === false ? "starting" : state.retiring ? "retiring" : "running"
     const boundedInflight = boundedPooledRunnerInflightJobIds(state.inflight.keys())
@@ -1608,6 +1616,7 @@ export default class BackgroundJobsWorker {
       shutdownRequestedAtMs: state.shutdownRequestedAtMs ?? observation?.shutdownRequestedAtMs ?? null,
       shutdownReason,
       shutdownSignal: state.shutdownSignal ?? observation?.signal ?? signal,
+      terminationReason,
       timeoutJobId: state.timeoutJobId ?? null,
       workerId: this.workerId,
       workerLifecycle,

@@ -8,6 +8,7 @@ export type BackgroundJobStatus = BackgroundJobActiveStatus | BackgroundJobTermi
 export type PooledRunnerFailureOrigin = "exit" | "process-error" | "ipc-send";
 export type PooledRunnerLifecycleState = "starting" | "running" | "retiring";
 export type PooledChildShutdownReason = "parent_retire_drained" | "job_timeout" | "worker_stop" | "signal_sigterm" | "signal_sigint" | "signal_sigkill" | "signal_other" | "ipc_disconnect" | "process_error" | "unexpected_exit";
+export type PooledRunnerTerminationReason = "unexpected" | "job-timeout" | "worker-shutdown-timeout";
 export type BackgroundJobsWorkerLifecycleState = "running" | "retiring" | "stopping";
 export type BackgroundJobProducerProof = {
     /**
@@ -126,6 +127,10 @@ export type PooledRunnerFailure = {
      * - Parent-requested or child-observed shutdown signal when available.
      */
     shutdownSignal: import("node:child_process").ChildProcess["signalCode"];
+    /**
+     * - Deprecated compatibility category; use shutdownReason for exact provenance.
+     */
+    terminationReason: PooledRunnerTerminationReason;
     /**
      * - Job whose timeout initiated child termination, or null.
      */
@@ -820,6 +825,10 @@ export type BackgroundJobSocketMessage = BackgroundJobHelloMessage | BackgroundJ
 /** @typedef {"exit" | "process-error" | "ipc-send"} PooledRunnerFailureOrigin */
 /** @typedef {"starting" | "running" | "retiring"} PooledRunnerLifecycleState */
 /** @typedef {"parent_retire_drained" | "job_timeout" | "worker_stop" | "signal_sigterm" | "signal_sigint" | "signal_sigkill" | "signal_other" | "ipc_disconnect" | "process_error" | "unexpected_exit"} PooledChildShutdownReason */
+/**
+ * @deprecated Use PooledChildShutdownReason for exact shutdown provenance.
+ * @typedef {"unexpected" | "job-timeout" | "worker-shutdown-timeout"} PooledRunnerTerminationReason
+ */
 /** @typedef {"running" | "retiring" | "stopping"} BackgroundJobsWorkerLifecycleState */
 /**
  * Exact durable handoff ownership carried by an executing job when it produces
@@ -860,6 +869,7 @@ export type BackgroundJobSocketMessage = BackgroundJobHelloMessage | BackgroundJ
  * @property {number | null} shutdownRequestedAtMs - Exact parent request timestamp, or null for external/unrequested shutdown.
  * @property {PooledChildShutdownReason} shutdownReason - Exact recorded parent request or observed child shutdown cause.
  * @property {import("node:child_process").ChildProcess["signalCode"]} shutdownSignal - Parent-requested or child-observed shutdown signal when available.
+ * @property {PooledRunnerTerminationReason} terminationReason - Deprecated compatibility category; use shutdownReason for exact provenance.
  * @property {string | null} timeoutJobId - Job whose timeout initiated child termination, or null.
  * @property {string} workerId - Stable generation-qualified worker id.
  * @property {BackgroundJobsWorkerLifecycleState} workerLifecycle - Parent worker lifecycle immediately before recovery.

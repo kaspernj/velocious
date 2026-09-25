@@ -495,7 +495,10 @@ The `background-job-failed` payload has:
   final process `signal`, and `oomKilled`. Shutdown-specific fields are:
   `shutdownReason`, `shutdownRequestedAtMs`, `shutdownObservedAtMs`,
   `shutdownSignal`, `timeoutJobId`, and the bounded `inflightJobIds` snapshot
-  with `inflightJobIdsTruncatedCount`.
+  with `inflightJobIdsTruncatedCount`. The deprecated `terminationReason` field
+  remains additive for existing consumers: `job_timeout` maps to `job-timeout`,
+  `worker_stop` maps to `worker-shutdown-timeout`, and every other exact reason
+  maps to `unexpected`. New consumers should use `shutdownReason`.
 
 `shutdownReason` is one typed value: `parent_retire_drained`, `job_timeout`,
 `worker_stop`, `signal_sigterm`, `signal_sigint`, `signal_sigkill`,
