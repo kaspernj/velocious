@@ -489,10 +489,26 @@ The `background-job-failed` payload has:
 - `context.runnerFailure`: present when a pooled runner process failure affected
   this job. Every job lost with the same child receives the same snapshot. It
   contains `activeJobs` (job, handoff, timestamp, and worker identities), the
-  runner and worker PIDs, release generation, runner/worker lifecycle states,
-  runner age and completed-job count, process-group ownership through
-  `runnerDetached`, failure `origin`, expected `terminationReason`, timeout job
-  id, exit code, signal, and `oomKilled`.
+  runner PID and stable `childInstanceId`, release generation, worker identity
+  and PID, runner/worker lifecycle states, runner age and completed-job count,
+  process-group ownership through `runnerDetached`, failure `origin`, exit code,
+  final process `signal`, and `oomKilled`. Shutdown-specific fields are:
+  `shutdownReason`, `shutdownRequestedAtMs`, `shutdownObservedAtMs`,
+  `shutdownSignal`, `timeoutJobId`, and the bounded `inflightJobIds` snapshot
+  with `inflightJobIdsTruncatedCount`. The deprecated `terminationReason` field
+  remains additive for existing consumers: `job_timeout` maps to `job-timeout`,
+  `worker_stop` maps to `worker-shutdown-timeout`, and every other exact reason
+  maps to `unexpected`. New consumers should use `shutdownReason`.
+
+`shutdownReason` is one typed value: `parent_retire_drained`, `job_timeout`,
+`worker_stop`, `signal_sigterm`, `signal_sigint`, `signal_sigkill`,
+`signal_other`, `ipc_disconnect`, `process_error`, or `unexpected_exit`. Parent
+requests are recorded with their timestamp before IPC/signal delivery and win
+over later exit inference. `parent_retire_drained` therefore means the parent
+proved zero tracked in-flight jobs; attempting that retirement with tracked work
+fails loudly. Timeout and worker-stop termination retain their own reason and
+in-flight handoff snapshot even if the five-second safety escalation makes the
+final process signal `SIGKILL`.
 
 `oomKilled` is `false` when Velocious initiated or observed a termination that
 rules OOM out. It is `null` for an unexplained `SIGKILL`, because Node cannot
@@ -517,7 +533,7 @@ configuration.getErrorEvents().on("background-job-orphaned", ({error, context}) 
 })
 ```
 
-The `background-job-orphaned` payload mirrors `background-job-failed`: `error` (the orphan reason as an `Error`) and `context` with `attempts`, `jobArgs`, `jobId`, `jobName`, `maxRetries`, `status`, `terminal`, `willRetry`, and `stage: "background-job-orphaned"`. `willRetry` is `true` when the reclaim returned the job to the queue for another attempt (retries remaining) and `false` when it was exhausted into a terminal `orphaned` state.
+The `background-job-orphaned` payload mirrors `background-job-failed`: `error` (the orphan reason as an `Error`) and `context` with `attempts`, `jobArgs`, `jobId`, `jobName`, `maxRetries`, `status`, `terminal`, `willRetry`, and `stage: "background-job-orphaned"`. `willRetry` is `true` when the reclaim returned the job to the queue for another attempt (retries remaining) and `false` when it was exhausted into a terminal `orphaned` state. An orphan sweep has no pooled-child report to attach, so it does not synthesize `runnerFailure` or a shutdown reason. Treat that cause as unknown; child acceptance timestamps/PID alone do not prove OOM, deployment, timeout, signal, or normal retirement.
 
 An unexpected live concurrency-reconciliation failure is emitted as
 `framework-error` and mirrored to `all-error` with

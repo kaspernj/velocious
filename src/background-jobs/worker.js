@@ -14,6 +14,7 @@ import performBackgroundJob from "./perform-job.js"
 import { runWithBackgroundJobPayload } from "./execution-context.js"
 import { createGenerationWorkerId } from "./generation-identity.js"
 import BackgroundJobsGenerationHandshakeTimeoutError, { DEFAULT_GENERATION_HANDSHAKE_TIMEOUT_MS, validateGenerationHandshakeTimeoutMs } from "./generation-handshake-timeout-error.js"
+import { POOLED_RUNNER_INFLIGHT_JOB_ID_LIMIT, boundedPooledRunnerInflightJobIds, isPooledChildShutdownReason, isPooledChildShutdownSignal } from "./pooled-runner-shutdown.js"
 
 /**
  * Per-forked-child timeout bookkeeping.
@@ -33,18 +34,26 @@ import BackgroundJobsGenerationHandshakeTimeoutError, { DEFAULT_GENERATION_HANDS
 /**
  * @typedef {object} PooledChildState
  * @property {number} createdAtMs - Child creation timestamp.
+ * @property {string} [childInstanceId] - Stable identity reported by the child.
  * @property {number} jobsRun - Acknowledged jobs completed by this child.
  * @property {Map<string, PooledJobEntry>} inflight - Jobs currently owned by this child.
  * @property {number} lastDispatchSeq - Round-robin dispatch sequence.
  * @property {boolean} retiring - Whether this child is draining before retirement.
  * @property {boolean} [started] - Whether the child completed its startup handshake.
  * @property {boolean} [settling] - Whether failure handling already owns this child.
+ * @property {number} [ipcDisconnectedAtMs] - Parent observation of IPC disconnect.
+ * @property {import("./types.js").PooledChildShutdownObservation} [shutdownObservation] - Child observation sent before teardown.
+ * @property {import("./types.js").PooledChildShutdownReason} [shutdownReason] - Exact parent-requested shutdown reason.
+ * @property {number} [shutdownRequestedAtMs] - Exact parent shutdown-request timestamp.
+ * @property {import("node:child_process").ChildProcess["signalCode"]} [shutdownSignal] - Signal selected by the parent request.
+ * @property {ReturnType<typeof setTimeout>} [shutdownSignalTimer] - Drained-retirement fallback signal timer.
  * @property {ReturnType<typeof setTimeout> | null} [timeoutSigkillTimer] - Pending timeout SIGKILL timer.
- * @property {import("./types.js").PooledRunnerTerminationReason} [terminationReason] - Expected termination reason.
  * @property {string} [timeoutJobId] - Job whose timeout initiated termination.
  */
 /** Grace period after SIGTERM before a lingering process runner is SIGKILLed. */
 const FORKED_CHILD_SIGKILL_GRACE_MS = 5000
+/** Time a drained retirement gives the child IPC request to begin teardown before SIGTERM fallback. */
+const POOLED_RUNNER_SHUTDOWN_REQUEST_GRACE_MS = 250
 /**
  * Largest delay Node's `setTimeout` accepts without overflowing to a 1ms delay
  * (a 32-bit signed int of ms, ~24.8 days). A `jobTimeoutMs` above this — or a
@@ -98,6 +107,29 @@ function isChildAcceptanceMessage(message) {
     && (record.startedAtMs === undefined || typeof record.startedAtMs === "number")
     && (record.childInstanceId === undefined || typeof record.childInstanceId === "string")
     && (record.childPid === undefined || Number.isInteger(record.childPid))
+}
+
+/**
+ * Checks whether an IPC value is the child's bounded pre-teardown observation.
+ * @param {ReturnType<typeof JSON.parse>} message - IPC message.
+ * @returns {message is import("./types.js").PooledChildShutdownObservation & {type: "shutdown-observation"}} - Whether this is a valid shutdown observation.
+ */
+function isChildShutdownObservationMessage(message) {
+  if (!message || typeof message !== "object") return false
+  const record = /** @type {{childInstanceId?: ReturnType<typeof JSON.parse>, inflightJobIds?: ReturnType<typeof JSON.parse>, inflightJobIdsTruncatedCount?: ReturnType<typeof JSON.parse>, reason?: ReturnType<typeof JSON.parse>, shutdownObservedAtMs?: ReturnType<typeof JSON.parse>, shutdownRequestedAtMs?: ReturnType<typeof JSON.parse>, signal?: ReturnType<typeof JSON.parse>, type?: ReturnType<typeof JSON.parse>}} */ (message)
+
+  return record.type === "shutdown-observation"
+    && typeof record.childInstanceId === "string"
+    && Array.isArray(record.inflightJobIds)
+    && record.inflightJobIds.length <= POOLED_RUNNER_INFLIGHT_JOB_ID_LIMIT
+    && record.inflightJobIds.every((jobId) => typeof jobId === "string")
+    && Number.isInteger(record.inflightJobIdsTruncatedCount)
+    && record.inflightJobIdsTruncatedCount >= 0
+    && isPooledChildShutdownReason(record.reason)
+    && typeof record.shutdownObservedAtMs === "number"
+    && Number.isFinite(record.shutdownObservedAtMs)
+    && (record.shutdownRequestedAtMs === null || (typeof record.shutdownRequestedAtMs === "number" && Number.isFinite(record.shutdownRequestedAtMs)))
+    && isPooledChildShutdownSignal(record.signal)
 }
 
 /**
@@ -561,14 +593,14 @@ export default class BackgroundJobsWorker {
 
     for (const child of this.inflightProcessChildren) {
       const pooledState = this.pooledChildStates.get(child)
-      if (pooledState && pooledState.inflight.size > 0 && !pooledState.terminationReason) {
-        pooledState.terminationReason = "worker-shutdown-timeout"
-      }
-
-      try {
-        child.kill("SIGTERM")
-      } catch {
-        // Child already exited; nothing to do.
+      if (pooledState) {
+        this._requestPooledChildShutdown({child, reason: "worker_stop", signal: "SIGTERM"})
+      } else {
+        try {
+          child.kill("SIGTERM")
+        } catch {
+          // Child already exited; nothing to do.
+        }
       }
     }
 
@@ -1185,16 +1217,10 @@ export default class BackgroundJobsWorker {
     const state = this.pooledChildStates.get(child)
 
     // Already settling/gone, or the job finished in the race with this timer.
-    if (!state || state.settling || state.terminationReason || !state.inflight.has(jobId)) return
+    if (!state || state.settling || state.shutdownReason || !state.inflight.has(jobId)) return
 
-    state.terminationReason = "job-timeout"
     state.timeoutJobId = jobId
-
-    try {
-      child.kill("SIGTERM")
-    } catch {
-      // Child already exited; nothing to do.
-    }
+    this._requestPooledChildShutdown({child, reason: "job_timeout", signal: "SIGTERM"})
 
     state.timeoutSigkillTimer = setTimeout(() => {
       try {
@@ -1234,6 +1260,10 @@ export default class BackgroundJobsWorker {
       origin: "process-error",
       signal: child.signalCode
     }))
+    child.once("disconnect", () => {
+      const state = this.pooledChildStates.get(child)
+      if (state) state.ipcDisconnectedAtMs ??= Date.now()
+    })
     return child
   }
 
@@ -1247,10 +1277,24 @@ export default class BackgroundJobsWorker {
    */
   _handlePooledChildMessage({child, message}) {
     if (!message || typeof message !== "object") return
-    const record = /** @type {{type?: ReturnType<typeof JSON.parse>, jobId?: ReturnType<typeof JSON.parse>, acknowledged?: ReturnType<typeof JSON.parse>, rssBytes?: ReturnType<typeof JSON.parse>, error?: ReturnType<typeof JSON.parse>}} */ (message)
+    const record = /** @type {{type?: ReturnType<typeof JSON.parse>, childInstanceId?: ReturnType<typeof JSON.parse>, jobId?: ReturnType<typeof JSON.parse>, acknowledged?: ReturnType<typeof JSON.parse>, rssBytes?: ReturnType<typeof JSON.parse>, error?: ReturnType<typeof JSON.parse>}} */ (message)
     const state = this.pooledChildStates.get(child)
     if (record.type === "ready") {
-      if (state) state.started = true
+      if (state) {
+        state.started = true
+        if (typeof record.childInstanceId === "string") state.childInstanceId = record.childInstanceId
+      }
+      return
+    }
+    if (isChildShutdownObservationMessage(message)) {
+      if (state) {
+        state.childInstanceId = message.childInstanceId
+        state.shutdownObservation = message
+        if (state.shutdownSignalTimer) {
+          clearTimeout(state.shutdownSignalTimer)
+          state.shutdownSignalTimer = undefined
+        }
+      }
       return
     }
     if (isChildAcceptanceMessage(message)) {
@@ -1354,10 +1398,78 @@ export default class BackgroundJobsWorker {
    * @returns {void}
    */
   _retirePooledChild(child) {
+    const state = this.pooledChildStates.get(child)
+    if (!state) throw new Error("Cannot retire pooled child without tracked state")
+    if (state.inflight.size > 0) {
+      throw new Error(`Cannot retire pooled child while ${state.inflight.size} ${state.inflight.size === 1 ? "job remains" : "jobs remain"} in flight`)
+    }
+
     this.pooledChildren.delete(child)
-    this.pooledChildStates.delete(child)
-    this.inflightProcessChildren.delete(child)
-    child.kill("SIGTERM")
+    state.retiring = true
+    this._requestPooledChildShutdown({child, reason: "parent_retire_drained", signal: "SIGTERM", waitForObservation: true})
+  }
+
+  /**
+   * Records an exact parent request before IPC or signal delivery. Drained
+   * retirement gets a brief IPC-first grace so its zero-job observation is
+   * deterministic; timeout/worker-stop paths signal immediately.
+   * @param {object} args - Shutdown request.
+   * @param {import("node:child_process").ChildProcess} args.child - Pooled child.
+   * @param {import("./types.js").PooledChildShutdownReason} args.reason - Exact parent reason.
+   * @param {keyof typeof import("node:os").constants.signals} args.signal - Signal to deliver.
+   * @param {boolean} [args.waitForObservation] - Whether IPC observation may precede signal fallback.
+   * @returns {void}
+   */
+  _requestPooledChildShutdown({child, reason, signal, waitForObservation = false}) {
+    const state = this.pooledChildStates.get(child)
+    if (!state || state.settling || state.shutdownReason) return
+
+    const shutdownRequestedAtMs = Date.now()
+    state.shutdownReason = reason
+    state.shutdownRequestedAtMs = shutdownRequestedAtMs
+    state.shutdownSignal = signal
+
+    let requestSent = false
+    if (child.connected) {
+      try {
+        child.send({type: "shutdown-request", reason, shutdownRequestedAtMs, signal}, (error) => {
+          if (!error || !waitForObservation || state.settling) return
+
+          if (state.shutdownSignalTimer) {
+            clearTimeout(state.shutdownSignalTimer)
+            state.shutdownSignalTimer = undefined
+          }
+          this._signalPooledChild({child, signal})
+        })
+        requestSent = true
+      } catch {
+        // The signal below remains the bounded shutdown mechanism.
+      }
+    }
+
+    if (waitForObservation && requestSent) {
+      state.shutdownSignalTimer = setTimeout(() => {
+        state.shutdownSignalTimer = undefined
+        this._signalPooledChild({child, signal})
+      }, POOLED_RUNNER_SHUTDOWN_REQUEST_GRACE_MS)
+      state.shutdownSignalTimer.unref()
+      return
+    }
+
+    this._signalPooledChild({child, signal})
+  }
+
+  /**
+   * Delivers one parent-owned process signal without changing recorded provenance.
+   * @param {{child: import("node:child_process").ChildProcess, signal: keyof typeof import("node:os").constants.signals}} args - Signal request.
+   * @returns {void}
+   */
+  _signalPooledChild({child, signal}) {
+    try {
+      child.kill(signal)
+    } catch {
+      // Child already exited; its exit/error handler owns state settlement.
+    }
   }
 
   /**
@@ -1384,6 +1496,7 @@ export default class BackgroundJobsWorker {
       // Cancel this child's pending timers before its in-flight set is reported —
       // the SIGKILL grace from a timeout kill, and every armed per-job backstop.
       if (state.timeoutSigkillTimer) clearTimeout(state.timeoutSigkillTimer)
+      if (state.shutdownSignalTimer) clearTimeout(state.shutdownSignalTimer)
       for (const inflightEntry of state.inflight.values()) {
         if (inflightEntry.timeoutTimer) clearTimeout(inflightEntry.timeoutTimer)
       }
@@ -1415,19 +1528,24 @@ export default class BackgroundJobsWorker {
     // observe a replacement slot before the failed jobs' reports are in flight.
     // The report promises remain tracked below; a slow retry must not hold the
     // newly freed runner capacity hostage.
-    if (state && state.started !== false) {
-      this._sendReadyIfRunning()
-    } else if (state) {
-      for (const entry of entries) {
-        if (entry.pooledJob) this._pooledStartupFailureJobs.add(entry.pooledJob)
-        const queueTracker = this.pooledJobQueueTrackers.get(entry.payload.id)
-        if (queueTracker) this._pooledStartupFailureJobs.add(queueTracker)
+    // A drained retirement already advertised its replacement capacity when
+    // the final job completed. Re-advertising here can restore a credit main
+    // consumed before its handoff reached the replacement child.
+    if (state?.shutdownReason !== "parent_retire_drained") {
+      if (state && state.started !== false) {
+        this._sendReadyIfRunning()
+      } else if (state) {
+        for (const entry of entries) {
+          if (entry.pooledJob) this._pooledStartupFailureJobs.add(entry.pooledJob)
+          const queueTracker = this.pooledJobQueueTrackers.get(entry.payload.id)
+          if (queueTracker) this._pooledStartupFailureJobs.add(queueTracker)
+        }
+        // A previous ready message may still have unconsumed pooled credits at the
+        // main. Revoke them authoritatively without suppressing valid inline or
+        // process-runner readiness; otherwise queued jobs can trigger a startup
+        // crash loop using the stale credits.
+        this._sendReadyIfRunning({revokePooledAdmission: true})
       }
-      // A previous ready message may still have unconsumed pooled credits at the
-      // main. Revoke them authoritatively without suppressing valid inline or
-      // process-runner readiness; otherwise queued jobs can trigger a startup
-      // crash loop using the stale credits.
-      this._sendReadyIfRunning({revokePooledAdmission: true})
     }
 
     await Promise.allSettled(failureReports)
@@ -1444,9 +1562,31 @@ export default class BackgroundJobsWorker {
    * @returns {import("./types.js").PooledRunnerFailure} - Shared failure provenance.
    */
   _pooledRunnerFailure({child, exitCode, origin, signal, state}) {
-    const terminationReason = state.terminationReason ?? "unexpected"
+    const observation = state.shutdownObservation
+    let shutdownReason = state.shutdownReason ?? observation?.reason
+    if (!shutdownReason) {
+      if (origin === "process-error" || origin === "ipc-send") {
+        shutdownReason = "process_error"
+      } else if (signal === "SIGTERM") {
+        shutdownReason = "signal_sigterm"
+      } else if (signal === "SIGINT") {
+        shutdownReason = "signal_sigint"
+      } else if (signal === "SIGKILL") {
+        shutdownReason = "signal_sigkill"
+      } else if (signal) {
+        shutdownReason = "signal_other"
+      } else if (state.ipcDisconnectedAtMs && exitCode === 0) {
+        shutdownReason = "ipc_disconnect"
+      } else {
+        shutdownReason = "unexpected_exit"
+      }
+    }
+    const terminationReason = shutdownReason === "job_timeout"
+      ? "job-timeout"
+      : shutdownReason === "worker_stop" ? "worker-shutdown-timeout" : "unexpected"
     const workerLifecycle = this.shouldStop ? "stopping" : this.isRetiring ? "retiring" : "running"
     const runnerLifecycle = state.started === false ? "starting" : state.retiring ? "retiring" : "running"
+    const boundedInflight = boundedPooledRunnerInflightJobIds(state.inflight.keys())
     const activeJobs = [...state.inflight.values()]
       .map((entry) => ({
         handoffId: entry.payload.handoffId ?? null,
@@ -1459,9 +1599,11 @@ export default class BackgroundJobsWorker {
 
     return Object.freeze({
       activeJobs,
+      childInstanceId: state.childInstanceId ?? observation?.childInstanceId ?? null,
       exitCode,
       generationId: this.generationId ?? null,
-      oomKilled: signal === "SIGKILL" && terminationReason === "unexpected" ? null : false,
+      ...boundedInflight,
+      oomKilled: signal === "SIGKILL" && shutdownReason === "signal_sigkill" ? null : false,
       origin,
       runnerAgeMs: Math.max(0, Date.now() - state.createdAtMs),
       runnerCreatedAtMs: state.createdAtMs,
@@ -1470,6 +1612,10 @@ export default class BackgroundJobsWorker {
       runnerLifecycle,
       runnerPid: child.pid ?? null,
       signal,
+      shutdownObservedAtMs: observation?.shutdownObservedAtMs ?? state.ipcDisconnectedAtMs ?? null,
+      shutdownRequestedAtMs: state.shutdownRequestedAtMs ?? observation?.shutdownRequestedAtMs ?? null,
+      shutdownReason,
+      shutdownSignal: state.shutdownSignal ?? observation?.signal ?? signal,
       terminationReason,
       timeoutJobId: state.timeoutJobId ?? null,
       workerId: this.workerId,

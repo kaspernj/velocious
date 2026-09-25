@@ -44,6 +44,10 @@ export type PooledChildState = {
      */
     createdAtMs: number;
     /**
+     * - Stable identity reported by the child.
+     */
+    childInstanceId?: string;
+    /**
      * - Acknowledged jobs completed by this child.
      */
     jobsRun: number;
@@ -68,13 +72,33 @@ export type PooledChildState = {
      */
     settling?: boolean;
     /**
+     * - Parent observation of IPC disconnect.
+     */
+    ipcDisconnectedAtMs?: number;
+    /**
+     * - Child observation sent before teardown.
+     */
+    shutdownObservation?: import("./types.js").PooledChildShutdownObservation;
+    /**
+     * - Exact parent-requested shutdown reason.
+     */
+    shutdownReason?: import("./types.js").PooledChildShutdownReason;
+    /**
+     * - Exact parent shutdown-request timestamp.
+     */
+    shutdownRequestedAtMs?: number;
+    /**
+     * - Signal selected by the parent request.
+     */
+    shutdownSignal?: import("node:child_process").ChildProcess["signalCode"];
+    /**
+     * - Drained-retirement fallback signal timer.
+     */
+    shutdownSignalTimer?: ReturnType<typeof setTimeout>;
+    /**
      * - Pending timeout SIGKILL timer.
      */
     timeoutSigkillTimer?: ReturnType<typeof setTimeout> | null;
-    /**
-     * - Expected termination reason.
-     */
-    terminationReason?: import("./types.js").PooledRunnerTerminationReason;
     /**
      * - Job whose timeout initiated termination.
      */
@@ -590,6 +614,32 @@ export default class BackgroundJobsWorker {
      * @returns {void}
      */
     _retirePooledChild(child: import("node:child_process").ChildProcess): void;
+    /**
+     * Records an exact parent request before IPC or signal delivery. Drained
+     * retirement gets a brief IPC-first grace so its zero-job observation is
+     * deterministic; timeout/worker-stop paths signal immediately.
+     * @param {object} args - Shutdown request.
+     * @param {import("node:child_process").ChildProcess} args.child - Pooled child.
+     * @param {import("./types.js").PooledChildShutdownReason} args.reason - Exact parent reason.
+     * @param {keyof typeof import("node:os").constants.signals} args.signal - Signal to deliver.
+     * @param {boolean} [args.waitForObservation] - Whether IPC observation may precede signal fallback.
+     * @returns {void}
+     */
+    _requestPooledChildShutdown({ child, reason, signal, waitForObservation }: {
+        child: import("node:child_process").ChildProcess;
+        reason: import("./types.js").PooledChildShutdownReason;
+        signal: keyof typeof import("node:os").constants.signals;
+        waitForObservation?: boolean;
+    }): void;
+    /**
+     * Delivers one parent-owned process signal without changing recorded provenance.
+     * @param {{child: import("node:child_process").ChildProcess, signal: keyof typeof import("node:os").constants.signals}} args - Signal request.
+     * @returns {void}
+     */
+    _signalPooledChild({ child, signal }: {
+        child: import("node:child_process").ChildProcess;
+        signal: keyof typeof import("node:os").constants.signals;
+    }): void;
     /**
      * Removes an exited/unhealthy pooled child and reports every job that was
      * in-flight on it as failed — a process-level crash's blast radius is the

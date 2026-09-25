@@ -1,14 +1,14 @@
 // @ts-check
 
-import {deferred} from "awaitery"
+import { deferred } from "awaitery"
 import timeout from "awaitery/build/timeout.js"
 import wait from "awaitery/build/wait.js"
-import {afterAll, beforeAll, describe, expect, it} from "../../src/testing/test.js"
+import { afterAll, beforeAll, describe, expect, it } from "../../src/testing/test.js"
 import createBackgroundJobsSocketBarrier from "../helpers/background-jobs-socket-barrier.js"
 import SocketBarrierTestJob from "../dummy/src/jobs/socket-barrier-test-job.js"
 import SlowTestJob from "../dummy/src/jobs/slow-test-job.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
-import {outputPathFor, startBackgroundJobs, waitForOutputJson} from "../helpers/background-jobs-helper.js"
+import { outputPathFor, startBackgroundJobs, waitForOutputJson } from "../helpers/background-jobs-helper.js"
 
 /** @type {Awaited<ReturnType<typeof startBackgroundJobs>> | undefined} */
 let backgroundJobs
@@ -168,13 +168,18 @@ describe("Background jobs - pooled ready dispatch", {tags: ["dummy"], databaseCl
       for (const failure of runnerFailures) {
         expect(failure.exitCode).toEqual(null)
         expect(failure.generationId).toEqual(null)
+        expect(typeof failure.childInstanceId).toEqual("string")
+        expect(failure.inflightJobIds).toEqual([...jobIds].sort())
+        expect(failure.inflightJobIdsTruncatedCount).toEqual(0)
         expect(failure.oomKilled).toEqual(null)
         expect(failure.origin).toEqual("exit")
         expect(failure.runnerDetached).toEqual(false)
         expect(failure.runnerLifecycle).toEqual("running")
         expect(failure.runnerPid).toEqual(runnerPid)
         expect(failure.signal).toEqual("SIGKILL")
-        expect(failure.terminationReason).toEqual("unexpected")
+        expect(failure.shutdownReason).toEqual("signal_sigkill")
+        expect(failure.shutdownRequestedAtMs).toEqual(null)
+        expect(failure.shutdownSignal).toEqual("SIGKILL")
         expect(failure.workerId).toEqual(backgroundJobs.worker.workerId)
         expect(failure.workerLifecycle).toEqual("running")
         expect(failure.workerPid).toEqual(process.pid)

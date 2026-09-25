@@ -1,6 +1,6 @@
 // @ts-check
 
-import {EventEmitter} from "node:events"
+import { EventEmitter } from "node:events"
 import BackgroundJobsWorker from "../../src/background-jobs/worker.js"
 
 /**
@@ -12,6 +12,7 @@ class FakeHungChild extends EventEmitter {
   constructor() {
     super()
     this.killed = false
+    this.pid = 43210
     /** @type {string[]} */
     this.killSignals = []
   }
@@ -40,7 +41,7 @@ class FakeHungChild extends EventEmitter {
   }
 }
 
-describe("Background jobs - worker forked job timeout", () => {
+describe("Background jobs - worker forked job timeout", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("terminates and reports a forked job that overruns the configured timeout", async () => {
     const worker = new BackgroundJobsWorker({jobTimeoutMs: 15, forkedChildSigkillGraceMs: 5})
     /** @type {Array<{jobId: string, status: string, error?: ReturnType<typeof JSON.parse>}>} */
@@ -135,7 +136,7 @@ describe("Background jobs - worker forked job timeout", () => {
   })
 })
 
-describe("Background jobs - worker pooled job timeout", () => {
+describe("Background jobs - worker pooled job timeout", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   /**
    * Registers a fake child as a pooled runner, mirroring `_createPooledChild`'s
    * exit wiring so a kill reports its in-flight jobs failed.
@@ -146,7 +147,14 @@ describe("Background jobs - worker pooled job timeout", () => {
   function registerPooledChild(worker, child) {
     worker.pooledChildren.add(/** @type {ReturnType<typeof JSON.parse>} */ (child))
     worker.inflightProcessChildren.add(/** @type {ReturnType<typeof JSON.parse>} */ (child))
-    worker.pooledChildStates.set(/** @type {ReturnType<typeof JSON.parse>} */ (child), {createdAtMs: Date.now(), jobsRun: 0, inflight: new Map(), lastDispatchSeq: 0, retiring: false})
+    worker.pooledChildStates.set(/** @type {ReturnType<typeof JSON.parse>} */ (child), {
+      childInstanceId: "timeout-child-instance",
+      createdAtMs: Date.now(),
+      jobsRun: 0,
+      inflight: new Map(),
+      lastDispatchSeq: 0,
+      retiring: false
+    })
     child.once("exit", (/** @type {number | null} */ exitCode, /** @type {import("node:child_process").ChildProcess["signalCode"]} */ signal) => {
       void worker._handlePooledChildFailure({
         child: /** @type {ReturnType<typeof JSON.parse>} */ (child),
@@ -169,7 +177,14 @@ describe("Background jobs - worker pooled job timeout", () => {
 
     // A hung child never reports a job-outcome, so only the wall-clock backstop
     // can free the slot. It SIGTERMs, then SIGKILLs after the grace.
-    await worker._runPooledJob(/** @type {ReturnType<typeof JSON.parse>} */ ({id: "pooled-1", jobName: "HangingJob", options: {timeoutMs: 15}}))
+    await worker._runPooledJob(/** @type {ReturnType<typeof JSON.parse>} */ ({
+      id: "pooled-1",
+      handedOffAtMs: 1111,
+      handoffId: "pooled-timeout-handoff",
+      jobName: "HangingJob",
+      options: {timeoutMs: 15},
+      workerId: "pooled-timeout-worker"
+    }))
 
     expect(child.killSignals).toEqual(["SIGTERM", "SIGKILL"])
     expect(reports.length).toEqual(1)
@@ -177,7 +192,19 @@ describe("Background jobs - worker pooled job timeout", () => {
     expect(reports[0].status).toEqual("failed")
     expect(reports[0].runnerFailure.oomKilled).toEqual(false)
     expect(reports[0].runnerFailure.signal).toEqual("SIGKILL")
-    expect(reports[0].runnerFailure.terminationReason).toEqual("job-timeout")
+    expect(reports[0].runnerFailure.shutdownReason).toEqual("job_timeout")
+    expect(typeof reports[0].runnerFailure.shutdownRequestedAtMs).toEqual("number")
+    expect(reports[0].runnerFailure.shutdownSignal).toEqual("SIGTERM")
+    expect(reports[0].runnerFailure.inflightJobIds).toEqual(["pooled-1"])
+    expect(reports[0].runnerFailure.inflightJobIdsTruncatedCount).toEqual(0)
+    expect(reports[0].runnerFailure.childInstanceId).toEqual("timeout-child-instance")
+    expect(reports[0].runnerFailure.runnerPid).toEqual(43210)
+    expect(reports[0].runnerFailure.activeJobs).toMatchObject([{
+      handedOffAtMs: 1111,
+      handoffId: "pooled-timeout-handoff",
+      jobId: "pooled-1",
+      workerId: "pooled-timeout-worker"
+    }])
     expect(reports[0].runnerFailure.timeoutJobId).toEqual("pooled-1")
     expect(worker.pooledChildren.has(/** @type {ReturnType<typeof JSON.parse>} */ (child))).toEqual(false)
   })
@@ -200,6 +227,14 @@ describe("Background jobs - worker pooled job timeout", () => {
     expect(reports.map((report) => report.runnerFailure.timeoutJobId)).toEqual([
       "pooled-first-timeout",
       "pooled-first-timeout"
+    ])
+    expect(reports.map((report) => report.runnerFailure.shutdownReason)).toEqual([
+      "job_timeout",
+      "job_timeout"
+    ])
+    expect(reports.map((report) => report.runnerFailure.inflightJobIds)).toEqual([
+      ["pooled-first-timeout", "pooled-second-timeout"],
+      ["pooled-first-timeout", "pooled-second-timeout"]
     ])
   })
 

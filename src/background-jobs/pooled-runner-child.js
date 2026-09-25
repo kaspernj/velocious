@@ -1,13 +1,17 @@
 // @ts-check
 
 import { randomUUID } from "node:crypto"
+import timeout from "awaitery/build/timeout.js"
 import runJobPayload, { BackgroundJobPerformedFailure } from "./job-runner.js"
+import { boundedPooledRunnerInflightJobIds, isPooledChildShutdownReason, isPooledChildShutdownSignal } from "./pooled-runner-shutdown.js"
 import { closeRunnerConnections, closeRunnerFrameworkConnections, currentConfigurationOrNull } from "./runner-graceful-shutdown.js"
 import setRunnerProcessTitle from "./runner-process-title.js"
 import PooledRunnerBrokerIdentity from "./pooled-runner-broker-identity.js"
 import { runWithSharedTransactionBrokerConfig } from "../testing/shared-transaction-proxy-driver.js"
 
 const BASE_PROCESS_TITLE = "velocious background-jobs-runner"
+/** A shutdown observation may delay resource teardown only for this bounded IPC send. */
+const SHUTDOWN_OBSERVATION_SEND_TIMEOUT_MS = 100
 /** Stable identity of this pooled child process for the life of the process. */
 const childInstanceId = randomUUID()
 
@@ -20,13 +24,18 @@ let shutdownPromise
  * Closes the runner's connections — releasing any advisory lock a killed-mid-pass
  * job still holds — before exiting, instead of leaving a half-open session that
  * keeps the lock until the DB server's `wait_timeout`.
- * @param {number} exitCode - Process exit code.
+ * @param {object} args - Shutdown observation.
+ * @param {number} args.exitCode - Process exit code.
+ * @param {import("./types.js").PooledChildShutdownReason} args.reason - Exact shutdown reason observed by the child.
+ * @param {number | null} [args.shutdownRequestedAtMs] - Parent request timestamp when supplied over IPC.
+ * @param {import("node:child_process").ChildProcess["signalCode"]} [args.signal] - Requested or observed signal.
  * @returns {Promise<void>}
  */
-function shutdownRunner(exitCode) {
+function shutdownRunner({exitCode, reason, shutdownRequestedAtMs = null, signal = null}) {
   if (shutdownPromise) return shutdownPromise
 
   shutdownPromise = (async () => {
+    await sendShutdownObservation({reason, shutdownRequestedAtMs, signal})
     await closeRunnerConnections(currentConfigurationOrNull())
     process.exit(exitCode)
   })()
@@ -58,6 +67,52 @@ function updateProcessTitle() {
   const count = runningJobIds.size
 
   process.title = count > 0 ? `${BASE_PROCESS_TITLE}: ${count} ${count === 1 ? "job" : "jobs"}` : BASE_PROCESS_TITLE
+}
+
+/**
+ * Sends one bounded lifecycle observation before application/framework teardown.
+ * A closed IPC channel is expected for `ipc_disconnect`; other send failures are
+ * surfaced on stderr but never hold connection cleanup past the fixed bound.
+ * @param {object} args - Shutdown observation.
+ * @param {import("./types.js").PooledChildShutdownReason} args.reason - Shutdown reason.
+ * @param {number | null} args.shutdownRequestedAtMs - Parent request timestamp.
+ * @param {import("node:child_process").ChildProcess["signalCode"]} args.signal - Requested or observed signal.
+ * @returns {Promise<void>} - Resolves after IPC accepts the observation or the bound expires.
+ */
+async function sendShutdownObservation({reason, shutdownRequestedAtMs, signal}) {
+  if (!process.send || !process.connected) return
+
+  const boundedInflight = boundedPooledRunnerInflightJobIds(runningJobIds)
+  /** @type {import("./types.js").PooledChildShutdownObservation & {type: "shutdown-observation"}} */
+  const message = {
+    childInstanceId,
+    ...boundedInflight,
+    reason,
+    shutdownObservedAtMs: Date.now(),
+    shutdownRequestedAtMs,
+    signal,
+    type: "shutdown-observation"
+  }
+
+  try {
+    await timeout({timeout: SHUTDOWN_OBSERVATION_SEND_TIMEOUT_MS}, async () => {
+      await new Promise((resolve, reject) => {
+        try {
+          process.send?.(message, (error) => {
+            if (error) {
+              reject(error)
+            } else {
+              resolve(undefined)
+            }
+          })
+        } catch (error) {
+          reject(error)
+        }
+      })
+    })
+  } catch (error) {
+    console.error("Pooled background job runner could not send its shutdown observation:", error)
+  }
 }
 
 /**
@@ -103,6 +158,22 @@ function isJobMessage(message) {
   const record = /** @type {{type?: ReturnType<typeof JSON.parse>, payload?: ReturnType<typeof JSON.parse>, sharedTransactionBroker?: ReturnType<typeof JSON.parse>}} */ (message)
 
   return record.type === "job" && !!record.payload && typeof record.payload === "object" && typeof record.payload.id === "string"
+}
+
+/**
+ * Checks whether an IPC value requests a typed pooled-child shutdown.
+ * @param {ReturnType<typeof JSON.parse>} message - IPC message.
+ * @returns {message is {type: "shutdown-request", reason: import("./types.js").PooledChildShutdownReason, shutdownRequestedAtMs: number, signal: import("node:child_process").ChildProcess["signalCode"]}} - Whether this is a valid parent shutdown request.
+ */
+function isShutdownRequestMessage(message) {
+  if (!message || typeof message !== "object") return false
+  const record = /** @type {{type?: ReturnType<typeof JSON.parse>, reason?: ReturnType<typeof JSON.parse>, shutdownRequestedAtMs?: ReturnType<typeof JSON.parse>, signal?: ReturnType<typeof JSON.parse>}} */ (message)
+
+  return record.type === "shutdown-request"
+    && isPooledChildShutdownReason(record.reason)
+    && typeof record.shutdownRequestedAtMs === "number"
+    && Number.isFinite(record.shutdownRequestedAtMs)
+    && isPooledChildShutdownSignal(record.signal)
 }
 
 /**
@@ -176,6 +247,16 @@ async function runJob(payload, sharedTransactionBroker) {
  * @returns {void}
  */
 function handleMessage(message) {
+  if (isShutdownRequestMessage(message)) {
+    void shutdownRunner({
+      exitCode: message.reason === "parent_retire_drained" ? 0 : 1,
+      reason: message.reason,
+      shutdownRequestedAtMs: message.shutdownRequestedAtMs,
+      signal: message.signal
+    })
+    return
+  }
+
   if (!isJobMessage(message) || runningJobIds.has(message.payload.id)) return
 
   runningJobIds.add(message.payload.id)
@@ -185,6 +266,7 @@ function handleMessage(message) {
 }
 
 process.on("message", (message) => handleMessage(message))
-process.once("disconnect", () => void shutdownRunner(0))
-for (const signal of ["SIGTERM", "SIGINT"]) process.once(signal, () => void shutdownRunner(1))
-if (process.send) process.send({type: "ready"})
+process.once("disconnect", () => void shutdownRunner({exitCode: 0, reason: "ipc_disconnect"}))
+process.once("SIGTERM", () => void shutdownRunner({exitCode: 1, reason: "signal_sigterm", signal: "SIGTERM"}))
+process.once("SIGINT", () => void shutdownRunner({exitCode: 1, reason: "signal_sigint", signal: "SIGINT"}))
+if (process.send) process.send({childInstanceId, childPid: process.pid, type: "ready"})

@@ -11,7 +11,11 @@
 /** @typedef {BackgroundJobActiveStatus | BackgroundJobTerminalStatus} BackgroundJobStatus */
 /** @typedef {"exit" | "process-error" | "ipc-send"} PooledRunnerFailureOrigin */
 /** @typedef {"starting" | "running" | "retiring"} PooledRunnerLifecycleState */
-/** @typedef {"unexpected" | "job-timeout" | "worker-shutdown-timeout"} PooledRunnerTerminationReason */
+/** @typedef {"parent_retire_drained" | "job_timeout" | "worker_stop" | "signal_sigterm" | "signal_sigint" | "signal_sigkill" | "signal_other" | "ipc_disconnect" | "process_error" | "unexpected_exit"} PooledChildShutdownReason */
+/**
+ * @deprecated Use PooledChildShutdownReason for exact shutdown provenance.
+ * @typedef {"unexpected" | "job-timeout" | "worker-shutdown-timeout"} PooledRunnerTerminationReason
+ */
 /** @typedef {"running" | "retiring" | "stopping"} BackgroundJobsWorkerLifecycleState */
 /**
  * Exact durable handoff ownership carried by an executing job when it produces
@@ -34,8 +38,11 @@
  * One process-failure snapshot shared by every job lost with a pooled child.
  * @typedef {object} PooledRunnerFailure
  * @property {PooledRunnerActiveJob[]} activeJobs - Jobs that were in flight when the child failed, ordered by job id.
+ * @property {string | null} childInstanceId - Stable pooled-child identity when its startup or shutdown observation arrived.
  * @property {number | null} exitCode - Child exit code, or null for signal/process errors.
  * @property {string | null} generationId - Release generation identity, or null in legacy mode.
+ * @property {string[]} inflightJobIds - Bounded job ids in flight when failure handling started.
+ * @property {number} inflightJobIdsTruncatedCount - In-flight ids omitted from the bounded snapshot.
  * @property {boolean | null} oomKilled - False when the observed exit rules OOM out; null when an unexpected SIGKILL cannot be distinguished from an OOM kill without supervisor/kernel evidence.
  * @property {PooledRunnerFailureOrigin} origin - Worker observation that initiated failure handling.
  * @property {number} runnerAgeMs - Child age when failure handling started.
@@ -45,11 +52,26 @@
  * @property {PooledRunnerLifecycleState} runnerLifecycle - Child lifecycle immediately before recovery.
  * @property {number | null} runnerPid - Child process id when available.
  * @property {import("node:child_process").ChildProcess["signalCode"]} signal - Child termination signal when available.
- * @property {PooledRunnerTerminationReason} terminationReason - Why the worker expected or did not expect termination.
+ * @property {number | null} shutdownObservedAtMs - Time the child or parent observed shutdown beginning.
+ * @property {number | null} shutdownRequestedAtMs - Exact parent request timestamp, or null for external/unrequested shutdown.
+ * @property {PooledChildShutdownReason} shutdownReason - Exact recorded parent request or observed child shutdown cause.
+ * @property {import("node:child_process").ChildProcess["signalCode"]} shutdownSignal - Parent-requested or child-observed shutdown signal when available.
+ * @property {PooledRunnerTerminationReason} terminationReason - Deprecated compatibility category; use shutdownReason for exact provenance.
  * @property {string | null} timeoutJobId - Job whose timeout initiated child termination, or null.
  * @property {string} workerId - Stable generation-qualified worker id.
  * @property {BackgroundJobsWorkerLifecycleState} workerLifecycle - Parent worker lifecycle immediately before recovery.
  * @property {number} workerPid - Parent worker process id.
+ */
+/**
+ * Best-effort observation sent before a pooled child closes its resources.
+ * @typedef {object} PooledChildShutdownObservation
+ * @property {string} childInstanceId - Stable pooled-child identity.
+ * @property {string[]} inflightJobIds - Bounded in-flight durable job ids.
+ * @property {number} inflightJobIdsTruncatedCount - In-flight ids omitted from the bounded snapshot.
+ * @property {PooledChildShutdownReason} reason - Shutdown reason observed by the child.
+ * @property {number} shutdownObservedAtMs - Child observation timestamp.
+ * @property {number | null} shutdownRequestedAtMs - Parent request timestamp when supplied over IPC.
+ * @property {import("node:child_process").ChildProcess["signalCode"]} signal - Requested or observed signal when available.
  */
 /**
  * @typedef {object} LocalBackgroundJobsClock

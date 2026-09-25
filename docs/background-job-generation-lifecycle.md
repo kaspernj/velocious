@@ -6,6 +6,17 @@ An executing job carries its exact durable handoff identity through its asynchro
 
 Retirement synchronously fences new dispatch, then lets workers finish in-flight work. Deployments never kill active jobs merely to complete rollout.
 
+Pooled-child shutdown provenance is explicit. A normal recycled child is requested
+as `parent_retire_drained` only after the parent proves its in-flight map is empty;
+violating that invariant throws instead of signalling the child. Job timeouts and
+bounded worker stops record `job_timeout` or `worker_stop`, plus the request
+timestamp, before signalling. The child sends one bounded best-effort IPC
+observation before closing application/framework resources, while external
+`SIGTERM`, `SIGINT`, IPC disconnect, process errors, and other exits retain
+distinct reasons. A missing observation is not evidence for OOM, deployment,
+timeout, or normal retirement. The parent keeps its own pre-signal request as the
+authoritative reason and never reconstructs it from an eventual exit code.
+
 Explicit main shutdown supersedes retirement cleanup. Once shutdown begins, an in-progress retirement must not reacquire generation-recovery timers or overwrite the stopped lifecycle state.
 
 Lifecycle control emits structured start/completion/failure stages. Startup reconciliation reads only queue-derived keys and rebuilds only active or stale concurrency counters, avoiding a job-table count query for every historical key. The built-in SQL store also repairs the secondary indexes missed by older add-column upgrades once through its internal migration ledger; SQLite repair DDL remains idempotent when separate generation processes race on a stale schema snapshot. Request bounds must still accommodate real startup work, but larger timeouts are not a substitute for bounded reconciliation or non-blocking activation semantics.
