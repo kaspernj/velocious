@@ -18,6 +18,12 @@ const legacyDefaultBackgroundJobsConfig = Object.fromEntries(
   Object.entries(defaultBackgroundJobsConfig).filter(([key]) => !generationConfigKeys.has(key))
 )
 
+// CI runner load (notably MS-SQL shards) can delay an idle worker's wake well past a
+// couple of seconds. These waits poll for a job/output that is guaranteed to complete,
+// so a generous default absorbs load-induced slowness without masking a real hang —
+// the poll loop still resolves the moment the condition is met.
+const defaultBackgroundJobWaitTimeoutSeconds = 15
+
 /**
  * Observes durable background-job updates without using polling deadlines.
  * @param {object} args - Observer options.
@@ -248,7 +254,7 @@ export async function outputPathFor(prefix) {
  * @param {number} [args.timeoutSeconds] - Timeout in seconds.
  * @returns {Promise<any>} - Parsed JSON.
  */
-export async function waitForOutputJson({outputPath, predicate, timeoutSeconds = 2}) {
+export async function waitForOutputJson({outputPath, predicate, timeoutSeconds = defaultBackgroundJobWaitTimeoutSeconds}) {
   let result
 
   await timeout({timeout: timeoutSeconds * 1000}, async () => {
@@ -295,7 +301,7 @@ function matchesOutputJson({predicate, result}) {
  * @param {number} [args.timeoutSeconds] - Timeout in seconds.
  * @returns {Promise<void>} - Resolves when completed.
  */
-export async function waitForJobCompleted({jobId, store, timeoutSeconds = 2}) {
+export async function waitForJobCompleted({jobId, store, timeoutSeconds = defaultBackgroundJobWaitTimeoutSeconds}) {
   await timeout({timeout: timeoutSeconds * 1000}, async () => {
     while (true) {
       if (await jobCompleted({jobId, store})) break
