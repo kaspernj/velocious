@@ -16,6 +16,7 @@ import path from "path"
 import PgsqlDriver from "../../../../src/database/drivers/pgsql/index.js"
 import installSqlJsWasmRoute from "../../../../src/plugins/sqljs-wasm-route.js"
 import requireContext from "require-context"
+import requestBodyPolicyResolver from "./request-body-policy-resolver.js"
 import CommentFrontendModelAbilityResource from "../resources/comment-frontend-model-ability-resource.js"
 import InteractionFrontendModelAbilityResource from "../resources/interaction-frontend-model-ability-resource.js"
 import ProjectFrontendModelAbilityResource from "../resources/project-frontend-model-ability-resource.js"
@@ -122,6 +123,7 @@ const configuration = new Configuration({
   cookieSecret: "dummy-cookie-secret",
   directory: dummyDirectory(),
   environmentHandler: new NodeEnvironmentHandler(),
+  httpServer: {requestBodyPolicyResolver},
   initializeModels: async ({configuration}) => {
     if (process.env.VELOCIOUS_SKIP_DUMMY_MODEL_INITIALIZATION === "1") return
 
