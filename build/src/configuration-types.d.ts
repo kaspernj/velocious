@@ -587,6 +587,41 @@ export type NormalizedHttpCompressionConfiguration = {
      */
     gzipLevel: number;
 };
+export type HttpRequestBodyPolicyResolverArgs = {
+    /**
+     * - Complete request headers as received by the parser.
+     */
+    headers: Record<string, string>;
+    /**
+     * - Uppercase HTTP method.
+     */
+    httpMethod: string;
+    /**
+     * - Request target, including its query string when present.
+     */
+    path: string;
+};
+export type HttpRequestBodyPolicy = {
+    /**
+     * - Per-request decoded body limit. Falls back to the global limit when omitted.
+     */
+    maxRequestBodyBytes?: number;
+    /**
+     * - Parsed params by default; raw preserves exact bytes and skips body decoding.
+     */
+    mode?: "parsed" | "raw";
+};
+export type HttpRequestBodyPolicyResolver = (args: HttpRequestBodyPolicyResolverArgs) => HttpRequestBodyPolicy | undefined;
+export type ResolvedHttpRequestBodyPolicy = {
+    /**
+     * - Effective decoded body limit.
+     */
+    maxRequestBodyBytes: number | undefined;
+    /**
+     * - Effective body handling mode.
+     */
+    mode: "parsed" | "raw";
+};
 export type HttpServerConfiguration = {
     /**
      * - Buffered response compression. Enabled with documented defaults when absent; false or {enabled: false} disables it globally.
@@ -608,6 +643,10 @@ export type HttpServerConfiguration = {
      * - Maximum decoded request-body bytes accepted before routing. Unbounded when absent.
      */
     maxRequestBodyBytes?: number;
+    /**
+     * - Optional synchronous header-stage resolver for per-request limits and raw-body handling.
+     */
+    requestBodyPolicyResolver?: HttpRequestBodyPolicyResolver;
     /**
      * - Backward-compatible alias for workers.
      */
@@ -1973,12 +2012,30 @@ export type ConfigurationArgsType = {
  * @property {number} gzipLevel - Gzip compression level (0-9).
  */
 /**
+ * @typedef {object} HttpRequestBodyPolicyResolverArgs
+ * @property {Record<string, string>} headers - Complete request headers as received by the parser.
+ * @property {string} httpMethod - Uppercase HTTP method.
+ * @property {string} path - Request target, including its query string when present.
+ */
+/**
+ * @typedef {object} HttpRequestBodyPolicy
+ * @property {number} [maxRequestBodyBytes] - Per-request decoded body limit. Falls back to the global limit when omitted.
+ * @property {"parsed" | "raw"} [mode] - Parsed params by default; raw preserves exact bytes and skips body decoding.
+ */
+/** @typedef {(args: HttpRequestBodyPolicyResolverArgs) => HttpRequestBodyPolicy | undefined} HttpRequestBodyPolicyResolver */
+/**
+ * @typedef {object} ResolvedHttpRequestBodyPolicy
+ * @property {number | undefined} maxRequestBodyBytes - Effective decoded body limit.
+ * @property {"parsed" | "raw"} mode - Effective body handling mode.
+ */
+/**
  * @typedef {object} HttpServerConfiguration
  * @property {boolean | HttpCompressionConfiguration} [compression] - Buffered response compression. Enabled with documented defaults when absent; false or {enabled: false} disables it globally.
  * @property {string} [host] - Hostname to bind the HTTP server to.
  * @property {boolean} [inProcess] - Run HTTP handlers in the main thread instead of worker threads.
  * @property {number} [maxBufferedResponseBodyBytes] - Maximum UTF-8/binary byte length accepted by buffered response bodies. Unbounded when absent; streamed file responses are unaffected.
  * @property {number} [maxRequestBodyBytes] - Maximum decoded request-body bytes accepted before routing. Unbounded when absent.
+ * @property {HttpRequestBodyPolicyResolver} [requestBodyPolicyResolver] - Optional synchronous header-stage resolver for per-request limits and raw-body handling.
  * @property {number} [maxWorkers] - Backward-compatible alias for workers.
  * @property {number} [port] - Port to bind the HTTP server to.
  * @property {{maxPendingBytes?: number, maxPendingMessages?: number}} [websocketInboundQueue] - Per-session retained inbound WebSocket message limits.

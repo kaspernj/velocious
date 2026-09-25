@@ -118,6 +118,13 @@ const configuration = new Configuration({
   cookieSecret: "dummy-cookie-secret",
   directory: dummyDirectory(),
   environmentHandler: new NodeEnvironmentHandler(),
+  httpServer: {
+    requestBodyPolicyResolver: ({httpMethod, path}) => {
+      if (httpMethod === "POST" && path.split("?")[0] === "/raw-body") {
+        return {maxRequestBodyBytes: 32, mode: "raw"}
+      }
+    }
+  },
   initializeModels: async ({configuration}) => {
     if (process.env.VELOCIOUS_SKIP_DUMMY_MODEL_INITIALIZATION === "1") return
 

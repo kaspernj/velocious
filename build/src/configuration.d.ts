@@ -143,6 +143,7 @@ export default class VelociousConfiguration {
         compression: import("./configuration-types.js").NormalizedHttpCompressionConfiguration;
         maxBufferedResponseBodyBytes: number | undefined;
         maxRequestBodyBytes: number | undefined;
+        requestBodyPolicyResolver: import("./configuration-types.js").HttpRequestBodyPolicyResolver | undefined;
         websocketInboundQueue: {
             maxPendingBytes: number;
             maxPendingMessages: number;
@@ -396,6 +397,13 @@ export default class VelociousConfiguration {
      * @returns {number | undefined} - Configured byte limit, or undefined when unbounded.
      */
     getHttpServerMaxRequestBodyBytes(): number | undefined;
+    /**
+     * Resolves request-body handling after the request line and headers are complete,
+     * before body bytes are retained or decoded.
+     * @param {import("./configuration-types.js").HttpRequestBodyPolicyResolverArgs} args - Parsed request head.
+     * @returns {import("./configuration-types.js").ResolvedHttpRequestBodyPolicy} - Effective request policy.
+     */
+    resolveHttpRequestBodyPolicy(args: import("./configuration-types.js").HttpRequestBodyPolicyResolverArgs): import("./configuration-types.js").ResolvedHttpRequestBodyPolicy;
     /**
      * Runs get cookie secret.
      * @returns {string | undefined} - Cookie secret.

@@ -4,79 +4,7 @@ import {describe, expect, it} from "../../src/testing/test.js"
 import Dummy from "../dummy/index.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import net from "net"
-import timeout from "awaitery/build/timeout.js"
-
-/**
- * @param {string} payload - Request payload.
- * @returns {Promise<string>} - Response payload.
- */
-const sendRawRequest = async (payload) => {
-  const socket = new net.Socket()
-  let response = ""
-
-  const responsePromise = new Promise((resolve, reject) => {
-    socket.on("data", (chunk) => {
-      response += chunk.toString("utf8")
-    })
-    socket.on("end", () => resolve(response))
-    socket.on("error", reject)
-  })
-
-  socket.connect(3006, "127.0.0.1", () => {
-    socket.write(payload)
-  })
-
-  try {
-    await timeout({timeout: 2000}, async () => {
-      response = await responsePromise
-    })
-  } finally {
-    socket.destroy()
-  }
-
-  return response
-}
-
-/**
- * @param {net.Socket} socket - Socket.
- * @param {string} [initialBuffer] - Initial buffer.
- * @returns {Promise<{response: string, remaining: string}>} - Response payload.
- */
-const readResponse = async (socket, initialBuffer = "") => {
-  let buffer = initialBuffer
-  let headerEndIndex = -1
-  let contentLength = 0
-
-  return await timeout({timeout: 2000}, async () => {
-    return await new Promise((resolve, reject) => {
-      const onData = (chunk) => {
-        buffer += chunk.toString("utf8")
-
-        if (headerEndIndex === -1) {
-          headerEndIndex = buffer.indexOf("\r\n\r\n")
-
-          if (headerEndIndex !== -1) {
-            const headerBlock = buffer.slice(0, headerEndIndex)
-            const match = headerBlock.match(/Content-Length: (\d+)/i)
-
-            if (match) contentLength = Number(match[1])
-          }
-        }
-
-        if (headerEndIndex !== -1 && buffer.length >= headerEndIndex + 4 + contentLength) {
-          const response = buffer.slice(0, headerEndIndex + 4 + contentLength)
-          const remaining = buffer.slice(headerEndIndex + 4 + contentLength)
-
-          socket.off("data", onData)
-          resolve({response, remaining})
-        }
-      }
-
-      socket.on("data", onData)
-      socket.on("error", reject)
-    })
-  })
-}
+import {readRawHttpResponse, sendRawHttpRequest} from "../helpers/raw-http-test-client.js"
 
 describe("HttpServer - request behavior", {databaseCleaning: {transaction: false, truncate: true}}, async () => {
   /** @returns {number} - Number of HTTP controller action checkouts currently in use. */
@@ -89,7 +17,7 @@ describe("HttpServer - request behavior", {databaseCleaning: {transaction: false
 
   it("closes HTTP/1.1 connections when requested", async () => {
     await Dummy.run(async () => {
-      const response = await sendRawRequest([
+      const response = await sendRawHttpRequest([
         "GET /ping HTTP/1.1",
         "Host: localhost",
         "Connection: close",
@@ -97,8 +25,8 @@ describe("HttpServer - request behavior", {databaseCleaning: {transaction: false
         ""
       ].join("\r\n"))
 
-      expect(response).toContain("HTTP/1.1 200 OK")
-      expect(response).toContain("Pong")
+      expect(response.toString("utf8")).toContain("HTTP/1.1 200 OK")
+      expect(response.toString("utf8")).toContain("Pong")
     })
   })
 
@@ -110,7 +38,7 @@ describe("HttpServer - request behavior", {databaseCleaning: {transaction: false
         "0\r\n",
         "\r\n"
       ].join("")
-      const response = await sendRawRequest([
+      const response = await sendRawHttpRequest([
         "POST /tasks/collection-post HTTP/1.1",
         "Host: localhost",
         "Connection: close",
@@ -120,15 +48,15 @@ describe("HttpServer - request behavior", {databaseCleaning: {transaction: false
         body
       ].join("\r\n"))
 
-      expect(response).toContain("HTTP/1.1 200 OK")
-      expect(response).toContain("\"method\":\"post\"")
+      expect(response.toString("utf8")).toContain("HTTP/1.1 200 OK")
+      expect(response.toString("utf8")).toContain("\"method\":\"post\"")
     })
   })
 
   it("responds with bad request on malformed nested post parameter keys", async () => {
     await Dummy.run(async () => {
       const body = "task[]]=Broken"
-      const response = await sendRawRequest([
+      const response = await sendRawHttpRequest([
         "POST /tasks/collection-post HTTP/1.1",
         "Host: localhost",
         "Connection: close",
@@ -138,13 +66,13 @@ describe("HttpServer - request behavior", {databaseCleaning: {transaction: false
         body
       ].join("\r\n"))
 
-      expect(response).toContain("HTTP/1.1 400 Bad Request")
+      expect(response.toString("utf8")).toContain("HTTP/1.1 400 Bad Request")
     })
   })
 
   it("responds to non-POST methods without hanging", async () => {
     await Dummy.run(async () => {
-      const response = await sendRawRequest([
+      const response = await sendRawHttpRequest([
         "PUT /ping HTTP/1.1",
         "Host: localhost",
         "Connection: close",
@@ -153,17 +81,17 @@ describe("HttpServer - request behavior", {databaseCleaning: {transaction: false
         ""
       ].join("\r\n"))
 
-      expect(response).toContain("HTTP/1.1")
+      expect(response.toString("utf8")).toContain("HTTP/1.1")
     })
   })
 
   it("responds with bad request on invalid status lines", async () => {
     await Dummy.run(async () => {
-      const invalidResponse = await sendRawRequest("GET /\n")
+      const invalidResponse = await sendRawHttpRequest("GET /\n")
 
-      expect(invalidResponse).toContain("HTTP/1.1 400 Bad Request")
+      expect(invalidResponse.toString("utf8")).toContain("HTTP/1.1 400 Bad Request")
 
-      const validResponse = await sendRawRequest([
+      const validResponse = await sendRawHttpRequest([
         "GET /ping HTTP/1.1",
         "Host: localhost",
         "Connection: close",
@@ -171,13 +99,13 @@ describe("HttpServer - request behavior", {databaseCleaning: {transaction: false
         ""
       ].join("\r\n"))
 
-      expect(validResponse).toContain("HTTP/1.1 200 OK")
+      expect(validResponse.toString("utf8")).toContain("HTTP/1.1 200 OK")
     })
   })
 
   it("does not crash when a malformed request follows a valid request", async () => {
     await Dummy.run(async () => {
-      const response = await sendRawRequest([
+      const response = await sendRawHttpRequest([
         "GET /ping HTTP/1.1",
         "Host: localhost",
         "",
@@ -185,9 +113,9 @@ describe("HttpServer - request behavior", {databaseCleaning: {transaction: false
         "GET /\n"
       ].join("\r\n"))
 
-      expect(response).toContain("HTTP/1.1 400 Bad Request")
+      expect(response.toString("utf8")).toContain("HTTP/1.1 400 Bad Request")
 
-      const followUpResponse = await sendRawRequest([
+      const followUpResponse = await sendRawHttpRequest([
         "GET /ping HTTP/1.1",
         "Host: localhost",
         "Connection: close",
@@ -195,7 +123,7 @@ describe("HttpServer - request behavior", {databaseCleaning: {transaction: false
         ""
       ].join("\r\n"))
 
-      expect(followUpResponse).toContain("HTTP/1.1 200 OK")
+      expect(followUpResponse.toString("utf8")).toContain("HTTP/1.1 200 OK")
     })
   })
 
@@ -214,7 +142,7 @@ describe("HttpServer - request behavior", {databaseCleaning: {transaction: false
       })
 
       try {
-        const firstResponse = await readResponse(socket)
+        const firstResponse = await readRawHttpResponse(socket)
         const remaining = firstResponse.remaining
 
         socket.write([
@@ -225,10 +153,10 @@ describe("HttpServer - request behavior", {databaseCleaning: {transaction: false
           ""
         ].join("\r\n"))
 
-        const secondResponse = await readResponse(socket, remaining)
+        const secondResponse = await readRawHttpResponse(socket, remaining)
         const statusLines = [
-          ...(firstResponse.response.match(/HTTP\/1\.0 200 OK/g) || []),
-          ...(secondResponse.response.match(/HTTP\/1\.0 200 OK/g) || [])
+          ...(firstResponse.response.toString("latin1").match(/HTTP\/1\.0 200 OK/g) || []),
+          ...(secondResponse.response.toString("latin1").match(/HTTP\/1\.0 200 OK/g) || [])
         ]
 
         expect(statusLines.length).toBe(2)
@@ -253,9 +181,9 @@ describe("HttpServer - request behavior", {databaseCleaning: {transaction: false
       })
 
       try {
-        const firstResponse = await readResponse(socket)
+        const firstResponse = await readRawHttpResponse(socket)
 
-        expect(firstResponse.response).toContain("HTTP/1.1 200 OK")
+        expect(firstResponse.response.toString("utf8")).toContain("HTTP/1.1 200 OK")
         expect(activeControllerActionConnectionCount()).toBe(0)
 
         socket.write([
@@ -266,9 +194,9 @@ describe("HttpServer - request behavior", {databaseCleaning: {transaction: false
           ""
         ].join("\r\n"))
 
-        const secondResponse = await readResponse(socket, firstResponse.remaining)
+        const secondResponse = await readRawHttpResponse(socket, firstResponse.remaining)
 
-        expect(secondResponse.response).toContain("HTTP/1.1 200 OK")
+        expect(secondResponse.response.toString("utf8")).toContain("HTTP/1.1 200 OK")
         expect(activeControllerActionConnectionCount()).toBe(0)
       } finally {
         socket.destroy()

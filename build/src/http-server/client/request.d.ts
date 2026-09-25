@@ -52,6 +52,11 @@ export default class VelociousHttpServerClientRequest {
     queryParams(): Record<string, string | string[]>;
     protocol(): string | null;
     remoteAddress(): string | undefined;
+    /**
+     * Returns exact body bytes for requests whose header-stage body policy selected raw mode.
+     * @returns {Buffer} - A copy of the exact request body bytes.
+     */
+    rawBody(): Buffer;
     socketRemoteAddress(): string | undefined;
     getRequestBuffer(): import("./request-buffer/index.js").default;
     getRequestParser(): RequestParser;

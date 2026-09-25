@@ -76,6 +76,52 @@ normal framework-error channels and the client receives an empty `500` response,
 which cannot itself exceed the configured bound. `sendFile` remains streamed and
 is outside the buffered-response limit.
 
+### Per-request body policies and exact raw bodies
+
+Applications that terminate a protocol or verify a signature over exact request
+bytes can select a body policy synchronously after the request line and headers
+are complete, before any body bytes are retained or decoded:
+
+```js
+const configuration = new Configuration({
+  database: false,
+  httpServer: {
+    requestBodyPolicyResolver: ({httpMethod, path}) => {
+      if (httpMethod === "POST" && path.split("?")[0] === "/protocol") {
+        return {maxRequestBodyBytes: 1024 * 1024, mode: "raw"}
+      }
+    }
+  }
+})
+```
+
+The resolver receives the uppercase `httpMethod`, exact request target in
+`path` (including a query string), and the complete `headers` hash. It must be
+synchronous. Returning `undefined` preserves normal parsed-body behavior and
+the global `maxRequestBodyBytes`; an omitted per-request limit also falls back
+to the global limit. A returned per-request limit replaces the global value for
+that request.
+
+`mode: "raw"` bypasses JSON, form, and multipart decoding. The routed
+controller reads a copy of the exact bytes with `this.request().rawBody()`.
+Malformed JSON therefore reaches the controller unchanged, and binary or UTF-8
+sequences remain byte-exact across socket and chunk boundaries. Calling
+`rawBody()` for a normally parsed request, before parsing completes, or after
+the request lifecycle is cleaned up raises an explicit contract error.
+
+Policies are isolated per request, including requests sharing a keep-alive
+connection. Fixed-length bodies are rejected from their declared
+`Content-Length` before allocation. Chunked bodies are rejected from the
+cumulative decoded size before the over-limit chunk is retained. Oversized
+requests receive the same connection-closing `413 Payload Too Large` response
+as the global limit.
+
+Chunk sizes must be complete unsigned hexadecimal tokens; extensions remain
+supported after the token. Signed, negative, prefixed (`0x`), partially parsed,
+unsafe-integer, and otherwise malformed sizes are rejected with `400 Bad
+Request`. The decoded-byte limit is also checked at the retention boundary, so
+invalid framing cannot suppress accounting while body bytes accumulate.
+
 ## File Responses
 
 Controllers can stream a file without loading it into memory:
