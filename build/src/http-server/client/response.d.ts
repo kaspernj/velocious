@@ -144,19 +144,23 @@ export default class VelociousHttpServerClientResponse {
      */
     stream(): void;
     /**
-     * Writes one chunk to an active stream. The chunk is framed and emitted to
-     * the client as soon as it is produced.
-     * @param {string | Uint8Array} value - Chunk to write.
-     * @returns {boolean} - Whether the chunk was accepted; false after the
-     * stream was ended or the client disconnected.
+     * Emits one chunk to the client as soon as it is produced. Returns a
+     * promise that settles once the chunk has been delivered to the socket, so
+     * a relay loop can `await response.write(chunk)` and get socket
+     * backpressure without an ad-hoc drain wait. Rejects when the stream has
+     * ended or been aborted, or when the outbound delivery queue cannot accept
+     * the chunk (a stalled client).
+     * @param {string | Uint8Array} value - Chunk to emit.
+     * @returns {Promise<void>} - Settles after the chunk is delivered.
      */
-    write(value: string | Uint8Array): boolean;
+    write(value: string | Uint8Array): Promise<void>;
     /**
      * Finishes an active stream: emits the chunked terminator and releases the
-     * response for completion logging.
-     * @returns {void} - No return value.
+     * response for completion logging. Settles after the terminator has been
+     * delivered to the socket.
+     * @returns {Promise<void>} - Settles after the stream is finished.
      */
-    end(): void;
+    end(): Promise<void>;
     /**
      * Registers a callback fired when the client disconnects mid-stream, so
      * the handler can release whatever the in-flight work reserved. Fired at

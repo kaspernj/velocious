@@ -690,6 +690,17 @@ export default class VeoliciousHttpServerClient {
   }
 
   /**
+   * Sink the owning worker handler wires in for stream output. The
+   * in-process handler resolves it after the framed output has been enqueued
+   * for delivery to the socket, so stream chunks share the bounded, ordered
+   * delivery path (byte/frame limits and socket backpressure) instead of
+   * being buffered unboundedly for a stalled client. The worker-thread
+   * handler keeps null: its output crosses to the parent over IPC and no
+   * per-chunk acknowledgement is available.
+   * @type {((output: string) => Promise<void>) | null} */
+  streamOutputSink = null
+
+  /**
    * Narrows the response to the documented streaming transport shape.
    * @param {import("./response.js").default} response - Response to stream.
    * @returns {{streaming: boolean, streamEnded: boolean, streamAborted: boolean, headers: Record<string, string[]>, getStatusCode: () => number, getStatusMessage: () => string, streamCloseCallbacks: Set<() => void>}} - Streaming view of the response.
@@ -745,41 +756,48 @@ export default class VeoliciousHttpServerClient {
   /**
    * Emits one chunked-encoded body chunk for an active stream.
    * @param {string | Uint8Array} chunk - Chunk to emit.
-   * @returns {void} - No return value.
+   * @returns {Promise<void>} - Settles after the chunk has been delivered to
+   * the client.
    */
-  writeStreamChunk(chunk) {
+  async writeStreamChunk(chunk) {
     const bytes = typeof chunk === "string" ? Buffer.from(chunk, "utf8") : Buffer.from(chunk)
-    this.events.emit("output", `${bytes.length.toString(16)}\r\n${bytes}\r\n`)
+    const frame = `${bytes.length.toString(16)}\r\n${bytes}\r\n`
+    if (this.streamOutputSink === null) {
+      this.events.emit("output", frame)
+      return
+    }
+    await this.streamOutputSink(frame)
   }
 
   /**
    * Emits the zero-length chunked terminator for a stream that finished on a
    * live connection, then runs its close callbacks.
    * @param {import("./response.js").default} response - Response to finish.
-   * @returns {void} - No return value.
+   * @returns {Promise<void>} - Settles after the terminator was delivered and
+   * the close callbacks ran.
    */
-  endStreamResponse(response) {
+  async endStreamResponse(response) {
     if (response.streamEnded) return
     response.streamEnded = true
     this._activeStreamResponses.delete(response)
-    this.events.emit("output", "0\r\n\r\n")
-    void this._runStreamCloseCallbacks(response)
+    if (this.streamOutputSink === null) {
+      this.events.emit("output", "0\r\n\r\n")
+    } else {
+      await this.streamOutputSink("0\r\n\r\n")
+    }
+    await this._runStreamCloseCallbacks(response)
   }
 
   /**
    * Aborts every stream whose client connection went away: marks the stream
-   * aborted, emits the chunked terminator for streams that never finished,
-   * and runs the close callbacks so in-flight work can settle its resources.
+   * aborted and runs the close callbacks so in-flight work can settle its
+   * resources. No terminator is emitted — the connection is already gone.
    * @returns {Promise<void>} - Resolves after every stream settled.
    */
   async abortStreamResponses() {
     for (const response of [...this._activeStreamResponses.keys()]) {
       if (response.streamAborted) continue
       response.streamAborted = true
-      if (!response.streamEnded) {
-        response.streamEnded = true
-        this.events.emit("output", "0\r\n\r\n")
-      }
       this._activeStreamResponses.delete(response)
       await this._runStreamCloseCallbacks(response)
     }

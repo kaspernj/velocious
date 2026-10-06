@@ -175,11 +175,15 @@ class RelayController extends Controller {
 `response.stream()` must be called before `response.setBody()`, before the
 status or headers have been touched, and only once; malformed use fails the
 request with a `500`. `response.write()` accepts strings or `Uint8Array`
-values and emits each chunk to the client immediately through the same
-ordered delivery queue that file responses use — chunk order is preserved and
-a later pipelined response cannot overtake an earlier stream's chunks.
-`response.end()` terminates the stream; calling it twice, or writing after it
-has ended, fails the request.
+values and returns a promise that settles once the chunk has been delivered
+to the socket. In-process handler mode routes each chunk through the bounded,
+ordered delivery queue, so `await response.write(chunk)` gives a relay loop
+socket backpressure (a stalled client pauses the producer instead of buffering
+engine output unboundedly) and the outbound byte/frame limits bound what a
+silent client can retain before the connection is torn down. Chunk order is
+preserved and a later pipelined response cannot overtake an earlier stream's
+chunks. `response.end()` terminates the stream; calling it twice, or writing
+after it has ended, fails the request.
 
 Client disconnects are observable mid-handler: `response.isStreamAborted()`
 turns true as soon as the underlying socket closes, and

@@ -136,6 +136,16 @@ export default class VeoliciousHttpServerClient {
      */
     abortPendingFileResponses(): Promise<void>;
     /**
+     * Sink the owning worker handler wires in for stream output. The
+     * in-process handler resolves it after the framed output has been enqueued
+     * for delivery to the socket, so stream chunks share the bounded, ordered
+     * delivery path (byte/frame limits and socket backpressure) instead of
+     * being buffered unboundedly for a stalled client. The worker-thread
+     * handler keeps null: its output crosses to the parent over IPC and no
+     * per-chunk acknowledgement is available.
+     * @type {((output: string) => Promise<void>) | null} */
+    streamOutputSink: ((output: string) => Promise<void>) | null;
+    /**
      * Narrows the response to the documented streaming transport shape.
      * @param {import("./response.js").default} response - Response to stream.
      * @returns {{streaming: boolean, streamEnded: boolean, streamAborted: boolean, headers: Record<string, string[]>, getStatusCode: () => number, getStatusMessage: () => string, streamCloseCallbacks: Set<() => void>}} - Streaming view of the response.
@@ -162,20 +172,22 @@ export default class VeoliciousHttpServerClient {
     /**
      * Emits one chunked-encoded body chunk for an active stream.
      * @param {string | Uint8Array} chunk - Chunk to emit.
-     * @returns {void} - No return value.
+     * @returns {Promise<void>} - Settles after the chunk has been delivered to
+     * the client.
      */
-    writeStreamChunk(chunk: string | Uint8Array): void;
+    writeStreamChunk(chunk: string | Uint8Array): Promise<void>;
     /**
      * Emits the zero-length chunked terminator for a stream that finished on a
      * live connection, then runs its close callbacks.
      * @param {import("./response.js").default} response - Response to finish.
-     * @returns {void} - No return value.
+     * @returns {Promise<void>} - Settles after the terminator was delivered and
+     * the close callbacks ran.
      */
-    endStreamResponse(response: import("./response.js").default): void;
+    endStreamResponse(response: import("./response.js").default): Promise<void>;
     /**
      * Aborts every stream whose client connection went away: marks the stream
-     * aborted, emits the chunked terminator for streams that never finished,
-     * and runs the close callbacks so in-flight work can settle its resources.
+     * aborted and runs the close callbacks so in-flight work can settle its
+     * resources. No terminator is emitted — the connection is already gone.
      * @returns {Promise<void>} - Resolves after every stream settled.
      */
     abortStreamResponses(): Promise<void>;

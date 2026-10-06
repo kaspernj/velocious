@@ -69,6 +69,17 @@ export default class VelociousHttpServerInProcessHandler {
       }
     })
 
+    // Streaming responses emit chunks while the request is running. Route
+    // their framed output through the counted delivery path so a stalled
+    // client cannot buffer engine chunks unboundedly: each chunk settles only
+    // after it has been delivered to the socket, which gives the handler
+    // backpressure, and the byte/frame limits bound what a silent client can
+    // retain before the connection is torn down.
+    httpClient.streamOutputSink = (output) => deliveryQueue.enqueueFrame({
+      byteLength: Buffer.byteLength(output),
+      delivery: () => serverClient.send(output)
+    })
+
     httpClient.events.on("output", (output, {websocketFrame = false} = {}) => {
       if (output !== null && output !== undefined) {
         const delivery = () => serverClient.send(output)

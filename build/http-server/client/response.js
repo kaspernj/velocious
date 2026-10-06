@@ -325,32 +325,35 @@ export default class VelociousHttpServerClientResponse {
   }
 
   /**
-   * Writes one chunk to an active stream. The chunk is framed and emitted to
-   * the client as soon as it is produced.
-   * @param {string | Uint8Array} value - Chunk to write.
-   * @returns {boolean} - Whether the chunk was accepted; false after the
-   * stream was ended or the client disconnected.
+   * Emits one chunk to the client as soon as it is produced. Returns a
+   * promise that settles once the chunk has been delivered to the socket, so
+   * a relay loop can `await response.write(chunk)` and get socket
+   * backpressure without an ad-hoc drain wait. Rejects when the stream has
+   * ended or been aborted, or when the outbound delivery queue cannot accept
+   * the chunk (a stalled client).
+   * @param {string | Uint8Array} value - Chunk to emit.
+   * @returns {Promise<void>} - Settles after the chunk is delivered.
    */
-  write(value) {
+  async write(value) {
     if (this.transport === null) throw new Error("write() requires an active streaming response")
     if (!this.streaming) throw new Error("write() requires stream() to be called first")
-    if (this.streamEnded || this.streamAborted) return false
+    if (this.streamEnded || this.streamAborted) return
 
-    this.transport.writeStreamChunk(value)
-    return true
+    await this.transport.writeStreamChunk(value)
   }
 
   /**
    * Finishes an active stream: emits the chunked terminator and releases the
-   * response for completion logging.
-   * @returns {void} - No return value.
+   * response for completion logging. Settles after the terminator has been
+   * delivered to the socket.
+   * @returns {Promise<void>} - Settles after the stream is finished.
    */
-  end() {
+  async end() {
     if (this.transport === null) throw new Error("end() requires an active streaming response")
     if (!this.streaming) throw new Error("end() requires stream() to be called first")
     if (this.streamEnded) return
 
-    this.transport.endStreamResponse(this)
+    await this.transport.endStreamResponse(this)
   }
 
   /**
