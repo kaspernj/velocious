@@ -127,19 +127,27 @@ describe("Database - Drivers - Mysql - Connection", {databaseCleaning: {transact
     })
   })
 
-  it("preserves raw state until checkout cleanup and reconnects without it", async () => {
+  it("resets raw session state in place on the same physical connection", async () => {
     await withMysqlConnection(async (mysql) => {
       const firstSession = await mysql.query("SELECT CONNECTION_ID() AS id")
 
       await mysql.query("SET @velocious_raw_session_hygiene = 'checkout-owned'")
       expect(await mysql.query("SELECT @velocious_raw_session_hygiene AS value")).toEqual([{value: "checkout-owned"}])
 
+      await mysql.query("CREATE TEMPORARY TABLE velocious_raw_session_hygiene_probe (id CHAR(36))")
+
       await mysql.cleanupSessionStateAfterCheckout()
 
       const secondSession = await mysql.query("SELECT CONNECTION_ID() AS id, @velocious_raw_session_hygiene AS value")
 
-      expect(secondSession[0].id).not.toEqual(firstSession[0].id)
+      // The physical connection is reused: no reconnect, same server session id.
+      expect(secondSession[0].id).toEqual(firstSession[0].id)
+      // ...but the server re-initialized the session on that connection: user
+      // variables are gone.
       expect(secondSession[0].value).toBe(null)
+      // Temporary tables are session-scoped and were cleared by the reset.
+      const tables = await mysql.query("SHOW TABLES LIKE 'velocious_raw_session_hygiene_probe'")
+      expect(tables).toEqual([])
     })
   })
 

@@ -24,11 +24,18 @@ export default class VelociousDatabaseDriversMysql extends Base {
      */
     _close(): Promise<void>;
     /**
-     * Disposes the physical MySQL session after each logical pool checkout.
-     * MySQL exposes open-ended session state, so reconnecting is safer than trying
-     * to enumerate and reset variables, temporary tables, prepared statements,
-     * SQL modes, and other caller-controlled state.
-     * @returns {Promise<void>} - Resolves after the physical session is closed.
+     * Resets the MySQL session state after each logical pool checkout while
+     * reusing the existing physical connection.
+     * MySQL exposes open-ended session state (user variables, temporary tables,
+     * prepared statements, `SET SESSION` changes), so the state must be cleared
+     * before the logical pool entry is handed out again. `COM_CHANGE_USER`
+     * performs a full session re-initialization on the server side — the same
+     * state a fresh handshake would start with — without opening a new TCP
+     * connection. That keeps checkouts isolated from each other while avoiding
+     * a reconnect (handshake + auth + schema re-introspection) on every
+     * operation. If the reset fails the physical session is closed instead, so
+     * the next query reconnects on a fresh session as a safe fallback.
+     * @returns {Promise<void>} - Resolves once the session state is reset.
      */
     cleanupSessionStateAfterCheckout(): Promise<void>;
     /**
