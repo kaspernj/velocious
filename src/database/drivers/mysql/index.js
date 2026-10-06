@@ -85,14 +85,59 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
-   * Disposes the physical MySQL session after each logical pool checkout.
-   * MySQL exposes open-ended session state, so reconnecting is safer than trying
-   * to enumerate and reset variables, temporary tables, prepared statements,
-   * SQL modes, and other caller-controlled state.
-   * @returns {Promise<void>} - Resolves after the physical session is closed.
+   * Resets the MySQL session state after each logical pool checkout while
+   * reusing the existing physical connection.
+   * MySQL exposes open-ended session state (user variables, temporary tables,
+   * prepared statements, `SET SESSION` changes), so the state must be cleared
+   * before the logical pool entry is handed out again. `COM_CHANGE_USER`
+   * performs a full session re-initialization on the server side — the same
+   * state a fresh handshake would start with — without opening a new TCP
+   * connection. That keeps checkouts isolated from each other while avoiding
+   * a reconnect (handshake + auth + schema re-introspection) on every
+   * operation. If the reset fails the physical session is closed instead, so
+   * the next query reconnects on a fresh session as a safe fallback.
+   * @returns {Promise<void>} - Resolves once the session state is reset.
    */
   async cleanupSessionStateAfterCheckout() {
-    await this._close()
+    const pool = this.pool
+
+    if (!pool) return
+
+    try {
+      const pooledConnection = await new Promise((resolve, reject) => {
+        pool.getConnection((error, connection) => {
+          if (error) reject(error instanceof Error ? error : new Error(`Failed to check out connection for session reset: ${error}`))
+          else resolve(connection)
+        })
+      })
+
+      try {
+        await new Promise((resolve, reject) => {
+          pooledConnection.changeUser({charset: "utf8mb4", timeout: 10000}, ((/** @type {import("mysql").MysqlError} */ error) => {
+            if (error) reject(error instanceof Error ? error : new Error(`MySQL session reset failed: ${error}`))
+            else resolve(undefined)
+          }))
+        })
+      } finally {
+        pooledConnection.release()
+      }
+
+      // The server re-initialized the session on this socket: user variables,
+      // temporary tables, prepared statements, and session variables are gone,
+      // and the session time zone must be re-established before the next query.
+      this.resetCurrentSessionTimeZone()
+    } catch (error) {
+      // A failed reset leaves the session state unknown, so fall back to a
+      // full physical disconnect: the next query reconnects on a fresh session.
+      // The logical connection is still reusable afterwards.
+      try {
+        await this._close()
+      } catch (closeError) {
+        throw new AggregateError([error, closeError], "MySQL session reset failed and the physical disconnect fallback also failed", {cause: closeError})
+      }
+
+      throw error
+    }
   }
 
   /**
