@@ -344,7 +344,8 @@ describe("HttpServer - worker handler", {databaseCleaning: {transaction: true}},
             shutdownEvents.push("cleanup-started")
             await cleanupReleased
             shutdownEvents.push("cleanup-finished")
-          }
+          },
+          abortStreamResponses: async () => {}
         },
         serverClient: {
           clientCount: 11,
