@@ -101,9 +101,13 @@ export default class VelociousHttpServerInProcessHandler {
 
     serverClient.events.on("close", () => {
       deliveryQueue.destroy()
-      const cleanup = httpClient.abortPendingFileResponses()
+      const cleanup = Promise.all([
+        httpClient.abortPendingFileResponses(),
+        httpClient.abortStreamResponses()
+      ])
+        .then(() => {})
         .catch((error) => {
-          this.logger.warn("Failed to abort file responses after client close", error)
+          this.logger.warn("Failed to abort responses after client close", error)
         })
         .finally(() => {
           this.pendingClientCloseCleanups.delete(cleanup)
@@ -159,6 +163,9 @@ export default class VelociousHttpServerInProcessHandler {
       await Promise.all([
         httpClient.abortPendingFileResponses().catch((error) => {
           this.logger.warn("Failed to abort file responses during shutdown", error)
+        }),
+        httpClient.abortStreamResponses().catch((error) => {
+          this.logger.warn("Failed to abort streaming responses during shutdown", error)
         }),
         serverClient.end().catch((error) => {
           this.logger.warn("Failed to close client during shutdown", error)

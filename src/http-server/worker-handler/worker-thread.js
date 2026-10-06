@@ -217,7 +217,10 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
     const settlements = []
     const client = this.clients[clientCount]
 
-    if (client) settlements.push(client.abortPendingFileResponses())
+    if (client) {
+      settlements.push(client.abortPendingFileResponses())
+      settlements.push(client.abortStreamResponses())
+    }
 
     for (const [transferId, transfer] of this.fileTransfers) {
       if (transfer.clientCount !== clientCount) continue
