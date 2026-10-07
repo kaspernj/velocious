@@ -322,6 +322,28 @@ export default class BackgroundJobsWorker {
     // Monotonic dispatch counter for round-robin child selection: each dispatch stamps
     // the chosen child, and selection prefers the child dispatched least recently.
     this._pooledDispatchSeq = 0
+    // Waiters blocked in _runPooledJob because the pool is at its hard cap: a job may
+    // not spawn a child while total live children (working + draining) is at the cap.
+    /** @type {Set<() => void>} */
+    this._pooledSlotWaiters = new Set()
+    /** @type {ReturnType<typeof setInterval> | undefined} - Safety poll that re-checks the slot condition. */
+    this._pooledSlotWaitTimer = undefined
+  }
+
+  /** Starts the slot-waiter safety poll if it is not already running. */
+  _startPooledSlotWaitPoll() {
+    if (this._pooledSlotWaitTimer) return
+
+    this._pooledSlotWaitTimer = setInterval(() => this._wakePooledSlotWaiters(), 50)
+    this._pooledSlotWaitTimer.unref()
+  }
+
+  /** Stops the slot-waiter safety poll once no waiter is registered. */
+  _stopPooledSlotWaitPollIfIdle() {
+    if (this._pooledSlotWaiters.size > 0 || !this._pooledSlotWaitTimer) return
+
+    clearInterval(this._pooledSlotWaitTimer)
+    this._pooledSlotWaitTimer = undefined
   }
 
   /**
@@ -1080,26 +1102,71 @@ export default class BackgroundJobsWorker {
   }
 
   /**
+   * Hard cap on total live pooled children (working + draining): children the
+   * pool may still spawn. Counting the whole live set — draining children
+   * included — is what bounds pool memory: a draining child still holds its
+   * RSS until its last in-flight job finishes, so it must occupy a cap slot.
+   * @returns {number} - Number of children the pool may still spawn.
+   */
+  _spawnablePooledChildren() {
+    return Math.max(0, this.pooledRunnerCount - this.pooledChildren.size)
+  }
+
+  /**
+   * Resolves once a non-retiring pooled child has a free concurrency slot or the
+   * pool may spawn a new one. Pooled jobs admitted while the pool is at its
+   * hard cap wait here instead of spawning an over-capacity child; the wake
+   * points are the only capacity-freeing transitions (a job outcome and a child
+   * exit), so no polling is needed.
+   * @returns {Promise<void>} - Resolves when a slot is available.
+   */
+  _waitPooledSlot() {
+    this._startPooledSlotWaitPoll()
+
+    return new Promise((resolve) => {
+      const waiter = () => {
+        this._pooledSlotWaiters.delete(waiter)
+        this._stopPooledSlotWaitPollIfIdle()
+        resolve()
+      }
+
+      this._pooledSlotWaiters.add(waiter)
+    })
+  }
+
+  /**
+   * Resolves every registered waiter; waiters re-check the slot condition
+   * themselves and only proceed when it holds.
+   * @returns {void}
+   */
+  _wakePooledSlotWaiters() {
+    if (this._pooledSlotWaiters.size === 0) return
+
+    for (const resolve of [...this._pooledSlotWaiters]) resolve()
+  }
+
+  /**
    * Free pooled slots across the pool: open slots in non-retiring children plus
-   * the slots we could add by spawning more children up to `pooledRunnerCount`.
-   * Retiring children (draining before replacement) never contribute capacity.
+   * the slots we could add by spawning more children up to the hard cap on total
+   * live children. Retiring children (draining before replacement) never
+   * contribute capacity, and they count against the cap: while one is still
+   * draining, no replacement is advertised (or spawned) — the pool advertises
+   * exactly what it can serve instead of phantom capacity.
    * @returns {number} - Number of pooled jobs the worker can accept right now.
    */
   _availablePooledSlots() {
     let openInExisting = 0
-    let nonRetiringChildren = 0
     let queuedReservations = 0
 
     for (const child of this.pooledChildren) {
       const state = this.pooledChildStates.get(child)
       if (!state || state.retiring) continue
-      nonRetiringChildren += 1
       openInExisting += this.pooledRunnerConcurrency - state.inflight.size
     }
 
     for (const queue of this.pooledJobQueues.values()) queuedReservations += queue.length
 
-    const spawnableChildren = Math.max(0, this.pooledRunnerCount - nonRetiringChildren)
+    const spawnableChildren = Math.max(0, this.pooledRunnerCount - this.pooledChildren.size)
 
     return Math.max(0, openInExisting + spawnableChildren * this.pooledRunnerConcurrency - queuedReservations)
   }
@@ -1109,11 +1176,32 @@ export default class BackgroundJobsWorker {
    * new child when every non-retiring child is full and the pool is below
    * `pooledRunnerCount`. Each child runs up to `pooledRunnerConcurrency` jobs at
    * once on its own event loop.
+   *
+   * When the pool is already at its hard cap (total live children, draining
+   * included), the job waits for a slot instead of spawning: that is what keeps
+   * the live-child count — and therefore the pool's total RSS — bounded. The
+   * wait resolves on the only two capacity-freeing transitions (a job outcome,
+   * a child exit); a safety poll covers anything missed.
    * @param {import("./types.js").BackgroundJobPayload & {id: string}} payload - Job payload.
    * @returns {Promise<void>} - Resolves after the durable report.
    */
-  _runPooledJob(payload) {
-    const child = this._selectPooledChild() || this._createPooledChild()
+  async _runPooledJob(payload) {
+    // At the hard cap (no free slot, no spawnable child) the job waits for a
+    // slot instead of spawning an over-capacity child — that is what bounds
+    // the live-child count and the pool's total RSS.
+    let child = this._selectPooledChild()
+    while (!child) {
+      if (this._spawnablePooledChildren() === 0) {
+        // Shutdown: main no longer dispatches and no slot will ever free —
+        // stop waiting so the tracked job can settle and the drain completes.
+        if (this.shouldStop) return
+        await this._waitPooledSlot()
+        child = this._selectPooledChild()
+        continue
+      }
+      child = this._selectPooledChild() || this._createPooledChild()
+    }
+
     const state = this.pooledChildStates.get(child)
     if (!state) throw new Error("Pooled runner state missing")
 
@@ -1232,12 +1320,16 @@ export default class BackgroundJobsWorker {
   }
 
   /**
-   * Creates a reusable pooled child.
-   * @returns {import("node:child_process").ChildProcess} - New pooled child.
+   * Creates a reusable pooled child, enforcing the hard cap on total live
+   * children (working + draining). Returns undefined when the cap is already
+   * met — the only way a new child may exist is a slot being open, so the
+   * caller re-checks and waits again.
+   * @returns {import("node:child_process").ChildProcess | undefined} - The new child, or undefined when the pool is at its cap.
    */
   _createPooledChild() {
     const configuration = this.configuration
     if (!configuration) throw new Error("Background jobs worker configuration not initialized")
+    if (this.pooledChildren.size >= this.pooledRunnerCount) return undefined
     const child = fork(POOLED_RUNNER_ENTRY_PATH, [], {
       cwd: configuration.getDirectory(), execArgv: [], stdio: ["ignore", "ignore", "ignore", "ipc"],
       env: Object.assign({}, process.env, this._childBackgroundJobsEnvironment())
@@ -1332,6 +1424,9 @@ export default class BackgroundJobsWorker {
       this._beginRetirePooledChild(child)
     }
     this._terminateIfDrained(child)
+    // A job outcome frees a concurrency slot and may drain a retiring child —
+    // the only two transitions that free capacity for waiters at the hard cap.
+    this._wakePooledSlotWaiters()
   }
 
   /**
@@ -1362,11 +1457,14 @@ export default class BackgroundJobsWorker {
   }
 
   /**
-   * Marks a pooled child for retirement and eagerly spawns a single replacement
-   * (1-for-1) so its capacity is restored immediately without waiting for it to
-   * finish draining. The retiring child stops receiving new jobs and is
-   * terminated only once its in-flight set drains, so a long-running job (e.g. a
-   * build) is never cut off.
+   * Marks a pooled child for retirement and — when the pool is below its hard
+   * cap — eagerly spawns a single replacement (1-for-1) so its capacity is
+   * restored immediately without waiting for it to finish draining. The
+   * replacement spawn is gated by the cap (the retiring child still counts as
+   * live until it exits), so a full pool simply defers the replacement to the
+   * retiring child's drain instead of spawning over capacity. The retiring
+   * child stops receiving new jobs and is terminated only once its in-flight
+   * set drains, so a long-running job (e.g. a build) is never cut off.
    * @param {import("node:child_process").ChildProcess} child - Child to retire.
    * @returns {void}
    */
@@ -1376,7 +1474,9 @@ export default class BackgroundJobsWorker {
 
     state.retiring = true
     // Best-effort pre-warm: skip when stopping (no new work) or before the
-    // worker is initialized (no configuration to fork a child from).
+    // worker is initialized (no configuration to fork a child from). The cap
+    // inside _createPooledChild refuses the spawn while the pool is full, in
+    // which case the replacement is deferred to the drain path.
     if (!this.shouldStop && this.configuration) this._createPooledChild()
   }
 
@@ -1394,6 +1494,9 @@ export default class BackgroundJobsWorker {
 
   /**
    * Retires a drained pooled child (removes it from tracking, then SIGTERMs it).
+   * Because the hard cap counts live children, the exit of this child frees a
+   * slot: any deferred replacement (the pool was full when the child retired)
+   * is spawned now, and capacity is re-advertised so main can dispatch into it.
    * @param {import("node:child_process").ChildProcess} child - Child process to retire.
    * @returns {void}
    */
@@ -1503,6 +1606,9 @@ export default class BackgroundJobsWorker {
     }
     this.pooledChildren.delete(child)
     this.inflightProcessChildren.delete(child)
+    // Child exit frees a hard-cap slot even while its in-flight set is still
+    // being reported — wake waiters now; their reports settle independently.
+    this._wakePooledSlotWaiters()
 
     const entries = state ? [...state.inflight.values()] : []
     const runnerFailure = state

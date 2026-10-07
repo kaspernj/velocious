@@ -1,0 +1,1 @@
+Fixed a background-jobs pooled runner memory leak: the worker no longer spawns replacement runners over the configured pool size. The hard cap now counts total live children (working plus draining) at both spawn sites, retiring children advertise no phantom capacity, and admitted jobs wait for a slot instead of spawning an over-capacity child.

@@ -247,6 +247,10 @@ export default class BackgroundJobsWorker {
     /** @type {WeakSet<Promise<void>>} */
     _pooledStartupFailureJobs: WeakSet<Promise<void>>;
     _pooledDispatchSeq: number;
+    /** @type {Set<() => void>} */
+    _pooledSlotWaiters: Set<() => void>;
+    /** @type {ReturnType<typeof setInterval> | undefined} - Safety poll that re-checks the slot condition. */
+    _pooledSlotWaitTimer: ReturnType<typeof setInterval> | undefined;
     /**
      * Runs constructor.
      * @param {object} [args] - Options.
@@ -295,6 +299,10 @@ export default class BackgroundJobsWorker {
         onGenerationAccepted?: () => void;
         onRetireMessage?: () => void;
     });
+    /** Starts the slot-waiter safety poll if it is not already running. */
+    _startPooledSlotWaitPoll(): void;
+    /** Stops the slot-waiter safety poll once no waiter is registered. */
+    _stopPooledSlotWaitPollIfIdle(): void;
     /**
      * Runs start.
      * @returns {Promise<void>} - Resolves when connected.
@@ -486,9 +494,35 @@ export default class BackgroundJobsWorker {
      */
     _runPooledJobQueue(jobId: string): Promise<void>;
     /**
+     * Hard cap on total live pooled children (working + draining): children the
+     * pool may still spawn. Counting the whole live set — draining children
+     * included — is what bounds pool memory: a draining child still holds its
+     * RSS until its last in-flight job finishes, so it must occupy a cap slot.
+     * @returns {number} - Number of children the pool may still spawn.
+     */
+    _spawnablePooledChildren(): number;
+    /**
+     * Resolves once a non-retiring pooled child has a free concurrency slot or the
+     * pool may spawn a new one. Pooled jobs admitted while the pool is at its
+     * hard cap wait here instead of spawning an over-capacity child; the wake
+     * points are the only capacity-freeing transitions (a job outcome and a child
+     * exit), so no polling is needed.
+     * @returns {Promise<void>} - Resolves when a slot is available.
+     */
+    _waitPooledSlot(): Promise<void>;
+    /**
+     * Resolves every registered waiter; waiters re-check the slot condition
+     * themselves and only proceed when it holds.
+     * @returns {void}
+     */
+    _wakePooledSlotWaiters(): void;
+    /**
      * Free pooled slots across the pool: open slots in non-retiring children plus
-     * the slots we could add by spawning more children up to `pooledRunnerCount`.
-     * Retiring children (draining before replacement) never contribute capacity.
+     * the slots we could add by spawning more children up to the hard cap on total
+     * live children. Retiring children (draining before replacement) never
+     * contribute capacity, and they count against the cap: while one is still
+     * draining, no replacement is advertised (or spawned) — the pool advertises
+     * exactly what it can serve instead of phantom capacity.
      * @returns {number} - Number of pooled jobs the worker can accept right now.
      */
     _availablePooledSlots(): number;
@@ -497,6 +531,12 @@ export default class BackgroundJobsWorker {
      * new child when every non-retiring child is full and the pool is below
      * `pooledRunnerCount`. Each child runs up to `pooledRunnerConcurrency` jobs at
      * once on its own event loop.
+     *
+     * When the pool is already at its hard cap (total live children, draining
+     * included), the job waits for a slot instead of spawning: that is what keeps
+     * the live-child count — and therefore the pool's total RSS — bounded. The
+     * wait resolves on the only two capacity-freeing transitions (a job outcome,
+     * a child exit); a safety poll covers anything missed.
      * @param {import("./types.js").BackgroundJobPayload & {id: string}} payload - Job payload.
      * @returns {Promise<void>} - Resolves after the durable report.
      */
@@ -556,10 +596,13 @@ export default class BackgroundJobsWorker {
         jobId: string;
     }): void;
     /**
-     * Creates a reusable pooled child.
-     * @returns {import("node:child_process").ChildProcess} - New pooled child.
+     * Creates a reusable pooled child, enforcing the hard cap on total live
+     * children (working + draining). Returns undefined when the cap is already
+     * met — the only way a new child may exist is a slot being open, so the
+     * caller re-checks and waits again.
+     * @returns {import("node:child_process").ChildProcess | undefined} - The new child, or undefined when the pool is at its cap.
      */
-    _createPooledChild(): import("node:child_process").ChildProcess;
+    _createPooledChild(): import("node:child_process").ChildProcess | undefined;
     /**
      * Handles a pooled child's per-job durable-report acknowledgement. A child
      * runs jobs concurrently and reports one `job-outcome` per job id.
@@ -593,11 +636,14 @@ export default class BackgroundJobsWorker {
         childPid?: number;
     }): void;
     /**
-     * Marks a pooled child for retirement and eagerly spawns a single replacement
-     * (1-for-1) so its capacity is restored immediately without waiting for it to
-     * finish draining. The retiring child stops receiving new jobs and is
-     * terminated only once its in-flight set drains, so a long-running job (e.g. a
-     * build) is never cut off.
+     * Marks a pooled child for retirement and — when the pool is below its hard
+     * cap — eagerly spawns a single replacement (1-for-1) so its capacity is
+     * restored immediately without waiting for it to finish draining. The
+     * replacement spawn is gated by the cap (the retiring child still counts as
+     * live until it exits), so a full pool simply defers the replacement to the
+     * retiring child's drain instead of spawning over capacity. The retiring
+     * child stops receiving new jobs and is terminated only once its in-flight
+     * set drains, so a long-running job (e.g. a build) is never cut off.
      * @param {import("node:child_process").ChildProcess} child - Child to retire.
      * @returns {void}
      */
@@ -610,6 +656,9 @@ export default class BackgroundJobsWorker {
     _terminateIfDrained(child: import("node:child_process").ChildProcess): void;
     /**
      * Retires a drained pooled child (removes it from tracking, then SIGTERMs it).
+     * Because the hard cap counts live children, the exit of this child frees a
+     * slot: any deferred replacement (the pool was full when the child retired)
+     * is spawned now, and capacity is re-advertised so main can dispatch into it.
      * @param {import("node:child_process").ChildProcess} child - Child process to retire.
      * @returns {void}
      */

@@ -206,7 +206,12 @@ describe("BackgroundJobsClient transport", {databaseCleaning: {transaction: fals
         {errorMessage: "Dropped acknowledgement did not settle", timeout: 1000},
         async () => await client.enqueue(request)
       ))
-      const replayedJobId = await client.enqueue(request)
+      // The replay enqueue must not inherit the 500ms timeout used to provoke the
+      // dropped-acknowledgement error: on a loaded CI runner the live main process
+      // can exceed 500ms to acknowledge, which makes the replay flake. Use the
+      // default client timeout for the acknowledgement that is expected to arrive.
+      const replayClient = new BackgroundJobsClient({configuration: dummyConfiguration})
+      const replayedJobId = await replayClient.enqueue(request)
 
       expect(firstError.message).toMatch(/closed before.*acknowledged/i)
       expect(replayedJobId).toEqual(droppedJobId)
