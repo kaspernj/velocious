@@ -19,6 +19,17 @@ export default class VelociousHttpServerClientRequest {
     this.client = client
     this.configuration = configuration
     this.requestParser = new RequestParser({configuration})
+
+    /**
+     * Whether the owning client connection was torn down while this request
+     * was still running. Set once by the client on socket teardown and read
+     * by handlers that need to settle in-flight work (e.g. admission queue
+     * positions) without waiting for the response to be sent.
+     * @type {boolean} */
+    this.clientDisconnected = false
+
+    /** @type {Set<() => void>} */
+    this.clientDisconnectCallbacks = new Set()
   }
 
   baseURL() { return `${this.protocol()}://${this.hostWithPort()}` }
@@ -113,6 +124,39 @@ export default class VelociousHttpServerClientRequest {
    */
   rawBody() { return this.getRequestBuffer().getRawBody() }
   socketRemoteAddress() { return this.client?.remoteAddress }
+
+  /**
+   * Marks this request as client-disconnected and runs every registered
+   * disconnect callback exactly once. The owning client invokes it when the
+   * socket tears down; handlers that register afterwards learn of the
+   * disconnect through the `clientDisconnected` field instead.
+   * @returns {void}
+   */
+  markClientDisconnected() {
+    if (this.clientDisconnected) return
+    this.clientDisconnected = true
+    for (const callback of this.clientDisconnectCallbacks) {
+      callback()
+    }
+    this.clientDisconnectCallbacks.clear()
+  }
+
+  /**
+   * Registers a callback that fires once when the client connection tears
+   * down while this request is still running. Buffered requests cannot rely
+   * on the streaming response's `onStreamClose` for that: no stream has
+   * been opened yet, so a queued request's queue position is otherwise
+   * stranded until its admission deadline.
+   * @param {() => void} callback - Disconnect callback.
+   * @returns {void}
+   */
+  onClientDisconnect(callback) {
+    if (this.clientDisconnected) {
+      callback()
+      return
+    }
+    this.clientDisconnectCallbacks.add(callback)
+  }
 
   getRequestBuffer() { return this.getRequestParser().getRequestBuffer() }
   getRequestParser() { return this.requestParser }

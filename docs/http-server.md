@@ -199,6 +199,39 @@ body; `Transfer-Encoding: chunked` is set explicitly and
 `Content-Length` is omitted. Sub-requests (e.g. websocket request payloads)
 have no socket and their responses fail loudly if they attempt to stream.
 
+## Client Disconnect for Buffered Requests
+
+The streaming close hooks only cover responses that already called
+`stream()`. A handler whose response is still buffered — an admission queue
+wait, a long-running search, anything that holds a slot before it answers —
+has no stream for the framework to abort when the client leaves. Use the
+request-level hooks instead:
+
+```js
+class QueueController extends Controller {
+  async run() {
+    const abort = new AbortController()
+    this.request().onClientDisconnect(() => { abort.abort() })
+    try {
+      const slot = await acquireSlot({signal: abort.signal})
+    } finally {
+      if (this.request().clientDisconnected) abort.abort()
+    }
+    // ...
+  }
+}
+```
+
+`request.onClientDisconnect(callback)` registers a callback that fires once
+when the owning client connection tears down while this request is still
+running; `request.clientDisconnected` reports the same state for handlers
+that start watching after the socket already went away. Both fire from the
+socket-teardown path in in-process and worker-thread handler modes. Register
+the hook before awaiting the long work, abort whatever the handler reserved
+(a queue position, an upstream call, an engine slot), and let the framework
+drop the response — the client that is no longer connected never receives it
+in any case.
+
 ## Response Compression
 
 Buffered HTTP responses are compressed with Brotli (`br`) or gzip by default

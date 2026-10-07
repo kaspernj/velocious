@@ -50,6 +50,51 @@ export default class VelociousHttpServerClientWebsocketRequest {
     const queryParams = this._parseQueryParams()
 
     this.paramsObject = {...queryParams, ...this.paramsObject}
+
+    /**
+     * Whether the owning client connection was torn down while this request
+     * was still running. Websocket requests are session-owned and never
+     * enter the client's in-flight request list, so this stays false for
+     * them; the field exists so the request union shares one surface.
+     * @type {boolean} */
+    this.clientDisconnected = false
+
+    /** @type {Set<() => void>} */
+    this.clientDisconnectCallbacks = new Set()
+  }
+
+  /**
+   * Marks this request as client-disconnected and runs every registered
+   * disconnect callback exactly once. The owning client invokes it when the
+   * socket tears down; handlers that register afterwards learn of the
+   * disconnect through the `clientDisconnected` field instead. Websocket
+   * requests are session-owned and never enter the client's in-flight
+   * request list, so this is inert for them; the shared surface keeps the
+   * request union uniform.
+   * @returns {void}
+   */
+  markClientDisconnected() {
+    if (this.clientDisconnected) return
+    this.clientDisconnected = true
+    for (const callback of this.clientDisconnectCallbacks) {
+      callback()
+    }
+    this.clientDisconnectCallbacks.clear()
+  }
+
+  /**
+   * Registers a callback that fires once when the client connection tears
+   * down while this request is still running. See the HTTP request's
+   * {@linkcode markClientDisconnected} for the shared-surface note.
+   * @param {() => void} callback - Disconnect callback.
+   * @returns {void}
+   */
+  onClientDisconnect(callback) {
+    if (this.clientDisconnected) {
+      callback()
+      return
+    }
+    this.clientDisconnectCallbacks.add(callback)
   }
 
   baseURL() {

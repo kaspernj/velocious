@@ -116,7 +116,13 @@ export default class VelociousHttpServerInProcessHandler {
         httpClient.abortPendingFileResponses(),
         httpClient.abortStreamResponses()
       ])
-        .then(() => {})
+        .then(() => {
+          // Buffered responses have no stream to abort, so their in-flight
+          // handlers never hear about the socket teardown through the
+          // streaming path: notify the running requests directly so they can
+          // settle resources (e.g. admission queue positions) in-process.
+          httpClient.notifyClientDisconnect()
+        })
         .catch((error) => {
           this.logger.warn("Failed to abort responses after client close", error)
         })
