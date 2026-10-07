@@ -220,6 +220,11 @@ export default class VelociousHttpServerWorkerHandlerWorkerThread {
     if (client) {
       settlements.push(client.abortPendingFileResponses())
       settlements.push(client.abortStreamResponses())
+      // Buffered responses have no stream to abort, so their in-flight
+      // handlers never hear about the socket teardown through the streaming
+      // path: notify the running requests directly so they can settle
+      // resources (e.g. admission queue positions) in-process.
+      client.notifyClientDisconnect()
     }
 
     for (const [transferId, transfer] of this.fileTransfers) {

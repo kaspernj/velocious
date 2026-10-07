@@ -16,6 +16,15 @@ export default class VelociousHttpServerClientWebsocketRequest {
     _path: string;
     remoteAddressValue: string | undefined;
     /**
+     * Whether the owning client connection was torn down while this request
+     * was still running. Websocket requests are session-owned and never
+     * enter the client's in-flight request list, so this stays false for
+     * them; the field exists so the request union shares one surface.
+     * @type {boolean} */
+    clientDisconnected: boolean;
+    /** @type {Set<() => void>} */
+    clientDisconnectCallbacks: Set<() => void>;
+    /**
      * Runs constructor.
      * @param {object} args - Options object.
      * @param {ReturnType<typeof JSON.parse>} [args.body] - Request body.
@@ -35,6 +44,25 @@ export default class VelociousHttpServerClientWebsocketRequest {
         params?: Record<string, ReturnType<typeof JSON.parse>>;
         remoteAddress?: string;
     });
+    /**
+     * Marks this request as client-disconnected and runs every registered
+     * disconnect callback exactly once. The owning client invokes it when the
+     * socket tears down; handlers that register afterwards learn of the
+     * disconnect through the `clientDisconnected` field instead. Websocket
+     * requests are session-owned and never enter the client's in-flight
+     * request list, so this is inert for them; the shared surface keeps the
+     * request union uniform.
+     * @returns {void}
+     */
+    markClientDisconnected(): void;
+    /**
+     * Registers a callback that fires once when the client connection tears
+     * down while this request is still running. See the HTTP request's
+     * {@linkcode markClientDisconnected} for the shared-surface note.
+     * @param {() => void} callback - Disconnect callback.
+     * @returns {void}
+     */
+    onClientDisconnect(callback: () => void): void;
     baseURL(): string | undefined;
     /**
      * Runs header.

@@ -4,6 +4,15 @@ export default class VelociousHttpServerClientRequest {
     configuration: import("../../configuration.js").default;
     requestParser: RequestParser;
     /**
+     * Whether the owning client connection was torn down while this request
+     * was still running. Set once by the client on socket teardown and read
+     * by handlers that need to settle in-flight work (e.g. admission queue
+     * positions) without waiting for the response to be sent.
+     * @type {boolean} */
+    clientDisconnected: boolean;
+    /** @type {Set<() => void>} */
+    clientDisconnectCallbacks: Set<() => void>;
+    /**
      * Runs constructor.
      * @param {object} args - Options object.
      * @param {import("./index.js").default} args.client - Client instance.
@@ -58,6 +67,24 @@ export default class VelociousHttpServerClientRequest {
      */
     rawBody(): Buffer;
     socketRemoteAddress(): string | undefined;
+    /**
+     * Marks this request as client-disconnected and runs every registered
+     * disconnect callback exactly once. The owning client invokes it when the
+     * socket tears down; handlers that register afterwards learn of the
+     * disconnect through the `clientDisconnected` field instead.
+     * @returns {void}
+     */
+    markClientDisconnected(): void;
+    /**
+     * Registers a callback that fires once when the client connection tears
+     * down while this request is still running. Buffered requests cannot rely
+     * on the streaming response's `onStreamClose` for that: no stream has
+     * been opened yet, so a queued request's queue position is otherwise
+     * stranded until its admission deadline.
+     * @param {() => void} callback - Disconnect callback.
+     * @returns {void}
+     */
+    onClientDisconnect(callback: () => void): void;
     getRequestBuffer(): import("./request-buffer/index.js").default;
     getRequestParser(): RequestParser;
 }

@@ -192,6 +192,15 @@ export default class VeoliciousHttpServerClient {
      */
     abortStreamResponses(): Promise<void>;
     /**
+     * Marks every in-flight request as client-disconnected and runs its
+     * disconnect callbacks. The worker handler calls this when the underlying
+     * socket tears down, so a handler whose response is still buffered (e.g.
+     * waiting in an admission queue) can observe the client leaving without
+     * waiting for the response to be sent.
+     * @returns {void}
+     */
+    notifyClientDisconnect(): void;
+    /**
      * Runs the close callbacks of a finished or aborted stream exactly once.
      * @param {import("./response.js").default} response - Finished stream.
      * @returns {Promise<void>} - Resolves after every callback ran.
