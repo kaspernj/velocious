@@ -178,6 +178,56 @@ export type PooledChildShutdownObservation = {
      */
     signal: import("node:child_process").ChildProcess["signalCode"];
 };
+export type PooledChildMemoryObservation = {
+    /**
+     * - In-flight job ids, bounded.
+     */
+    activeJobIds: string[];
+    /**
+     * - In-flight job ids omitted by the bound.
+     */
+    activeJobIdsTruncatedCount: number;
+    /**
+     * - Stable identity reported by the child.
+     */
+    childInstanceId: string;
+    /**
+     * - Child process id.
+     */
+    childPid: number;
+    /**
+     * - Child process uptime in ms.
+     */
+    childUptimeMs: number;
+    /**
+     * - V8 heap-stat breakdown at the sample.
+     */
+    heapStatistics: ReturnType<typeof import("node:v8").getHeapStatistics>;
+    /**
+     * - In-flight job count.
+     */
+    jobCount: number;
+    /**
+     * - Process memory breakdown at the sample.
+     */
+    memoryUsage: ReturnType<typeof import("node:process").memoryUsage>;
+    /**
+     * - Epoch ms the child sampled.
+     */
+    observedAtMs: number;
+    /**
+     * - Resident set size in bytes at the sample.
+     */
+    rssBytes: number;
+    /**
+     * - Discriminator.
+     */
+    type: "pooled-child-memory";
+    /**
+     * - Process uptime in ms.
+     */
+    uptimeMs: number;
+};
 export type LocalBackgroundJobsClock = {
     /**
      * - Current epoch milliseconds.
@@ -885,6 +935,27 @@ export type BackgroundJobSocketMessage = BackgroundJobHelloMessage | BackgroundJ
  * @property {number} shutdownObservedAtMs - Child observation timestamp.
  * @property {number | null} shutdownRequestedAtMs - Parent request timestamp when supplied over IPC.
  * @property {import("node:child_process").ChildProcess["signalCode"]} signal - Requested or observed signal when available.
+ */
+/**
+ * Bounded pooled-child memory observation sent over the child IPC channel.
+ * The pooled child's stdio is ignored by the worker fork, so this observation
+ * (sent periodically while jobs run, plus on demand) is how a memory problem
+ * in a running child names itself. `heapStatistics` and `memoryUsage`
+ * distinguish V8-heap growth from external/array-buffer (native resource)
+ * growth; `activeJobIds` ties the sample to the work that was in flight.
+ * @typedef {object} PooledChildMemoryObservation
+ * @property {string[]} activeJobIds - In-flight job ids, bounded.
+ * @property {number} activeJobIdsTruncatedCount - In-flight job ids omitted by the bound.
+ * @property {string} childInstanceId - Stable identity reported by the child.
+ * @property {number} childPid - Child process id.
+ * @property {number} childUptimeMs - Child process uptime in ms.
+ * @property {ReturnType<typeof import("node:v8").getHeapStatistics>} heapStatistics - V8 heap-stat breakdown at the sample.
+ * @property {number} jobCount - In-flight job count.
+ * @property {ReturnType<typeof import("node:process").memoryUsage>} memoryUsage - Process memory breakdown at the sample.
+ * @property {number} observedAtMs - Epoch ms the child sampled.
+ * @property {number} rssBytes - Resident set size in bytes at the sample.
+ * @property {"pooled-child-memory"} type - Discriminator.
+ * @property {number} uptimeMs - Process uptime in ms.
  */
 /**
  * @typedef {object} LocalBackgroundJobsClock

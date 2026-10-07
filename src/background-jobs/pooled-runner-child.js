@@ -1,6 +1,7 @@
 // @ts-check
 
 import { randomUUID } from "node:crypto"
+import v8 from "node:v8"
 import timeout from "awaitery/build/timeout.js"
 import runJobPayload, { BackgroundJobPerformedFailure } from "./job-runner.js"
 import { boundedPooledRunnerInflightJobIds, isPooledChildShutdownReason, isPooledChildShutdownSignal } from "./pooled-runner-shutdown.js"
@@ -14,6 +15,10 @@ const BASE_PROCESS_TITLE = "velocious background-jobs-runner"
 const SHUTDOWN_OBSERVATION_SEND_TIMEOUT_MS = 100
 /** Stable identity of this pooled child process for the life of the process. */
 const childInstanceId = randomUUID()
+/** Sampling cadence for the memory observation sampler. */
+const MEMORY_OBSERVATION_INTERVAL_MS = 10000
+/** Bound on in-flight job ids carried in a memory observation. */
+const MEMORY_OBSERVATION_JOB_ID_LIMIT = 32
 
 setRunnerProcessTitle()
 
@@ -149,6 +154,93 @@ function sendChildAcceptance(type, payload, observedAtMs) {
 }
 
 /**
+ * Collects a bounded diagnostic snapshot of this child's memory state. The
+ * pooled child's stdio is ignored by the worker fork, so IPC is the only channel
+ * to the worker's log surface — this snapshot (sent periodically and on demand)
+ * is how a memory problem names itself in production. The V8 heap-stat
+ * breakdown (not a full heap snapshot, which would be far too expensive while a
+ * child runs 25 concurrent jobs) distinguishes a V8 heap-growth leak from
+ * external/array-buffer (native resource) growth, and the in-flight job ids
+ * tie the observation to the work that was running.
+ * @returns {{activeJobIds: string[], activeJobIdsTruncatedCount: number, childInstanceId: string, childPid: number, childUptimeMs: number, heapStatistics: ReturnType<typeof v8.getHeapStatistics>, jobCount: number, memoryUsage: ReturnType<typeof process.memoryUsage>, observedAtMs: number, rssBytes: number, type: "pooled-child-memory", uptimeMs: number}} - Bounded memory observation for this child.
+ */
+function collectMemoryObservation() {
+  const jobIds = [...runningJobIds]
+  const activeJobIds = jobIds.slice(0, MEMORY_OBSERVATION_JOB_ID_LIMIT)
+  const memoryUsage = process.memoryUsage()
+
+  return {
+    activeJobIds,
+    activeJobIdsTruncatedCount: Math.max(0, jobIds.length - activeJobIds.length),
+    childInstanceId,
+    childPid: process.pid,
+    childUptimeMs: Math.floor(process.uptime() * 1000),
+    heapStatistics: v8.getHeapStatistics(),
+    jobCount: jobIds.length,
+    memoryUsage,
+    observedAtMs: Date.now(),
+    rssBytes: memoryUsage.rss,
+    type: "pooled-child-memory",
+    uptimeMs: Math.floor(process.uptime() * 1000)
+  }
+}
+
+/**
+ * Sends a memory observation to the worker. Sampling is cheap (process + V8
+ * heap stats) and only runs while jobs are in flight; a closed IPC channel is
+ * terminal for this child (the disconnect handler owns shutdown), so a failed
+ * send is swallowed.
+ * @returns {void}
+ */
+function sendMemoryObservation() {
+  if (!process.send || runningJobIds.size === 0) return
+
+  try {
+    process.send(collectMemoryObservation())
+  } catch {
+    // The IPC channel is already gone; the disconnect handler owns shutdown.
+  }
+}
+
+/** @type {ReturnType<typeof setInterval> | undefined} */
+let memoryObservationTimer
+
+/**
+ * Checks whether an IPC value requests this child to send a memory observation.
+ * @param {ReturnType<typeof JSON.parse>} message - IPC message.
+ * @returns {message is {type: "memory-observation-request"}} - Whether the message requests one.
+ */
+function isMemoryObservationRequestMessage(message) {
+  return message !== null
+    && typeof message === "object"
+    && message.type === "memory-observation-request"
+}
+
+/**
+ * Starts the periodic memory observation sampler if it is not already running.
+ * @returns {void}
+ */
+function startMemoryObservationSampling() {
+  if (memoryObservationTimer || !process.send) return
+
+  memoryObservationTimer = setInterval(() => {
+    sendMemoryObservation()
+  }, MEMORY_OBSERVATION_INTERVAL_MS)
+  memoryObservationTimer.unref()
+}
+
+/**
+ * Stops the periodic memory observation sampler.
+ * @returns {void}
+ */
+function stopMemoryObservationSampling() {
+  if (!memoryObservationTimer) return
+
+  clearInterval(memoryObservationTimer)
+  memoryObservationTimer = undefined
+}
+
+/**
  * Checks whether an IPC value is a runnable pooled job message.
  * @param {ReturnType<typeof JSON.parse>} message - IPC message.
  * @returns {message is {type: "job", payload: import("./types.js").BackgroundJobPayload & {id: string}, sharedTransactionBroker?: import("../testing/shared-transaction-proxy-driver.js").SharedTransactionBrokerJobConfig}} - Whether this is a valid job message.
@@ -238,6 +330,10 @@ async function runJob(payload, sharedTransactionBroker) {
   } finally {
     runningJobIds.delete(payload.id)
     updateProcessTitle()
+
+    if (runningJobIds.size === 0) {
+      stopMemoryObservationSampling()
+    }
   }
 }
 
@@ -257,11 +353,17 @@ function handleMessage(message) {
     return
   }
 
+  if (isMemoryObservationRequestMessage(message)) {
+    sendMemoryObservation()
+    return
+  }
+
   if (!isJobMessage(message) || runningJobIds.has(message.payload.id)) return
 
   runningJobIds.add(message.payload.id)
   updateProcessTitle()
   sendChildAcceptance("job-received", message.payload, Date.now())
+  startMemoryObservationSampling()
   void runJob(message.payload, message.sharedTransactionBroker || {expected: false})
 }
 

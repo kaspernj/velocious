@@ -72,6 +72,10 @@ export type PooledChildState = {
      */
     settling?: boolean;
     /**
+     * - Latest memory observation received from this child.
+     */
+    lastMemoryObservation?: import("./types.js").PooledChildMemoryObservation;
+    /**
      * - Parent observation of IPC disconnect.
      */
     ipcDisconnectedAtMs?: number;
@@ -123,6 +127,7 @@ export default class BackgroundJobsWorker {
     onStopped: (() => void | Promise<void>) | undefined;
     onGenerationAccepted: (() => void) | undefined;
     onRetireMessage: (() => void) | undefined;
+    onPooledRunnerMemoryObservation: ((observation: import("./types.js").PooledChildMemoryObservation) => void | Promise<void>) | undefined;
     /**
      * Constructor override for the inline-job concurrency cap. When unset
      * the cap is read from `configuration.getBackgroundJobsConfig()` in
@@ -275,8 +280,9 @@ export default class BackgroundJobsWorker {
      * @param {() => void | Promise<void>} [args.onStopped] - Lifecycle hook invoked after the worker finishes stopping.
      * @param {() => void} [args.onGenerationAccepted] - Explicit generation-acceptance observation hook.
      * @param {() => void} [args.onRetireMessage] - Explicit retire-message observation hook.
+     * @param {(observation: import("./types.js").PooledChildMemoryObservation) => void | Promise<void>} [args.onPooledRunnerMemoryObservation] - Explicit pooled-child memory observation hook. Every validated observation (periodic while a child has in-flight jobs, plus on demand) is forwarded here, in addition to the worker's compact stderr log line, so an application can route memory diagnostics (e.g. to a bug reporter) without parsing logs.
      */
-    constructor({ configuration, host, port, generationId, workerInstanceId, maxConcurrentForkedJobs, maxConcurrentInlineJobs, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, forkedChildSigkillGraceMs, heartbeatIntervalMs, generationHandshakeTimeoutMs, reconnectDelayMs, jobTimeoutMs, closeDatabaseConnectionsOnStop, onStopped, onGenerationAccepted, onRetireMessage }?: {
+    constructor({ configuration, host, port, generationId, workerInstanceId, maxConcurrentForkedJobs, maxConcurrentInlineJobs, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, forkedChildSigkillGraceMs, heartbeatIntervalMs, generationHandshakeTimeoutMs, reconnectDelayMs, jobTimeoutMs, closeDatabaseConnectionsOnStop, onStopped, onGenerationAccepted, onRetireMessage, onPooledRunnerMemoryObservation }?: {
         configuration?: import("../configuration.js").default;
         host?: string;
         port?: number;
@@ -298,6 +304,7 @@ export default class BackgroundJobsWorker {
         onStopped?: () => void | Promise<void>;
         onGenerationAccepted?: () => void;
         onRetireMessage?: () => void;
+        onPooledRunnerMemoryObservation?: (observation: import("./types.js").PooledChildMemoryObservation) => void | Promise<void>;
     });
     /** Starts the slot-waiter safety poll if it is not already running. */
     _startPooledSlotWaitPoll(): void;
@@ -635,6 +642,38 @@ export default class BackgroundJobsWorker {
         childInstanceId?: string;
         childPid?: number;
     }): void;
+    /**
+     * Handles a pooled child's bounded memory observation. The pooled child's
+     * stdio is ignored by the worker fork, so this IPC observation is how a
+     * memory problem in a running child names itself. The worker (a) records the
+     * latest observation on the child's state for later correlation, (b) logs one
+     * compact line to its own stderr (which reaches the prod log, unlike the
+     * child's ignored stdio), and (c) forwards the full observation to the
+     * optional `onPooledRunnerMemoryObservation` hook so an application can route
+     * it (e.g. to a bug reporter) without parsing logs. The heap-stat breakdown
+     * distinguishes V8-heap growth from external/array-buffer (native) growth. A
+     * hook failure is swallowed — diagnostics must never take down the worker or
+     * fail the jobs running on that child.
+     * @param {object} args - Message details.
+     * @param {import("node:child_process").ChildProcess} args.child - Pooled child.
+     * @param {import("./types.js").PooledChildMemoryObservation} args.message - Validated memory observation.
+     * @returns {void}
+     */
+    _handlePooledChildMemoryObservation({ child, message }: {
+        child: import("node:child_process").ChildProcess;
+        message: import("./types.js").PooledChildMemoryObservation;
+    }): void;
+    /**
+     * Requests an immediate memory observation from one pooled child. The child
+     * replies over IPC with its current snapshot (the same shape as the periodic
+     * sampler), which the worker records, logs, and forwards to the
+     * `onPooledRunnerMemoryObservation` hook. Use this to pull a snapshot on
+     * suspicion (e.g. after an OOM report) without waiting for the next periodic
+     * sample. A no-op when the child is gone or its IPC channel is closed.
+     * @param {import("node:child_process").ChildProcess} child - Pooled child to sample.
+     * @returns {void}
+     */
+    requestPooledChildMemoryObservation(child: import("node:child_process").ChildProcess): void;
     /**
      * Marks a pooled child for retirement and — when the pool is below its hard
      * cap — eagerly spawns a single replacement (1-for-1) so its capacity is
