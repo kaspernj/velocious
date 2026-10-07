@@ -13,6 +13,13 @@ export default class VeoliciousHttpServerClient {
     requestRunners: RequestRunner[];
     /** @type {Set<(result: "completed" | "aborted") => Promise<void>>} */
     pendingFileResponses: Set<(result: "completed" | "aborted") => Promise<void>>;
+    /**
+     * Streams that have started but have not finished or been aborted yet.
+     * @type {Map<import("./response.js").default, {clientCount: number, request: import("./request.js").default}>} */
+    _activeStreamResponses: Map<import("./response.js").default, {
+        clientCount: number;
+        request: import("./request.js").default;
+    }>;
     currentRequest: Request | undefined;
     websocketSession: WebsocketSession | undefined;
     events: import("eventemitter3").EventEmitter<string | symbol, any>;
@@ -128,6 +135,68 @@ export default class VeoliciousHttpServerClient {
      * @returns {Promise<void>} - Resolves after pending callbacks settle.
      */
     abortPendingFileResponses(): Promise<void>;
+    /**
+     * Sink the owning worker handler wires in for stream output. The
+     * in-process handler resolves it after the framed output has been enqueued
+     * for delivery to the socket, so stream chunks share the bounded, ordered
+     * delivery path (byte/frame limits and socket backpressure) instead of
+     * being buffered unboundedly for a stalled client. The worker-thread
+     * handler keeps null: its output crosses to the parent over IPC and no
+     * per-chunk acknowledgement is available.
+     * @type {((output: string) => Promise<void>) | null} */
+    streamOutputSink: ((output: string) => Promise<void>) | null;
+    /**
+     * Narrows the response to the documented streaming transport shape.
+     * @param {import("./response.js").default} response - Response to stream.
+     * @returns {{streaming: boolean, streamEnded: boolean, streamAborted: boolean, headers: Record<string, string[]>, getStatusCode: () => number, getStatusMessage: () => string, streamCloseCallbacks: Set<() => void>}} - Streaming view of the response.
+     */
+    _streamingResponse(response: import("./response.js").default): {
+        streaming: boolean;
+        streamEnded: boolean;
+        streamAborted: boolean;
+        headers: Record<string, string[]>;
+        getStatusCode: () => number;
+        getStatusMessage: () => string;
+        streamCloseCallbacks: Set<() => void>;
+    };
+    /**
+     * Starts a live chunked stream for a socket-bound response: emits the
+     * status line and headers (with `Transfer-Encoding: chunked`) to the
+     * client immediately so subsequent `write()` chunks reach the client as
+     * they are produced.
+     * @param {import("./response.js").default} response - Response to stream.
+     * @param {import("./request.js").default} request - Socket-bound request.
+     * @returns {void} - No return value.
+     */
+    beginStreamResponse(response: import("./response.js").default, request: import("./request.js").default): void;
+    /**
+     * Emits one chunked-encoded body chunk for an active stream.
+     * @param {string | Uint8Array} chunk - Chunk to emit.
+     * @returns {Promise<void>} - Settles after the chunk has been delivered to
+     * the client.
+     */
+    writeStreamChunk(chunk: string | Uint8Array): Promise<void>;
+    /**
+     * Emits the zero-length chunked terminator for a stream that finished on a
+     * live connection, then runs its close callbacks.
+     * @param {import("./response.js").default} response - Response to finish.
+     * @returns {Promise<void>} - Settles after the terminator was delivered and
+     * the close callbacks ran.
+     */
+    endStreamResponse(response: import("./response.js").default): Promise<void>;
+    /**
+     * Aborts every stream whose client connection went away: marks the stream
+     * aborted and runs the close callbacks so in-flight work can settle its
+     * resources. No terminator is emitted — the connection is already gone.
+     * @returns {Promise<void>} - Resolves after every stream settled.
+     */
+    abortStreamResponses(): Promise<void>;
+    /**
+     * Runs the close callbacks of a finished or aborted stream exactly once.
+     * @param {import("./response.js").default} response - Finished stream.
+     * @returns {Promise<void>} - Resolves after every callback ran.
+     */
+    _runStreamCloseCallbacks(response: import("./response.js").default): Promise<void>;
     /**
      * Runs should close connection.
      * @param {import("./request.js").default | import("./websocket-request.js").default} request - Request object.

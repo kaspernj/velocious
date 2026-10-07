@@ -69,6 +69,17 @@ export default class VelociousHttpServerInProcessHandler {
       }
     })
 
+    // Streaming responses emit chunks while the request is running. Route
+    // their framed output through the counted delivery path so a stalled
+    // client cannot buffer engine chunks unboundedly: each chunk settles only
+    // after it has been delivered to the socket, which gives the handler
+    // backpressure, and the byte/frame limits bound what a silent client can
+    // retain before the connection is torn down.
+    httpClient.streamOutputSink = (output) => deliveryQueue.enqueueFrame({
+      byteLength: Buffer.byteLength(output),
+      delivery: () => serverClient.send(output)
+    })
+
     httpClient.events.on("output", (output, {websocketFrame = false} = {}) => {
       if (output !== null && output !== undefined) {
         const delivery = () => serverClient.send(output)
@@ -101,9 +112,13 @@ export default class VelociousHttpServerInProcessHandler {
 
     serverClient.events.on("close", () => {
       deliveryQueue.destroy()
-      const cleanup = httpClient.abortPendingFileResponses()
+      const cleanup = Promise.all([
+        httpClient.abortPendingFileResponses(),
+        httpClient.abortStreamResponses()
+      ])
+        .then(() => {})
         .catch((error) => {
-          this.logger.warn("Failed to abort file responses after client close", error)
+          this.logger.warn("Failed to abort responses after client close", error)
         })
         .finally(() => {
           this.pendingClientCloseCleanups.delete(cleanup)
@@ -159,6 +174,9 @@ export default class VelociousHttpServerInProcessHandler {
       await Promise.all([
         httpClient.abortPendingFileResponses().catch((error) => {
           this.logger.warn("Failed to abort file responses during shutdown", error)
+        }),
+        httpClient.abortStreamResponses().catch((error) => {
+          this.logger.warn("Failed to abort streaming responses during shutdown", error)
         }),
         serverClient.end().catch((error) => {
           this.logger.warn("Failed to close client during shutdown", error)

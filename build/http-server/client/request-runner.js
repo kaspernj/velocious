@@ -305,12 +305,20 @@ export default class VelociousHttpServerClientRequestRunner {
       })
 
       response.setStatus(500)
-      try {
-        response.setErrorBody(error)
-      } catch (responseError) {
-        if (!(responseError instanceof HttpResponseBodyTooLargeError)) throw responseError
+      if (response.isStreaming()) {
+        // The headers already went to the client, so a plain error body is
+        // impossible. The handler owns the stream lifecycle: it aborts the
+        // stream (terminator + close callbacks) or, when it still controls
+        // the connection, writes an error SSE frame.
+        response.abortStream()
+      } else {
+        try {
+          response.setErrorBody(error)
+        } catch (responseError) {
+          if (!(responseError instanceof HttpResponseBodyTooLargeError)) throw responseError
 
-        response.setBody("")
+          response.setBody("")
+        }
       }
     }
 

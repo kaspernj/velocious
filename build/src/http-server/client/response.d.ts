@@ -25,6 +25,35 @@ export default class VelociousHttpServerClientResponse {
      * @type {boolean} */
     compressionDisabled: boolean;
     /**
+     * Whether this response has been switched to live chunked streaming. Once
+     * streaming has started, the status line and headers are emitted to the
+     * client immediately and every `write()` is emitted as it happens, instead
+     * of the whole body being buffered and sent once after the handler
+     * returns.
+     * @type {boolean} */
+    streaming: boolean;
+    /**
+     * Whether the stream has been finished with `end()` (or finalized).
+     * @type {boolean} */
+    streamEnded: boolean;
+    /**
+     * Whether the client connection dropped while the stream was in flight.
+     * @type {boolean} */
+    streamAborted: boolean;
+    /**
+     * Transport sink wired in by the owning client so the response can emit
+     * headers and chunks to the socket-bound connection.
+     * @type {import("./index.js").default | null} */
+    transport: import("./index.js").default | null;
+    /**
+     * The socket-bound request this response belongs to.
+     * @type {import("./request.js").default | null} */
+    transportRequest: import("./request.js").default | null;
+    /**
+     * Callbacks fired when the client disconnects mid-stream.
+     * @type {Set<() => void>} */
+    streamCloseCallbacks: Set<() => void>;
+    /**
      * Runs constructor.
      * @param {object} args - Options object.
      * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
@@ -90,6 +119,65 @@ export default class VelociousHttpServerClientResponse {
      * @returns {void} - No return value.
      */
     setBody(value: string | Uint8Array): void;
+    /**
+     * Whether this response is (or was) a live chunked stream.
+     * @returns {boolean} - Whether streaming has started.
+     */
+    isStreaming(): boolean;
+    /**
+     * Whether the client disconnected mid-stream.
+     * @returns {boolean} - Whether the stream was aborted by the client.
+     */
+    isStreamAborted(): boolean;
+    /**
+     * Switches this response to live chunked streaming. The status line and
+     * headers are emitted to the client immediately (with a
+     * `Transfer-Encoding: chunked` framing header) so `write()` chunks reach
+     * the client as they are produced — instead of the whole body being
+     * buffered and emitted once after the handler returns.
+     *
+     * Streaming requires a socket-bound HTTP request and an HTTP version that
+     * supports chunked framing, a status that may carry a body, and a
+     * non-HEAD request. It cannot be combined with a buffered body, a file
+     * response, or a second `stream()` call.
+     * @returns {void} - No return value.
+     */
+    stream(): void;
+    /**
+     * Emits one chunk to the client as soon as it is produced. Returns a
+     * promise that settles once the chunk has been delivered to the socket, so
+     * a relay loop can `await response.write(chunk)` and get socket
+     * backpressure without an ad-hoc drain wait. Rejects when the stream has
+     * ended or been aborted, or when the outbound delivery queue cannot accept
+     * the chunk (a stalled client).
+     * @param {string | Uint8Array} value - Chunk to emit.
+     * @returns {Promise<void>} - Settles after the chunk is delivered.
+     */
+    write(value: string | Uint8Array): Promise<void>;
+    /**
+     * Finishes an active stream: emits the chunked terminator and releases the
+     * response for completion logging. Settles after the terminator has been
+     * delivered to the socket.
+     * @returns {Promise<void>} - Settles after the stream is finished.
+     */
+    end(): Promise<void>;
+    /**
+     * Registers a callback fired when the client disconnects mid-stream, so
+     * the handler can release whatever the in-flight work reserved. Fired at
+     * most once; also fires when the stream is finalized after the client is
+     * already gone.
+     * @param {() => void} callback - Disconnect callback.
+     * @returns {void} - No return value.
+     */
+    onStreamClose(callback: () => void): void;
+    /**
+     * Terminates an active stream after a framework-level failure (the handler
+     * threw after `stream()` started): emits the chunked terminator and runs
+     * the close callbacks so in-flight work settles its resources. No-op when
+     * the stream already ended or was aborted.
+     * @returns {void} - No return value.
+     */
+    abortStream(): void;
     /**
      * Runs get file path.
      * @returns {string | null} - File path.

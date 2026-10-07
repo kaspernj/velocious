@@ -106,6 +106,41 @@ export default class VelociousHttpServerClientResponse {
   compressionDisabled = false
 
   /**
+   * Whether this response has been switched to live chunked streaming. Once
+   * streaming has started, the status line and headers are emitted to the
+   * client immediately and every `write()` is emitted as it happens, instead
+   * of the whole body being buffered and sent once after the handler
+   * returns.
+   * @type {boolean} */
+  streaming = false
+
+  /**
+   * Whether the stream has been finished with `end()` (or finalized).
+   * @type {boolean} */
+  streamEnded = false
+
+  /**
+   * Whether the client connection dropped while the stream was in flight.
+   * @type {boolean} */
+  streamAborted = false
+
+  /**
+   * Transport sink wired in by the owning client so the response can emit
+   * headers and chunks to the socket-bound connection.
+   * @type {import("./index.js").default | null} */
+  transport = null
+
+  /**
+   * The socket-bound request this response belongs to.
+   * @type {import("./request.js").default | null} */
+  transportRequest = null
+
+  /**
+   * Callbacks fired when the client disconnects mid-stream.
+   * @type {Set<() => void>} */
+  streamCloseCallbacks = new Set()
+
+  /**
    * Runs constructor.
    * @param {object} args - Options object.
    * @param {import("../../configuration.js").default} args.configuration - Configuration instance.
@@ -238,6 +273,113 @@ export default class VelociousHttpServerClientResponse {
     }
 
     this.body = value
+  }
+
+  /**
+   * Whether this response is (or was) a live chunked stream.
+   * @returns {boolean} - Whether streaming has started.
+   */
+  isStreaming() {
+    return this.streaming
+  }
+
+  /**
+   * Whether the client disconnected mid-stream.
+   * @returns {boolean} - Whether the stream was aborted by the client.
+   */
+  isStreamAborted() {
+    return this.streamAborted
+  }
+
+  /**
+   * Switches this response to live chunked streaming. The status line and
+   * headers are emitted to the client immediately (with a
+   * `Transfer-Encoding: chunked` framing header) so `write()` chunks reach
+   * the client as they are produced — instead of the whole body being
+   * buffered and emitted once after the handler returns.
+   *
+   * Streaming requires a socket-bound HTTP request and an HTTP version that
+   * supports chunked framing, a status that may carry a body, and a
+   * non-HEAD request. It cannot be combined with a buffered body, a file
+   * response, or a second `stream()` call.
+   * @returns {void} - No return value.
+   */
+  stream() {
+    if (this.streaming) throw new Error("The response is already streaming")
+    if (this.filePath !== null) throw new Error("A file response cannot be switched to streaming")
+    if (this.body !== null && this.body !== undefined) throw new Error("A buffered body was already set; call stream() before setBody() to stream instead")
+    if (this.transport === null) throw new Error("Streaming responses require a socket-bound HTTP request")
+
+    const request = this.transportRequest
+    if (!request) throw new Error("Streaming responses require a socket-bound HTTP request")
+
+    if (request.httpMethod() === "HEAD") throw new Error("HEAD responses cannot stream a body")
+
+    const statusCode = this.getStatusCode()
+    if ((statusCode >= 100 && statusCode < 200) || statusCode === 204 || statusCode === 304) {
+      throw new Error(`Status ${statusCode} cannot carry a streaming body`)
+    }
+
+    this.streaming = true
+    this.transport.beginStreamResponse(this, request)
+  }
+
+  /**
+   * Emits one chunk to the client as soon as it is produced. Returns a
+   * promise that settles once the chunk has been delivered to the socket, so
+   * a relay loop can `await response.write(chunk)` and get socket
+   * backpressure without an ad-hoc drain wait. Rejects when the stream has
+   * ended or been aborted, or when the outbound delivery queue cannot accept
+   * the chunk (a stalled client).
+   * @param {string | Uint8Array} value - Chunk to emit.
+   * @returns {Promise<void>} - Settles after the chunk is delivered.
+   */
+  async write(value) {
+    if (this.transport === null) throw new Error("write() requires an active streaming response")
+    if (!this.streaming) throw new Error("write() requires stream() to be called first")
+    if (this.streamEnded || this.streamAborted) return
+
+    await this.transport.writeStreamChunk(value)
+  }
+
+  /**
+   * Finishes an active stream: emits the chunked terminator and releases the
+   * response for completion logging. Settles after the terminator has been
+   * delivered to the socket.
+   * @returns {Promise<void>} - Settles after the stream is finished.
+   */
+  async end() {
+    if (this.transport === null) throw new Error("end() requires an active streaming response")
+    if (!this.streaming) throw new Error("end() requires stream() to be called first")
+    if (this.streamEnded) return
+
+    await this.transport.endStreamResponse(this)
+  }
+
+  /**
+   * Registers a callback fired when the client disconnects mid-stream, so
+   * the handler can release whatever the in-flight work reserved. Fired at
+   * most once; also fires when the stream is finalized after the client is
+   * already gone.
+   * @param {() => void} callback - Disconnect callback.
+   * @returns {void} - No return value.
+   */
+  onStreamClose(callback) {
+    this.streamCloseCallbacks.add(callback)
+  }
+
+  /**
+   * Terminates an active stream after a framework-level failure (the handler
+   * threw after `stream()` started): emits the chunked terminator and runs
+   * the close callbacks so in-flight work settles its resources. No-op when
+   * the stream already ended or was aborted.
+   * @returns {void} - No return value.
+   */
+  abortStream() {
+    if (!this.streaming || this.streamEnded || this.transport === null) return
+
+    this.streamEnded = true
+    this.transport.endStreamResponse(this)
   }
 
   /**

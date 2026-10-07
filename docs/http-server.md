@@ -154,6 +154,51 @@ order. Bodyless status responses preserve their existing no-body and
 no-`Content-Length` behavior while still settling `onFinished` after the parent
 acknowledges the response.
 
+## Streaming (chunked) Responses
+
+Buffered responses emit status, headers, and body in one shot after the
+handler completes. For long-lived responses that must reach the client while
+the handler is still running — server-sent events, relays, chunked downloads
+generated in the handler — switch the response to a live chunked stream:
+
+```js
+class RelayController extends Controller {
+  async run() {
+    this.response().stream()          // emits status + headers, Transfer-Encoding: chunked
+    this.response().write("data: one\n\n")
+    for await (const chunk of upstream) this.response().write(chunk)
+    this.response().end()             // emits the chunked terminator
+  }
+}
+```
+
+`response.stream()` must be called before `response.setBody()`, before the
+status or headers have been touched, and only once; malformed use fails the
+request with a `500`. `response.write()` accepts strings or `Uint8Array`
+values and returns a promise that settles once the chunk has been delivered
+to the socket. In-process handler mode routes each chunk through the bounded,
+ordered delivery queue, so `await response.write(chunk)` gives a relay loop
+socket backpressure (a stalled client pauses the producer instead of buffering
+engine output unboundedly) and the outbound byte/frame limits bound what a
+silent client can retain before the connection is torn down. Chunk order is
+preserved and a later pipelined response cannot overtake an earlier stream's
+chunks. `response.end()` terminates the stream; calling it twice, or writing
+after it has ended, fails the request.
+
+Client disconnects are observable mid-handler: `response.isStreamAborted()`
+turns true as soon as the underlying socket closes, and
+`response.onStreamClose(callback)` fires the callback (exactly once) so a
+handler can release whatever the in-flight work reserved (engine slots,
+advisory locks, ...). If the handler itself throws after `stream()`, the
+framework terminates the stream and runs the close callbacks, so in-flight
+work still settles.
+
+Streaming works in both in-process and worker-thread handler modes. A
+streaming response cannot carry a buffered body, file body, or compressed
+body; `Transfer-Encoding: chunked` is set explicitly and
+`Content-Length` is omitted. Sub-requests (e.g. websocket request payloads)
+have no socket and their responses fail loudly if they attempt to stream.
+
 ## Response Compression
 
 Buffered HTTP responses are compressed with Brotli (`br`) or gzip by default

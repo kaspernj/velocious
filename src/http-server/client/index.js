@@ -61,6 +61,11 @@ export default class VeoliciousHttpServerClient {
 
     /** @type {Set<(result: "completed" | "aborted") => Promise<void>>} */
     this.pendingFileResponses = new Set()
+
+    /**
+     * Streams that have started but have not finished or been aborted yet.
+     * @type {Map<import("./response.js").default, {clientCount: number, request: import("./request.js").default}>} */
+    this._activeStreamResponses = new Map()
   }
 
   /**
@@ -180,6 +185,15 @@ export default class VeoliciousHttpServerClient {
     })
 
     this.requestRunners.push(requestRunner)
+
+    // A streaming response emits its headers and chunks to the client while
+    // the request is still running, so the response needs the owning client
+    // as its transport sink before the handler runs. Sub-requests (e.g.
+    // websocket request payloads) have no socket and keep transport null;
+    // their responses fail loudly if they attempt to stream.
+    const socketRequest = currentRequest
+    requestRunner.response.transport = this
+    requestRunner.response.transportRequest = socketRequest
 
     requestRunner.events.on("done", this.requestDone)
     requestRunner.run()
@@ -423,6 +437,15 @@ export default class VeoliciousHttpServerClient {
    */
   async sendResponse(requestRunner) {
     const response = digg(requestRunner, "response")
+
+    // A streaming response already emitted its status line, headers, every
+    // chunk, and the chunked terminator to the client while the request was
+    // running. Nothing left to send here — just log the completed request.
+    if (response.isStreaming()) {
+      await requestRunner.logCompletedRequest()
+      return
+    }
+
     const request = requestRunner.getRequest()
     const filePath = response.getFilePath()
     const fileOnFinished = response.getFileOnFinished()
@@ -664,6 +687,143 @@ export default class VeoliciousHttpServerClient {
    */
   async abortPendingFileResponses() {
     await Promise.all([...this.pendingFileResponses].map((settle) => settle("aborted")))
+  }
+
+  /**
+   * Sink the owning worker handler wires in for stream output. The
+   * in-process handler resolves it after the framed output has been enqueued
+   * for delivery to the socket, so stream chunks share the bounded, ordered
+   * delivery path (byte/frame limits and socket backpressure) instead of
+   * being buffered unboundedly for a stalled client. The worker-thread
+   * handler keeps null: its output crosses to the parent over IPC and no
+   * per-chunk acknowledgement is available.
+   * @type {((output: string) => Promise<void>) | null} */
+  streamOutputSink = null
+
+  /**
+   * Narrows the response to the documented streaming transport shape.
+   * @param {import("./response.js").default} response - Response to stream.
+   * @returns {{streaming: boolean, streamEnded: boolean, streamAborted: boolean, headers: Record<string, string[]>, getStatusCode: () => number, getStatusMessage: () => string, streamCloseCallbacks: Set<() => void>}} - Streaming view of the response.
+   */
+  _streamingResponse(response) {
+    return response
+  }
+
+  /**
+   * Starts a live chunked stream for a socket-bound response: emits the
+   * status line and headers (with `Transfer-Encoding: chunked`) to the
+   * client immediately so subsequent `write()` chunks reach the client as
+   * they are produced.
+   * @param {import("./response.js").default} response - Response to stream.
+   * @param {import("./request.js").default} request - Socket-bound request.
+   * @returns {void} - No return value.
+   */
+  beginStreamResponse(response, request) {
+    this._activeStreamResponses.set(response, {clientCount: this.clientCount, request})
+
+    const httpVersion = request.httpVersion()
+
+    // HTTP/1.0 has no chunked transfer encoding: terminate the stream with a
+    // connection close instead of a zero-length chunk.
+    if (httpVersion == "1.0" && !this.shouldCloseConnection(request)) {
+      response.setHeader("Connection", "Close")
+    }
+
+    // The chunked framing owns the body length; a Content-Length header set
+    // by the application before stream() would desynchronize the framing.
+    response.removeHeader("Content-Length")
+    if (response.getHeader("Transfer-Encoding").length === 0) {
+      response.setHeader("Transfer-Encoding", "chunked")
+    }
+
+    response.setHeader("Date", new Date().toUTCString())
+    response.setHeader("Server", "Velocious")
+
+    const responseView = this._streamingResponse(response)
+    let headers = ""
+    headers += `HTTP/${httpVersion} ${responseView.getStatusCode()} ${responseView.getStatusMessage()}\r\n`
+
+    for (const headerKey in responseView.headers) {
+      for (const headerValue of responseView.headers[headerKey]) {
+        headers += `${headerKey}: ${headerValue}\r\n`
+      }
+    }
+
+    headers += "\r\n"
+    this.events.emit("output", headers)
+  }
+
+  /**
+   * Emits one chunked-encoded body chunk for an active stream.
+   * @param {string | Uint8Array} chunk - Chunk to emit.
+   * @returns {Promise<void>} - Settles after the chunk has been delivered to
+   * the client.
+   */
+  async writeStreamChunk(chunk) {
+    const bytes = typeof chunk === "string" ? Buffer.from(chunk, "utf8") : Buffer.from(chunk)
+    const frame = `${bytes.length.toString(16)}\r\n${bytes}\r\n`
+    if (this.streamOutputSink === null) {
+      this.events.emit("output", frame)
+      return
+    }
+    await this.streamOutputSink(frame)
+  }
+
+  /**
+   * Emits the zero-length chunked terminator for a stream that finished on a
+   * live connection, then runs its close callbacks.
+   * @param {import("./response.js").default} response - Response to finish.
+   * @returns {Promise<void>} - Settles after the terminator was delivered and
+   * the close callbacks ran.
+   */
+  async endStreamResponse(response) {
+    if (response.streamEnded) return
+    response.streamEnded = true
+    this._activeStreamResponses.delete(response)
+    if (this.streamOutputSink === null) {
+      this.events.emit("output", "0\r\n\r\n")
+    } else {
+      await this.streamOutputSink("0\r\n\r\n")
+    }
+    await this._runStreamCloseCallbacks(response)
+  }
+
+  /**
+   * Aborts every stream whose client connection went away: marks the stream
+   * aborted and runs the close callbacks so in-flight work can settle its
+   * resources. No terminator is emitted — the connection is already gone.
+   * @returns {Promise<void>} - Resolves after every stream settled.
+   */
+  async abortStreamResponses() {
+    for (const response of [...this._activeStreamResponses.keys()]) {
+      if (response.streamAborted) continue
+      response.streamAborted = true
+      this._activeStreamResponses.delete(response)
+      await this._runStreamCloseCallbacks(response)
+    }
+  }
+
+  /**
+   * Runs the close callbacks of a finished or aborted stream exactly once.
+   * @param {import("./response.js").default} response - Finished stream.
+   * @returns {Promise<void>} - Resolves after every callback ran.
+   */
+  async _runStreamCloseCallbacks(response) {
+    if (response.streamCloseCallbacks.size === 0) return
+
+    for (const callback of response.streamCloseCallbacks) {
+      try {
+        callback()
+      } catch (error) {
+        const errorPayload = {
+          context: {clientCount: this.clientCount, stage: "stream-close-callback"},
+          error
+        }
+        this.configuration.getErrorEvents().emit("framework-error", errorPayload)
+        this.configuration.getErrorEvents().emit("all-error", {...errorPayload, errorType: "framework-error"})
+      }
+    }
+    response.streamCloseCallbacks.clear()
   }
 
   /**
