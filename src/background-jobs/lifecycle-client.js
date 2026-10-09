@@ -7,6 +7,49 @@ import JsonSocket from "./json-socket.js"
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 10000
 export const MAX_LIFECYCLE_REQUEST_TIMEOUT_MS = 120000
+const LIFECYCLE_CONNECT_RETRY_DELAY_MS = 50
+const TRANSIENT_CONNECT_ERROR_CODES = new Set(["ECONNABORTED", "ECONNREFUSED", "ENOENT"])
+
+/**
+ * Whether a lifecycle request failure is a transient "endpoint not ready yet"
+ * connect failure (the coordinator's control socket opens asynchronously after
+ * its process starts) rather than a definitive protocol or state rejection.
+ * @param {unknown} error - The rejection reason.
+ * @returns {boolean} - Whether the request may be retried.
+ */
+function isTransientConnectError(error) {
+  if (typeof error !== "object" || error === null) return false
+  const code = /** @type {{code?: unknown}} */ (error).code
+
+  return typeof code === "string" && TRANSIENT_CONNECT_ERROR_CODES.has(code)
+}
+
+/**
+ * Waits before the next lifecycle connect retry, rejecting with the signal
+ * reason when the caller-owned deadline fires mid-wait.
+ * @param {number} delayMs - Wait between attempts.
+ * @param {AbortSignal} signal - Caller-owned deadline signal.
+ * @returns {Promise<void>} - Resolves after the delay, or rejects on abort.
+ */
+async function waitBeforeNextAttempt(delayMs, signal) {
+  await new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      reject(signal.reason)
+
+      return
+    }
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort)
+      resolve(undefined)
+    }, delayMs)
+    const onAbort = () => {
+      clearTimeout(timer)
+      reject(signal.reason)
+    }
+
+    signal.addEventListener("abort", onAbort)
+  })
+}
 
 /** One-request acknowledged lifecycle client. */
 export default class BackgroundJobsLifecycleClient {
@@ -59,14 +102,35 @@ export default class BackgroundJobsLifecycleClient {
   }
 
   /**
-   * Sends the lifecycle request under its caller-owned deadline.
+   * Sends the lifecycle request under its caller-owned deadline. Retries
+   * transient "endpoint not ready yet" connect failures (the coordinator opens
+   * its control socket asynchronously after its process starts) until the
+   * deadline; any definitive protocol or state rejection fails immediately.
    * @param {object} args - Request details.
    * @param {"activate" | "retire"} args.action - Lifecycle action.
    * @param {AbortSignal} args.signal - Request deadline signal.
    * @returns {Promise<import("./types.js").BackgroundJobsGenerationLifecycleState>} - Resulting state.
    */
   async _runRequest({action, signal}) {
-    const requestId = randomUUID()
+    while (true) {
+      try {
+        return await this._attemptRequest(action, randomUUID(), signal)
+      } catch (error) {
+        if (!isTransientConnectError(error)) throw error
+        if (signal.aborted) throw signal.reason
+        await waitBeforeNextAttempt(LIFECYCLE_CONNECT_RETRY_DELAY_MS, signal)
+      }
+    }
+  }
+
+  /**
+   * Performs one lifecycle request attempt against the control socket.
+   * @param {"activate" | "retire"} action - Lifecycle action.
+   * @param {string} requestId - Request identity for acknowledgement matching.
+   * @param {AbortSignal} signal - Request deadline signal.
+   * @returns {Promise<import("./types.js").BackgroundJobsGenerationLifecycleState>} - Resulting state.
+   */
+  async _attemptRequest(action, requestId, signal) {
     const socket = net.createConnection(this.socketPath)
     const jsonSocket = new JsonSocket(socket)
 
