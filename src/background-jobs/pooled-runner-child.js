@@ -1,6 +1,7 @@
 // @ts-check
 
 import { randomUUID } from "node:crypto"
+import { readFileSync } from "node:fs"
 import v8 from "node:v8"
 import timeout from "awaitery/build/timeout.js"
 import runJobPayload, { BackgroundJobPerformedFailure } from "./job-runner.js"
@@ -19,6 +20,31 @@ const childInstanceId = randomUUID()
 const MEMORY_OBSERVATION_INTERVAL_MS = 10000
 /** Bound on in-flight job ids carried in a memory observation. */
 const MEMORY_OBSERVATION_JOB_ID_LIMIT = 32
+
+/**
+ * Reads this process's peak resident set size (the kernel high-water mark,
+ * `VmHWM` in `/proc/self/status`). Unlike a point-in-time RSS sample, this is
+ * monotonic for the life of the process: once a burst ratchets the working set
+ * up, `VmHWM` remembers it even after garbage collection returns the pages.
+ * That makes it the honest signal for recycling a pooled child — a child that
+ * spiked to several gigabytes during a build burst keeps its ratcheted floor
+ * and must be replaced, even though its settled RSS at job-outcome time looks
+ * modest. A read failure (no `/proc`) degrades to the current RSS sample so the
+ * observation is never blocked on it.
+ * @returns {number} Peak RSS in bytes, or the current RSS sample when unreadable.
+ */
+function readPeakRssBytes() {
+  const fallbackBytes = process.memoryUsage().rss
+  try {
+    const status = readFileSync("/proc/self/status", "utf8")
+    const match = /^VmHWM:\s+(\d+)\s+kB$/m.exec(status)
+    if (!match) return fallbackBytes
+    const kibibytes = Number(match[1])
+    return Number.isFinite(kibibytes) && kibibytes > 0 ? kibibytes * 1024 : fallbackBytes
+  } catch {
+    return fallbackBytes
+  }
+}
 
 setRunnerProcessTitle()
 
@@ -162,7 +188,7 @@ function sendChildAcceptance(type, payload, observedAtMs) {
  * child runs 25 concurrent jobs) distinguishes a V8 heap-growth leak from
  * external/array-buffer (native resource) growth, and the in-flight job ids
  * tie the observation to the work that was running.
- * @returns {{activeJobIds: string[], activeJobIdsTruncatedCount: number, childInstanceId: string, childPid: number, childUptimeMs: number, heapStatistics: ReturnType<typeof v8.getHeapStatistics>, jobCount: number, memoryUsage: ReturnType<typeof process.memoryUsage>, observedAtMs: number, rssBytes: number, type: "pooled-child-memory", uptimeMs: number}} - Bounded memory observation for this child.
+ * @returns {{activeJobIds: string[], activeJobIdsTruncatedCount: number, childInstanceId: string, childPid: number, childUptimeMs: number, heapStatistics: ReturnType<typeof v8.getHeapStatistics>, jobCount: number, memoryUsage: ReturnType<typeof process.memoryUsage>, observedAtMs: number, peakRssBytes: number, rssBytes: number, type: "pooled-child-memory", uptimeMs: number}} - Bounded memory observation for this child.
  */
 function collectMemoryObservation() {
   const jobIds = [...runningJobIds]
@@ -179,6 +205,7 @@ function collectMemoryObservation() {
     jobCount: jobIds.length,
     memoryUsage,
     observedAtMs: Date.now(),
+    peakRssBytes: readPeakRssBytes(),
     rssBytes: memoryUsage.rss,
     type: "pooled-child-memory",
     uptimeMs: Math.floor(process.uptime() * 1000)
@@ -289,6 +316,7 @@ function sendOutcome({jobId, acknowledged, status, error}) {
       jobId,
       acknowledged,
       status,
+      peakRssBytes: readPeakRssBytes(),
       rssBytes: process.memoryUsage().rss,
       error: error?.message
     }, () => resolve(undefined))

@@ -1404,7 +1404,7 @@ export default class BackgroundJobsWorker {
    */
   _handlePooledChildMessage({child, message}) {
     if (!message || typeof message !== "object") return
-    const record = /** @type {{type?: ReturnType<typeof JSON.parse>, childInstanceId?: ReturnType<typeof JSON.parse>, jobId?: ReturnType<typeof JSON.parse>, acknowledged?: ReturnType<typeof JSON.parse>, rssBytes?: ReturnType<typeof JSON.parse>, error?: ReturnType<typeof JSON.parse>}} */ (message)
+    const record = /** @type {{type?: ReturnType<typeof JSON.parse>, childInstanceId?: ReturnType<typeof JSON.parse>, jobId?: ReturnType<typeof JSON.parse>, acknowledged?: ReturnType<typeof JSON.parse>, rssBytes?: ReturnType<typeof JSON.parse>, peakRssBytes?: ReturnType<typeof JSON.parse>, error?: ReturnType<typeof JSON.parse>}} */ (message)
     const state = this.pooledChildStates.get(child)
     if (record.type === "ready") {
       if (state) {
@@ -1458,8 +1458,13 @@ export default class BackgroundJobsWorker {
     }
 
     const rssBytes = typeof record.rssBytes === "number" ? record.rssBytes : Number.POSITIVE_INFINITY
+    // The child's peak RSS (VmHWM) is monotonic and outlives the settled
+    // sample: a ratcheted burst working-set must recycle the child even when
+    // settled RSS at outcome time looks modest. A child without peak support
+    // falls back to the settled sample.
+    const peakRssBytes = typeof record.peakRssBytes === "number" ? record.peakRssBytes : rssBytes
     const runnerAgeMs = Date.now() - state.createdAtMs
-    if (!state.retiring && (state.jobsRun >= this.pooledRunnerMaxJobs || rssBytes >= this.pooledRunnerMaxRssBytes || runnerAgeMs >= this.pooledRunnerMaxLifetimeMs || this.shouldStop)) {
+    if (!state.retiring && (state.jobsRun >= this.pooledRunnerMaxJobs || peakRssBytes >= this.pooledRunnerMaxRssBytes || runnerAgeMs >= this.pooledRunnerMaxLifetimeMs || this.shouldStop)) {
       this._beginRetirePooledChild(child)
     }
     this._terminateIfDrained(child)
@@ -1524,6 +1529,7 @@ export default class BackgroundJobsWorker {
         childPid: message.childPid,
         childUptimeS: Math.round(message.childUptimeMs / 1000),
         rssMb: Math.round(message.rssBytes / (1024 * 1024)),
+        peakRssMb: Math.round((typeof message.peakRssBytes === "number" ? message.peakRssBytes : message.rssBytes) / (1024 * 1024)),
         heapUsedMb: Math.round(heap.used_heap_size / (1024 * 1024)),
         heapTotalMb: Math.round(heap.total_heap_size / (1024 * 1024)),
         heapLimitMb: Math.round(heap.heap_size_limit / (1024 * 1024)),

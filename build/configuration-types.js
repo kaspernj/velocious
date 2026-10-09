@@ -194,7 +194,7 @@
  * @property {number} [pooledRunnerCount] - Number of warm, reusable child runners owned by each worker. Pooled capacity is separate from inline and forked/spawned capacity. Default: `4`.
  * @property {number} [pooledRunnerConcurrency] - Number of jobs each pooled child runs concurrently on its own event loop. Total per-worker pooled capacity is `pooledRunnerCount × pooledRunnerConcurrency`. `1` (default) keeps each child serial; raise it for I/O-bound jobs so a bounded set of isolated processes handles high concurrency (like the inline lane) without one process per concurrent job. Default: `1`.
  * @property {number} [pooledRunnerMaxJobs] - Number of sequential jobs a pooled child runs before it is replaced, bounding process-level resource accumulation. Default: `100`.
- * @property {number} [pooledRunnerMaxRssBytes] - RSS bytes after an acknowledged job at which a pooled child is replaced. Default: `536870912` (512 MiB).
+ * @property {number} [pooledRunnerMaxRssBytes] - Peak RSS (the kernel `VmHWM` high-water mark reported by the child) at which a pooled child is replaced after an acknowledged job. The child's peak, not its settled RSS at job-outcome time, is the trigger, so a burst working-set that reclaims before the outcome still retires the child. Default: `536870912` (512 MiB).
  * @property {number} [pooledRunnerMaxLifetimeMs] - Age after an acknowledged job at which a pooled child is replaced. Default: `3600000` (one hour).
  * @property {Record<string, {maxConcurrent?: number, priority?: number}>} [queues] - Per-queue
  *   concurrency caps and dispatch priorities, Sidekiq-style. A job declares its queue (static
