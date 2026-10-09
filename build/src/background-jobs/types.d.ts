@@ -216,6 +216,10 @@ export type PooledChildMemoryObservation = {
      */
     observedAtMs: number;
     /**
+     * - Child-reported peak RSS (kernel `VmHWM` high-water mark) in bytes, monotonic for the child's life.
+     */
+    peakRssBytes: number;
+    /**
      * - Resident set size in bytes at the sample.
      */
     rssBytes: number;
@@ -953,6 +957,7 @@ export type BackgroundJobSocketMessage = BackgroundJobHelloMessage | BackgroundJ
  * @property {number} jobCount - In-flight job count.
  * @property {ReturnType<typeof import("node:process").memoryUsage>} memoryUsage - Process memory breakdown at the sample.
  * @property {number} observedAtMs - Epoch ms the child sampled.
+ * @property {number} peakRssBytes - Child-reported peak RSS (kernel `VmHWM` high-water mark) in bytes, monotonic for the child's life.
  * @property {number} rssBytes - Resident set size in bytes at the sample.
  * @property {"pooled-child-memory"} type - Discriminator.
  * @property {number} uptimeMs - Process uptime in ms.
