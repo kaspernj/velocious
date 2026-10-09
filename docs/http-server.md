@@ -154,6 +154,48 @@ order. Bodyless status responses preserve their existing no-body and
 no-`Content-Length` behavior while still settling `onFinished` after the parent
 acknowledges the response.
 
+### Static file serving (length-determined, no chunked encoding)
+
+For small, fixed static assets (SPA shells, app bundles, stylesheets, favicons,
+wasm blobs) that must be served from a fixed directory, `serveFile` is the
+proxy-safe alternative to `Controller#sendFile` and `response.stream()`:
+
+```js
+import serveFile from "velocious/build/src/http-server/client/serve-file.js"
+
+class ConsoleController extends Controller {
+  async index() {
+    const served = await serveFile(this.response(), webRoot, "index.html", {
+      contentType: "text/html; charset=utf-8",
+      cacheControl: "no-store"
+    })
+
+    if (!served) this.response().setJson({error: "not_found"}, 404)
+  }
+}
+```
+
+`serveFile(response, root, name, options)` resolves `name` against `root`,
+rejects any name that resolves outside `root` (path-traversal guard), `lstat`s
+the target, rejects symlinks and non-files, reads the bytes with
+`node:fs/promises`, and emits them through `response.setBody` so the
+transport sends a length-determined body with a framework-computed
+`Content-Length`. It never switches the response into streaming mode, which
+matters behind proxies that hang on `Transfer-Encoding: chunked` for finite
+responses. When the file is missing or the name escapes the root, the
+response status is set to `404` and `false` is returned so the caller can
+replace the body (e.g. a JSON error payload).
+
+Options:
+
+- `contentType` — value for the `Content-Type` response header (defaults to
+  `application/octet-stream`).
+- `cacheControl` — value for the `Cache-Control` response header (defaults
+  to `no-store`).
+
+Because the file is buffered, the standard response-compression rules apply
+unless the caller opts out with `response.disableCompression()`.
+
 ## Streaming (chunked) Responses
 
 Buffered responses emit status, headers, and body in one shot after the
