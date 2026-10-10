@@ -83,7 +83,8 @@ function addFakePooledChild(worker, {inflight = 0, lastDispatchSeq = 0, retiring
  * Stubs the fork so spawn attempts are counted instead of forking processes,
  * and gives the worker a minimal configuration so the spawn gate is active.
  * The stubbed _createPooledChild enforces the same hard cap the real one does
- * (total live children, draining included).
+ * (total live children, draining included), plus the same bounded over-cap
+ * option the liveness replacement uses.
  * @param {BackgroundJobsWorker} worker - Worker under test.
  * @returns {{spawned: () => number}} - Spawn counter.
  */
@@ -93,8 +94,8 @@ function stubFork(worker) {
     getDirectory: () => "/tmp",
     getBackgroundJobsConfig: () => ({jobTimeoutMs: null})
   })
-  worker._createPooledChild = function() {
-    if (this.pooledChildren.size >= this.pooledRunnerCount) return undefined
+  worker._createPooledChild = function({allowOverCap = false} = {}) {
+    if (!allowOverCap && this.pooledChildren.size >= this.pooledRunnerCount) return undefined
     spawnCount += 1
     return addFakePooledChild(this)
   }
@@ -126,7 +127,7 @@ function delay(ms) {
 }
 
 describe("Background jobs - pooled runner hard cap", {databaseCleaning: {transaction: false, truncate: false}}, () => {
-  it("keeps total live children (working + draining) at the hard cap through a retirement wave", () => {
+  it("keeps total live children bounded at the hard cap plus one liveness replacement through a retirement wave", () => {
     const worker = new BackgroundJobsWorker({pooledRunnerCount: 4, pooledRunnerConcurrency: 2, pooledRunnerMaxJobs: 1})
     const fork = stubFork(worker)
 
@@ -139,21 +140,24 @@ describe("Background jobs - pooled runner hard cap", {databaseCleaning: {transac
     expect(worker.pooledChildren.size).toEqual(4)
     expect(fork.spawned()).toEqual(0)
 
-    // Retirement wave: the old code eagerly spawned a 1-for-1 replacement for
-    // every retiring child while the old one was still alive (4 → 8 → 16 → 27
-    // under repeated waves). With the cap, no replacement may spawn while the
-    // pool is at its size — the live count stays bounded.
+    // Retirement wave: pre-cap code spawned a replacement for every retiring
+    // child while the old one was still alive (4 → 8 → 16 → 27 under repeated
+    // waves); the cap bounds that. One bounded exception now applies: when a
+    // mark leaves no non-retiring child at all, a single liveness replacement
+    // spawns over the cap (cap + 1 live children) so advertised capacity never
+    // collapses to zero for the whole drain window.
     for (const child of children) completeFirstJob(worker, /** @type {import("node:child_process").ChildProcess} */ (/** @type {unknown} */ (child)))
 
-    // All four are retiring and still draining (one in-flight job each).
+    // All four are retiring and still draining (one in-flight job each); the
+    // fourth mark spawned the single bounded over-cap liveness replacement.
     for (const child of children) {
       const state = worker.pooledChildStates.get(/** @type {import("node:child_process").ChildProcess} */ (/** @type {unknown} */ (child)))
       expect(state?.retiring).toBe(true)
       expect(state?.inflight.size).toEqual(1)
     }
-    expect(worker.pooledChildren.size).toBeLessThanOrEqual(4)
-    expect(worker.pooledChildStates.size).toBeLessThanOrEqual(4)
-    expect(fork.spawned()).toEqual(0)
+    expect(worker.pooledChildren.size).toEqual(worker.pooledRunnerCount + 1)
+    expect(worker.pooledChildStates.size).toEqual(worker.pooledRunnerCount + 1)
+    expect(fork.spawned()).toEqual(1)
   })
 
   it("defers a replacement spawn until the draining child actually exits at the cap", () => {
