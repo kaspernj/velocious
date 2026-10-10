@@ -35,7 +35,10 @@ export default class BackgroundJobsLifecycleClient {
      */
     _request(action: "activate" | "retire"): Promise<import("./types.js").BackgroundJobsGenerationLifecycleState>;
     /**
-     * Sends the lifecycle request under its caller-owned deadline.
+     * Sends the lifecycle request under its caller-owned deadline. Retries
+     * transient "endpoint not ready yet" connect failures (the coordinator opens
+     * its control socket asynchronously after its process starts) until the
+     * deadline; any definitive protocol or state rejection fails immediately.
      * @param {object} args - Request details.
      * @param {"activate" | "retire"} args.action - Lifecycle action.
      * @param {AbortSignal} args.signal - Request deadline signal.
@@ -45,5 +48,13 @@ export default class BackgroundJobsLifecycleClient {
         action: "activate" | "retire";
         signal: AbortSignal;
     }): Promise<import("./types.js").BackgroundJobsGenerationLifecycleState>;
+    /**
+     * Performs one lifecycle request attempt against the control socket.
+     * @param {"activate" | "retire"} action - Lifecycle action.
+     * @param {string} requestId - Request identity for acknowledgement matching.
+     * @param {AbortSignal} signal - Request deadline signal.
+     * @returns {Promise<import("./types.js").BackgroundJobsGenerationLifecycleState>} - Resulting state.
+     */
+    _attemptRequest(action: "activate" | "retire", requestId: string, signal: AbortSignal): Promise<import("./types.js").BackgroundJobsGenerationLifecycleState>;
 }
 //# sourceMappingURL=lifecycle-client.d.ts.map
