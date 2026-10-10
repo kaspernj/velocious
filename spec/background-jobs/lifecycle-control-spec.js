@@ -5,6 +5,7 @@ import os from "node:os"
 import path from "node:path"
 import timeout, { TimeoutError } from "awaitery/build/timeout.js"
 import BackgroundJobsLifecycleClient, { MAX_LIFECYCLE_REQUEST_TIMEOUT_MS } from "../../src/background-jobs/lifecycle-client.js"
+import delayedLifecycleSocketServer from "../helpers/delayed-lifecycle-socket-server.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import { connectGenerationPeer, startGenerationMain } from "../helpers/background-jobs-generation-harness.js"
 import releaseLifecyclePaths from "../helpers/release-lifecycle-paths.js"
@@ -61,6 +62,102 @@ describe("Background jobs lifecycle control", () => {
       expect(stalled.requestCount()).toEqual(1)
     } finally {
       await stalled.close()
+      await fs.rm(paths.directory, {recursive: true})
+    }
+  })
+
+  it("retries transient connect failures until the lifecycle socket is ready", async () => {
+    const paths = await releaseLifecyclePaths()
+    const delayed = await delayedLifecycleSocketServer({generationId: "release-ready-retry", socketPath: paths.socketPath})
+    const client = new BackgroundJobsLifecycleClient({
+      configuration: dummyConfiguration,
+      generationId: "release-ready-retry",
+      socketPath: paths.socketPath
+    })
+
+    try {
+      const startedAt = Date.now()
+      const request = timeout({errorMessage: "Test guard expired before ready-retry activation", timeout: 2500}, async () => await client.activate())
+      await new Promise((resolve) => { setTimeout(resolve, 150) })
+      await delayed.start()
+
+      expect(await request).toEqual("active")
+      expect(Date.now() - startedAt).toBeGreaterThanOrEqual(100)
+      expect(delayed.requests()).toEqual(1)
+    } finally {
+      await delayed.close()
+      await fs.rm(paths.directory, {recursive: true})
+    }
+  })
+
+  it("fails fast on a definitive lifecycle error without retrying", async () => {
+    const paths = await releaseLifecyclePaths()
+    const delayed = await delayedLifecycleSocketServer({
+      errorMessage: "Cannot retire background jobs generation from candidate",
+      generationId: "release-definitive-error",
+      socketPath: paths.socketPath
+    })
+    await delayed.start()
+    const client = new BackgroundJobsLifecycleClient({
+      configuration: dummyConfiguration,
+      generationId: "release-definitive-error",
+      socketPath: paths.socketPath
+    })
+
+    try {
+      const error = await (async () => {
+        try {
+          await timeout({errorMessage: "Test guard expired before definitive lifecycle error", timeout: 2500}, async () => await client.retire())
+        } catch (caught) {
+          if (caught instanceof Error) return caught
+          throw caught
+        }
+        throw new Error("Expected lifecycle request to fail")
+      })()
+
+      expect(error.message).toMatch(/Cannot retire background jobs generation from candidate/)
+      expect(delayed.requests()).toEqual(1)
+    } finally {
+      await delayed.close()
+      await fs.rm(paths.directory, {recursive: true})
+    }
+  })
+
+  it("stops retrying when the request deadline passes before the socket is ready", async () => {
+    const paths = await releaseLifecyclePaths()
+    const delayed = await delayedLifecycleSocketServer({generationId: "release-never-ready", socketPath: paths.socketPath})
+    const client = new BackgroundJobsLifecycleClient({
+      configuration: dummyConfiguration,
+      generationId: "release-never-ready",
+      requestTimeoutMs: 50,
+      socketPath: paths.socketPath
+    })
+
+    try {
+      // Attach the outcome handler immediately: the 50ms deadline elapses while
+      // the socket is still unopened, so the request rejects before the test
+      // reaches `await request` (150ms). Handling it up front avoids an
+      // unhandledRejection in that gap.
+      /** @type {Error | undefined} */
+      let requestError
+      const request = client.retire().then(
+        () => {
+          requestError = new Error("Expected the lifecycle request to time out before the socket became ready")
+        },
+        (error) => {
+          requestError = error
+        }
+      )
+      await new Promise((resolve) => { setTimeout(resolve, 150) })
+      await delayed.start()
+      await request
+
+      if (!(requestError instanceof Error)) throw new Error("Expected a lifecycle request error")
+      expect(requestError instanceof TimeoutError).toEqual(true)
+      expect(requestError.message).toMatch(/retire.*release-never-ready.*50ms/)
+      expect(delayed.requests()).toEqual(0)
+    } finally {
+      await delayed.close()
       await fs.rm(paths.directory, {recursive: true})
     }
   })

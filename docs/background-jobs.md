@@ -717,7 +717,7 @@ npx velocious background-jobs:retire \
   --timeout-ms 10000
 ```
 
-There is no polling, retry, PID guessing, marker file, or remote control
+There is no polling, PID guessing, marker file, or remote control
 endpoint. The socket must be an absolute portable-length path inside the release
 directory, under a real directory owned by the process user. Velocious creates
 it mode `0600`, refuses symlink/non-socket/foreign-owner/active collisions,
@@ -726,10 +726,13 @@ check, and removes its own path on shutdown only if the inode is still the one
 it created. Requests and acknowledgements carry the exact generation and a UUID;
 server errors preserve their name/message/stack and are also emitted on
 `framework-error` and `all-error` for supervisors whose hooks ignore stdio.
-The client issues one request with no retry and defaults to a hard 10000ms
-deadline (configurable from 1 through 60000ms so supervised lifecycle transitions
-can use a full-minute deadline); timeout destroys the socket and exits the CLI
-nonzero.
+The client issues one request per acknowledged attempt and defaults to a hard
+10000ms deadline (configurable from 1 through 120000ms so supervised lifecycle
+transitions can use a two-minute deadline). Because the coordinator's control
+socket opens asynchronously after the process starts, the client retries
+transient connect failures until the deadline; a definitive protocol or state
+response always fails immediately and is never resent. Timeout destroys the
+socket and exits the CLI nonzero.
 
 ## Worker shutdown and process-job draining
 

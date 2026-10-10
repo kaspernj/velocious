@@ -7,6 +7,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { connectGenerationPeer, startGenerationMain } from "../helpers/background-jobs-generation-harness.js"
 import createBackgroundJobsLifecycleCliProject from "../helpers/background-jobs-lifecycle-cli-project.js"
+import delayedLifecycleSocketServer from "../helpers/delayed-lifecycle-socket-server.js"
 import releaseLifecyclePaths from "../helpers/release-lifecycle-paths.js"
 import stalledSocketServer from "../helpers/stalled-socket-server.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
@@ -140,6 +141,35 @@ describe("Background jobs lifecycle CLI", () => {
       expect(stalled.requestCount()).toEqual(1)
     } finally {
       await stalled.close()
+      await fs.rm(paths.directory, {recursive: true})
+      await project.cleanup()
+    }
+  })
+
+  it("waits for a lifecycle socket that opens after the CLI starts and exits zero", async () => {
+    const project = await createBackgroundJobsLifecycleCliProject()
+    const paths = await releaseLifecyclePaths()
+    const delayed = await delayedLifecycleSocketServer({generationId: "release-late-socket", socketPath: paths.socketPath})
+
+    try {
+      const resultPromise = runCli([
+        "background-jobs:activate",
+        "--generation",
+        "release-late-socket",
+        "--socket",
+        paths.socketPath,
+        "--timeout-ms",
+        "2000"
+      ], project.directory)
+      await new Promise((resolve) => { setTimeout(resolve, 150) })
+      await delayed.start()
+      const result = await resultPromise
+
+      expect(result.code).toEqual(0)
+      expect(result.stderr).toEqual("")
+      expect(delayed.requests()).toEqual(1)
+    } finally {
+      await delayed.close()
       await fs.rm(paths.directory, {recursive: true})
       await project.cleanup()
     }

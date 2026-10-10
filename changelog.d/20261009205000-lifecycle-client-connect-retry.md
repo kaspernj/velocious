@@ -1,0 +1,1 @@
+Retry transient background jobs lifecycle connect failures until the request deadline so activate and retire hooks run right after a coordinator restart reach the still-starting control socket, while definitive protocol and state errors still fail immediately without retry.
