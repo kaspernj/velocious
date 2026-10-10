@@ -190,6 +190,8 @@ export default class BackgroundJobsWorker {
    * @param {number} [args.pooledRunnerMaxJobs] - Override the per-runner recycle job count.
    * @param {number} [args.pooledRunnerMaxRssBytes] - Override the per-runner recycle RSS limit.
    * @param {number} [args.pooledRunnerMaxLifetimeMs] - Override the per-runner recycle lifetime.
+   * @param {number} [args.runnerMaxOldSpaceSizeMb] - Override the V8 heap cap (MiB, `--max-old-space-size`) applied to runner children.
+   * @param {number} [args.runnerMallocArenaMax] - Override `MALLOC_ARENA_MAX` for runner children.
    * @param {number} [args.forkedChildSigkillGraceMs] - Override the grace period between SIGTERM and SIGKILL when reaping lingering process runners on stop.
    * @param {number} [args.heartbeatIntervalMs] - Override the liveness heartbeat interval (default 15000ms).
    * @param {number} [args.generationHandshakeTimeoutMs] - Maximum time to wait for generation acknowledgement (default: 4000).
@@ -201,7 +203,7 @@ export default class BackgroundJobsWorker {
    * @param {() => void} [args.onRetireMessage] - Explicit retire-message observation hook.
    * @param {(observation: import("./types.js").PooledChildMemoryObservation) => void | Promise<void>} [args.onPooledRunnerMemoryObservation] - Explicit pooled-child memory observation hook. Every validated observation (periodic while a child has in-flight jobs, plus on demand) is forwarded here, in addition to the worker's compact stderr log line, so an application can route memory diagnostics (e.g. to a bug reporter) without parsing logs.
    */
-  constructor({configuration, host, port, generationId, workerInstanceId, maxConcurrentForkedJobs, maxConcurrentInlineJobs, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, forkedChildSigkillGraceMs, heartbeatIntervalMs, generationHandshakeTimeoutMs = DEFAULT_GENERATION_HANDSHAKE_TIMEOUT_MS, reconnectDelayMs = 1000, jobTimeoutMs, closeDatabaseConnectionsOnStop = true, onStopped, onGenerationAccepted, onRetireMessage, onPooledRunnerMemoryObservation} = {}) {
+  constructor({configuration, host, port, generationId, workerInstanceId, maxConcurrentForkedJobs, maxConcurrentInlineJobs, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, runnerMaxOldSpaceSizeMb, runnerMallocArenaMax, forkedChildSigkillGraceMs, heartbeatIntervalMs, generationHandshakeTimeoutMs = DEFAULT_GENERATION_HANDSHAKE_TIMEOUT_MS, reconnectDelayMs = 1000, jobTimeoutMs, closeDatabaseConnectionsOnStop = true, onStopped, onGenerationAccepted, onRetireMessage, onPooledRunnerMemoryObservation} = {}) {
     /**
      * Narrows the runtime value to the documented type.
      * @type {Promise<import("../configuration.js").default>} */
@@ -251,11 +253,15 @@ export default class BackgroundJobsWorker {
     this.pooledRunnerMaxJobsOverride = positiveInteger(pooledRunnerMaxJobs)
     this.pooledRunnerMaxRssBytesOverride = positiveNumber(pooledRunnerMaxRssBytes)
     this.pooledRunnerMaxLifetimeMsOverride = positiveNumber(pooledRunnerMaxLifetimeMs)
+    this.runnerMaxOldSpaceSizeMbOverride = positiveInteger(runnerMaxOldSpaceSizeMb)
+    this.runnerMallocArenaMaxOverride = positiveInteger(runnerMallocArenaMax)
     this.pooledRunnerCount = this.pooledRunnerCountOverride || 4
     this.pooledRunnerConcurrency = this.pooledRunnerConcurrencyOverride || 1
     this.pooledRunnerMaxJobs = this.pooledRunnerMaxJobsOverride || 100
     this.pooledRunnerMaxRssBytes = this.pooledRunnerMaxRssBytesOverride || 512 * 1024 * 1024
     this.pooledRunnerMaxLifetimeMs = this.pooledRunnerMaxLifetimeMsOverride || 60 * 60 * 1000
+    this.runnerMaxOldSpaceSizeMb = this.runnerMaxOldSpaceSizeMbOverride || 2048
+    this.runnerMallocArenaMax = this.runnerMallocArenaMaxOverride || 4
     /**
      * Grace period between SIGTERM and SIGKILL when reaping process runners that
      * outlast a bounded shutdown drain.
@@ -422,6 +428,8 @@ export default class BackgroundJobsWorker {
     if (typeof this.pooledRunnerMaxJobsOverride !== "number") this.pooledRunnerMaxJobs = poolConfig.pooledRunnerMaxJobs
     if (typeof this.pooledRunnerMaxRssBytesOverride !== "number") this.pooledRunnerMaxRssBytes = poolConfig.pooledRunnerMaxRssBytes
     if (typeof this.pooledRunnerMaxLifetimeMsOverride !== "number") this.pooledRunnerMaxLifetimeMs = poolConfig.pooledRunnerMaxLifetimeMs
+    if (typeof this.runnerMaxOldSpaceSizeMbOverride !== "number" && typeof poolConfig.runnerMaxOldSpaceSizeMb === "number") this.runnerMaxOldSpaceSizeMb = poolConfig.runnerMaxOldSpaceSizeMb
+    if (typeof this.runnerMallocArenaMaxOverride !== "number" && typeof poolConfig.runnerMallocArenaMax === "number") this.runnerMallocArenaMax = poolConfig.runnerMallocArenaMax
 
     this.statusReporter = new BackgroundJobsStatusReporter({
       configuration: this.configuration,
@@ -1366,7 +1374,7 @@ export default class BackgroundJobsWorker {
     if (!configuration) throw new Error("Background jobs worker configuration not initialized")
     if (this.pooledChildren.size >= this.pooledRunnerCount) return undefined
     const child = fork(POOLED_RUNNER_ENTRY_PATH, [], {
-      cwd: configuration.getDirectory(), execArgv: [], stdio: ["ignore", "ignore", "ignore", "ipc"],
+      cwd: configuration.getDirectory(), execArgv: this._childRunnerExecArgv(), stdio: ["ignore", "ignore", "ignore", "ipc"],
       env: Object.assign({}, process.env, this._childBackgroundJobsEnvironment())
     })
     this.pooledChildren.add(child)
@@ -1898,7 +1906,7 @@ export default class BackgroundJobsWorker {
     const directory = configuration.getDirectory()
     return fork(FORKED_RUNNER_ENTRY_PATH, [], {
       cwd: directory,
-      execArgv: [],
+      execArgv: this._childRunnerExecArgv(),
       stdio: ["ignore", "ignore", "ignore", "ipc"],
       env: Object.assign({}, process.env, this._childBackgroundJobsEnvironment())
     })
@@ -2123,7 +2131,7 @@ export default class BackgroundJobsWorker {
     const argvCommand = process.argv[1]
     const command = argvCommand ? argvCommand : `${directory}/bin/velocious.js`
     const encodedPayload = Buffer.from(JSON.stringify(payload)).toString("base64")
-    const child = spawn(process.execPath, [command, "background-jobs-runner"], {
+    const child = spawn(process.execPath, [...this._childRunnerExecArgv(), command, "background-jobs-runner"], {
       cwd: directory,
       detached: true,
       stdio: "ignore",
@@ -2150,6 +2158,18 @@ export default class BackgroundJobsWorker {
   }
 
   /**
+   * Builds the node options applied to every background-jobs runner child.
+   * A hard V8 heap cap keeps one child from ever committing multiple GBs of
+   * heap; it stays deliberately generous relative to observed runner usage
+   * (tens to a few hundred MB) and is configurable via
+   * `backgroundJobs.runnerMaxOldSpaceSizeMb`.
+   * @returns {string[]} - Node options for runner children.
+   */
+  _childRunnerExecArgv() {
+    return [`--max-old-space-size=${this.runnerMaxOldSpaceSizeMb}`]
+  }
+
+  /**
    * Builds the exact main endpoint and generation inherited by every child.
    * @returns {Record<string, string>} - Child process environment additions.
    */
@@ -2163,6 +2183,7 @@ export default class BackgroundJobsWorker {
       VELOCIOUS_ENV: configuration.getEnvironment(),
       VELOCIOUS_BACKGROUND_JOBS_HOST: this.host,
       VELOCIOUS_BACKGROUND_JOBS_PORT: `${this.port}`,
+      MALLOC_ARENA_MAX: `${this.runnerMallocArenaMax}`,
       ...(this.generationId ? {VELOCIOUS_BACKGROUND_JOBS_GENERATION_ID: this.generationId} : {})
     }
   }

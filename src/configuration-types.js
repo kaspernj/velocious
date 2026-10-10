@@ -196,6 +196,8 @@
  * @property {number} [pooledRunnerMaxJobs] - Number of sequential jobs a pooled child runs before it is replaced, bounding process-level resource accumulation. Default: `100`.
  * @property {number} [pooledRunnerMaxRssBytes] - Peak RSS (the kernel `VmHWM` high-water mark reported by the child) at which a pooled child is replaced after an acknowledged job. The child's peak, not its settled RSS at job-outcome time, is the trigger, so a burst working-set that reclaims before the outcome still retires the child. Default: `536870912` (512 MiB).
  * @property {number} [pooledRunnerMaxLifetimeMs] - Age after an acknowledged job at which a pooled child is replaced. Default: `3600000` (one hour).
+ * @property {number} [runnerMaxOldSpaceSizeMb] - V8 heap cap (`--max-old-space-size`, MiB) applied to every background-jobs runner child process (pooled, forked, and spawned) so a single child can never commit multiple GBs of heap. Default: `2048`.
+ * @property {number} [runnerMallocArenaMax] - `MALLOC_ARENA_MAX` exported to every background-jobs runner child process, bounding glibc per-thread arenas. Defaults to an inherited `MALLOC_ARENA_MAX`, else `4`.
  * @property {Record<string, {maxConcurrent?: number, priority?: number}>} [queues] - Per-queue
  *   concurrency caps and dispatch priorities, Sidekiq-style. A job declares its queue (static
  *   `queue` on the job class, or the `queue` enqueue option; defaults to `"default"`), and
