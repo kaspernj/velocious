@@ -1,11 +1,9 @@
 // @ts-check
 
-import net from "net"
-import JsonSocket from "../../src/background-jobs/json-socket.js"
 import SqlBackgroundJobsAdapter from "../../src/background-jobs/sql-adapter.js"
 import { describe, expect, it } from "../../src/testing/test.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
-import { startBackgroundJobsMain } from "../helpers/background-jobs-helper.js"
+import { addReadyPooledWorker, ControllableWorkerSocket, startBackgroundJobsMain } from "../helpers/background-jobs-helper.js"
 
 class HandoffRecoveryTestAdapter extends SqlBackgroundJobsAdapter {
   /** @param {ConstructorParameters<typeof SqlBackgroundJobsAdapter>[0]} args - Adapter options. */
@@ -89,22 +87,6 @@ class HandoffRecoveryTestAdapter extends SqlBackgroundJobsAdapter {
   }
 }
 
-class ControllableWorkerSocket extends JsonSocket {
-  constructor() {
-    super(new net.Socket())
-    /** @type {import("../../src/background-jobs/types.js").BackgroundJobPayload[]} */
-    this.receivedJobs = []
-  }
-
-  /** @param {import("../../src/background-jobs/types.js").BackgroundJobSocketMessage} message - Main message. @returns {void} */
-  send(message) {
-    if (message.type === "job") this.receivedJobs.push(message.payload)
-  }
-
-  /** @returns {void} */
-  close() {}
-}
-
 /**
  * Starts a main with long error cadence so tests explicitly drive retries.
  * @returns {Promise<{adapter: HandoffRecoveryTestAdapter, main: import("../../src/background-jobs/main.js").default}>} - Started test services.
@@ -116,31 +98,6 @@ async function startRecoveryMain() {
   })
 
   return {adapter, main}
-}
-
-/**
- * Adds one exact-capacity pooled worker without triggering an automatic drain.
- * @param {import("../../src/background-jobs/main.js").default} main - Owning main.
- * @param {string} workerId - Stable worker id.
- * @returns {ControllableWorkerSocket} - Ready worker.
- */
-function addReadyPooledWorker(main, workerId) {
-  const worker = new ControllableWorkerSocket()
-
-  worker.workerId = workerId
-  worker.supportsHandoffIdReporting = true
-  worker.acceptsForkedJobs = false
-  worker.acceptsInlineJobs = false
-  worker.acceptsPooledJobs = true
-  worker.acceptsSpawnedJobs = false
-  worker.availablePooledSlots = 1
-  worker.usesPooledCapacityCredits = true
-  worker.readinessVersion = 1
-  main.workers.add(worker)
-  main.readyWorkers.add(worker)
-  main.workerHandoffs.set(worker, new Map())
-
-  return worker
 }
 
 /** @param {HandoffRecoveryTestAdapter} adapter - Store. @returns {Promise<string>} - Job id. */
