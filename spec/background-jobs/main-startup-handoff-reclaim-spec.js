@@ -1,14 +1,12 @@
 // @ts-check
 
-import net from "node:net"
 import { deferred } from "awaitery"
 import timeout from "awaitery/build/timeout.js"
 import wait from "awaitery/build/wait.js"
 import BackgroundJobsMain from "../../src/background-jobs/main.js"
-import JsonSocket from "../../src/background-jobs/json-socket.js"
 import BackgroundJobsStore from "../../src/background-jobs/store.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
-import { clearBackgroundJobs } from "../helpers/background-jobs-helper.js"
+import { clearBackgroundJobs, ControllableWorkerSocket } from "../helpers/background-jobs-helper.js"
 import { describe, expect, it } from "../../src/testing/test.js"
 
 const MAX_TIMER_MS = 2_147_483_647
@@ -70,22 +68,6 @@ class ControlledStartupStore extends BackgroundJobsStore {
     await this.scheduledLookupCanFinish.promise
     return await super.nextScheduledJob()
   }
-}
-
-class ControllableWorkerSocket extends JsonSocket {
-  constructor() {
-    super(new net.Socket())
-    /** @type {import("../../src/background-jobs/types.js").BackgroundJobPayload[]} */
-    this.receivedJobs = []
-  }
-
-  /** @param {import("../../src/background-jobs/types.js").BackgroundJobSocketMessage} message - Main message. @returns {void} */
-  send(message) {
-    if (message.type === "job") this.receivedJobs.push(message.payload)
-  }
-
-  /** @returns {void} */
-  close() {}
 }
 
 /** @returns {Promise<import("../../src/background-jobs/store.js").default>} - Empty SQL background-jobs store. */
