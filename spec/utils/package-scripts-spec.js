@@ -9,6 +9,13 @@ import {describe, expect, it} from "../../src/testing/test.js"
 import { runRetainedChildProcess } from "../helpers/retained-child-process.js"
 
 const execFileAsync = promisify(execFile)
+/**
+ * Artifact diffs routinely exceed the child-process default stdout buffer once
+ * source-map files are involved (a single regenerated map rewrites a megabyte
+ * or more), so without this an out-of-date artifact tree surfaces as an opaque
+ * `RangeError: stdout maxBuffer length exceeded` instead of the real diff.
+ */
+const ARTIFACT_DIFF_MAX_BUFFER_BYTES = 64 * 1024 * 1024
 
 /** @returns {string} - Repository directory. */
 function repositoryDirectory() {
@@ -86,12 +93,12 @@ describe("package scripts", {databaseCleaning: {transaction: true}}, () => {
     if (!npmExecutable) throw new Error("Expected npm_execpath while running the generated build spec")
 
     await execFileAsync(process.execPath, [npmExecutable, "run", "build"], {cwd: repositoryDirectory()})
-    await execFileAsync("git", ["diff", "--exit-code", "--", "build"], {cwd: repositoryDirectory()})
+    await execFileAsync("git", ["diff", "--exit-code", "--", "build"], {cwd: repositoryDirectory(), maxBuffer: ARTIFACT_DIFF_MAX_BUFFER_BYTES})
 
     const {stdout: untrackedBuildPaths} = await execFileAsync(
       "git",
       ["ls-files", "--others", "--exclude-standard", "--", "build"],
-      {cwd: repositoryDirectory()}
+      {cwd: repositoryDirectory(), maxBuffer: ARTIFACT_DIFF_MAX_BUFFER_BYTES}
     )
 
     expect(untrackedBuildPaths).toEqual("")
