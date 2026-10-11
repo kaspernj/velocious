@@ -1148,6 +1148,24 @@ export default class BackgroundJobsWorker {
   }
 
   /**
+   * Counts live children still able to run new work. The pool must always
+   * keep — or restore, through the bounded over-cap liveness replacement — at
+   * least one non-retiring child: with every live child retiring, advertised
+   * capacity is zero for the entire drain window, which can stretch to the
+   * longest in-flight job, and dispatch silently stalls.
+   * @returns {number} - Number of non-retiring pooled children.
+   */
+  _nonRetiringPooledChildCount() {
+    let count = 0
+
+    for (const state of this.pooledChildStates.values()) {
+      if (!state.retiring) count += 1
+    }
+
+    return count
+  }
+
+  /**
    * Resolves once a non-retiring pooled child has a free concurrency slot or the
    * pool may spawn a new one. Pooled jobs admitted while the pool is at its
    * hard cap wait here instead of spawning an over-capacity child; the wake
@@ -1358,13 +1376,18 @@ export default class BackgroundJobsWorker {
    * Creates a reusable pooled child, enforcing the hard cap on total live
    * children (working + draining). Returns undefined when the cap is already
    * met — the only way a new child may exist is a slot being open, so the
-   * caller re-checks and waits again.
+   * caller re-checks and waits again. `allowOverCap` is reserved for the
+   * bounded liveness replacement: at most one child beyond the cap may exist,
+   * and only when every other live child is already retiring (see
+   * `_beginRetirePooledChild` for the gate).
+   * @param {object} [args] - Spawn options.
+   * @param {boolean} [args.allowOverCap] - Allow one over-cap spawn for the liveness replacement.
    * @returns {import("node:child_process").ChildProcess | undefined} - The new child, or undefined when the pool is at its cap.
    */
-  _createPooledChild() {
+  _createPooledChild({allowOverCap = false} = {}) {
     const configuration = this.configuration
     if (!configuration) throw new Error("Background jobs worker configuration not initialized")
-    if (this.pooledChildren.size >= this.pooledRunnerCount) return undefined
+    if (!allowOverCap && this.pooledChildren.size >= this.pooledRunnerCount) return undefined
     const child = fork(POOLED_RUNNER_ENTRY_PATH, [], {
       cwd: configuration.getDirectory(), execArgv: [], stdio: ["ignore", "ignore", "ignore", "ipc"],
       env: Object.assign({}, process.env, this._childBackgroundJobsEnvironment())
@@ -1577,10 +1600,19 @@ export default class BackgroundJobsWorker {
    * cap — eagerly spawns a single replacement (1-for-1) so its capacity is
    * restored immediately without waiting for it to finish draining. The
    * replacement spawn is gated by the cap (the retiring child still counts as
-   * live until it exits), so a full pool simply defers the replacement to the
-   * retiring child's drain instead of spawning over capacity. The retiring
-   * child stops receiving new jobs and is terminated only once its in-flight
-   * set drains, so a long-running job (e.g. a build) is never cut off.
+   * live until it exits), so a full pool defers the replacement to the drain
+   * path. One bounded exception keeps the pool from ever advertising zero
+   * capacity: when this mark leaves no non-retiring child, a single liveness
+   * replacement spawns over the cap — live children stay bounded at
+   * `pooledRunnerCount + 1`, and the extra child is absorbed by the next
+   * draining exit. Without it, a full retirement wave (e.g. every child
+   * crossing the peak-RSS threshold after the same memory burst) silently
+   * removes all pooled capacity for the whole drain window, which can stretch
+   * to the longest in-flight job. When even the liveness spawn is unavailable
+   * (an over-cap child is already draining), the starvation is logged so it is
+   * visible instead of silent. The retiring child stops receiving new jobs and
+   * is terminated only once its in-flight set drains, so a long-running job
+   * (e.g. a build) is never cut off.
    * @param {import("node:child_process").ChildProcess} child - Child to retire.
    * @returns {void}
    */
@@ -1592,8 +1624,55 @@ export default class BackgroundJobsWorker {
     // Best-effort pre-warm: skip when stopping (no new work) or before the
     // worker is initialized (no configuration to fork a child from). The cap
     // inside _createPooledChild refuses the spawn while the pool is full, in
-    // which case the replacement is deferred to the drain path.
-    if (!this.shouldStop && this.configuration) this._createPooledChild()
+    // which case the bounded liveness replacement below takes over.
+    if (this.shouldStop || !this.configuration) return
+
+    if (this._createPooledChild()) return
+    if (this._nonRetiringPooledChildCount() > 0) return
+
+    // Liveness replacement: this mark emptied the working pool, so advertised
+    // capacity would be zero until a draining child exits. Spawn one
+    // replacement over the hard cap (bounded: the gate admits it only when the
+    // live count is at most the cap, so at most one over-cap child exists and
+    // the next draining exit absorbs it).
+    if (this.pooledChildren.size <= this.pooledRunnerCount) {
+      const livenessChild = this._createPooledChild({allowOverCap: true})
+
+      if (livenessChild) {
+        this._logPooledCapacityEvent("pooled-capacity-liveness-spawn")
+        return
+      }
+    }
+
+    // An over-cap child is already draining: the pool waits for the next
+    // draining exit, which frees a cap slot for a lazy replacement. Log it so
+    // this bounded starvation is not silent.
+    this._logPooledCapacityEvent("pooled-capacity-starved")
+  }
+
+  /**
+   * Logs one compact pooled-capacity event to the worker's own stderr (the
+   * surface that reaches the production log). Used by the bounded liveness
+   * replacement in `_beginRetirePooledChild`: the spawn that keeps dispatch
+   * alive through a full retirement wave, or the bounded starvation when an
+   * over-cap child is already draining and the pool must wait for an exit.
+   * @param {"pooled-capacity-liveness-spawn" | "pooled-capacity-starved"} event - Event name.
+   * @returns {void}
+   */
+  _logPooledCapacityEvent(event) {
+    let retiringChildren = 0
+
+    for (const state of this.pooledChildStates.values()) {
+      if (state.retiring) retiringChildren += 1
+    }
+
+    console.error(JSON.stringify({
+      event,
+      liveChildren: this.pooledChildren.size,
+      retiringChildren,
+      cap: this.pooledRunnerCount,
+      concurrency: this.pooledRunnerConcurrency
+    }))
   }
 
   /**

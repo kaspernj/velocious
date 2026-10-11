@@ -224,6 +224,14 @@
  *   to restore the legacy fixed-interval poll.
  * @property {number} [pollIntervalMs] - Poll interval in milliseconds. Only used
  *   when `dispatchStrategy === "polling"`. Default: `1000`.
+ * @property {number} [drainStoreOperationTimeoutMs] - Bounds one drain-critical
+ *   store operation in the main process: the queued-job lookup, the durable
+ *   handoff claim, and handoff-recovery transitions. A store call that never
+ *   settles (wedged DB connection, lost acknowledgement) would otherwise freeze
+ *   the coalesced drain and every later dispatch queued behind it until the
+ *   process is killed; on timeout the drain fails into its existing
+ *   error/retry path and the stall is reported as a framework error.
+ *   Default: `60000`.
  * @property {number | null} [jobTimeoutMs] - Wall-clock backstop, in ms, for a
  *   `"forked"` job runner. A forked job still running after this is terminated
  *   (SIGTERM, then SIGKILL after the reaping grace) and reported failed, so a

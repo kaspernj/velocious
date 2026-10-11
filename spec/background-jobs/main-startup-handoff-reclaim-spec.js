@@ -1,17 +1,20 @@
 // @ts-check
 
-import net from "node:net"
 import { deferred } from "awaitery"
 import timeout from "awaitery/build/timeout.js"
 import wait from "awaitery/build/wait.js"
 import BackgroundJobsMain from "../../src/background-jobs/main.js"
-import JsonSocket from "../../src/background-jobs/json-socket.js"
 import BackgroundJobsStore from "../../src/background-jobs/store.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
-import { clearBackgroundJobs } from "../helpers/background-jobs-helper.js"
+import { clearBackgroundJobs, ControllableWorkerSocket } from "../helpers/background-jobs-helper.js"
 import { describe, expect, it } from "../../src/testing/test.js"
 
 const MAX_TIMER_MS = 2_147_483_647
+
+// Startup-path waits are fail-fast bounds, not the behavior under test: mssql
+// spends seconds in `configuration.initialize` and the schema/reconciliation
+// startup steps, so per-driver-tight budgets flake on slow drivers.
+const STARTUP_WAIT_BUDGET_MS = 10_000
 
 class ManualStartupClock {
   nextTimerId = 1
@@ -70,22 +73,6 @@ class ControlledStartupStore extends BackgroundJobsStore {
     await this.scheduledLookupCanFinish.promise
     return await super.nextScheduledJob()
   }
-}
-
-class ControllableWorkerSocket extends JsonSocket {
-  constructor() {
-    super(new net.Socket())
-    /** @type {import("../../src/background-jobs/types.js").BackgroundJobPayload[]} */
-    this.receivedJobs = []
-  }
-
-  /** @param {import("../../src/background-jobs/types.js").BackgroundJobSocketMessage} message - Main message. @returns {void} */
-  send(message) {
-    if (message.type === "job") this.receivedJobs.push(message.payload)
-  }
-
-  /** @returns {void} */
-  close() {}
 }
 
 /** @returns {Promise<import("../../src/background-jobs/store.js").default>} - Empty SQL background-jobs store. */
@@ -172,7 +159,7 @@ function addReadyWorker(main, workerId) {
 
 /** @param {BackgroundJobsMain} main - Main whose startup reclaim should finish. @returns {Promise<void>} - Resolves after the grace pass. */
 async function waitForStartupReclaim(main) {
-  await timeout({timeout: 1000}, async () => {
+  await timeout({timeout: STARTUP_WAIT_BUDGET_MS}, async () => {
     while (main._startupHandoffReclaimTimer || main._startupHandoffReclaimPromise) await wait(0.01)
   })
 }
@@ -198,7 +185,7 @@ describe("Background jobs - main startup handoff reclaim", {databaseCleaning: {t
     try {
       if (!handoff) throw new Error("Expected the startup boundary handoff")
 
-      await timeout({timeout: 1000}, async () => await store.scheduledLookupStarted.promise)
+      await timeout({timeout: STARTUP_WAIT_BUDGET_MS}, async () => await store.scheduledLookupStarted.promise)
       expect(clock.timers.size).toEqual(0)
     } finally {
       store.scheduledLookupCanFinish.resolve(undefined)

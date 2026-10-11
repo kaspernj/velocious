@@ -1,5 +1,6 @@
 // @ts-check
 
+import timeout, { TimeoutError } from "awaitery/build/timeout.js"
 import { randomUUID } from "crypto"
 import net from "net"
 import JsonSocket from "./json-socket.js"
@@ -146,6 +147,7 @@ export default class BackgroundJobsMain {
     this.port = typeof port === "number" ? port : config.port
     this.dispatchStrategy = config.dispatchStrategy
     this.pollIntervalMs = config.pollIntervalMs
+    this.drainStoreOperationTimeoutMs = config.drainStoreOperationTimeoutMs
     this.retention = config.retention
     // A worker that stops sending anything (heartbeat/ready/report) for this
     // long is treated as wedged/dead: its leases are released and it is dropped.
@@ -2064,8 +2066,47 @@ export default class BackgroundJobsMain {
       return false
     } catch (error) {
       this.logger.error(() => ["Background jobs drain failed:", error])
+      if (error instanceof TimeoutError) this._reportDrainStallError(error)
       return true
     }
+  }
+
+  /**
+   * Bounds one drain-critical store operation so a store call that never
+   * settles rejects into the drain error/retry path instead of stalling the
+   * coalesced drain and every later dispatch queued behind it.
+   * @template T
+   * @param {string} operation - Operation label for the timeout error.
+   * @param {() => Promise<T>} callback - Drain store operation.
+   * @returns {Promise<T>} - Operation result.
+   */
+  async _boundedDrainStoreOperation(operation, callback) {
+    return await timeout({
+      errorMessage: `Background jobs drain store operation timed out after ${this.drainStoreOperationTimeoutMs}ms: ${operation}`,
+      timeout: this.drainStoreOperationTimeoutMs
+    }, callback)
+  }
+
+  /**
+   * Surfaces a drain pass whose store operation never settled. The bounded
+   * store timeout keeps dispatch moving through the error-retry path; this
+   * report makes the stall observable for process-level bug reporters.
+   * @param {Error} error - Drain stall failure.
+   * @returns {void}
+   */
+  _reportDrainStallError(error) {
+    const payload = {
+      context: {
+        stage: "background-jobs-drain-stall",
+        drainStoreOperationTimeoutMs: this.drainStoreOperationTimeoutMs,
+        dispatchStrategy: this.dispatchStrategy
+      },
+      error
+    }
+    const errorEvents = this.configuration.getErrorEvents()
+
+    errorEvents.emit("framework-error", payload)
+    errorEvents.emit("all-error", {...payload, errorType: "framework-error"})
   }
 
   /**
@@ -2127,7 +2168,7 @@ export default class BackgroundJobsMain {
    */
   async _drainOnce() {
     while (this.readyWorkers.size > 0 && !this._stopped && this.lifecycleState === "active" && this._activeOwnershipReady) {
-      const job = await this.nextAvailableJobForReadyWorkers()
+      const job = await this._boundedDrainStoreOperation("next-available-job", async () => await this.nextAvailableJobForReadyWorkers())
       if (!job) return
 
       const worker = this.readyWorkerForJob(job)
@@ -2138,13 +2179,13 @@ export default class BackgroundJobsMain {
       let handoff
 
       try {
-        handoff = await this.store.markHandedOff({handoffId: requestedHandoffId, jobId: job.id, workerId: worker.workerId})
+        handoff = await this._boundedDrainStoreOperation("mark-handed-off", async () => await this.store.markHandedOff({handoffId: requestedHandoffId, jobId: job.id, workerId: worker.workerId}))
       } catch (error) {
         this._rememberHandoffRecovery({handoffId: requestedHandoffId, jobId: job.id})
         this._restoreWorkerAdmission({...admission, worker})
 
         try {
-          await this._recoverHandoff({handoffId: requestedHandoffId, jobId: job.id})
+          await this._boundedDrainStoreOperation("recover-handoff", async () => await this._recoverHandoff({handoffId: requestedHandoffId, jobId: job.id}))
         } catch (recoveryError) {
           this._reportHandoffRecoveryError({error: recoveryError, handoffId: requestedHandoffId, jobId: job.id})
         }
@@ -2164,7 +2205,7 @@ export default class BackgroundJobsMain {
       if (!handoffs || !this.workers.has(worker) || worker.isDraining || this.lifecycleState !== "active" || !this._activeOwnershipReady) {
         this._rememberHandoffRecovery({handoffId: handoff.handoffId, jobId: job.id})
         try {
-          await this._recoverHandoff({handoffId: handoff.handoffId, jobId: job.id})
+          await this._boundedDrainStoreOperation("recover-handoff", async () => await this._recoverHandoff({handoffId: handoff.handoffId, jobId: job.id}))
         } catch (recoveryError) {
           this._reportHandoffRecoveryError({error: recoveryError, handoffId: handoff.handoffId, jobId: job.id})
           throw recoveryError

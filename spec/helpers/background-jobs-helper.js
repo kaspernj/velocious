@@ -1,12 +1,14 @@
 // @ts-check
 
 import fs from "fs/promises"
+import net from "node:net"
 import path from "path"
 import timeout from "awaitery/build/timeout.js"
 import wait from "awaitery/build/wait.js"
 import BackgroundJobsMain from "../../src/background-jobs/main.js"
 import BackgroundJobsStore from "../../src/background-jobs/store.js"
 import BackgroundJobsWorker from "../../src/background-jobs/worker.js"
+import JsonSocket from "../../src/background-jobs/json-socket.js"
 import AsyncTrackedMultiConnectionPool from "../../src/database/pool/async-tracked-multi-connection.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 
@@ -23,6 +25,51 @@ const legacyDefaultBackgroundJobsConfig = Object.fromEntries(
 // so a generous default absorbs load-induced slowness without masking a real hang —
 // the poll loop still resolves the moment the condition is met.
 const defaultBackgroundJobWaitTimeoutSeconds = 15
+
+/**
+ * Worker socket double that records dispatched job payloads without a real
+ * process transport, shared by main-dispatch specs.
+ */
+export class ControllableWorkerSocket extends JsonSocket {
+  constructor() {
+    super(new net.Socket())
+    /** @type {import("../../src/background-jobs/types.js").BackgroundJobPayload[]} */
+    this.receivedJobs = []
+  }
+
+  /** @param {import("../../src/background-jobs/types.js").BackgroundJobSocketMessage} message - Main message. @returns {void} */
+  send(message) {
+    if (message.type === "job") this.receivedJobs.push(message.payload)
+  }
+
+  /** @returns {void} */
+  close() {}
+}
+
+/**
+ * Adds one exact-capacity pooled worker without triggering an automatic drain.
+ * @param {BackgroundJobsMain} main - Owning main.
+ * @param {string} workerId - Stable worker id.
+ * @returns {ControllableWorkerSocket} - Ready worker.
+ */
+export function addReadyPooledWorker(main, workerId) {
+  const worker = new ControllableWorkerSocket()
+
+  worker.workerId = workerId
+  worker.supportsHandoffIdReporting = true
+  worker.acceptsForkedJobs = false
+  worker.acceptsInlineJobs = false
+  worker.acceptsPooledJobs = true
+  worker.acceptsSpawnedJobs = false
+  worker.availablePooledSlots = 1
+  worker.usesPooledCapacityCredits = true
+  worker.readinessVersion = 1
+  main.workers.add(worker)
+  main.readyWorkers.add(worker)
+  main.workerHandoffs.set(worker, new Map())
+
+  return worker
+}
 
 /**
  * Observes durable background-job updates without using polling deadlines.
