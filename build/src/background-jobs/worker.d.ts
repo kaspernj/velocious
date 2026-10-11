@@ -154,11 +154,15 @@ export default class BackgroundJobsWorker {
     pooledRunnerMaxJobsOverride: number | undefined;
     pooledRunnerMaxRssBytesOverride: number | undefined;
     pooledRunnerMaxLifetimeMsOverride: number | undefined;
+    runnerMaxOldSpaceSizeMbOverride: number | undefined;
+    runnerMallocArenaMaxOverride: number | undefined;
     pooledRunnerCount: number;
     pooledRunnerConcurrency: number;
     pooledRunnerMaxJobs: number;
     pooledRunnerMaxRssBytes: number;
     pooledRunnerMaxLifetimeMs: number;
+    runnerMaxOldSpaceSizeMb: number;
+    runnerMallocArenaMax: number;
     /**
      * Grace period between SIGTERM and SIGKILL when reaping process runners that
      * outlast a bounded shutdown drain.
@@ -271,6 +275,8 @@ export default class BackgroundJobsWorker {
      * @param {number} [args.pooledRunnerMaxJobs] - Override the per-runner recycle job count.
      * @param {number} [args.pooledRunnerMaxRssBytes] - Override the per-runner recycle RSS limit.
      * @param {number} [args.pooledRunnerMaxLifetimeMs] - Override the per-runner recycle lifetime.
+     * @param {number} [args.runnerMaxOldSpaceSizeMb] - Override the V8 heap cap (MiB, `--max-old-space-size`) applied to runner children.
+     * @param {number} [args.runnerMallocArenaMax] - Override `MALLOC_ARENA_MAX` for runner children.
      * @param {number} [args.forkedChildSigkillGraceMs] - Override the grace period between SIGTERM and SIGKILL when reaping lingering process runners on stop.
      * @param {number} [args.heartbeatIntervalMs] - Override the liveness heartbeat interval (default 15000ms).
      * @param {number} [args.generationHandshakeTimeoutMs] - Maximum time to wait for generation acknowledgement (default: 4000).
@@ -282,7 +288,7 @@ export default class BackgroundJobsWorker {
      * @param {() => void} [args.onRetireMessage] - Explicit retire-message observation hook.
      * @param {(observation: import("./types.js").PooledChildMemoryObservation) => void | Promise<void>} [args.onPooledRunnerMemoryObservation] - Explicit pooled-child memory observation hook. Every validated observation (periodic while a child has in-flight jobs, plus on demand) is forwarded here, in addition to the worker's compact stderr log line, so an application can route memory diagnostics (e.g. to a bug reporter) without parsing logs.
      */
-    constructor({ configuration, host, port, generationId, workerInstanceId, maxConcurrentForkedJobs, maxConcurrentInlineJobs, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, forkedChildSigkillGraceMs, heartbeatIntervalMs, generationHandshakeTimeoutMs, reconnectDelayMs, jobTimeoutMs, closeDatabaseConnectionsOnStop, onStopped, onGenerationAccepted, onRetireMessage, onPooledRunnerMemoryObservation }?: {
+    constructor({ configuration, host, port, generationId, workerInstanceId, maxConcurrentForkedJobs, maxConcurrentInlineJobs, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, runnerMaxOldSpaceSizeMb, runnerMallocArenaMax, forkedChildSigkillGraceMs, heartbeatIntervalMs, generationHandshakeTimeoutMs, reconnectDelayMs, jobTimeoutMs, closeDatabaseConnectionsOnStop, onStopped, onGenerationAccepted, onRetireMessage, onPooledRunnerMemoryObservation }?: {
         configuration?: import("../configuration.js").default;
         host?: string;
         port?: number;
@@ -295,6 +301,8 @@ export default class BackgroundJobsWorker {
         pooledRunnerMaxJobs?: number;
         pooledRunnerMaxRssBytes?: number;
         pooledRunnerMaxLifetimeMs?: number;
+        runnerMaxOldSpaceSizeMb?: number;
+        runnerMallocArenaMax?: number;
         forkedChildSigkillGraceMs?: number;
         heartbeatIntervalMs?: number;
         generationHandshakeTimeoutMs?: number;
@@ -965,6 +973,15 @@ export default class BackgroundJobsWorker {
      * @returns {Promise<void>} - Resolves when the spawned runner exits or spawn fails.
      */
     _spawnJob(payload: import("./types.js").BackgroundJobPayload): Promise<void>;
+    /**
+     * Builds the node options applied to every background-jobs runner child.
+     * A hard V8 heap cap keeps one child from ever committing multiple GBs of
+     * heap; it stays deliberately generous relative to observed runner usage
+     * (tens to a few hundred MB) and is configurable via
+     * `backgroundJobs.runnerMaxOldSpaceSizeMb`.
+     * @returns {string[]} - Node options for runner children.
+     */
+    _childRunnerExecArgv(): string[];
     /**
      * Builds the exact main endpoint and generation inherited by every child.
      * @returns {Record<string, string>} - Child process environment additions.
