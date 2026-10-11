@@ -12,6 +12,13 @@ import SqliteDriver from "../../src/database/drivers/sqlite/index.js"
 import NodeEnvironmentHandler from "../../src/environment-handlers/node.js"
 import { waitForEvent } from "../../src/testing/test.js"
 
+// Fail-fast budget for the forked child-process waits below (IPC messages and
+// process exit). These waits observe child boot and shutdown (test
+// infrastructure), not the behavior under test: child startup includes
+// configuration and SQLite initialization, which exceeds a tight 5s bound on
+// loaded CI nodes and replaces the real race outcome with a guard timeout.
+const CHILD_PROCESS_WAIT_BUDGET_MS = 30_000
+
 const CHILD_PATH = fileURLToPath(new URL("../helpers/idempotent-enqueue-sqlite-child.js", import.meta.url))
 
 /**
@@ -44,7 +51,7 @@ async function waitForChildMessage(child, type) {
         matched = record
         return true
       },
-      timeoutMs: 5000
+      timeoutMs: CHILD_PROCESS_WAIT_BUDGET_MS
     })
   } catch (error) {
     throw new Error(`Waiting for child message ${type} failed (exitCode=${child.exitCode}, signal=${child.signalCode})`, {cause: error})
@@ -61,7 +68,7 @@ async function waitForChildMessage(child, type) {
  */
 async function stopChild(child) {
   if (child.exitCode !== null || child.signalCode !== null) return
-  const exitPromise = waitForEvent(child, "exit", {timeoutMs: 5000})
+  const exitPromise = waitForEvent(child, "exit", {timeoutMs: CHILD_PROCESS_WAIT_BUDGET_MS})
 
   child.kill()
   await exitPromise

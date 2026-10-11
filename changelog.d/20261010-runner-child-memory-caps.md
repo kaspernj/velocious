@@ -1,0 +1,1 @@
+Background-jobs runner children now spawn with a hard V8 heap cap (`--max-old-space-size`, `backgroundJobs.runnerMaxOldSpaceSizeMb`, default 2048 MiB) and a bounded `MALLOC_ARENA_MAX` (`backgroundJobs.runnerMallocArenaMax`, default 4 or an inherited value), so a single child can never commit multi-GB heaps or unbounded allocator arenas.

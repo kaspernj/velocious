@@ -13,8 +13,14 @@ const MAX_TIMER_MS = 2_147_483_647
 
 // Startup-path waits are fail-fast bounds, not the behavior under test: mssql
 // spends seconds in `configuration.initialize` and the schema/reconciliation
-// startup steps, so per-driver-tight budgets flake on slow drivers.
-const STARTUP_WAIT_BUDGET_MS = 10_000
+// startup steps, so per-driver-tight budgets flake on slow drivers. The
+// network-backed drivers (mssql, pgsql, mariadb) add a generous budget so the
+// bound absorbs slow-driver startup latency and CI load spikes without masking
+// a real regression; file-backed drivers keep the tight bound.
+const STARTUP_WAIT_BUDGET_MS =
+  ["mssql", "pgsql", "mysql", "mariadb"].includes(dummyConfiguration.getDatabaseType("default"))
+    ? 30_000
+    : 10_000
 
 class ManualStartupClock {
   nextTimerId = 1

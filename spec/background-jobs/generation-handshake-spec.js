@@ -12,6 +12,15 @@ import stalledSocketServer from "../helpers/stalled-socket-server.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import { describe, expect, it } from "../../src/testing/test.js"
 
+// Fail-fast budget for the guarded handshake waits in this file. The guard only
+// needs to fail on a true deadlock — not measure pace — and the wrapped work
+// boots the worker against the active dummy configuration, where configuration
+// initialization plus connection setup alone takes multiple seconds on
+// network-backed drivers under CI load. A sub-second bound expires before the
+// worker's own bounded handshake rejection can surface and hides the typed
+// error behind a generic guard timeout.
+const HANDSHAKE_GUARD_BUDGET_MS = 30_000
+
 /**
  * Captures an expected request failure within a test-only deadlock guard.
  * @param {() => Promise<void>} callback - Request expected to reject.
@@ -19,7 +28,7 @@ import { describe, expect, it } from "../../src/testing/test.js"
  */
 async function requestError(callback) {
   try {
-    await timeout({errorMessage: "Test guard expired before generation handshake failure", timeout: 250}, callback)
+    await timeout({errorMessage: "Test guard expired before generation handshake failure", timeout: HANDSHAKE_GUARD_BUDGET_MS}, callback)
   } catch (error) {
     if (error instanceof Error) return error
     throw error
@@ -63,7 +72,7 @@ describe("Background jobs generation handshake", () => {
       expect(error.name).toEqual("BackgroundJobsGenerationHandshakeTimeoutError")
       expect(error.message).toMatch(/worker.*release-stalled-worker.*25ms.*127\.0\.0\.1/)
       await stalled.requestReceived
-      await timeout({errorMessage: "Timed-out worker socket stayed open", timeout: 250}, async () => await stalled.connectionClosed)
+      await timeout({errorMessage: "Timed-out worker socket stayed open", timeout: HANDSHAKE_GUARD_BUDGET_MS}, async () => await stalled.connectionClosed)
       expect(stalled.requestCount()).toEqual(1)
       expect(stalled.requests()[0]).toMatchObject({type: "hello", role: "worker", generationId: "release-stalled-worker"})
       expect(worker._generationAccepted).toEqual(false)
@@ -101,7 +110,7 @@ describe("Background jobs generation handshake", () => {
         expect(error.name).toEqual("BackgroundJobsGenerationHandshakeTimeoutError")
         expect(error.message).toMatch(new RegExp(`${role}.*release-stalled-request.*25ms`))
         await stalled.requestReceived
-        await timeout({errorMessage: `Timed-out ${role} socket stayed open`, timeout: 250}, async () => await stalled.connectionClosed)
+        await timeout({errorMessage: `Timed-out ${role} socket stayed open`, timeout: HANDSHAKE_GUARD_BUDGET_MS}, async () => await stalled.connectionClosed)
         expect(stalled.requestCount()).toEqual(1)
         expect(stalled.requests()[0]).toMatchObject({type: "hello", role, generationId: "release-stalled-request"})
       } finally {
@@ -192,7 +201,7 @@ describe("Background jobs generation handshake", () => {
       peer.jsonSocket.send({type: "enqueue", jobName: "GenerationHandshakeJob", args: []})
       expect(await peer.nextMessage()).toEqual({type: "generation-rejected", reason: "generation-mismatch"})
 
-      await timeout({errorMessage: "Rejected peer mutated the durable queue", timeout: 1000}, async () => {
+      await timeout({errorMessage: "Rejected peer mutated the durable queue", timeout: HANDSHAKE_GUARD_BUDGET_MS}, async () => {
         expect(await store.nextAvailableJob()).toEqual(null)
       })
 

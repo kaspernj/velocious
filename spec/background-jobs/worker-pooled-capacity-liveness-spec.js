@@ -256,4 +256,58 @@ describe("Background jobs - pooled capacity liveness", {databaseCleaning: {trans
     captureStderr(() => completeFirstJob(worker, asChild(child)))
     expect(worker.pooledChildren.size).toBeLessThanOrEqual(1)
   })
+
+  it("restores a working child when the absorbed over-cap replacement exits while the wave still drains", () => {
+    const worker = new BackgroundJobsWorker({pooledRunnerCount: 2, pooledRunnerConcurrency: 1, pooledRunnerMaxJobs: 1})
+    const fork = stubFork(worker)
+    /** @type {Array<Record<string, unknown>>} */
+    const sent = []
+
+    worker.jsonSocket = /** @type {ReturnType<typeof JSON.parse>} */ ({send: (message) => sent.push(message)})
+
+    const childA = addFakePooledChild(worker, {inflight: 2})
+    const childB = addFakePooledChild(worker, {inflight: 2})
+
+    // Both originals retire while still draining; the second mark leaves no
+    // non-retiring child, so the bounded over-cap replacement spawns.
+    captureStderr(() => completeFirstJob(worker, asChild(childA)))
+    captureStderr(() => completeFirstJob(worker, asChild(childB)))
+    expect(fork.spawned()).toEqual(1)
+    expect(worker.pooledChildren.size).toEqual(3)
+
+    // The replacement retires on its own threshold while both originals are
+    // still draining: the over-cap budget is spent and advertised capacity is
+    // zero again — the same state that starved production dispatch for 37
+    // minutes before a natural drain exit restored capacity.
+    const replacement = findWorkingChild(worker)
+    const replacementState = worker.pooledChildStates.get(asChild(replacement))
+
+    if (!replacementState) throw new Error("Expected replacement state")
+
+    replacementState.inflight.set("replacement-job", {payload: fakePayload("replacement-job")})
+    captureStderr(() => completeFirstJob(worker, asChild(replacement)))
+    expect(fork.spawned()).toEqual(1)
+    expect(worker._availablePooledSlots()).toEqual(0)
+
+    // The drained replacement's process exits and its slot is absorbed. No
+    // retirement mark remains to restore a working child, and at the cap
+    // nothing else can spawn lazily. The exit must spawn a fresh bounded
+    // replacement and re-advertise its capacity immediately so dispatch
+    // resumes instead of starving until the originals' long jobs drain.
+    sent.length = 0
+    const lines = captureStderr(() => {
+      void worker._handlePooledChildFailure({child: asChild(replacement), error: new Error("pooled child exited"), exitCode: 0, origin: "exit", signal: null})
+    })
+
+    expect(fork.spawned()).toEqual(2)
+    expect(worker.pooledChildren.size).toEqual(3)
+    expect(lines.some((line) => line.includes("pooled-capacity-liveness-spawn"))).toEqual(true)
+    expect(worker._availablePooledSlots()).toBeGreaterThan(0)
+    expect(sent.some((message) => message.type === "ready" && message.acceptsPooled === true && message.availablePooledSlots > 0)).toEqual(true)
+
+    // Settle the last tracked jobs so the suite exits cleanly.
+    captureStderr(() => completeFirstJob(worker, asChild(childA)))
+    captureStderr(() => completeFirstJob(worker, asChild(childB)))
+    expect(worker.pooledChildren.size).toBeLessThanOrEqual(2)
+  })
 })

@@ -104,4 +104,40 @@ describe("Background jobs configuration", () => {
       expect(envConfig.pooledRunnerMaxLifetimeMs).toEqual(7200000)
     })
   })
+
+  it("resolves bounded runner child memory caps with sensible defaults", () => {
+    const defaults = buildConfiguration().getBackgroundJobsConfig()
+    expect(defaults.runnerMaxOldSpaceSizeMb).toEqual(2048)
+    expect(defaults.runnerMallocArenaMax).toEqual(4)
+
+    for (const invalidValue of [1.5, 0, -1, 32]) {
+      expect(buildConfiguration({runnerMaxOldSpaceSizeMb: invalidValue}).getBackgroundJobsConfig().runnerMaxOldSpaceSizeMb).toEqual(2048)
+    }
+    for (const invalidValue of [1.5, 0, -1]) {
+      expect(buildConfiguration({runnerMallocArenaMax: invalidValue}).getBackgroundJobsConfig().runnerMallocArenaMax).toEqual(4)
+    }
+
+    const configured = buildConfiguration({runnerMaxOldSpaceSizeMb: 4096, runnerMallocArenaMax: 2}).getBackgroundJobsConfig()
+    expect(configured.runnerMaxOldSpaceSizeMb).toEqual(4096)
+    expect(configured.runnerMallocArenaMax).toEqual(2)
+
+    const envKeys = {
+      VELOCIOUS_BACKGROUND_JOBS_RUNNER_MAX_OLD_SPACE_SIZE_MB: "3072",
+      VELOCIOUS_BACKGROUND_JOBS_RUNNER_MALLOC_ARENA_MAX: "6"
+    }
+    const previous = Object.fromEntries(Object.keys(envKeys).map((key) => [key, process.env[key]]))
+
+    Object.assign(process.env, envKeys)
+
+    try {
+      const envConfig = buildConfiguration().getBackgroundJobsConfig()
+      expect(envConfig.runnerMaxOldSpaceSizeMb).toEqual(3072)
+      expect(envConfig.runnerMallocArenaMax).toEqual(6)
+    } finally {
+      for (const [key, value] of Object.entries(previous)) {
+        if (value === undefined) delete process.env[key]
+        else process.env[key] = value
+      }
+    }
+  })
 })

@@ -154,11 +154,15 @@ export default class BackgroundJobsWorker {
     pooledRunnerMaxJobsOverride: number | undefined;
     pooledRunnerMaxRssBytesOverride: number | undefined;
     pooledRunnerMaxLifetimeMsOverride: number | undefined;
+    runnerMaxOldSpaceSizeMbOverride: number | undefined;
+    runnerMallocArenaMaxOverride: number | undefined;
     pooledRunnerCount: number;
     pooledRunnerConcurrency: number;
     pooledRunnerMaxJobs: number;
     pooledRunnerMaxRssBytes: number;
     pooledRunnerMaxLifetimeMs: number;
+    runnerMaxOldSpaceSizeMb: number;
+    runnerMallocArenaMax: number;
     /**
      * Grace period between SIGTERM and SIGKILL when reaping process runners that
      * outlast a bounded shutdown drain.
@@ -271,6 +275,8 @@ export default class BackgroundJobsWorker {
      * @param {number} [args.pooledRunnerMaxJobs] - Override the per-runner recycle job count.
      * @param {number} [args.pooledRunnerMaxRssBytes] - Override the per-runner recycle RSS limit.
      * @param {number} [args.pooledRunnerMaxLifetimeMs] - Override the per-runner recycle lifetime.
+     * @param {number} [args.runnerMaxOldSpaceSizeMb] - Override the V8 heap cap (MiB, `--max-old-space-size`) applied to runner children.
+     * @param {number} [args.runnerMallocArenaMax] - Override `MALLOC_ARENA_MAX` for runner children.
      * @param {number} [args.forkedChildSigkillGraceMs] - Override the grace period between SIGTERM and SIGKILL when reaping lingering process runners on stop.
      * @param {number} [args.heartbeatIntervalMs] - Override the liveness heartbeat interval (default 15000ms).
      * @param {number} [args.generationHandshakeTimeoutMs] - Maximum time to wait for generation acknowledgement (default: 4000).
@@ -282,7 +288,7 @@ export default class BackgroundJobsWorker {
      * @param {() => void} [args.onRetireMessage] - Explicit retire-message observation hook.
      * @param {(observation: import("./types.js").PooledChildMemoryObservation) => void | Promise<void>} [args.onPooledRunnerMemoryObservation] - Explicit pooled-child memory observation hook. Every validated observation (periodic while a child has in-flight jobs, plus on demand) is forwarded here, in addition to the worker's compact stderr log line, so an application can route memory diagnostics (e.g. to a bug reporter) without parsing logs.
      */
-    constructor({ configuration, host, port, generationId, workerInstanceId, maxConcurrentForkedJobs, maxConcurrentInlineJobs, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, forkedChildSigkillGraceMs, heartbeatIntervalMs, generationHandshakeTimeoutMs, reconnectDelayMs, jobTimeoutMs, closeDatabaseConnectionsOnStop, onStopped, onGenerationAccepted, onRetireMessage, onPooledRunnerMemoryObservation }?: {
+    constructor({ configuration, host, port, generationId, workerInstanceId, maxConcurrentForkedJobs, maxConcurrentInlineJobs, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, runnerMaxOldSpaceSizeMb, runnerMallocArenaMax, forkedChildSigkillGraceMs, heartbeatIntervalMs, generationHandshakeTimeoutMs, reconnectDelayMs, jobTimeoutMs, closeDatabaseConnectionsOnStop, onStopped, onGenerationAccepted, onRetireMessage, onPooledRunnerMemoryObservation }?: {
         configuration?: import("../configuration.js").default;
         host?: string;
         port?: number;
@@ -295,6 +301,8 @@ export default class BackgroundJobsWorker {
         pooledRunnerMaxJobs?: number;
         pooledRunnerMaxRssBytes?: number;
         pooledRunnerMaxLifetimeMs?: number;
+        runnerMaxOldSpaceSizeMb?: number;
+        runnerMallocArenaMax?: number;
         forkedChildSigkillGraceMs?: number;
         heartbeatIntervalMs?: number;
         generationHandshakeTimeoutMs?: number;
@@ -693,31 +701,47 @@ export default class BackgroundJobsWorker {
     /**
      * Marks a pooled child for retirement and — when the pool is below its hard
      * cap — eagerly spawns a single replacement (1-for-1) so its capacity is
-     * restored immediately without waiting for it to finish draining. The
+     * restored immediately without waiting for it to finish draining, and
+     * re-advertises that capacity so dispatch can resume at once. The
      * replacement spawn is gated by the cap (the retiring child still counts as
      * live until it exits), so a full pool defers the replacement to the drain
-     * path. One bounded exception keeps the pool from ever advertising zero
-     * capacity: when this mark leaves no non-retiring child, a single liveness
-     * replacement spawns over the cap — live children stay bounded at
-     * `pooledRunnerCount + 1`, and the extra child is absorbed by the next
-     * draining exit. Without it, a full retirement wave (e.g. every child
-     * crossing the peak-RSS threshold after the same memory burst) silently
-     * removes all pooled capacity for the whole drain window, which can stretch
-     * to the longest in-flight job. When even the liveness spawn is unavailable
-     * (an over-cap child is already draining), the starvation is logged so it is
-     * visible instead of silent. The retiring child stops receiving new jobs and
-     * is terminated only once its in-flight set drains, so a long-running job
-     * (e.g. a build) is never cut off.
+     * path — where a child exit restores a working child through the same
+     * bounded liveness replacement (see `_ensureNonRetiringChild`). Without it,
+     * a full retirement wave (e.g. every child crossing the peak-RSS threshold
+     * after the same memory burst) silently removes all pooled capacity for the
+     * whole drain window, which can stretch to the longest in-flight job. The
+     * retiring child stops receiving new jobs and is terminated only once its
+     * in-flight set drains, so a long-running job (e.g. a build) is never cut
+     * off.
      * @param {import("node:child_process").ChildProcess} child - Child to retire.
      * @returns {void}
      */
     _beginRetirePooledChild(child: import("node:child_process").ChildProcess): void;
     /**
+     * Keeps — or restores — at least one non-retiring pooled child through the
+     * bounded over-cap liveness replacement, used by both the retirement mark
+     * (`_beginRetirePooledChild`) and the child-exit path
+     * (`_handlePooledChildFailure`): advertised capacity is zero while every
+     * live child is retiring, and once they are all retiring no further
+     * retirement mark remains to restore a working child — nor can a lazy
+     * replacement spawn while the pool counts at its cap — so dispatch would
+     * stall cluster-wide until the next draining exit, up to the longest
+     * in-flight job (e.g. a multi-minute build). Spawns one replacement over the
+     * hard cap (bounded: the gate admits it only when the live count is at most
+     * the cap, so at most one over-cap child exists and the next draining exit
+     * absorbs it). When even that spawn is unavailable (an over-cap child is
+     * already draining), the bounded starvation is logged so it is visible
+     * instead of silent.
+     * @returns {boolean} - True when a replacement child was spawned.
+     */
+    _ensureNonRetiringChild(): boolean;
+    /**
      * Logs one compact pooled-capacity event to the worker's own stderr (the
      * surface that reaches the production log). Used by the bounded liveness
-     * replacement in `_beginRetirePooledChild`: the spawn that keeps dispatch
-     * alive through a full retirement wave, or the bounded starvation when an
-     * over-cap child is already draining and the pool must wait for an exit.
+     * replacement in `_ensureNonRetiringChild`: the spawn that keeps dispatch
+     * alive through a full retirement wave (at a retirement mark or a child
+     * exit), or the bounded starvation when an over-cap child is already
+     * draining and the pool must wait for an exit.
      * @param {"pooled-capacity-liveness-spawn" | "pooled-capacity-starved"} event - Event name.
      * @returns {void}
      */
@@ -965,6 +989,15 @@ export default class BackgroundJobsWorker {
      * @returns {Promise<void>} - Resolves when the spawned runner exits or spawn fails.
      */
     _spawnJob(payload: import("./types.js").BackgroundJobPayload): Promise<void>;
+    /**
+     * Builds the node options applied to every background-jobs runner child.
+     * A hard V8 heap cap keeps one child from ever committing multiple GBs of
+     * heap; it stays deliberately generous relative to observed runner usage
+     * (tens to a few hundred MB) and is configurable via
+     * `backgroundJobs.runnerMaxOldSpaceSizeMb`.
+     * @returns {string[]} - Node options for runner children.
+     */
+    _childRunnerExecArgv(): string[];
     /**
      * Builds the exact main endpoint and generation inherited by every child.
      * @returns {Record<string, string>} - Child process environment additions.
