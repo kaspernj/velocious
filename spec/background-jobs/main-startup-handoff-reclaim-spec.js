@@ -116,9 +116,17 @@ async function createControlledStartupStore() {
  * @returns {Promise<BackgroundJobsMain>} - Started main.
  */
 async function startMain(store, workerReconnectGraceMs, clock) {
+  // This file exercises the main's default single-release startup path, and its
+  // controlled stores deliberately implement only that mode. Pin the generation
+  // keys so release-generation state left on the shared dummy configuration by
+  // an earlier spec file cannot flip this main into generation mode (whose
+  // adapter capability check these stores do not satisfy).
   dummyConfiguration.setBackgroundJobsConfig({
     adapter: store,
     dispatchStrategy: "beacon",
+    generationId: undefined,
+    initialGenerationState: undefined,
+    lifecycleSocketPath: undefined,
     retention: {completedTtlMs: null, failedTtlMs: null}
   })
   const main = new BackgroundJobsMain({
