@@ -65,6 +65,7 @@ export default class BackgroundJobsMain {
     port: number;
     dispatchStrategy: import("../configuration-types.js").BackgroundJobsDispatchStrategy;
     pollIntervalMs: number;
+    drainStoreOperationTimeoutMs: number;
     retention: import("../configuration-types.js").ResolvedBackgroundJobsRetentionConfiguration;
     workerStaleTimeoutMs: number;
     workerLivenessSweepMs: number;
@@ -833,6 +834,24 @@ export default class BackgroundJobsMain {
      * @returns {Promise<boolean>} - Whether one drain pass failed.
      */
     _drainOnceWithErrorReport(): Promise<boolean>;
+    /**
+     * Bounds one drain-critical store operation so a store call that never
+     * settles rejects into the drain error/retry path instead of stalling the
+     * coalesced drain and every later dispatch queued behind it.
+     * @template T
+     * @param {string} operation - Operation label for the timeout error.
+     * @param {() => Promise<T>} callback - Drain store operation.
+     * @returns {Promise<T>} - Operation result.
+     */
+    _boundedDrainStoreOperation<T>(operation: string, callback: () => Promise<T>): Promise<T>;
+    /**
+     * Surfaces a drain pass whose store operation never settled. The bounded
+     * store timeout keeps dispatch moving through the error-retry path; this
+     * report makes the stall observable for process-level bug reporters.
+     * @param {Error} error - Drain stall failure.
+     * @returns {void}
+     */
+    _reportDrainStallError(error: Error): void;
     /**
      * Arms a one-shot `setTimeout` to retry `_drain` after a transient
      * failure. Idempotent — repeated calls while a retry is already

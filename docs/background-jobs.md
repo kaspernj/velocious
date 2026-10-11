@@ -852,3 +852,19 @@ longest legitimate forked or pooled job unless individual jobs supply tighter
 timeouts. Omit it, or set `null`/`<= 0`, to disable the default. `"inline"` jobs
 are not covered: they share the worker's process and cannot be killed without
 killing the worker.
+
+## Dispatch stall recovery
+
+The main process dispatches through one coalesced drain: each pass claims a queued job, marks it `handed_off`, and sends it to a ready worker. A store call inside that drain — the queued-job lookup, the handoff claim, or a handoff-recovery transition — that never settles (a wedged database connection, a lost acknowledgement) used to freeze the whole drain silently: every later wake-up coalesced onto the stuck pass, dispatch stopped cluster-wide with no error, and the process had to be killed by an operator before a deploy could finish.
+
+Drain-critical store operations are now bounded by `drainStoreOperationTimeoutMs` (default 60 seconds). A store call that exceeds the bound rejects into the existing drain error/retry path: the pass fails fast, the error-retry cadence re-arms, and dispatching resumes as soon as the store answers again. The bounded rejection also releases the coalesced drain, so `stop()` and later wake-ups are no longer chained to a stuck promise. The stall is reported on the framework-error channel with `context.stage = "background-jobs-drain-stall"`, so process-level bug reporters see it instead of a silent freeze.
+
+```js
+backgroundJobs: {
+  // Bound one drain-critical store operation (default 60s).
+  drainStoreOperationTimeoutMs: 60 * 1000
+}
+```
+
+Set it well above the slowest legitimate queue-control query for your database: it is a stall detector, not per-job tuning. Per-job wall-clock limits are `jobTimeoutMs` (above), and worker shutdown draining has its own limits.
+

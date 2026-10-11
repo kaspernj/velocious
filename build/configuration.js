@@ -1687,6 +1687,9 @@ export default class VelociousConfiguration {
     const pollIntervalMs = typeof configured.pollIntervalMs === "number" && configured.pollIntervalMs >= 1
       ? configured.pollIntervalMs
       : (typeof envPollInterval === "number" && Number.isFinite(envPollInterval) && envPollInterval >= 1 ? envPollInterval : 1000)
+    const drainStoreOperationTimeoutMs = typeof configured.drainStoreOperationTimeoutMs === "number" && configured.drainStoreOperationTimeoutMs >= 1
+      ? configured.drainStoreOperationTimeoutMs
+      : 60_000
     const queues = configured.queues && typeof configured.queues === "object" ? configured.queues : {}
     // An explicit config value wins over the env var — including `null`/`0`,
     // which disable the backstop even when the environment sets a default.
@@ -1712,7 +1715,7 @@ export default class VelociousConfiguration {
 
     const jobClasses = this.getBackgroundJobClasses()
 
-    return {host, port, databaseIdentifier, maxConcurrentForkedJobs, maxConcurrentInlineJobs, mode, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, dispatchStrategy, pollIntervalMs, queues, jobClasses, jobTimeoutMs, retention, generationId, initialGenerationState, lifecycleSocketPath}
+    return {host, port, databaseIdentifier, maxConcurrentForkedJobs, maxConcurrentInlineJobs, mode, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, dispatchStrategy, pollIntervalMs, drainStoreOperationTimeoutMs, queues, jobClasses, jobTimeoutMs, retention, generationId, initialGenerationState, lifecycleSocketPath}
   }
 
   /**
