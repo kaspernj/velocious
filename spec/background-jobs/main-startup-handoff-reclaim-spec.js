@@ -24,6 +24,14 @@ const STARTUP_WAIT_BUDGET_MS =
     ? 45_000
     : 10_000
 
+// The reclaim path hands recovered work back through the drain; on slow
+// drivers under CI load a legitimate mark-handed-off call exceeded the
+// production 3 s drain bound (a pg-sql shard run aborted the recovered-lease
+// wake-up on that timeout). This file is not about the drain stall bound:
+// pin it above slow-driver latency while staying below the runner's 60 s
+// per-test cut.
+const DRAIN_STORE_OPERATION_TIMEOUT_MS = 15_000
+
 class ManualStartupClock {
   nextTimerId = 1
   /** @type {Map<number, () => void>} */
@@ -124,6 +132,7 @@ async function startMain(store, workerReconnectGraceMs, clock) {
   dummyConfiguration.setBackgroundJobsConfig({
     adapter: store,
     dispatchStrategy: "beacon",
+    drainStoreOperationTimeoutMs: DRAIN_STORE_OPERATION_TIMEOUT_MS,
     generationId: undefined,
     initialGenerationState: undefined,
     lifecycleSocketPath: undefined,
