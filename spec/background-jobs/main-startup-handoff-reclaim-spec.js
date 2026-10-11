@@ -14,12 +14,14 @@ const MAX_TIMER_MS = 2_147_483_647
 // Startup-path waits are fail-fast bounds, not the behavior under test: mssql
 // spends seconds in `configuration.initialize` and the schema/reconciliation
 // startup steps, so per-driver-tight budgets flake on slow drivers. The
-// network-backed drivers (mssql, pgsql, mariadb) add a generous budget so the
-// bound absorbs slow-driver startup latency and CI load spikes without masking
-// a real regression; file-backed drivers keep the tight bound.
+// network-backed drivers (mssql, pgsql, mariadb) get a budget sized for the
+// heaviest observed CI shard load (a peak shard run pushed the wait to ~31s) while staying below the test
+// runner's 60s default per-test cut, so a stalled startup still fails fast,
+// and cleanly, before the runner intervenes; file-backed drivers keep the
+// tight bound.
 const STARTUP_WAIT_BUDGET_MS =
   ["mssql", "pgsql", "mysql", "mariadb"].includes(dummyConfiguration.getDatabaseType("default"))
-    ? 30_000
+    ? 45_000
     : 10_000
 
 class ManualStartupClock {
@@ -188,10 +190,22 @@ describe("Background jobs - main startup handoff reclaim", {databaseCleaning: {t
     const startup = startMain(store, 100, clock)
     let main
 
+    // Startup intentionally stays pending until the finally block below; without
+    // an observer a rejection landing before then would surface as an
+    // unhandledRejection that fails the whole file instead of this single test.
+    // The race consumes this observer, so a failed startup still fails this test
+    // immediately, with the causing error.
+    const startupSettledEarly = startup.then(() => {
+      throw new Error("Startup settled before the scheduled-job lookup ran")
+    })
+
     try {
       if (!handoff) throw new Error("Expected the startup boundary handoff")
 
-      await timeout({timeout: STARTUP_WAIT_BUDGET_MS}, async () => await store.scheduledLookupStarted.promise)
+      await timeout({timeout: STARTUP_WAIT_BUDGET_MS}, async () => await Promise.race([
+        store.scheduledLookupStarted.promise,
+        startupSettledEarly
+      ]))
       expect(clock.timers.size).toEqual(0)
     } finally {
       store.scheduledLookupCanFinish.resolve(undefined)
@@ -321,6 +335,10 @@ describe("Background jobs - main startup handoff reclaim", {databaseCleaning: {t
       await store.adoptionStarted.promise
       expect(main._startupHandoffGraceElapsed).toEqual(false)
       const startupReclaim = runStartupReclaimNow(main)
+
+      // The reclaim is awaited only after the assertions below; keep it observed
+      // in the gap so a rejection cannot surface as an unhandledRejection.
+      void startupReclaim.catch(() => {})
 
       expect(main._startupHandoffGraceElapsed).toEqual(true)
       expect(await store.getJob(jobId)).toMatchObject({
