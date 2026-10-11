@@ -40,7 +40,12 @@ describe("websocket event log store", {tags: ["dummy"], databaseCleaning: {trunc
     expect(result).toEqual(false)
   })
 
-  it("appends and retrieves events by sequence", async () => {
+  // The first append lazily runs the store's schema bootstrap (table existence
+  // introspection) over the live driver. Under peak CI shard load that
+  // introspection plus the two round-trips can exceed the runner's 60s default
+  // per-test budget, so budget this example above the loaded-shard latency the
+  // same way the sibling background-jobs specs do.
+  it("appends and retrieves events by sequence", {timeoutSeconds: 180}, async () => {
     const store = websocketEventLogStoreForConfiguration(dummyConfiguration)
 
     const first = await store.appendEvent({channel: "seq-test", payload: {order: 1}})
