@@ -55,14 +55,16 @@ class StallControllableAdapter extends SqlBackgroundJobsAdapter {
 }
 
 /**
- * Starts a main whose drain store operations time out quickly so tests can
- * drive a never-settling store call to the bounded stall path.
+ * Starts a main whose drain store operations are bounded low enough to prove
+ * the stall path inside the test, but well above legitimate call latency on
+ * slow drivers (mssql/mariadb under CI load) so only a never-settling call
+ * can trip it. The bound value itself is not the behavior under test.
  * @returns {Promise<{adapter: StallControllableAdapter, main: import("../../src/background-jobs/main.js").default}>} - Started test services.
  */
 async function startStallRecoveryMain() {
   const adapter = new StallControllableAdapter({configuration: dummyConfiguration})
   const {main} = await startBackgroundJobsMain({
-    backgroundJobsConfig: {adapter, drainStoreOperationTimeoutMs: 50, pollIntervalMs: 60000}
+    backgroundJobsConfig: {adapter, drainStoreOperationTimeoutMs: 3000, pollIntervalMs: 60000}
   })
 
   return {adapter, main}
@@ -94,10 +96,10 @@ describe("Background jobs - main drain stall recovery", {databaseCleaning: {trun
 
       expect(frameworkErrors).toMatchObject([{
         context: {
-          drainStoreOperationTimeoutMs: 50,
-          stage: "background-jobs-drain-stall"
+          stage: "background-jobs-drain-stall",
+          drainStoreOperationTimeoutMs: 3000
         },
-        error: {message: "Background jobs drain store operation timed out after 50ms: next-available-job"}
+        error: {message: "Background jobs drain store operation timed out after 3000ms: next-available-job"}
       }])
       expect(main._drainPromise).toEqual(undefined)
       expect(worker.receivedJobs).toEqual([])

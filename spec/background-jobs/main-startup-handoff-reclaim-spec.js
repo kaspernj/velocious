@@ -11,6 +11,11 @@ import { describe, expect, it } from "../../src/testing/test.js"
 
 const MAX_TIMER_MS = 2_147_483_647
 
+// Startup-path waits are fail-fast bounds, not the behavior under test: mssql
+// spends seconds in `configuration.initialize` and the schema/reconciliation
+// startup steps, so per-driver-tight budgets flake on slow drivers.
+const STARTUP_WAIT_BUDGET_MS = 10_000
+
 class ManualStartupClock {
   nextTimerId = 1
   /** @type {Map<number, () => void>} */
@@ -154,7 +159,7 @@ function addReadyWorker(main, workerId) {
 
 /** @param {BackgroundJobsMain} main - Main whose startup reclaim should finish. @returns {Promise<void>} - Resolves after the grace pass. */
 async function waitForStartupReclaim(main) {
-  await timeout({timeout: 1000}, async () => {
+  await timeout({timeout: STARTUP_WAIT_BUDGET_MS}, async () => {
     while (main._startupHandoffReclaimTimer || main._startupHandoffReclaimPromise) await wait(0.01)
   })
 }
@@ -180,7 +185,7 @@ describe("Background jobs - main startup handoff reclaim", {databaseCleaning: {t
     try {
       if (!handoff) throw new Error("Expected the startup boundary handoff")
 
-      await timeout({timeout: 1000}, async () => await store.scheduledLookupStarted.promise)
+      await timeout({timeout: STARTUP_WAIT_BUDGET_MS}, async () => await store.scheduledLookupStarted.promise)
       expect(clock.timers.size).toEqual(0)
     } finally {
       store.scheduledLookupCanFinish.resolve(undefined)
