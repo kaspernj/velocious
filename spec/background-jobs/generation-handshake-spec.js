@@ -10,7 +10,7 @@ import { startBackgroundJobsMain } from "../helpers/background-jobs-helper.js"
 import { connectGenerationPeer } from "../helpers/background-jobs-generation-harness.js"
 import stalledSocketServer from "../helpers/stalled-socket-server.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
-import { describe, expect, it } from "../../src/testing/test.js"
+import { afterEach, describe, expect, it } from "../../src/testing/test.js"
 
 // Fail-fast budget for the guarded handshake waits in this file. The guard only
 // needs to fail on a true deadlock — not measure pace — and the wrapped work
@@ -55,6 +55,18 @@ function socketConfiguration(endpoint) {
 }
 
 describe("Background jobs generation handshake", () => {
+  afterEach(() => {
+    // Release-generation mode lives on the shared dummy configuration, so a
+    // generation left behind here flips later spec files that start mains with
+    // non-generation-capable stores into generation mode and fails them. Clear
+    // it as soon as each test here is done.
+    dummyConfiguration.setBackgroundJobsConfig({
+      generationId: undefined,
+      initialGenerationState: undefined,
+      lifecycleSocketPath: undefined
+    })
+  })
+
   it("bounds worker acknowledgement and closes a stalled real socket before readiness", async () => {
     const stalled = await stalledSocketServer()
     const worker = new BackgroundJobsWorker({

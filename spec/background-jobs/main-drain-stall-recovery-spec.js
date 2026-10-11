@@ -59,12 +59,18 @@ class StallControllableAdapter extends SqlBackgroundJobsAdapter {
  * the stall path inside the test, but well above legitimate call latency on
  * slow drivers (mssql/mariadb under CI load) so only a never-settling call
  * can trip it. The bound value itself is not the behavior under test.
+ *
+ * The spec drives every drain manually; pin the legacy polling strategy with
+ * a long interval so no autonomous dispatch machinery — the error-retry
+ * timer or the scheduled-timer's unbounded store tail — can run between the
+ * manual drains this spec asserts on (a saturated MS-SQL shard left the
+ * beacon-mode timer tail pending until the per-test cut).
  * @returns {Promise<{adapter: StallControllableAdapter, main: import("../../src/background-jobs/main.js").default}>} - Started test services.
  */
 async function startStallRecoveryMain() {
   const adapter = new StallControllableAdapter({configuration: dummyConfiguration})
   const {main} = await startBackgroundJobsMain({
-    backgroundJobsConfig: {adapter, drainStoreOperationTimeoutMs: 3000, pollIntervalMs: 60000}
+    backgroundJobsConfig: {adapter, dispatchStrategy: "polling", drainStoreOperationTimeoutMs: 3000, pollIntervalMs: 60000}
   })
 
   return {adapter, main}

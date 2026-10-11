@@ -1,6 +1,5 @@
 // @ts-check
 
-import fs from "fs/promises"
 import {deferred} from "awaitery"
 import timeout from "awaitery/build/timeout.js"
 import wait from "awaitery/build/wait.js"
@@ -11,7 +10,6 @@ import dummyConfiguration from "../dummy/src/config/configuration.js"
 import AppendJob from "../dummy/src/jobs/append-job.js"
 import FailingJob from "../dummy/src/jobs/failing-job.js"
 import SocketBarrierTestJob from "../dummy/src/jobs/socket-barrier-test-job.js"
-import SlowTestJob from "../dummy/src/jobs/slow-test-job.js"
 
 class MainWithBlockedDrain extends BackgroundJobsMain {
   /** @param {ConstructorParameters<typeof BackgroundJobsMain>[0]} args - Main options. */
@@ -142,35 +140,47 @@ describe("Background jobs - queue", {databaseCleaning: {truncate: true}}, () => 
   })
 
   it("limits forked runner concurrency without blocking inline job capacity", async () => {
-    await withBackgroundJobs(async () => {
-      const firstForkedPath = await outputPathFor("forked-limit-first")
-      const secondForkedPath = await outputPathFor("forked-limit-second")
+    await withBackgroundJobs(async ({worker}) => {
+      const firstBarrier = await createBackgroundJobsSocketBarrier(1)
+      const secondBarrier = await createBackgroundJobsSocketBarrier(1)
       const inlinePath = await outputPathFor("forked-limit-inline")
 
-      await SlowTestJob.performLater("first", firstForkedPath, 1)
-      await SlowTestJob.performLater("second", secondForkedPath, 0.01)
-      const inlineResult = await appendInlineAndWait(inlinePath)
-
-      let secondForkedExists = true
-
       try {
-        await fs.readFile(secondForkedPath, "utf8")
-      } catch (error) {
-        if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error
+        await SocketBarrierTestJob.performLaterWithOptions({
+          args: [firstBarrier.port],
+          options: {executionMode: "forked"}
+        })
+        await firstBarrier.waiting
+        expect(worker.inflightProcessJobs.size).toEqual(1)
+        const [firstExecution] = worker.inflightProcessJobs
+        if (!firstExecution) throw new Error("Expected a tracked forked execution")
 
-        secondForkedExists = false
+        await SocketBarrierTestJob.performLaterWithOptions({
+          args: [secondBarrier.port],
+          options: {executionMode: "forked"}
+        })
+        const inlineResult = await appendInlineAndWait(inlinePath)
+
+        expect(inlineResult).toEqual(["inline"])
+
+        // The concurrency cap is the behavior under test: while the first
+        // forked job still holds the only forked slot, the queued second
+        // forked job must not have started. A broken cap would leave two
+        // tracked executions — both parked jobs stay visible while held.
+        expect(worker.inflightProcessJobs.size).toEqual(1)
+
+        firstBarrier.release()
+        await firstExecution
+        await secondBarrier.waiting
+        const secondExecution = [...worker.inflightProcessJobs].find((execution) => execution !== firstExecution)
+        if (!secondExecution) throw new Error("Expected the second tracked forked execution")
+
+        secondBarrier.release()
+        await secondExecution
+      } finally {
+        await firstBarrier.close()
+        await secondBarrier.close()
       }
-
-      expect(secondForkedExists).toBeFalse()
-
-      const [firstForkedResult, secondForkedResult] = await Promise.all([
-        waitForOutputJson({outputPath: firstForkedPath, timeoutSeconds: 5}),
-        waitForOutputJson({outputPath: secondForkedPath, timeoutSeconds: 5})
-      ])
-
-      expect(inlineResult).toEqual(["inline"])
-      expect(firstForkedResult).toEqual({message: "first"})
-      expect(secondForkedResult).toEqual({message: "second"})
     }, {workerOptions: {
       maxConcurrentForkedJobs: 1,
       maxConcurrentInlineJobs: 4
@@ -225,7 +235,9 @@ describe("Background jobs - queue", {databaseCleaning: {truncate: true}}, () => 
         options: {executionMode: "inline", maxRetries: 0}
       })
 
-      await timeout({timeout: 2000}, async () => await failureReceived.promise)
+      // The failure event follows an accepted inline job run and its store
+      // round-trips; budget well above loaded-CI latency.
+      await timeout({timeout: 25_000}, async () => await failureReceived.promise)
 
       expect(failureEvents.length).toEqual(1)
       expect(failureEvents[0].context.jobId).toEqual(jobId)

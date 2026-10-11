@@ -102,7 +102,8 @@ const configuration = new Configuration({
           options: {
             serverName: "mssql",
             encrypt: true, // for azure
-            trustServerCertificate: true // change to true for local dev / self-signed certs
+            trustServerCertificate: true, // change to true for local dev / self-signed certs
+            requestTimeout: 60000 // peak CI load: db:migrate schema introspection exceeded the vendor 15 s default
           }
         }
       },
@@ -121,7 +122,8 @@ const configuration = new Configuration({
           options: {
             serverName: "mssql",
             encrypt: true, // for azure
-            trustServerCertificate: true // change to true for local dev / self-signed certs
+            trustServerCertificate: true, // change to true for local dev / self-signed certs
+            requestTimeout: 60000 // peak CI load: db:migrate schema introspection exceeded the vendor 15 s default
           }
         }
       }

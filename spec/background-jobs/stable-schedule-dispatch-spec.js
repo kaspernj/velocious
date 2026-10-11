@@ -40,7 +40,7 @@ describe("Background jobs - stable schedule dispatch", {databaseCleaning: {trunc
       })
 
       expect(second).toEqual({jobId: second.jobId, previousJobId: first.jobId, previousStatus: "queued"})
-      expect(await waitForOutputJson({outputPath, timeoutSeconds: 2})).toEqual({message: "early"})
+      expect(await waitForOutputJson({outputPath})).toEqual({message: "early"})
       expect(await store.getJob(first.jobId)).toMatchObject({status: "cancelled"})
     } finally {
       await worker.stop()
@@ -76,7 +76,7 @@ describe("Background jobs - stable schedule dispatch", {databaseCleaning: {trunc
       })
       await main._armScheduledTimer()
 
-      expect(await waitForOutputJson({outputPath: earlyOutputPath, timeoutSeconds: 1})).toEqual({message: "early"})
+      expect(await waitForOutputJson({outputPath: earlyOutputPath})).toEqual({message: "early"})
     } finally {
       await worker.stop()
       await main.stop()
@@ -115,7 +115,7 @@ describe("Background jobs - stable schedule dispatch", {databaseCleaning: {trunc
         args: ["kept", keptOutputPath],
         options: {executionMode: "inline", scheduledAtMs: Date.now()}
       })
-      expect(await waitForOutputJson({outputPath: keptOutputPath, timeoutSeconds: 2})).toEqual({message: "kept"})
+      expect(await waitForOutputJson({outputPath: keptOutputPath})).toEqual({message: "kept"})
       await expect(async () => await fs.access(cancelledOutputPath)).toThrow(/ENOENT/)
     } finally {
       await worker.stop()
@@ -156,7 +156,7 @@ describe("Background jobs - stable schedule dispatch", {databaseCleaning: {trunc
       worker = new BackgroundJobsWorker({closeDatabaseConnectionsOnStop: false, configuration: dummyConfiguration})
       await worker.start()
 
-      expect(await waitForOutputJson({outputPath, timeoutSeconds: 2})).toEqual({message: "latest"})
+      expect(await waitForOutputJson({outputPath})).toEqual({message: "latest"})
     } finally {
       await worker?.stop()
       await main.stop()

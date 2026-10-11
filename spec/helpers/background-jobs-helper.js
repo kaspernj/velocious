@@ -21,10 +21,11 @@ const legacyDefaultBackgroundJobsConfig = Object.fromEntries(
 )
 
 // CI runner load (notably MS-SQL shards) can delay an idle worker's wake well past a
-// couple of seconds. These waits poll for a job/output that is guaranteed to complete,
-// so a generous default absorbs load-induced slowness without masking a real hang —
-// the poll loop still resolves the moment the condition is met.
-const defaultBackgroundJobWaitTimeoutSeconds = 15
+// couple of seconds, and peak shard runs have pushed these waits past 15 s. These waits
+// poll for a job/output that is guaranteed to complete, so a generous default absorbs
+// load-induced slowness without masking a real hang — the poll loop still resolves the
+// moment the condition is met.
+const defaultBackgroundJobWaitTimeoutSeconds = 25
 
 /**
  * Worker socket double that records dispatched job payloads without a real
