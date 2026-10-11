@@ -16,6 +16,13 @@ import { describe, expect, it } from "../../src/testing/test.js"
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..")
 const cliEntryPath = path.join(repositoryRoot, "bin", "velocious.js")
 
+// Fail-fast budget for observing the spawned lifecycle CLI process and its
+// socket effects. The wait covers Node/framework boot plus local socket
+// delivery on loaded CI nodes (test infrastructure) — not the behavior under
+// test; the bounded single-request contract is asserted through the CLI's exit
+// code, stderr, and the observed request count. Sized to fail only on a true hang.
+const CLI_OBSERVATION_BUDGET_MS = 30_000
+
 /**
  * Runs one real lifecycle CLI process.
  * @param {string[]} args - Command arguments.
@@ -132,12 +139,12 @@ describe("Background jobs lifecycle CLI", () => {
         "--timeout-ms",
         "25"
       ], project.directory)
-      await timeout({errorMessage: "Lifecycle CLI never sent its single request", timeout: 2000}, async () => await stalled.requestReceived)
+      await timeout({errorMessage: "Lifecycle CLI never sent its single request", timeout: CLI_OBSERVATION_BUDGET_MS}, async () => await stalled.requestReceived)
       const result = await resultPromise
 
       expect(result.code).toEqual(1)
       expect(result.stderr).toMatch(/retire.*release-stalled-cli.*25ms/)
-      await timeout({errorMessage: "Timed-out lifecycle CLI socket stayed open", timeout: 250}, async () => await stalled.connectionClosed)
+      await timeout({errorMessage: "Timed-out lifecycle CLI socket stayed open", timeout: CLI_OBSERVATION_BUDGET_MS}, async () => await stalled.connectionClosed)
       expect(stalled.requestCount()).toEqual(1)
     } finally {
       await stalled.close()

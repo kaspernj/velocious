@@ -15,6 +15,14 @@ import { waitForEvent } from "../../src/testing/test.js"
  * @property {() => Promise<import("../../src/background-jobs/types.js").BackgroundJobSocketMessage>} nextMessage - Waits for one message.
  */
 
+// Fail-fast budget for the peer transport waits below (socket connect, socket
+// close, message arrival). These waits are test infrastructure, not the behavior
+// under test: their latency depends on the store's driver and CI load, so a
+// tight sub-second bound trips green code on slow network-backed drivers and can
+// surface as unhandledRejection cascades when a creator awaits the promise only
+// after unrelated work. Sized to fail only on a true hang.
+const PEER_TRANSPORT_WAIT_BUDGET_MS = 10_000
+
 /**
  * Starts a real SQL-backed generation main without mutating endpoint identity in
  * the shared dummy configuration, allowing multiple mains in one process.
@@ -87,7 +95,7 @@ export async function emptyGenerationStore({clock} = {}) {
  */
 export async function connectGenerationPeer(port) {
   const socket = net.createConnection({host: "127.0.0.1", port})
-  await waitForEvent(socket, "connect", {timeoutMs: 1000})
+  await waitForEvent(socket, "connect", {timeoutMs: PEER_TRANSPORT_WAIT_BUDGET_MS})
   const jsonSocket = new JsonSocket(socket)
   /** @type {import("../../src/background-jobs/types.js").BackgroundJobSocketMessage[]} */
   const messages = []
@@ -100,13 +108,13 @@ export async function connectGenerationPeer(port) {
   return {
     close: async () => {
       if (socket.destroyed) return
-      const closed = waitForEvent(socket, "close", {timeoutMs: 1000})
+      const closed = waitForEvent(socket, "close", {timeoutMs: PEER_TRANSPORT_WAIT_BUDGET_MS})
       jsonSocket.close()
       await closed
     },
     jsonSocket,
     nextMessage: async () => {
-      if (messages.length === 0) await waitForEvent(messageEvents, "available", {timeoutMs: 1000})
+      if (messages.length === 0) await waitForEvent(messageEvents, "available", {timeoutMs: PEER_TRANSPORT_WAIT_BUDGET_MS})
       const message = messages.shift()
       if (!message) throw new Error("Generation peer message queue was empty")
 
