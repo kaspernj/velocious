@@ -222,7 +222,7 @@ describe("Background jobs - pooled capacity liveness", {databaseCleaning: {trans
     expect(worker.pooledChildren.size).toBeLessThanOrEqual(1)
   })
 
-  it("logs a bounded starvation event instead of spawning beyond one over-cap child", () => {
+  it("defers retiring the last working child while the over-cap budget is spent", () => {
     const worker = new BackgroundJobsWorker({pooledRunnerCount: 1, pooledRunnerConcurrency: 1, pooledRunnerMaxJobs: 1})
     const fork = stubFork(worker)
     const child = addFakePooledChild(worker, {inflight: 2})
@@ -234,27 +234,42 @@ describe("Background jobs - pooled capacity liveness", {databaseCleaning: {trans
     expect(worker.pooledChildren.size).toEqual(2)
     expect(spawnLines.some((line) => line.includes("pooled-capacity-liveness-spawn"))).toEqual(true)
 
-    // The replacement retires while the original child still drains: spawning
-    // again would exceed cap + 1, so the pool waits for the next draining exit
-    // instead — and says so, instead of starving silently.
+    // The replacement crosses its threshold while the original child still
+    // drains. Retiring it would leave the pool at its cap with zero working
+    // children — advertised capacity would collapse to zero until the next
+    // draining exit, up to the longest in-flight job (tens of minutes with
+    // builds). The retirement is deferred instead: the replacement keeps
+    // serving and capacity stays advertised.
     const replacement = findWorkingChild(worker)
     const replacementState = worker.pooledChildStates.get(asChild(replacement))
 
     if (!replacementState) throw new Error("Expected replacement state")
 
     replacementState.inflight.set("replacement-job", {payload: fakePayload("replacement-job")})
-    const starvedLines = captureStderr(() => completeFirstJob(worker, asChild(replacement)))
+    const deferredLines = captureStderr(() => completeFirstJob(worker, asChild(replacement)))
 
+    expect(replacementState.retiring).toBe(false)
     expect(fork.spawned()).toEqual(1)
     expect(worker.pooledChildren.size).toBeLessThanOrEqual(2)
-    expect(starvedLines.some((line) => line.includes("pooled-capacity-starved"))).toEqual(true)
-    // No working child remains: advertised capacity is zero until the draining
-    // child exits — bounded by that drain, and visible in the log.
-    expect(worker._availablePooledSlots()).toEqual(0)
+    expect(deferredLines.some((line) => line.includes("pooled-capacity-retirement-deferred"))).toEqual(true)
+    expect(worker._availablePooledSlots()).toBeGreaterThan(0)
 
-    // Settle the last tracked job so the suite exits cleanly.
+    // The original child drains fully and its slot frees. The deferred
+    // retirement now retries: the replacement marks and its own bounded
+    // replacement spawns, so working capacity still never touches zero.
     captureStderr(() => completeFirstJob(worker, asChild(child)))
-    expect(worker.pooledChildren.size).toBeLessThanOrEqual(1)
+    expect(worker.pooledChildren.size).toEqual(1)
+
+    replacementState.inflight.set("replacement-job-2", {payload: fakePayload("replacement-job-2")})
+    const retryLines = captureStderr(() => completeFirstJob(worker, asChild(replacement)))
+
+    expect(replacementState.retiring).toBe(true)
+    expect(fork.spawned()).toEqual(2)
+    expect(retryLines.some((line) => line.includes("pooled-capacity-liveness-spawn"))).toEqual(true)
+    expect(worker._availablePooledSlots()).toBeGreaterThan(0)
+
+    // Only the fresh working replacement remains; no tracked jobs are pending.
+    expect(worker.pooledChildren.size).toEqual(1)
   })
 
   it("restores a working child when the absorbed over-cap replacement exits while the wave still drains", () => {
@@ -275,25 +290,30 @@ describe("Background jobs - pooled capacity liveness", {databaseCleaning: {trans
     expect(fork.spawned()).toEqual(1)
     expect(worker.pooledChildren.size).toEqual(3)
 
-    // The replacement retires on its own threshold while both originals are
-    // still draining: the over-cap budget is spent and advertised capacity is
-    // zero again — the same state that starved production dispatch for 37
-    // minutes before a natural drain exit restored capacity.
+    // The replacement crosses its threshold while both originals are still
+    // draining. Retiring it would collapse advertised capacity to zero until
+    // a natural drain exit — the state that starved production dispatch for
+    // tens of minutes at a time — so the retirement is deferred and the
+    // replacement keeps its capacity advertised.
     const replacement = findWorkingChild(worker)
     const replacementState = worker.pooledChildStates.get(asChild(replacement))
 
     if (!replacementState) throw new Error("Expected replacement state")
 
     replacementState.inflight.set("replacement-job", {payload: fakePayload("replacement-job")})
-    captureStderr(() => completeFirstJob(worker, asChild(replacement)))
-    expect(fork.spawned()).toEqual(1)
-    expect(worker._availablePooledSlots()).toEqual(0)
+    const deferredLines = captureStderr(() => completeFirstJob(worker, asChild(replacement)))
 
-    // The drained replacement's process exits and its slot is absorbed. No
-    // retirement mark remains to restore a working child, and at the cap
-    // nothing else can spawn lazily. The exit must spawn a fresh bounded
-    // replacement and re-advertise its capacity immediately so dispatch
-    // resumes instead of starving until the originals' long jobs drain.
+    expect(replacementState.retiring).toBe(false)
+    expect(fork.spawned()).toEqual(1)
+    expect(deferredLines.some((line) => line.includes("pooled-capacity-retirement-deferred"))).toEqual(true)
+    expect(worker._availablePooledSlots()).toBeGreaterThan(0)
+
+    // The replacement's process dies unexpectedly and its slot is absorbed. No
+    // retirement mark or pending observation remains to restore a working
+    // child, and at the cap nothing else can spawn lazily. The exit must spawn
+    // a fresh bounded replacement and re-advertise its capacity immediately so
+    // dispatch resumes instead of starving until the originals' long jobs
+    // drain.
     sent.length = 0
     const lines = captureStderr(() => {
       void worker._handlePooledChildFailure({child: asChild(replacement), error: new Error("pooled child exited"), exitCode: 0, origin: "exit", signal: null})

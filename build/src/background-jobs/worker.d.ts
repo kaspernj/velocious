@@ -712,7 +712,11 @@ export default class BackgroundJobsWorker {
      * whole drain window, which can stretch to the longest in-flight job. The
      * retiring child stops receiving new jobs and is terminated only once its
      * in-flight set drains, so a long-running job (e.g. a build) is never cut
-     * off.
+     * off. When the pool already carries its bounded over-cap child, retiring
+     * the last working child is deferred instead of emptying the working pool:
+     * the child keeps serving and a later observation retries the retirement
+     * once a draining exit has freed a cap slot, so advertised capacity cannot
+     * collapse to zero inside a wave.
      * @param {import("node:child_process").ChildProcess} child - Child to retire.
      * @returns {void}
      */
@@ -740,12 +744,14 @@ export default class BackgroundJobsWorker {
      * surface that reaches the production log). Used by the bounded liveness
      * replacement in `_ensureNonRetiringChild`: the spawn that keeps dispatch
      * alive through a full retirement wave (at a retirement mark or a child
-     * exit), or the bounded starvation when an over-cap child is already
-     * draining and the pool must wait for an exit.
-     * @param {"pooled-capacity-liveness-spawn" | "pooled-capacity-starved"} event - Event name.
+     * exit), the deferred retirement of the last working child while the pool
+     * already carries its bounded over-cap child (retried after the next drain
+     * frees a cap slot), or the bounded starvation when an over-cap child is
+     * already draining and the pool must wait for an exit.
+     * @param {"pooled-capacity-liveness-spawn" | "pooled-capacity-starved" | "pooled-capacity-retirement-deferred"} event - Event name.
      * @returns {void}
      */
-    _logPooledCapacityEvent(event: "pooled-capacity-liveness-spawn" | "pooled-capacity-starved"): void;
+    _logPooledCapacityEvent(event: "pooled-capacity-liveness-spawn" | "pooled-capacity-starved" | "pooled-capacity-retirement-deferred"): void;
     /**
      * Terminates a retiring pooled child once it has no in-flight jobs left.
      * @param {import("node:child_process").ChildProcess} child - Child to check.
