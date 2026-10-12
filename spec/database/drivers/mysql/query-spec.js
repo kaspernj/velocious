@@ -197,4 +197,43 @@ describe("Database - Drivers - Mysql - Query", {databaseCleaning: {transaction: 
     expect(caught instanceof QueryAbortedError).toBe(true)
     expect(checkedOut).toBe(false)
   })
+
+  it("keeps the driver error reachable as the rejection cause", async () => {
+    const driverError = Object.assign(new Error("Table 'background_jobs' was skipped"), {
+      code: "ER_WARN_I_S_SKIPPED_TABLE",
+      errno: 1684,
+      fatal: false
+    })
+    const connection = {
+      released: false,
+      destroyed: false,
+      query(_sql, callback) {
+        callback(driverError)
+      },
+      release() {
+        connection.released = true
+      },
+      destroy() {
+        connection.destroyed = true
+      }
+    }
+    const pool = /** @type {import("mysql").Pool} */ ({
+      getConnection(callback) {
+        callback(null, connection)
+      }
+    })
+
+    let caught
+    try {
+      await query(pool, "SHOW FULL COLUMNS FROM `background_jobs`")
+    } catch (error) {
+      caught = error
+    }
+
+    expect(caught.message).toContain("Query failed because of")
+    expect(caught.cause).toBe(driverError)
+    expect(caught.cause.code).toEqual("ER_WARN_I_S_SKIPPED_TABLE")
+    expect(connection.released).toBe(true)
+    expect(connection.destroyed).toBe(false)
+  })
 })

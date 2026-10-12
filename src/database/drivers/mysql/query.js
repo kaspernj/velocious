@@ -171,7 +171,7 @@ export default async function query(pool, sql, {signal} = {}) {
           connection.release()
         }
 
-        reject(new Error(`Query failed because of ${error}: ${sql}`))
+        reject(new Error(`Query failed because of ${error}: ${sql}`, {cause: error}))
 
         return
       }

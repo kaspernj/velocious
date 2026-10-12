@@ -116,6 +116,17 @@ const SCHEDULE_KEYS_TABLE = "background_job_schedule_keys"
 const SCHEDULE_ORDER_WATERMARKS_TABLE = "background_job_schedule_order_watermarks"
 const SCHEDULE_ORDER_WATERMARK_MIGRATION_VERSION = "20260911120000"
 const SCHEDULE_HISTORY_ORDER_INDEX = "index_background_jobs_schedule_history_order"
+// Composite retention indexes bound the terminal-status discovery scan to the expired
+// (status, terminal_timestamp) range, so retention candidate pages stay cheap on
+// multi-million-row tables. Activation was staged separately from the lock-scope fix
+// because MariaDB online index DDL makes concurrent metadata inspection fail with
+// ER_WARN_I_S_SKIPPED_TABLE; the driver now outlasts that skip with a bounded retry.
+const RETENTION_INDEX_MIGRATION_VERSION = "20261012120000"
+const RETENTION_INDEX_DEFINITIONS = [
+  {columns: ["status", "completed_at_ms", "id"], name: "index_background_jobs_completed_retention"},
+  {columns: ["status", "failed_at_ms", "id"], name: "index_background_jobs_failed_retention"},
+  {columns: ["status", "orphaned_at_ms", "id"], name: "index_background_jobs_orphaned_retention"}
+]
 const CONCURRENCY_TABLE = "background_job_concurrency"
 const COUNTS_REVISION_TABLE = "background_job_count_revisions"
 const COUNTS_REVISION_KEY = "counts"
@@ -2155,6 +2166,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       await this._ensureScheduleKeysTable(db)
       await this._ensureConcurrencyTable(db)
       await this._ensureCountRevisionTable(db)
+      await this._ensureRetentionIndexesOnce(db)
 
       return
     }
@@ -2360,6 +2372,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
     await this._ensureJobTimeoutColumn(db)
     await this._ensureChildAcceptanceColumns(db)
     await this._ensureJobsTableIndexesOnce(db)
+    await this._ensureRetentionIndexesOnce(db)
   }
 
   /**
@@ -2440,6 +2453,54 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
         if (indexedColumnNames.has(columnName)) continue
 
         for (const sql of await db.createIndexSQLs({columns: [columnName], ifNotExists: db.getType() === "sqlite", tableName: JOBS_TABLE})) {
+          await db.query(sql)
+        }
+      }
+
+      db.clearSchemaCache()
+      await this._recordMigration(db, migrationVersion)
+    } finally {
+      await db.releaseAdvisoryLock(migrationKey)
+    }
+  }
+
+  /**
+   * Idempotently creates the ordered composite retention indexes. An index
+   * with the expected name but a different column order is a manual-repair
+   * situation and fails readiness loudly instead of being rebuilt or
+   * re-recorded; the migration ledger is written only once every expected
+   * index exists with its exact ordered columns.
+   * @param {import("../database/drivers/base.js").default} db - Database connection.
+   * @returns {Promise<void>} - Resolves when all retention indexes exist.
+   */
+  async _ensureRetentionIndexesOnce(db) {
+    const migrationVersion = RETENTION_INDEX_MIGRATION_VERSION
+    const migrationKey = this._migrationKey(migrationVersion)
+
+    if (await this._hasMigration(db, migrationVersion)) return
+
+    const acquired = await db.acquireAdvisoryLock(migrationKey)
+
+    if (!acquired) throw new Error("Failed to acquire background jobs retention index lock")
+
+    try {
+      if (await this._hasMigration(db, migrationVersion)) return
+
+      db.clearSchemaCache()
+      const table = await db.getTableByNameOrFail(JOBS_TABLE)
+      const existingIndexColumns = new Map(
+        (await table.getIndexes()).map((index) => [index.getName(), index.getColumnNames()])
+      )
+
+      for (const {columns, name} of RETENTION_INDEX_DEFINITIONS) {
+        const existingColumns = existingIndexColumns.get(name)
+
+        if (existingColumns) {
+          if (existingColumns.join(",") === columns.join(",")) continue
+          throw new Error(`Background jobs retention index ${name} exists with unexpected columns: ${existingColumns.join(",")}`)
+        }
+
+        for (const sql of await db.createIndexSQLs({columns, ifNotExists: db.getType() === "sqlite", name, tableName: JOBS_TABLE})) {
           await db.query(sql)
         }
       }

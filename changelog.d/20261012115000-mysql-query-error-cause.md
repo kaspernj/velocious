@@ -1,0 +1,1 @@
+MySQL query rejections now keep the driver error as the rejection cause instead of flattening it into a message-only error, so `code` and `errno` stay reachable from error handling (for example `ER_WARN_I_S_SKIPPED_TABLE` / 1684 during concurrent online DDL). Rejection message text is unchanged.

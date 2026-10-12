@@ -938,6 +938,16 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
      */
     _ensureJobsTableIndexesOnce(db: import("../database/drivers/base.js").default): Promise<void>;
     /**
+     * Idempotently creates the ordered composite retention indexes. An index
+     * with the expected name but a different column order is a manual-repair
+     * situation and fails readiness loudly instead of being rebuilt or
+     * re-recorded; the migration ledger is written only once every expected
+     * index exists with its exact ordered columns.
+     * @param {import("../database/drivers/base.js").default} db - Database connection.
+     * @returns {Promise<void>} - Resolves when all retention indexes exist.
+     */
+    _ensureRetentionIndexesOnce(db: import("../database/drivers/base.js").default): Promise<void>;
+    /**
      * Idempotently adds the per-job wall-clock timeout to existing job tables.
      * @param {import("../database/drivers/base.js").default} db - Database connection.
      * @returns {Promise<void>} - Resolves when ensured.

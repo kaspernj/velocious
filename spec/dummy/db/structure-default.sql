@@ -64,6 +64,12 @@ CREATE TABLE `velocious_server_sequences` (`id` INTEGER PRIMARY KEY NOT NULL, `c
 
 CREATE TABLE `velocious_sync_scopes` (`id` VARCHAR(255) PRIMARY KEY NOT NULL, `scope_digest` VARCHAR(255) NOT NULL, `resource_type` VARCHAR(255) NOT NULL, `conditions_json` TEXT NOT NULL, `cursor_json` TEXT, `state` VARCHAR(255) NOT NULL, `created_at` DATETIME NOT NULL, `updated_at` DATETIME NOT NULL);
 
+CREATE INDEX `index_background_jobs_completed_retention` ON `background_jobs` (`status`, `completed_at_ms`, `id`);
+
+CREATE INDEX `index_background_jobs_failed_retention` ON `background_jobs` (`status`, `failed_at_ms`, `id`);
+
+CREATE INDEX `index_background_jobs_orphaned_retention` ON `background_jobs` (`status`, `orphaned_at_ms`, `id`);
+
 CREATE INDEX `index_background_jobs_schedule_history_order` ON `background_jobs` (`schedule_key`, `schedule_order`, `created_at_ms`, `id`);
 
 CREATE INDEX `index_on_acts_as_list_items_project_id` ON `acts_as_list_items` (`project_id`);
