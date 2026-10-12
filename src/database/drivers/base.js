@@ -183,6 +183,12 @@ const SCHEMA_INVALIDATION_SCAN_LIMIT = 8192
 /** Maximum checkout-name characters inspected by retry diagnostics. */
 const OPERATION_NAME_SCAN_LIMIT = 1024
 const REDACTED_DIAGNOSTIC_LABEL = "[REDACTED]"
+/** First backoff between retries of a schema-metadata read blocked by concurrent online DDL. */
+const SCHEMA_METADATA_RETRY_INITIAL_DELAY_MS = 250
+/** Largest backoff between retries of a schema-metadata read blocked by concurrent online DDL. */
+const SCHEMA_METADATA_RETRY_MAX_DELAY_MS = 2000
+/** Default bounded deadline for outlasting a concurrent online-DDL metadata skip. */
+const SCHEMA_METADATA_RETRY_DEADLINE_MS = 60000
 
 /**
  * Builds a non-reversible, stable SQL fingerprint without retaining SQL text. Literal spelling is
@@ -778,6 +784,52 @@ export default class VelociousDatabaseDriversBase {
   }
 
   /**
+   * Runs schema metadata retry deadline ms.
+   * @returns {number} - Bounded deadline for outlasting transient schema-metadata contention.
+   */
+  _schemaMetadataRetryDeadlineMs() {
+    const configured = this.getArgs().schemaMetadataRetryDeadlineMs
+
+    return typeof configured === "number" ? configured : SCHEMA_METADATA_RETRY_DEADLINE_MS
+  }
+
+  /**
+   * Whether an error raised by a schema-metadata read is transient contention that a bounded
+   * retry can outlast. Drivers override this for their own contention signatures; the default
+   * treats every failure as final so only drivers that prove the transient shape retry it.
+   * @param {unknown} _error - Error raised by a schema-metadata read.
+   * @returns {boolean} - Whether the read may be retried.
+   */
+  _isTransientSchemaMetadataError(_error) {
+    return false
+  }
+
+  /**
+   * Runs a schema-metadata read, retrying transient concurrent-DDL contention until the bounded
+   * deadline. Non-transient failures and exhausted deadlines propagate the original error.
+   * @template T
+   * @param {() => Promise<T>} callback - Cache-miss schema read.
+   * @returns {Promise<T>} - Resolves with the read result.
+   */
+  async _withSchemaMetadataDdlRetry(callback) {
+    const deadlineMs = this._schemaMetadataRetryDeadlineMs()
+    const startedAt = Date.now()
+    let delayMs = SCHEMA_METADATA_RETRY_INITIAL_DELAY_MS
+
+    for (;;) {
+      try {
+        return await callback()
+      } catch (error) {
+        if (!this._isTransientSchemaMetadataError(error)) throw error
+        if (Date.now() - startedAt + delayMs > deadlineMs) throw error
+
+        await wait(delayMs)
+        delayMs = Math.min(delayMs * 2, SCHEMA_METADATA_RETRY_MAX_DELAY_MS)
+      }
+    }
+  }
+
+  /**
    * Runs cached schema metadata.
    * @template T
    * @param {string} cacheKey - Schema cache key.
@@ -785,7 +837,7 @@ export default class VelociousDatabaseDriversBase {
    * @returns {Promise<T>} - Resolves with the cached metadata.
    */
   async _cachedSchemaMetadata(cacheKey, callback) {
-    if (!this._schemaCacheEnabled()) return await callback()
+    if (!this._schemaCacheEnabled()) return await this._withSchemaMetadataDdlRetry(callback)
 
     const existingPromise = this._schemaCache.get(cacheKey)
 
@@ -793,7 +845,7 @@ export default class VelociousDatabaseDriversBase {
       return /** @type {T} */ (this._schemaCacheReturnValue(await existingPromise))
     }
 
-    const promise = (async () => await callback())()
+    const promise = (async () => await this._withSchemaMetadataDdlRetry(callback))()
 
     this._schemaCache.set(cacheKey, promise)
 

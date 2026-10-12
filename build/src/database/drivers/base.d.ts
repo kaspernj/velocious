@@ -658,6 +658,27 @@ export default class VelociousDatabaseDriversBase {
      */
     _schemaCacheEnabled(): boolean;
     /**
+     * Runs schema metadata retry deadline ms.
+     * @returns {number} - Bounded deadline for outlasting transient schema-metadata contention.
+     */
+    _schemaMetadataRetryDeadlineMs(): number;
+    /**
+     * Whether an error raised by a schema-metadata read is transient contention that a bounded
+     * retry can outlast. Drivers override this for their own contention signatures; the default
+     * treats every failure as final so only drivers that prove the transient shape retry it.
+     * @param {unknown} _error - Error raised by a schema-metadata read.
+     * @returns {boolean} - Whether the read may be retried.
+     */
+    _isTransientSchemaMetadataError(_error: unknown): boolean;
+    /**
+     * Runs a schema-metadata read, retrying transient concurrent-DDL contention until the bounded
+     * deadline. Non-transient failures and exhausted deadlines propagate the original error.
+     * @template T
+     * @param {() => Promise<T>} callback - Cache-miss schema read.
+     * @returns {Promise<T>} - Resolves with the read result.
+     */
+    _withSchemaMetadataDdlRetry<T>(callback: () => Promise<T>): Promise<T>;
+    /**
      * Runs cached schema metadata.
      * @template T
      * @param {string} cacheKey - Schema cache key.

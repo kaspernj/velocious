@@ -296,6 +296,15 @@ export default class VelociousDatabaseDriversMysql extends Base {
      */
     insertSql(args: import("../base.js").InsertSqlArgsType): string;
     /**
+     * MariaDB skips information-schema/SHOW reads for a table whose definition is being modified
+     * by concurrent online DDL (ER_WARN_I_S_SKIPPED_TABLE). The build completes in seconds, so the
+     * skip is transient contention that the bounded schema-metadata retry can outlast. Query
+     * helpers wrap the driver error, so the code is searched through the cause chain.
+     * @param {unknown} error - Error raised by a schema-metadata read.
+     * @returns {boolean} - Whether the read hit concurrent-DDL metadata contention.
+     */
+    _isTransientSchemaMetadataError(error: unknown): boolean;
+    /**
      * Runs get tables.
      * @returns {Promise<Array<import("../base-table.js").default>>} - Resolves with the tables.
      */

@@ -324,6 +324,56 @@ async function createStoreWithoutChildAcceptanceColumns() {
   return store
 }
 
+/** @returns {Promise<BackgroundJobsStore>} - Store whose jobs table carries a conflicting single-column retention index. */
+async function createStoreWithConflictingRetentionIndex() {
+  dummyConfiguration.setCurrent()
+  const store = new BackgroundJobsStore({configuration: dummyConfiguration})
+  const pool = dummyConfiguration.getDatabasePool(store.getDatabaseIdentifier())
+
+  await pool.withConnection({name: "Background jobs pre-conflicting retention index"}, async (db) => {
+    await db.dropTable("background_jobs", {cascade: true, ifExists: true})
+    await db.delete({tableName: "velocious_internal_migrations", conditions: {key: "background_jobs:20261012120000"}})
+    db.clearSchemaCache()
+
+    const jobsTable = new TableData("background_jobs")
+    jobsTable.string("id", {primaryKey: true})
+    jobsTable.string("job_name", {null: false, index: true})
+    jobsTable.text("args_json", {null: false})
+    jobsTable.string("execution_mode", {null: false})
+    jobsTable.string("queue", {null: true, index: true})
+    jobsTable.integer("max_retries", {null: false})
+    jobsTable.integer("attempts", {null: false})
+    jobsTable.string("status", {null: false, index: true})
+    jobsTable.bigint("scheduled_at_ms", {null: false, index: true})
+    jobsTable.bigint("created_at_ms", {null: false, index: true})
+    jobsTable.string("schedule_key", {null: true, index: true})
+    jobsTable.bigint("handed_off_at_ms", {null: true, index: true})
+    jobsTable.string("handoff_id", {null: true})
+    jobsTable.bigint("completed_at_ms", {null: true})
+    jobsTable.bigint("failed_at_ms", {null: true})
+    jobsTable.bigint("orphaned_at_ms", {null: true, index: true})
+    jobsTable.string("worker_id", {null: true})
+    jobsTable.text("last_error", {null: true})
+    jobsTable.string("concurrency_key", {null: true, index: true})
+    jobsTable.integer("max_concurrency", {null: true})
+    jobsTable.bigint("timeout_ms", {null: true})
+    await db.createTable(jobsTable)
+
+    for (const sql of await db.createIndexSQLs({
+      columns: ["completed_at_ms"],
+      ifNotExists: db.getType() === "sqlite",
+      name: "index_background_jobs_completed_retention",
+      tableName: "background_jobs"
+    })) {
+      await db.query(sql)
+    }
+
+    db.clearSchemaCache()
+  })
+
+  return store
+}
+
 describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => {
   it("validates paired concurrency options and rejects conflicting caps", async () => {
     const store = await createClearedStore()
@@ -1105,22 +1155,49 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     expect(job.childStartedAtMs).toBeNull()
   })
 
-  it("defers composite retention indexes from routine readiness", async () => {
+  it("installs composite retention indexes during routine readiness", async () => {
     const store = await createClearedStore()
     const pool = dummyConfiguration.getDatabasePool(store.getDatabaseIdentifier())
 
-    await pool.withConnection({name: "Background jobs verify deferred retention indexes"}, async (db) => {
+    await pool.withConnection({name: "Background jobs verify retention indexes"}, async (db) => {
       const jobsTable = await db.getTableByNameOrFail("background_jobs")
-      const indexNames = (await jobsTable.getIndexes()).map((index) => index.getName())
+      const indexesByName = new Map((await jobsTable.getIndexes()).map((index) => [index.getName(), index.getColumnNames()]))
 
-      for (const name of [
-        "index_background_jobs_completed_retention",
-        "index_background_jobs_failed_retention",
-        "index_background_jobs_orphaned_retention"
+      for (const [name, columns] of [
+        ["index_background_jobs_completed_retention", ["status", "completed_at_ms", "id"]],
+        ["index_background_jobs_failed_retention", ["status", "failed_at_ms", "id"]],
+        ["index_background_jobs_orphaned_retention", ["status", "orphaned_at_ms", "id"]]
       ]) {
-        expect(indexNames.includes(name)).toEqual(false)
+        expect(indexesByName.get(name)).toEqual(columns)
       }
     })
+  })
+
+  it("records the retention index migration so later readiness skips the DDL", async () => {
+    const store = await createClearedStore()
+    const pool = dummyConfiguration.getDatabasePool(store.getDatabaseIdentifier())
+
+    await pool.withConnection({name: "Background jobs verify retention migration ledger"}, async (db) => {
+      expect(await store._hasMigration(db, "20261012120000")).toEqual(true)
+    })
+  })
+
+  it("fails readiness when a retention index exists with unexpected columns", async () => {
+    const store = await createStoreWithConflictingRetentionIndex()
+
+    await expect(async () => {
+      await store.ensureReady()
+    }).toThrow(/index_background_jobs_completed_retention exists with unexpected columns/)
+
+    // Leave a fully rebuilt jobs schema behind so later examples in this file are not
+    // stranded on the deliberately minimal conflicting table.
+    await store._withDb(async (db) => {
+      await db.dropTable("background_jobs", {cascade: true, ifExists: true})
+      await db.delete({tableName: "velocious_internal_migrations", conditions: {key: "background_jobs:20261012120000"}})
+      db.clearSchemaCache()
+    })
+
+    await store.ensureReady()
   })
 
   it("keeps the concurrency counter consistent across every release path", async () => {

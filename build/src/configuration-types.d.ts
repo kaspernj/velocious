@@ -220,6 +220,10 @@ export type DatabaseConfigurationType = {
      */
     schemaCache?: boolean;
     /**
+     * - Bounded deadline (ms) for outlasting a cached schema-metadata read the server skipped because concurrent online DDL is modifying the table. Defaults to 60000.
+     */
+    schemaMetadataRetryDeadlineMs?: number;
+    /**
      * - Record-level configuration.
      */
     record?: {
@@ -1850,6 +1854,7 @@ export type ConfigurationArgsType = {
  * @property {boolean} [readOnly] - Whether writes should be blocked for this database.
  * @property {string} [schema] - Default schema for unqualified table lookups (MSSQL).
  * @property {boolean} [schemaCache] - Whether schema metadata should be cached on the driver. Defaults to true.
+ * @property {number} [schemaMetadataRetryDeadlineMs] - Bounded deadline (ms) for outlasting a cached schema-metadata read the server skipped because concurrent online DDL is modifying the table. Defaults to 60000.
  * @property {object} [record] - Record-level configuration.
  * @property {boolean} [record.transactions] - Whether record operations should use transactions.
  * @property {boolean} [reset] - Whether to reset the database on startup.
