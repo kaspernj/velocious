@@ -11,6 +11,7 @@ import CliCommandsGenerateFrontendModels from "./node/cli/commands/generate/fron
 import CliCommandsGenerateMigration from "./node/cli/commands/generate/migration.js"
 import CliCommandsGenerateModel from "./node/cli/commands/generate/model.js"
 import CliCommandsLintRelationships from "./node/cli/commands/lint/relationships.js"
+import CliCommandsMcp from "./node/cli/commands/mcp.js"
 import CliCommandsRoutes from "./node/cli/commands/routes.js"
 import CliCommandsServer from "./node/cli/commands/server.js"
 import CliCommandsTest from "./node/cli/commands/test.js"
@@ -857,6 +858,15 @@ export default class VelociousEnvironmentHandlerNode extends Base{
    */
   async cliCommandsServer(command) {
     return await this.forwardCommand(command, CliCommandsServer)
+  }
+
+  /**
+   * Runs cli commands mcp.
+   * @param {import("../cli/base-command.js").default} command - Command.
+   * @returns {Promise<void>} - Resolves when the command completes.
+   */
+  async cliCommandsMcp(command) {
+    return await this.forwardCommand(command, CliCommandsMcp)
   }
 
   /**
