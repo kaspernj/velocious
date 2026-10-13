@@ -1,0 +1,1 @@
+MCP dispatch now forwards the request-context `authorization` key as the `Authorization` header of the synthetic in-process frontend-model request, so apps whose `abilityResolver` authenticates from request headers (Bearer service tokens or personal access tokens) authenticate `velocious mcp` tool calls exactly like HTTP calls.

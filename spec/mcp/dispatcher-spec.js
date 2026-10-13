@@ -1,6 +1,6 @@
 // @ts-check
 
-import {callMcpTool} from "../../src/mcp/dispatcher.js"
+import {buildSyntheticRequestLines, callMcpTool} from "../../src/mcp/dispatcher.js"
 import {describe, expect, it} from "../../src/testing/test.js"
 import {metaToolName} from "../../src/mcp/manifest-tools.js"
 import Dummy from "../dummy/index.js"
@@ -132,5 +132,24 @@ describe("MCP dispatcher", () => {
       expect(manifest.formatVersion).toEqual(1)
       expect(manifest.resources.Task).not.toEqual(undefined)
     })
+  })
+
+  it("forwards the request-context authorization as the synthetic request Authorization header", () => {
+    const lines = buildSyntheticRequestLines({requestContext: {authorization: "Bearer tbz_service_token"}})
+
+    expect(lines.includes("Authorization: Bearer tbz_service_token")).toEqual(true)
+  })
+
+  it("omits the Authorization header when no request-context authorization is configured", () => {
+    expect(buildSyntheticRequestLines({requestContext: undefined}).includes("Authorization:")).toEqual(false)
+    expect(buildSyntheticRequestLines({requestContext: {tenant: "acme"}}).includes("Authorization:")).toEqual(false)
+  })
+
+  it("strips line breaks from request-context authorization so request lines cannot be injected", () => {
+    const lines = buildSyntheticRequestLines({requestContext: {authorization: "Bearer x\r\nX-Injected: 1"}})
+    const headerLines = lines.split("\r\n")
+
+    expect(headerLines.includes("X-Injected: 1")).toEqual(false)
+    expect(headerLines.includes("Authorization: Bearer xX-Injected: 1")).toEqual(true)
   })
 })
