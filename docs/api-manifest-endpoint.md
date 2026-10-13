@@ -1,5 +1,7 @@
 # API Manifest Endpoint
 
+The same manifest also drives the built-in MCP server (`velocious mcp`), which turns every exposed command into an MCP tool — see [docs/mcp-server.md](mcp-server.md).
+
 Velocious can expose a built-in endpoint that describes every registered
 frontend-model resource: attributes, relationships, attachments, abilities,
 commands (built-in and custom with typed arguments and return types), sync

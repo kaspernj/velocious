@@ -1,5 +1,7 @@
 # Frontend Models
 
+Frontend-model commands can also be exposed to AI clients as MCP tools via `velocious mcp` — see [docs/mcp-server.md](mcp-server.md).
+
 Projects sharing resource policy between backend and local/offline runtimes should also read the [shared-resource sync developer guide](shared-resource-sync-guide.md), including its permit and portable-query boundaries.
 
 ## Core transport

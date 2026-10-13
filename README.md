@@ -50,6 +50,7 @@
 * AbortSignal-driven MySQL/MariaDB query cancellation for raw, model, and cross-tenant aggregate queries (see [docs/database-query-cancellation.md](docs/database-query-cancellation.md))
 * Optional built-in debug endpoint for inspecting server and database connection state (see [docs/debug-endpoint.md](docs/debug-endpoint.md))
 * Optional built-in API manifest endpoint describing every registered frontend-model resource as human- and machine-readable JSON (see [docs/api-manifest-endpoint.md](docs/api-manifest-endpoint.md))
+* Built-in MCP server command `velocious mcp` exposing every registered frontend-model command as MCP tools for AI clients, dispatched through the frontend-model controller with the app's own ability resolver (see [docs/mcp-server.md](docs/mcp-server.md))
 * Backend record attachments with filesystem, S3, native callback, bounded Node path-input persistence, and model-declared client sync policy (see [docs/attachments.md](docs/attachments.md))
 
 # Setup

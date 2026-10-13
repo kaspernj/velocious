@@ -362,6 +362,12 @@ export default class VelociousEnvironmentHandlerBase {
      */
     cliCommandsConsole(_command: import("../cli/base-command.js").default): Promise<ReturnType<typeof JSON.parse>>;
     /**
+     * Runs cli commands mcp.
+     * @param {import("../cli/base-command.js").default} _command - Command.
+     * @returns {Promise<void>} - Resolves when the command completes.
+     */
+    cliCommandsMcp(_command: import("../cli/base-command.js").default): Promise<void>;
+    /**
      * Runs cli commands server.
      * @param {import("../cli/base-command.js").default} _command - Command.
      * @returns {Promise<ReturnType<typeof JSON.parse>>} - Resolves with the command result.
