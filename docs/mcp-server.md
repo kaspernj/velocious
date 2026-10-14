@@ -64,6 +64,11 @@ JSON object:
 MCP_REQUEST_CONTEXT='{"authorization":"Bearer <service-token>"}' npx velocious mcp
 ```
 
+When the context carries an `authorization` key, it is also forwarded as the
+`Authorization` header of the synthetic in-process request, so apps whose
+`abilityResolver` authenticates from request headers (Bearer service tokens or
+personal access tokens) authenticate MCP tool calls exactly like HTTP calls.
+
 Denied commands surface as MCP tool results with `isError: true` and the
 dispatcher's error message — the same authorization behavior as the web app.
 

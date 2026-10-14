@@ -116,4 +116,18 @@ export declare function callMcpTool({ configuration, requestContext, toolArgumen
     toolArguments: Record<string, unknown>;
     toolName: string;
 }): Promise<McpToolResult>;
+/**
+ * Builds the synthetic HTTP request lines for one MCP dispatch. The request-context
+ * `authorization` key is forwarded as the request's `Authorization` header so apps
+ * whose ability resolver authenticates from headers (Bearer service tokens or
+ * personal access tokens) authenticate MCP tool calls exactly like HTTP calls.
+ * Carriage returns and line feeds are stripped so a context value can never inject
+ * extra request lines.
+ * @param {object} args - Arguments.
+ * @param {Record<string, string | number | boolean> | undefined} args.requestContext - Remote request context.
+ * @returns {string} - Raw HTTP request head.
+ */
+export declare function buildSyntheticRequestLines({ requestContext }: {
+    requestContext: Record<string, string | number | boolean> | undefined;
+}): string;
 //# sourceMappingURL=dispatcher.d.ts.map
