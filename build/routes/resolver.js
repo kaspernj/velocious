@@ -126,7 +126,10 @@ export default class VelociousRoutesResolver {
       const __filename = fileURLToPath(import.meta.url)
       const __dirname = dirname(__filename)
       const requestedPath = currentPath.replace(/^\//, "") || "_root"
-      const attemptedControllerPath = `${this.configuration.getDirectory()}/src/routes/${requestedPath}/controller.js`
+      const catchAllRoute = currentRoute?.catchAllRoute
+      const attemptedControllerPath = catchAllRoute
+        ? `${this.configuration.getDirectory()}/src/routes/${catchAllRoute.controller}/controller.js`
+        : `${this.configuration.getDirectory()}/src/routes/${requestedPath}/controller.js`
 
       const logger = this.logger
 
@@ -136,13 +139,23 @@ export default class VelociousRoutesResolver {
 
       await logger.warn(`No route matched for ${loggedPath}. Tried controller at ${attemptedControllerPath}`)
 
-      controller = "errors"
-      controllerPath = "./built-in/errors/controller.js"
-      action = "notFound"
-      skipAbilityResolution = true
-      skipControllerConnections = true
-      skipTenantResolution = true
-      viewPath = await fs.realpath(`${__dirname}/built-in/errors`)
+      if (catchAllRoute) {
+        controller = catchAllRoute.controller
+        action = normalizeActionName(catchAllRoute.action)
+        controllerPath = `${this.configuration.getDirectory()}/src/routes/${controller}/controller.js`
+        viewPath = `${this.configuration.getDirectory()}/src/routes/${controller}`
+        skipAbilityResolution = true
+        skipControllerConnections = true
+        skipTenantResolution = true
+      } else {
+        controller = "errors"
+        controllerPath = "./built-in/errors/controller.js"
+        action = "notFound"
+        skipAbilityResolution = true
+        skipControllerConnections = true
+        skipTenantResolution = true
+        viewPath = await fs.realpath(`${__dirname}/built-in/errors`)
+      }
     } else if (action) {
       if (!controller) controller = "_root"
 
