@@ -1,5 +1,8 @@
 // @ts-check
 
+import {DEFAULT_SCHEDULED_ENQUEUE_TIMEOUT_MS} from "./scheduled-enqueue-bound.js"
+import ScheduledBackgroundJobEnqueueTimeoutError from "./scheduled-enqueue-timeout-error.js"
+
 import Logger from "../logger.js"
 import {nextCronFireDate, parseCronExpression} from "./cron-expression.js"
 
@@ -24,6 +27,12 @@ const DURATION_MULTIPLIERS = {
   week: 7 * 24 * 60 * 60 * 1000,
   weeks: 7 * 24 * 60 * 60 * 1000
 }
+
+// The watchdog below is internal machinery, not a schedule timer. Capturing the
+// platform timers at module load keeps them out of a caller's schedule-timer
+// observation, so bounding an enqueue never appears as an extra scheduled job.
+const armWatchdogTimer = globalThis.setTimeout
+const cancelWatchdogTimer = globalThis.clearTimeout
 
 /**
  * Runs the parseScheduledDuration helper.
@@ -73,6 +82,8 @@ export default class BackgroundJobsScheduler {
     this.configuration = configuration
     this.enqueueJob = enqueueJob
     this.logger = new Logger(this)
+    /** @type {number | null} - Bound (ms) for one scheduled enqueue attempt; `null` disables the bound. */
+    this.scheduledEnqueueTimeoutMs = this._resolveScheduledEnqueueTimeoutMs()
     /**
      * Narrows the runtime value to the documented type.
      * @type {Array<ReturnType<typeof setInterval>>} */
@@ -270,15 +281,121 @@ export default class BackgroundJobsScheduler {
       // of identical scheduled jobs when the queue backed up. Dedup is by job identity (see the
       // store), so the job keeps its queue-derived concurrency cap. A schedule can opt out with
       // `deduplicateWhileQueued: false`.
-      await this.enqueueJob({
-        args: Array.isArray(jobConfiguration.args) ? jobConfiguration.args : [],
-        jobClass: jobConfiguration.class,
+      await this._withScheduledEnqueueTimeout({
         jobKey,
-        options: {deduplicateWhileQueued: true, ...(jobConfiguration.options || {})}
+        jobName: jobConfiguration.class.jobName(),
+        run: async () => {
+          await this.enqueueJob({
+            args: Array.isArray(jobConfiguration.args) ? jobConfiguration.args : [],
+            jobClass: jobConfiguration.class,
+            jobKey,
+            options: {deduplicateWhileQueued: true, ...(jobConfiguration.options || {})}
+          })
+        }
       })
     } catch (error) {
+      if (error instanceof ScheduledBackgroundJobEnqueueTimeoutError) {
+        this._reportScheduledEnqueueStall({error, jobKey})
+
+        return
+      }
+
       await this.logger.error(() => ["Failed to enqueue scheduled background job", {jobKey, jobName: jobConfiguration.class.jobName()}, error])
     }
+  }
+
+  /**
+   * Runs one durable enqueue attempt under the scheduled-enqueue bound.
+   *
+   * The bound is applied with a local race rather than `awaitery`'s `timeout()`:
+   * that helper starts its callback through `Promise.resolve().then(...)`, which
+   * would defer every scheduled enqueue by a microtask and change the tick
+   * semantics callers rely on. Here the attempt starts synchronously, and the
+   * watchdog uses the module-captured timers so it is never observable as a
+   * schedule timer. Only the watchdog raises the typed timeout error, so a
+   * timeout raised inside the enqueue itself keeps its own error path.
+   * @param {object} args - Options.
+   * @param {string} args.jobKey - Schedule key.
+   * @param {string} args.jobName - Resolved job class name.
+   * @param {() => Promise<void>} args.run - Enqueue attempt.
+   * @returns {Promise<void>} - Resolves when the attempt settles within the bound.
+   */
+  async _withScheduledEnqueueTimeout({jobKey, jobName, run}) {
+    const timeoutMs = this.scheduledEnqueueTimeoutMs
+    /** @type {Promise<void>} */
+    let attempt
+
+    try {
+      attempt = Promise.resolve(run())
+    } catch (error) {
+      attempt = Promise.reject(/** @type {Error} */ (error))
+    }
+
+    if (timeoutMs === null) return await attempt
+
+    /**
+     * Rejects the watchdog promise when the bound expires.
+     * @type {(error: Error) => void} */
+    let rejectScheduledEnqueueTimeout = () => {}
+    const watchdog = new Promise((_, reject) => { rejectScheduledEnqueueTimeout = reject })
+    /**
+     * Watchdog timer handle.
+     * @type {ReturnType<typeof armWatchdogTimer>} */
+    const watchdogId = armWatchdogTimer(() => {
+      rejectScheduledEnqueueTimeout(new ScheduledBackgroundJobEnqueueTimeoutError({
+        jobKey,
+        jobName,
+        scheduledEnqueueTimeoutMs: timeoutMs
+      }))
+    }, timeoutMs)
+
+    try {
+      return await Promise.race([attempt, watchdog])
+    } finally {
+      cancelWatchdogTimer(watchdogId)
+    }
+  }
+
+  /**
+   * Surfaces a scheduled enqueue whose store call never settled. Without this report the only
+   * symptom is a schedule that silently stops enqueueing after one wedged call.
+   * @param {object} args - Options.
+   * @param {Error} args.error - Timeout error.
+   * @param {string} args.jobKey - Schedule key.
+   * @returns {void}
+   */
+  _reportScheduledEnqueueStall({error, jobKey}) {
+    const payload = {
+      context: {
+        jobKey,
+        scheduledEnqueueTimeoutMs: this.scheduledEnqueueTimeoutMs,
+        stage: "background-jobs-scheduled-enqueue-stall"
+      },
+      error
+    }
+
+    void this.logger.error(() => ["Scheduled background job enqueue stalled", payload.context, error])
+
+    const errorEvents = typeof this.configuration?.getErrorEvents === "function" ? this.configuration.getErrorEvents() : undefined
+
+    if (!errorEvents) return
+
+    errorEvents.emit("framework-error", payload)
+    errorEvents.emit("all-error", {...payload, errorType: "framework-error"})
+  }
+
+  /**
+   * Resolves the scheduled-enqueue bound from configuration.
+   * @returns {number | null} - Bound in milliseconds, or `null` for an unbounded wait.
+   */
+  _resolveScheduledEnqueueTimeoutMs() {
+    const backgroundJobsConfig = typeof this.configuration?.getBackgroundJobsConfig === "function" ? this.configuration.getBackgroundJobsConfig() : undefined
+    const configured = backgroundJobsConfig?.scheduledEnqueueTimeoutMs
+
+    if (configured === null) return null
+    if (typeof configured === "number" && configured > 0) return configured
+
+    return DEFAULT_SCHEDULED_ENQUEUE_TIMEOUT_MS
   }
 
   /**

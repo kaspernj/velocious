@@ -22,6 +22,11 @@ import Update from "./sql/update.js"
 
 const PG_TIMESTAMP_WITHOUT_TIMEZONE_OID = 1114
 
+/** Smallest wait between `pg_try_advisory_lock` probes; preserves the historical 50ms cadence for short bounds. */
+const PGSQL_ADVISORY_LOCK_POLL_MIN_INTERVAL_MS = 50
+/** Largest wait between `pg_try_advisory_lock` probes; keeps a long bounded wait from probing tens of thousands of times. */
+const PGSQL_ADVISORY_LOCK_POLL_MAX_INTERVAL_MS = 2000
+
 pgTypes.setTypeParser(PG_TIMESTAMP_WITHOUT_TIMEZONE_OID, (value) => new Date(`${value.replace(" ", "T")}Z`))
 
 export default class VelociousDatabaseDriversPgsql extends Base{
@@ -426,13 +431,31 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   }
 
   /**
+   * Resolves the `pg_try_advisory_lock` probe cadence for one bounded wait.
+   *
+   * `pg_advisory_lock` has no native timeout, so a bounded acquisition polls. Scaling the interval
+   * with the bound keeps the historical 50ms cadence — and its fast acquisition — for the short
+   * explicit `timeoutMs` values callers already pass, while a long framework default stays
+   * responsive without turning one contended lock into tens of thousands of probe queries.
+   * @param {number} timeoutMs - Bounded wait in milliseconds.
+   * @returns {number} - Probe interval in milliseconds.
+   */
+  static advisoryLockPollIntervalMs(timeoutMs) {
+    return Math.min(
+      Math.max(Math.floor(timeoutMs / 100), PGSQL_ADVISORY_LOCK_POLL_MIN_INTERVAL_MS),
+      PGSQL_ADVISORY_LOCK_POLL_MAX_INTERVAL_MS
+    )
+  }
+
+  /**
    * Blocks until a PostgreSQL session-level advisory lock is acquired on
    * this connection. Implemented via `pg_advisory_lock(bigint)`, which has
    * no native timeout — the `timeoutMs` argument is emulated by racing a
-   * `pg_try_advisory_lock` poll loop so callers on MySQL and Postgres see
-   * the same contract.
+   * `pg_try_advisory_lock` poll loop so callers on MySQL and Postgres see the
+   * same contract. The poll interval backs off to a cap so a long bounded wait
+   * does not turn one contended lock into thousands of probe queries.
    * @param {string} name - Lock name.
-   * @param {{timeoutMs?: number | null}} [args] - Optional timeout in milliseconds; `null`, `undefined`, or negative blocks forever.
+   * @param {{timeoutMs?: number | null}} [args] - Optional timeout in milliseconds; `null` or negative blocks forever, and an omitted value uses the database's `advisoryLockAcquireTimeoutMs` or the framework default.
    * @returns {Promise<boolean>} - True if the lock was acquired, false if the timeout elapsed.
    */
   async _acquireAdvisoryLock(name, {timeoutMs} = {}) {
@@ -444,7 +467,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
     }
 
     const deadline = Date.now() + timeoutMs
-    const pollIntervalMs = 50
+    const pollIntervalMs = VelociousDatabaseDriversPgsql.advisoryLockPollIntervalMs(timeoutMs)
 
     while (true) {
       if (await this._tryAcquireAdvisoryLock(name)) return true

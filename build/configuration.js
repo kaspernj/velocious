@@ -26,6 +26,7 @@ import UUID from "pure-uuid"
 import translate from "gettext-universal/build/src/translate.js"
 import Ability from "./authorization/ability.js"
 import BackgroundJobsAdapter from "./background-jobs/adapter.js"
+import {DEFAULT_SCHEDULED_ENQUEUE_TIMEOUT_MS} from "./background-jobs/scheduled-enqueue-bound.js"
 import DatabaseOperation from "./database/operation.js"
 import { initializeAuditedModelRelationships } from "./database/record/auditing.js"
 import EventEmitter from "./utils/event-emitter.js"
@@ -1707,6 +1708,20 @@ export default class VelociousConfiguration {
     const drainStoreOperationTimeoutMs = typeof configured.drainStoreOperationTimeoutMs === "number" && configured.drainStoreOperationTimeoutMs >= 1
       ? configured.drainStoreOperationTimeoutMs
       : 60_000
+    // `null` is an explicit opt-out of the scheduled-enqueue bound. A present
+    // but non-positive number is a mistake, not an opt-out, so it falls back to
+    // the framework default rather than silently disabling the watchdog.
+    const scheduledEnqueueTimeoutMs = "scheduledEnqueueTimeoutMs" in configured
+      ? (
+        configured.scheduledEnqueueTimeoutMs === null ?
+          null
+        : (
+          typeof configured.scheduledEnqueueTimeoutMs === "number" && configured.scheduledEnqueueTimeoutMs > 0 ?
+            configured.scheduledEnqueueTimeoutMs
+          : DEFAULT_SCHEDULED_ENQUEUE_TIMEOUT_MS
+        )
+      )
+      : DEFAULT_SCHEDULED_ENQUEUE_TIMEOUT_MS
     const queues = configured.queues && typeof configured.queues === "object" ? configured.queues : {}
     // An explicit config value wins over the env var — including `null`/`0`,
     // which disable the backstop even when the environment sets a default.
@@ -1732,7 +1747,7 @@ export default class VelociousConfiguration {
 
     const jobClasses = this.getBackgroundJobClasses()
 
-    return {host, port, databaseIdentifier, maxConcurrentForkedJobs, maxConcurrentInlineJobs, mode, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, runnerMaxOldSpaceSizeMb, runnerMallocArenaMax, dispatchStrategy, pollIntervalMs, drainStoreOperationTimeoutMs, queues, jobClasses, jobTimeoutMs, retention, generationId, initialGenerationState, lifecycleSocketPath}
+    return {host, port, databaseIdentifier, maxConcurrentForkedJobs, maxConcurrentInlineJobs, mode, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, runnerMaxOldSpaceSizeMb, runnerMallocArenaMax, dispatchStrategy, pollIntervalMs, drainStoreOperationTimeoutMs, scheduledEnqueueTimeoutMs, queues, jobClasses, jobTimeoutMs, retention, generationId, initialGenerationState, lifecycleSocketPath}
   }
 
   /**

@@ -1480,12 +1480,24 @@ export default class VelociousDatabaseDriversBase {
      * same name and let you serialize functionality without blocking readers
      * or writers that do not participate in the same lock.
      * @param {string} name - Lock name.
-     * @param {{timeoutMs?: number | null}} [args] - Optional timeout in milliseconds; `null` or undefined blocks forever.
+     * @param {{timeoutMs?: number | null}} [args] - Optional timeout in milliseconds; `null` blocks forever, and an omitted value uses the database's `advisoryLockAcquireTimeoutMs` or the framework default.
      * @returns {Promise<boolean>} - Resolves to true when the lock has been acquired, false if the timeout elapsed.
      */
     acquireAdvisoryLock(name: string, args?: {
         timeoutMs?: number | null;
     }): Promise<boolean>;
+    /**
+     * Resolves the wait bound for one advisory-lock acquisition.
+     * An explicit `timeoutMs` — including an explicit `null` opt-out — always
+     * wins. Otherwise the database configuration's `advisoryLockAcquireTimeoutMs`
+     * applies, and a null there opts out too. Only when neither is configured does
+     * the framework default bound the wait.
+     * @param {{timeoutMs?: number | null}} [args] - Acquisition options from the caller.
+     * @returns {number | null} - Wait bound in milliseconds, or `null` for an indefinite wait.
+     */
+    advisoryLockAcquireTimeoutMs(args?: {
+        timeoutMs?: number | null;
+    }): number | null;
     /**
      * Driver-specific blocking advisory-lock acquisition hook.
      * @abstract

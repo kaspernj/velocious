@@ -1,0 +1,23 @@
+// @ts-check
+import { TimeoutError } from "awaitery/build/timeout.js";
+/** Typed failure for a scheduled background-job enqueue that never settled within its bound. */
+export default class ScheduledBackgroundJobEnqueueTimeoutError extends TimeoutError {
+    /**
+     * Builds a scheduled-enqueue timeout error without job arguments or connection details.
+     * @param {object} args - Safe timeout context.
+     * @param {string} args.jobKey - Schedule key whose enqueue stalled.
+     * @param {string} args.jobName - Resolved job class name.
+     * @param {number} args.scheduledEnqueueTimeoutMs - Configured bound that expired.
+     * @param {TimeoutError} [args.cause] - Original watchdog timeout.
+     */
+    constructor({ jobKey, jobName, scheduledEnqueueTimeoutMs, cause }) {
+        super(`Scheduled background job enqueue did not settle within ${scheduledEnqueueTimeoutMs}ms`, cause ? { cause } : undefined);
+        this.name = "ScheduledBackgroundJobEnqueueTimeoutError";
+        /** @type {"BACKGROUND_JOB_SCHEDULED_ENQUEUE_TIMEOUT"} */
+        this.code = "BACKGROUND_JOB_SCHEDULED_ENQUEUE_TIMEOUT";
+        this.jobKey = jobKey;
+        this.jobName = jobName;
+        this.scheduledEnqueueTimeoutMs = scheduledEnqueueTimeoutMs;
+    }
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoic2NoZWR1bGVkLWVucXVldWUtdGltZW91dC1lcnJvci5qcyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbIi4uLy4uLy4uL3NyYy9iYWNrZ3JvdW5kLWpvYnMvc2NoZWR1bGVkLWVucXVldWUtdGltZW91dC1lcnJvci5qcyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQSxZQUFZO0FBRVosT0FBTyxFQUFDLFlBQVksRUFBQyxNQUFNLDJCQUEyQixDQUFBO0FBRXRELGdHQUFnRztBQUNoRyxNQUFNLENBQUMsT0FBTyxPQUFPLHlDQUEwQyxTQUFRLFlBQVk7SUFDakY7Ozs7Ozs7T0FPRztJQUNILFlBQVksRUFBQyxNQUFNLEVBQUUsT0FBTyxFQUFFLHlCQUF5QixFQUFFLEtBQUssRUFBQztRQUM3RCxLQUFLLENBQUMsMERBQTBELHlCQUF5QixJQUFJLEVBQUUsS0FBSyxDQUFDLENBQUMsQ0FBQyxFQUFDLEtBQUssRUFBQyxDQUFDLENBQUMsQ0FBQyxTQUFTLENBQUMsQ0FBQTtRQUUzSCxJQUFJLENBQUMsSUFBSSxHQUFHLDJDQUEyQyxDQUFBO1FBQ3ZELHlEQUF5RDtRQUN6RCxJQUFJLENBQUMsSUFBSSxHQUFHLDBDQUEwQyxDQUFBO1FBQ3RELElBQUksQ0FBQyxNQUFNLEdBQUcsTUFBTSxDQUFBO1FBQ3BCLElBQUksQ0FBQyxPQUFPLEdBQUcsT0FBTyxDQUFBO1FBQ3RCLElBQUksQ0FBQyx5QkFBeUIsR0FBRyx5QkFBeUIsQ0FBQTtJQUM1RCxDQUFDO0NBQ0YiLCJzb3VyY2VzQ29udGVudCI6WyIvLyBAdHMtY2hlY2tcblxuaW1wb3J0IHtUaW1lb3V0RXJyb3J9IGZyb20gXCJhd2FpdGVyeS9idWlsZC90aW1lb3V0LmpzXCJcblxuLyoqIFR5cGVkIGZhaWx1cmUgZm9yIGEgc2NoZWR1bGVkIGJhY2tncm91bmQtam9iIGVucXVldWUgdGhhdCBuZXZlciBzZXR0bGVkIHdpdGhpbiBpdHMgYm91bmQuICovXG5leHBvcnQgZGVmYXVsdCBjbGFzcyBTY2hlZHVsZWRCYWNrZ3JvdW5kSm9iRW5xdWV1ZVRpbWVvdXRFcnJvciBleHRlbmRzIFRpbWVvdXRFcnJvciB7XG4gIC8qKlxuICAgKiBCdWlsZHMgYSBzY2hlZHVsZWQtZW5xdWV1ZSB0aW1lb3V0IGVycm9yIHdpdGhvdXQgam9iIGFyZ3VtZW50cyBvciBjb25uZWN0aW9uIGRldGFpbHMuXG4gICAqIEBwYXJhbSB7b2JqZWN0fSBhcmdzIC0gU2FmZSB0aW1lb3V0IGNvbnRleHQuXG4gICAqIEBwYXJhbSB7c3RyaW5nfSBhcmdzLmpvYktleSAtIFNjaGVkdWxlIGtleSB3aG9zZSBlbnF1ZXVlIHN0YWxsZWQuXG4gICAqIEBwYXJhbSB7c3RyaW5nfSBhcmdzLmpvYk5hbWUgLSBSZXNvbHZlZCBqb2IgY2xhc3MgbmFtZS5cbiAgICogQHBhcmFtIHtudW1iZXJ9IGFyZ3Muc2NoZWR1bGVkRW5xdWV1ZVRpbWVvdXRNcyAtIENvbmZpZ3VyZWQgYm91bmQgdGhhdCBleHBpcmVkLlxuICAgKiBAcGFyYW0ge1RpbWVvdXRFcnJvcn0gW2FyZ3MuY2F1c2VdIC0gT3JpZ2luYWwgd2F0Y2hkb2cgdGltZW91dC5cbiAgICovXG4gIGNvbnN0cnVjdG9yKHtqb2JLZXksIGpvYk5hbWUsIHNjaGVkdWxlZEVucXVldWVUaW1lb3V0TXMsIGNhdXNlfSkge1xuICAgIHN1cGVyKGBTY2hlZHVsZWQgYmFja2dyb3VuZCBqb2IgZW5xdWV1ZSBkaWQgbm90IHNldHRsZSB3aXRoaW4gJHtzY2hlZHVsZWRFbnF1ZXVlVGltZW91dE1zfW1zYCwgY2F1c2UgPyB7Y2F1c2V9IDogdW5kZWZpbmVkKVxuXG4gICAgdGhpcy5uYW1lID0gXCJTY2hlZHVsZWRCYWNrZ3JvdW5kSm9iRW5xdWV1ZVRpbWVvdXRFcnJvclwiXG4gICAgLyoqIEB0eXBlIHtcIkJBQ0tHUk9VTkRfSk9CX1NDSEVEVUxFRF9FTlFVRVVFX1RJTUVPVVRcIn0gKi9cbiAgICB0aGlzLmNvZGUgPSBcIkJBQ0tHUk9VTkRfSk9CX1NDSEVEVUxFRF9FTlFVRVVFX1RJTUVPVVRcIlxuICAgIHRoaXMuam9iS2V5ID0gam9iS2V5XG4gICAgdGhpcy5qb2JOYW1lID0gam9iTmFtZVxuICAgIHRoaXMuc2NoZWR1bGVkRW5xdWV1ZVRpbWVvdXRNcyA9IHNjaGVkdWxlZEVucXVldWVUaW1lb3V0TXNcbiAgfVxufVxuIl19

@@ -182,13 +182,25 @@ export default class VelociousDatabaseDriversPgsql extends Base {
      */
     advisoryLockKey(name: string): string;
     /**
+     * Resolves the `pg_try_advisory_lock` probe cadence for one bounded wait.
+     *
+     * `pg_advisory_lock` has no native timeout, so a bounded acquisition polls. Scaling the interval
+     * with the bound keeps the historical 50ms cadence — and its fast acquisition — for the short
+     * explicit `timeoutMs` values callers already pass, while a long framework default stays
+     * responsive without turning one contended lock into tens of thousands of probe queries.
+     * @param {number} timeoutMs - Bounded wait in milliseconds.
+     * @returns {number} - Probe interval in milliseconds.
+     */
+    static advisoryLockPollIntervalMs(timeoutMs: number): number;
+    /**
      * Blocks until a PostgreSQL session-level advisory lock is acquired on
      * this connection. Implemented via `pg_advisory_lock(bigint)`, which has
      * no native timeout — the `timeoutMs` argument is emulated by racing a
-     * `pg_try_advisory_lock` poll loop so callers on MySQL and Postgres see
-     * the same contract.
+     * `pg_try_advisory_lock` poll loop so callers on MySQL and Postgres see the
+     * same contract. The poll interval backs off to a cap so a long bounded wait
+     * does not turn one contended lock into thousands of probe queries.
      * @param {string} name - Lock name.
-     * @param {{timeoutMs?: number | null}} [args] - Optional timeout in milliseconds; `null`, `undefined`, or negative blocks forever.
+     * @param {{timeoutMs?: number | null}} [args] - Optional timeout in milliseconds; `null` or negative blocks forever, and an omitted value uses the database's `advisoryLockAcquireTimeoutMs` or the framework default.
      * @returns {Promise<boolean>} - True if the lock was acquired, false if the timeout elapsed.
      */
     _acquireAdvisoryLock(name: string, { timeoutMs }?: {

@@ -14,7 +14,8 @@ Advisory locks take a plain string name. Callers who participate in the same nam
 ## API
 
 ```js
-// Blocking: waits forever (or up to `timeoutMs`), runs the callback, releases in `finally`.
+// Blocking: waits up to the acquisition bound (see "Acquisition bound" below),
+// runs the callback, releases in `finally`.
 const result = await Account.withAdvisoryLock("sync-account-42", async () => {
   return await syncAccount(42)
 })
@@ -33,8 +34,8 @@ try {
 }
 
 // Optional timeout. Throws `AdvisoryLockTimeoutError` if the lock is not
-// granted within `timeoutMs`. A missing, null, or negative `timeoutMs`
-// blocks forever.
+// granted within `timeoutMs`. Pass `timeoutMs: null` to opt out and block
+// forever; omit it to use the acquisition bound described below.
 await Account.withAdvisoryLock("daily-report", async () => {
   await generateDailyReport()
 }, {timeoutMs: 5_000})
@@ -67,6 +68,22 @@ Both `withAdvisoryLock` and `withAdvisoryLockOrFail` release the lock in a `fina
 Pass `{dedicatedConnection: true}` to force a dedicated lock connection even when no `holdTimeoutMs` is set. The callback still runs on the caller/model connection; only lock ownership moves to the spawned session. Use this when the caller connection may be shared or reused and you need independent, non-re-entrant lock semantics.
 
 Each database connection also keeps a counted registry of advisory locks it successfully acquires. Before a checked-out connection returns to its pool, Velocious releases every lock still in that registry so an abandoned critical section cannot leak a session lock into the next checkout. Closing a connection performs the same cleanup before closing the physical database session, including the dedicated connection used by positive `holdTimeoutMs` calls. Cleanup preserves re-entrant acquisition counts and attempts every tracked lock; release failures are surfaced rather than silently leaving a reusable connection poisoned.
+
+## Acquisition bound
+
+A blocking acquisition that passes no `timeoutMs` no longer waits forever. It waits up to a finite bound and then reports `AdvisoryLockTimeoutError`, so a wedged lock holder stops consuming pool connections indefinitely:
+
+1. An explicit per-call `timeoutMs` always wins. Pass `timeoutMs: null` to opt back in to the driver's indefinite wait.
+2. Otherwise the database configuration's `advisoryLockAcquireTimeoutMs` applies, and a `null` there opts out.
+3. Otherwise the framework default applies: 15 minutes (`DEFAULT_ADVISORY_LOCK_ACQUIRE_TIMEOUT_MS` in `src/database/advisory-lock-bound.js`).
+
+```js
+// databaseConfiguration: {
+//   advisoryLockAcquireTimeoutMs: 120_000  // 2 minutes, or null for the old indefinite wait
+// }
+```
+
+Why the bound exists: an unbounded `GET_LOCK` on MySQL/MariaDB waits for one year. When one holder wedged — a killed process, a runner that died while holding the lock, a connection that never returned — every later caller on the same lock name queued behind it, and each waiter parked a pooled connection in the server's `User lock` state. A single wedged name therefore drained the pool and stalled dispatch process-wide while nothing logged. The default sits far above any contention observed in healthy operation, so a legitimate lock handover is never cut off; a wedged holder now surfaces as a named `AdvisoryLockTimeoutError` instead of a silent outage.
 
 ## Scope
 

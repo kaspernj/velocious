@@ -120,6 +120,10 @@ export type DatabasePoolConfiguration = {
 };
 export type DatabaseConfigurationType = {
     /**
+     * - Bound (ms) a blocking advisory-lock acquisition waits for a contended lock before reporting failure. Default: `900000` (15 minutes). `null` opts out and restores the driver's indefinite wait. A per-call `timeoutMs` argument always overrides this.
+     */
+    advisoryLockAcquireTimeoutMs?: number | null;
+    /**
      * - Default character set applied by `db:create` via mysql/mariadb `CREATE DATABASE ... CHARACTER SET`. Distinct from `charset`, which is the client connection charset forwarded to the mysql2 driver.
      */
     databaseCharset?: string;
@@ -464,6 +468,10 @@ export type BackgroundJobsConfiguration = {
         maxConcurrent?: number;
         priority?: number;
     }>;
+    /**
+     * - Bounds one scheduled enqueue attempt in the main process. A durable enqueue that never settles (wedged DB connection, contended advisory lock) would otherwise keep its schedule key permanently in flight, so every later tick skipped itself and shutdown could never drain. On timeout the attempt is reported as `background-jobs-scheduled-enqueue-stall` and the key clears for the next tick. Default: 20 minutes — deliberately 5 minutes above `advisoryLockAcquireTimeoutMs` so the precise lock error surfaces first. `null` opts out.
+     */
+    scheduledEnqueueTimeoutMs?: number | null;
     /**
      * - How the main process
      * detects new work. Defaults to `"beacon"` (event-driven). Set to `"polling"`
@@ -1829,6 +1837,7 @@ export type ConfigurationArgsType = {
  */
 /**
  * @typedef {object} DatabaseConfigurationType
+ * @property {number | null} [advisoryLockAcquireTimeoutMs] - Bound (ms) a blocking advisory-lock acquisition waits for a contended lock before reporting failure. Default: `900000` (15 minutes). `null` opts out and restores the driver's indefinite wait. A per-call `timeoutMs` argument always overrides this.
  * @property {string} [databaseCharset] - Default character set applied by `db:create` via mysql/mariadb `CREATE DATABASE ... CHARACTER SET`. Distinct from `charset`, which is the client connection charset forwarded to the mysql2 driver.
  * @property {string} [databaseCollation] - Default collation applied by `db:create` via mysql/mariadb `CREATE DATABASE ... COLLATE`.
  * @property {string} [database] - Database name for this connection.
@@ -1973,6 +1982,7 @@ export type ConfigurationArgsType = {
  *   Priorities may be any number, including negative to sink a queue below the
  *   default. Jobs within the same priority keep FIFO (`scheduled_at`, then
  *   `created_at`) order. Default: `{}` (no queue caps, all queues priority `0`).
+ * @property {number | null} [scheduledEnqueueTimeoutMs] - Bounds one scheduled enqueue attempt in the main process. A durable enqueue that never settles (wedged DB connection, contended advisory lock) would otherwise keep its schedule key permanently in flight, so every later tick skipped itself and shutdown could never drain. On timeout the attempt is reported as `background-jobs-scheduled-enqueue-stall` and the key clears for the next tick. Default: 20 minutes — deliberately 5 minutes above `advisoryLockAcquireTimeoutMs` so the precise lock error surfaces first. `null` opts out.
  * @property {BackgroundJobsDispatchStrategy} [dispatchStrategy] - How the main process
  *   detects new work. Defaults to `"beacon"` (event-driven). Set to `"polling"`
  *   to restore the legacy fixed-interval poll.

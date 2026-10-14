@@ -868,3 +868,18 @@ backgroundJobs: {
 
 Set it well above the slowest legitimate queue-control query for your database: it is a stall detector, not per-job tuning. Per-job wall-clock limits are `jobTimeoutMs` (above), and worker shutdown draining has its own limits.
 
+### Scheduled enqueue stall
+
+Scheduled and cron jobs enter the store through a different path than the drain: the scheduler calls `enqueueJob` on its own timer and remembers the in-flight promise in `pendingEnqueuesByJobKey` so a tick cannot overlap itself and `stop()` can drain it. That key used to be poisoned permanently by one enqueue that never settled — a wedged database connection, or an advisory lock held by a process that died. Every later tick saw the key still in flight and skipped itself, so the schedule silently stopped firing anywhere, `stop()` could never drain, and shutdown hung until an operator killed the process. Nothing was logged, because from the scheduler's point of view a job was still "in progress".
+
+Scheduled enqueues are now bounded by `scheduledEnqueueTimeoutMs` (default 20 minutes). On timeout the attempt rejects, the stall is reported on the framework-error channel with `context.stage = "background-jobs-scheduled-enqueue-stall"`, and the schedule key clears so the next tick tries again. The bound is deliberately 5 minutes above the advisory-lock acquisition bound (see [Advisory locks](advisory-locks.md#acquisition-bound)) because a scheduled enqueue waits for a lock *and then* inserts: keeping the watchdog outside the lock bound lets the precise `AdvisoryLockTimeoutError` — which names the stuck lock — surface first, instead of a generic enqueue timeout that hides the cause.
+
+```js
+backgroundJobs: {
+  // Bound one scheduled enqueue attempt (default 20 minutes).
+  scheduledEnqueueTimeoutMs: 20 * 60 * 1000
+}
+```
+
+Set `null` to opt out and restore the previous unbounded behaviour. As with the drain bound, this is a stall detector rather than per-job tuning: a healthy scheduled enqueue is a single insert.
+

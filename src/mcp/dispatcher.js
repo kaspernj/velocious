@@ -172,6 +172,35 @@ function resolveCustomCommandPath({commandEntry, toolArguments}) {
 }
 
 /**
+ * Builds the synthetic HTTP request lines for one MCP dispatch. The request-context
+ * `authorization` key is forwarded as the request's `Authorization` header so apps
+ * whose ability resolver authenticates from headers (Bearer service tokens or
+ * personal access tokens) authenticate MCP tool calls exactly like HTTP calls.
+ * Carriage returns and line feeds are stripped so a context value can never inject
+ * extra request lines.
+ * @param {object} args - Arguments.
+ * @param {Record<string, string | number | boolean> | undefined} args.requestContext - Remote request context.
+ * @returns {string} - Raw HTTP request head.
+ */
+export function buildSyntheticRequestLines({requestContext}) {
+  const lines = [
+    `POST ${MCP_REQUEST_PATH} HTTP/1.1`,
+    "Host: velocious-mcp",
+    "Content-Length: 0",
+  ]
+
+  if (requestContext && typeof requestContext.authorization === "string") {
+    const authorization = requestContext.authorization.replace(/[\r\n]/g, "").trim()
+
+    if (authorization.length > 0) lines.push(`Authorization: ${authorization}`)
+  }
+
+  lines.push("", "")
+
+  return lines.join("\r\n")
+}
+
+/**
  * Runs one frontend-model request entry through the controller in-process,
  * mirroring the synthetic-request pattern used by the controller specs.
  * @param {object} args - Arguments.
@@ -184,13 +213,7 @@ async function runFrontendApiRequest({configuration, requestEntry}) {
   const request = new Request({client, configuration})
   const donePromise = new Promise((resolve) => request.requestParser.events.on("done", resolve))
 
-  request.feed(Buffer.from([
-    `POST ${MCP_REQUEST_PATH} HTTP/1.1`,
-    "Host: velocious-mcp",
-    "Content-Length: 0",
-    "",
-    ""
-  ].join("\r\n"), "utf8"))
+  request.feed(Buffer.from(buildSyntheticRequestLines({requestContext: requestEntry.requestContext}), "utf8"))
 
   await donePromise
 
