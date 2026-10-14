@@ -260,7 +260,7 @@ export default class VelociousConfiguration {
    * Runs constructor.
    * @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments.
    */
-  constructor({abilityResolver, abilityResources, attachments, autoload = true, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug = false, debugEndpoint = false, apiManifest = false, directory, enforceTenantDatabaseScopes = true, environment, environmentHandler, exposeInternalErrorsToClients, frontendTenantSqlite, httpServer, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, packages, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, secureFrontendModelErrors, structureSql, sync, tenantDatabaseProviders, tenantDatabaseResolver, tenantResolver, testing, timeZone, timezoneOffsetMinutes, trustedProxies, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
+  constructor({abilityResolver, abilityResources, attachments, autoload = true, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug = false, debugEndpoint = false, apiManifest = false, directory, enforceTenantDatabaseScopes = true, environment, environmentHandler, exposeInternalErrorsToClients, frontendTenantSqlite, httpServer, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, mcp = false, packages, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, secureFrontendModelErrors, structureSql, sync, tenantDatabaseProviders, tenantDatabaseResolver, tenantResolver, testing, timeZone, timezoneOffsetMinutes, trustedProxies, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
     restArgsError(restArgs)
 
     this._abilityResolver = abilityResolver
@@ -304,6 +304,7 @@ export default class VelociousConfiguration {
     this.debug = debug
     this._debugEndpoint = this._normalizeDebugEndpoint(debugEndpoint)
     this._apiManifest = this._normalizeApiManifest(apiManifest)
+    this._mcp = this._normalizeMcp(mcp)
     this._environment = environment || globalThis.process?.env.VELOCIOUS_ENV || globalThis.process?.env.NODE_ENV || "development"
     this._environmentHandler = environmentHandler
     this._enforceTenantDatabaseScopes = enforceTenantDatabaseScopes
@@ -486,6 +487,7 @@ export default class VelociousConfiguration {
     this._routeResolverHooks = [...(routeResolverHooks || [])]
     this._addDebugEndpointRouteHook()
     this._addApiManifestRouteHook()
+    this._addMcpRouteHook()
 
     /**
      * Stores the applied route mounts value.
@@ -621,6 +623,63 @@ export default class VelociousConfiguration {
         skipAbilityResolution: true,
         skipTenantResolution: true,
         viewPath: "./built-in/api-manifest"
+      }
+    })
+  }
+
+  /**
+   * Runs normalize mcp.
+   * @param {boolean | {path?: string, token?: string}} value - MCP endpoint configuration.
+   * @returns {{enabled: boolean, path: string, token: string | null}} - Normalized MCP endpoint configuration.
+   */
+  _normalizeMcp(value) {
+    if (value === false || value === undefined) return {enabled: false, path: "/mcp", token: null}
+    if (value === true) return {enabled: true, path: "/mcp", token: null}
+
+    if (typeof value !== "object" || value === null) {
+      throw new Error(`Expected mcp to be a boolean or object, got: ${String(value)}`)
+    }
+
+    const path = value.path || "/mcp"
+
+    if (typeof path !== "string" || !path.startsWith("/")) {
+      throw new Error(`Expected mcp.path to be a string starting with '/', got: ${String(path)}`)
+    }
+
+    const token = value.token === undefined || value.token === null ? null : value.token
+
+    if (token !== null && (typeof token !== "string" || !token.trim())) {
+      throw new Error(`Expected mcp.token to be a non-empty string, got: ${String(token)}`)
+    }
+
+    return {enabled: true, path, token: token === null ? null : token.trim()}
+  }
+
+  /**
+   * Runs add mcp route hook.
+   * @returns {void} - No return value.
+   */
+  _addMcpRouteHook() {
+    if (!this._mcp.enabled) return
+
+    this.addRouteResolverHook(({currentPath, request}) => {
+      if (request.httpMethod() !== "POST") return null
+      if (currentPath !== this._mcp.path) return null
+
+      // When a token is configured, an unauthenticated request gets no route at
+      // all (404) rather than a 401, so the endpoint's existence stays hidden.
+      if (this._mcp.token && !this.debugEndpointRequestAuthorized(request, this._mcp.token)) return null
+
+      return {
+        action: "handle",
+        controller: "velociousMcp",
+        controllerPath: "./built-in/mcp/controller.js",
+        // Tenant and ability resolution belong to the frontend-model dispatcher
+        // per command (withFrontendModelRequestContext), exactly like the regular
+        // /frontend-models route — the MCP transport never bypasses them.
+        skipAbilityResolution: true,
+        skipTenantResolution: true,
+        viewPath: "./built-in/mcp"
       }
     })
   }
@@ -1042,6 +1101,7 @@ export default class VelociousConfiguration {
       enforceTenantDatabaseScopes: this.getEnforceTenantDatabaseScopes(),
       exposeInternalErrorsToClients: this.getExposeInternalErrorsToClients(),
       initialized: this._isInitialized,
+      mcp: this._mcp.enabled ? {enabled: true, path: this._mcp.path, tokenConfigured: Boolean(this._mcp.token)} : {enabled: false},
       logging: {
         debugLowLevel: this._logging?.debugLowLevel === true,
         outputs: this._logging ? Object.keys(this._logging) : []
