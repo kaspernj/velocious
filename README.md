@@ -976,6 +976,10 @@ Frontend-model command transport preserves `Date` and `undefined` by encoding th
 
 Frontend-model commands raise an `Error` when the backend responds with `{status: "error"}` (using `errorMessage` when present), so unauthorized or missing-record update/find/destroy responses fail fast in frontend code.
 
+## Route catch-all
+
+Applications can declare their own 404 response in the routes file with `route.catchAll({action: "notFound", controller: "errors"})` instead of hand-wiring a route resolver hook. Unmatched requests then resolve to the given controller/action through the standard controller lookup, without tenant/ability/connection resolution. See [docs/route-catch-all.md](docs/route-catch-all.md).
+
 ## Route resolver hooks
 
 Libraries can hook unresolved routes and hijack them before Velocious falls back to the built-in 404 controller.
