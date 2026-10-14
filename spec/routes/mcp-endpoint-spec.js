@@ -115,6 +115,12 @@ async function postToDummyMcp(payload, {authorization} = {}) {
     method: "POST"
   })
   const text = await response.text()
+  const contentType = response.headers.get("content-type") || ""
+
+  if (!contentType.includes("application/json")) {
+    // Surface routing failures with the real status/body instead of a JSON parse crash.
+    throw new Error(`MCP endpoint returned non-JSON response (status ${response.status}): ${text.slice(0, 200)}`)
+  }
 
   return {payload: text.length > 0 ? JSON.parse(text) : {}, status: response.status}
 }
