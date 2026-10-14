@@ -160,6 +160,7 @@ import BacktraceCleaner from "../../utils/backtrace-cleaner.js"
 import { getDatabaseAnnotations } from "../annotations.js"
 import { formatDateForDatabase } from "../datetime-storage.js"
 import isDate from "../../utils/is-date.js"
+import {DEFAULT_ADVISORY_LOCK_ACQUIRE_TIMEOUT_MS} from "../advisory-lock-bound.js"
 import Logger from "../../logger.js"
 import Query from "../query/index.js"
 import QueryAbortedError from "../query-aborted-error.js"
@@ -2928,15 +2929,35 @@ export default class VelociousDatabaseDriversBase {
    * same name and let you serialize functionality without blocking readers
    * or writers that do not participate in the same lock.
    * @param {string} name - Lock name.
-   * @param {{timeoutMs?: number | null}} [args] - Optional timeout in milliseconds; `null` or undefined blocks forever.
+   * @param {{timeoutMs?: number | null}} [args] - Optional timeout in milliseconds; `null` blocks forever, and an omitted value uses the database's `advisoryLockAcquireTimeoutMs` or the framework default.
    * @returns {Promise<boolean>} - Resolves to true when the lock has been acquired, false if the timeout elapsed.
    */
   async acquireAdvisoryLock(name, args = {}) {
-    const acquired = await this._acquireAdvisoryLock(name, args)
+    const acquired = await this._acquireAdvisoryLock(name, {timeoutMs: this.advisoryLockAcquireTimeoutMs(args)})
 
     if (acquired) this._trackAdvisoryLock(name)
 
     return acquired
+  }
+
+  /**
+   * Resolves the wait bound for one advisory-lock acquisition.
+   * An explicit `timeoutMs` — including an explicit `null` opt-out — always
+   * wins. Otherwise the database configuration's `advisoryLockAcquireTimeoutMs`
+   * applies, and a null there opts out too. Only when neither is configured does
+   * the framework default bound the wait.
+   * @param {{timeoutMs?: number | null}} [args] - Acquisition options from the caller.
+   * @returns {number | null} - Wait bound in milliseconds, or `null` for an indefinite wait.
+   */
+  advisoryLockAcquireTimeoutMs(args = {}) {
+    if (args.timeoutMs !== undefined) return args.timeoutMs
+
+    const configured = this.getArgs()?.advisoryLockAcquireTimeoutMs
+
+    if (configured === null) return null
+    if (typeof configured === "number" && configured >= 0) return configured
+
+    return DEFAULT_ADVISORY_LOCK_ACQUIRE_TIMEOUT_MS
   }
 
   /**
