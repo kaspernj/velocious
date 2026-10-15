@@ -90,11 +90,6 @@ export default class VelociousConfiguration {
         path: string;
         token: string | null;
     };
-    _mcp: {
-        enabled: boolean;
-        path: string;
-        token: string | null;
-    };
     _environment: string;
     _environmentHandler: import("./environment-handlers/base.js").default;
     _enforceTenantDatabaseScopes: boolean;
@@ -178,6 +173,7 @@ export default class VelociousConfiguration {
     _tenantDatabaseProviders: Record<string, import("./configuration-types.js").TenantDatabaseProviderType>;
     _tenantDatabaseResolver: import("./configuration-types.js").TenantDatabaseResolverType | undefined;
     _tenantResolver: import("./configuration-types.js").TenantResolverType | undefined;
+    _testTenantPools: import("./configuration-types.js").TestTenantPoolsConfiguration | undefined;
     _websocketEvents: import("./http-server/websocket-events.js").default | undefined;
     /**
      * Stores the websocket channel subscribers value.
@@ -305,7 +301,7 @@ export default class VelociousConfiguration {
      * Runs constructor.
      * @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments.
      */
-    constructor({ abilityResolver, abilityResources, attachments, autoload, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug, debugEndpoint, apiManifest, directory, enforceTenantDatabaseScopes, environment, environmentHandler, exposeInternalErrorsToClients, frontendTenantSqlite, httpServer, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, mcp, packages, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, secureFrontendModelErrors, structureSql, sync, tenantDatabaseProviders, tenantDatabaseResolver, tenantResolver, testing, timeZone, timezoneOffsetMinutes, trustedProxies, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs }: import("./configuration-types.js").ConfigurationArgsType);
+    constructor({ abilityResolver, abilityResources, attachments, autoload, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug, debugEndpoint, apiManifest, directory, enforceTenantDatabaseScopes, environment, environmentHandler, exposeInternalErrorsToClients, frontendTenantSqlite, httpServer, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, packages, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, secureFrontendModelErrors, structureSql, sync, tenantDatabaseProviders, tenantDatabaseResolver, tenantResolver, testTenantPools, testing, timeZone, timezoneOffsetMinutes, trustedProxies, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs }: import("./configuration-types.js").ConfigurationArgsType);
     /**
      * Runs get autoload.
      * @returns {boolean} Whether auto-batch-preload of relationships on lazy access is enabled globally.
@@ -371,24 +367,6 @@ export default class VelociousConfiguration {
      * @returns {void} - No return value.
      */
     _addApiManifestRouteHook(): void;
-    /**
-     * Runs normalize mcp.
-     * @param {boolean | {path?: string, token?: string}} value - MCP endpoint configuration.
-     * @returns {{enabled: boolean, path: string, token: string | null}} - Normalized MCP endpoint configuration.
-     */
-    _normalizeMcp(value: boolean | {
-        path?: string;
-        token?: string;
-    }): {
-        enabled: boolean;
-        path: string;
-        token: string | null;
-    };
-    /**
-     * Runs add mcp route hook.
-     * @returns {void} - No return value.
-     */
-    _addMcpRouteHook(): void;
     /**
      * Runs add debug endpoint route hook.
      * @returns {void} - No return value.
@@ -638,6 +616,11 @@ export default class VelociousConfiguration {
      */
     getTenantDatabaseResolver(): import("./configuration-types.js").TenantDatabaseResolverType | undefined;
     /**
+     * Runs get test tenant pool configurations.
+     * @returns {import("./configuration-types.js").TestTenantPoolsConfiguration | undefined} - Opt-in test tenant database pools keyed by database identifier.
+     */
+    getTestTenantPools(): import("./configuration-types.js").TestTenantPoolsConfiguration | undefined;
+    /**
      * Runs get enforce tenant database scopes.
      * @returns {boolean} - Whether tenant-switched models require a resolved tenant database identifier.
      */
@@ -687,6 +670,12 @@ export default class VelociousConfiguration {
      * @returns {void} - No return value.
      */
     setTenantDatabaseResolver(resolver: import("./configuration-types.js").TenantDatabaseResolverType | undefined): void;
+    /**
+     * Runs set test tenant pool configurations.
+     * @param {import("./configuration-types.js").TestTenantPoolsConfiguration | undefined} pools - Opt-in test tenant database pools.
+     * @returns {void} - No return value.
+     */
+    setTestTenantPools(pools: import("./configuration-types.js").TestTenantPoolsConfiguration | undefined): void;
     /**
      * Runs set enforce tenant database scopes.
      * @param {boolean} newValue - Whether tenant-switched models require a resolved tenant database identifier.

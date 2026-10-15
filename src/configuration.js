@@ -260,7 +260,7 @@ export default class VelociousConfiguration {
    * Runs constructor.
    * @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments.
    */
-  constructor({abilityResolver, abilityResources, attachments, autoload = true, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug = false, debugEndpoint = false, apiManifest = false, directory, enforceTenantDatabaseScopes = true, environment, environmentHandler, exposeInternalErrorsToClients, frontendTenantSqlite, httpServer, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, mcp = false, packages, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, secureFrontendModelErrors, structureSql, sync, tenantDatabaseProviders, tenantDatabaseResolver, tenantResolver, testing, timeZone, timezoneOffsetMinutes, trustedProxies, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
+  constructor({abilityResolver, abilityResources, attachments, autoload = true, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug = false, debugEndpoint = false, apiManifest = false, directory, enforceTenantDatabaseScopes = true, environment, environmentHandler, exposeInternalErrorsToClients, frontendTenantSqlite, httpServer, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, mcp = false, packages, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, secureFrontendModelErrors, structureSql, sync, tenantDatabaseProviders, tenantDatabaseResolver, tenantResolver, testTenantPools, testing, timeZone, timezoneOffsetMinutes, trustedProxies, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
     restArgsError(restArgs)
 
     this._abilityResolver = abilityResolver
@@ -399,6 +399,7 @@ export default class VelociousConfiguration {
     this._tenantDatabaseProviders = tenantDatabaseProviders || {}
     this._tenantDatabaseResolver = tenantDatabaseResolver
     this._tenantResolver = tenantResolver
+    this._testTenantPools = testTenantPools
     this._websocketEvents = undefined
     /**
      * Stores the websocket channel subscribers value.
@@ -1446,6 +1447,12 @@ export default class VelociousConfiguration {
   getTenantDatabaseResolver() { return this._tenantDatabaseResolver }
 
   /**
+   * Runs get test tenant pool configurations.
+   * @returns {import("./configuration-types.js").TestTenantPoolsConfiguration | undefined} - Opt-in test tenant database pools keyed by database identifier.
+   */
+  getTestTenantPools() { return this._testTenantPools }
+
+  /**
    * Runs get enforce tenant database scopes.
    * @returns {boolean} - Whether tenant-switched models require a resolved tenant database identifier.
    */
@@ -1513,6 +1520,13 @@ export default class VelociousConfiguration {
    * @returns {void} - No return value.
    */
   setTenantDatabaseResolver(resolver) { this._tenantDatabaseResolver = resolver }
+
+  /**
+   * Runs set test tenant pool configurations.
+   * @param {import("./configuration-types.js").TestTenantPoolsConfiguration | undefined} pools - Opt-in test tenant database pools.
+   * @returns {void} - No return value.
+   */
+  setTestTenantPools(pools) { this._testTenantPools = pools }
 
   /**
    * Runs set enforce tenant database scopes.
