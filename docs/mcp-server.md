@@ -17,7 +17,18 @@ The MCP layer is a thin adapter over the existing seams:
   app's `abilityResolver`, validation, and error envelopes all apply unchanged
   — MCP never bypasses them.
 
-## Running it
+## Transports
+
+Velocious serves MCP over two transports that share the same tool generation
+and dispatch layer:
+
+- **stdio** via `npx velocious mcp` — the primary transport for local tool
+  servers (Claude Desktop, Hermes, etc.).
+- **HTTP** via the built-in endpoint `mcp: true` in your configuration — the
+  same JSON-RPC methods served by your application's own HTTP server, no
+  separate process.
+
+### stdio: `velocious mcp`
 
 ```sh
 npx velocious mcp
@@ -25,9 +36,33 @@ npx velocious mcp
 
 The command boots your application (config resolution, models, database
 connections) without starting the HTTP server, then serves line-delimited
-JSON-RPC over **stdin/stdout** — the primary MCP transport for local tool
-servers. Supported methods: `initialize`, `ping`, `tools/list`, `tools/call`,
-and `notifications/*` (protocol version `2025-03-26`).
+JSON-RPC over **stdin/stdout**. Supported methods: `initialize`, `ping`,
+`tools/list`, `tools/call`, and `notifications/*` (protocol version
+`2025-03-26`).
+
+### HTTP: `mcp: true`
+
+```js
+// src/config/configuration.js
+export default new Configuration({
+  // ...
+  mcp: true, // serves JSON-RPC at POST /mcp on the application's HTTP server
+  // or: mcp: {path: "/internal/mcp", token: "<bearer-token>"}
+})
+```
+
+Every MCP request is one `POST` with a JSON-RPC message body; the JSON-RPC
+response is returned as `application/json` (notifications get `202` with an
+empty body). When `token` is configured, requests must carry
+`Authorization: Bearer <token>` or they are not routed at all (404), so the
+endpoint stays hidden — same convention as `apiManifest` and `debugEndpoint`.
+
+The request's `Authorization` header is forwarded as the request-context
+`authorization` key into every tool call, so your app's `abilityResolver`
+authenticates MCP-over-HTTP calls exactly like regular frontend-model calls.
+Tenant and ability resolution still happen per command inside
+`FrontendModelController.frontendApi()` — the HTTP transport never bypasses
+them.
 
 ### Tool naming
 
@@ -92,7 +127,8 @@ Run it from your application directory so the CLI resolves your configuration.
 
 ## Scope notes (v1)
 
-- **Stdio only.** HTTP/SSE transport is out of scope for v1.
+- **Transports.** stdio (`velocious mcp`) and HTTP (`mcp: true`) are both
+  supported; SSE/streamable-HTTP transport is out of scope for v1.
 - **Attachments.** `attach`/`download` commands are exposed as tools but
   binary payloads (base64) are a follow-up.
 - **Errors.** Dispatcher and validation errors are surfaced faithfully as MCP
@@ -105,6 +141,8 @@ Run it from your application directory so the CLI resolves your configuration.
 | ----- | -------- |
 | Manifest → MCP tool generation | `src/mcp/manifest-tools.js` |
 | `tools/call` → `frontendApi` dispatch | `src/mcp/dispatcher.js` |
-| JSON-RPC / stdio transport | `src/mcp/json-rpc-server.js` |
+| JSON-RPC method handling | `src/mcp/json-rpc-server.js` |
+| stdio transport | `src/mcp/json-rpc-server.js` (`startMcpStdioServer`) |
+| HTTP transport (`mcp: true`) | `src/routes/built-in/mcp/controller.js`, route hook in `src/configuration.js` |
 | CLI entry (`velocious mcp`) | `src/cli/commands/mcp.js`, `src/environment-handlers/node/cli/commands/mcp.js` |
 | Specs | `spec/mcp/` |

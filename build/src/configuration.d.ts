@@ -90,6 +90,11 @@ export default class VelociousConfiguration {
         path: string;
         token: string | null;
     };
+    _mcp: {
+        enabled: boolean;
+        path: string;
+        token: string | null;
+    };
     _environment: string;
     _environmentHandler: import("./environment-handlers/base.js").default;
     _enforceTenantDatabaseScopes: boolean;
@@ -300,7 +305,7 @@ export default class VelociousConfiguration {
      * Runs constructor.
      * @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments.
      */
-    constructor({ abilityResolver, abilityResources, attachments, autoload, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug, debugEndpoint, apiManifest, directory, enforceTenantDatabaseScopes, environment, environmentHandler, exposeInternalErrorsToClients, frontendTenantSqlite, httpServer, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, packages, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, secureFrontendModelErrors, structureSql, sync, tenantDatabaseProviders, tenantDatabaseResolver, tenantResolver, testing, timeZone, timezoneOffsetMinutes, trustedProxies, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs }: import("./configuration-types.js").ConfigurationArgsType);
+    constructor({ abilityResolver, abilityResources, attachments, autoload, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug, debugEndpoint, apiManifest, directory, enforceTenantDatabaseScopes, environment, environmentHandler, exposeInternalErrorsToClients, frontendTenantSqlite, httpServer, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, mcp, packages, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, secureFrontendModelErrors, structureSql, sync, tenantDatabaseProviders, tenantDatabaseResolver, tenantResolver, testing, timeZone, timezoneOffsetMinutes, trustedProxies, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs }: import("./configuration-types.js").ConfigurationArgsType);
     /**
      * Runs get autoload.
      * @returns {boolean} Whether auto-batch-preload of relationships on lazy access is enabled globally.
@@ -366,6 +371,24 @@ export default class VelociousConfiguration {
      * @returns {void} - No return value.
      */
     _addApiManifestRouteHook(): void;
+    /**
+     * Runs normalize mcp.
+     * @param {boolean | {path?: string, token?: string}} value - MCP endpoint configuration.
+     * @returns {{enabled: boolean, path: string, token: string | null}} - Normalized MCP endpoint configuration.
+     */
+    _normalizeMcp(value: boolean | {
+        path?: string;
+        token?: string;
+    }): {
+        enabled: boolean;
+        path: string;
+        token: string | null;
+    };
+    /**
+     * Runs add mcp route hook.
+     * @returns {void} - No return value.
+     */
+    _addMcpRouteHook(): void;
     /**
      * Runs add debug endpoint route hook.
      * @returns {void} - No return value.

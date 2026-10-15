@@ -122,6 +122,7 @@ const configuration = new Configuration({
   httpServer: {
     requestBodyPolicyResolver
   },
+  mcp: true,
   initializeModels: async ({configuration}) => {
     if (process.env.VELOCIOUS_SKIP_DUMMY_MODEL_INITIALIZATION === "1") return
 
