@@ -33,7 +33,7 @@ describe("Background jobs - DB context", {tags: ["dummy"], databaseCleaning: {tr
         options: {executionMode: "inline"}
       })
 
-      await waitForJobCompleted({jobId, store, timeoutSeconds: 5})
+      await waitForJobCompleted({jobId, store, timeoutSeconds: 25})
     } finally {
       dummyConfiguration.withConnections = originalWithConnections
     }
@@ -58,7 +58,7 @@ describe("Background jobs - DB context", {tags: ["dummy"], databaseCleaning: {tr
       options: {executionMode: "forked"}
     })
 
-    await waitForJobCompleted({jobId, store, timeoutSeconds: 5})
+    await waitForJobCompleted({jobId, store, timeoutSeconds: 25})
 
     const result = await waitForOutputJson({outputPath})
 

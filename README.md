@@ -4,7 +4,7 @@
 * Database framework with familiar MVC concepts
 * Database models with migrations and validations
 * Database models that work almost the same in frontend and backend, including online CRUD for [composite primary keys](docs/composite-primary-keys.md)
-* Connection-scoped advisory locks with automatic cleanup before pooled connections are reused or closed (see [docs/advisory-locks.md](docs/advisory-locks.md))
+* Connection-scoped advisory locks with automatic cleanup before pooled connections are reused or closed, a non-throwing `withAdvisoryLockOrDefer` result for contended hot paths, and event-driven slow acquire/hold duration telemetry with holder attribution (see [docs/advisory-locks.md](docs/advisory-locks.md)) (see [docs/advisory-locks.md](docs/advisory-locks.md))
 * Built-in record auditing for model lifecycle changes (see [docs/auditing.md](docs/auditing.md))
 * Declarative state machines for models, with typed event methods generated into the base model (see [docs/state-machine.md](docs/state-machine.md))
 * Migrations for schema changes and UTC datetime storage, including caller-selected `pre-runtime` and `post-publication` execution sets and recorded `changeTable` batches that combine operations into one `ALTER` on bulk-capable drivers (see [docs/database-migrations.md](docs/database-migrations.md), [docs/migration-execution-phases.md](docs/migration-execution-phases.md), and [docs/change-table.md](docs/change-table.md))

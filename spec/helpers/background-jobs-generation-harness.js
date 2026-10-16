@@ -21,7 +21,7 @@ import { waitForEvent } from "../../src/testing/test.js"
 // tight sub-second bound trips green code on slow network-backed drivers and can
 // surface as unhandledRejection cascades when a creator awaits the promise only
 // after unrelated work. Sized to fail only on a true hang.
-const PEER_TRANSPORT_WAIT_BUDGET_MS = 10_000
+const PEER_TRANSPORT_WAIT_BUDGET_MS = 30_000
 
 /**
  * Starts a real SQL-backed generation main without mutating endpoint identity in

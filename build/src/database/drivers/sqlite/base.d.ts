@@ -212,5 +212,17 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
      * @returns {Promise<boolean>} - True if any driver instance currently holds the lock.
      */
     isAdvisoryLockHeld(name: string): Promise<boolean>;
+    /**
+     * The SQLite emulation is the process-local tier of the STC-210 chain.
+     * @returns {string} - Tier name reported on telemetry payloads.
+     */
+    advisoryLockBackendTier(): string;
+    /**
+     * Attribute the named lock to the driver instance that owns it in the
+     * shared in-process registry (best-effort; the caller guards failures).
+     * @param {string} name - Lock name.
+     * @returns {Promise<string | null>} - Owning driver's holder id, or null when no instance holds the lock.
+     */
+    advisoryLockHolderConnectionId(name: string): Promise<string | null>;
 }
 //# sourceMappingURL=base.d.ts.map
