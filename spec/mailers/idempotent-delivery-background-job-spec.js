@@ -81,7 +81,7 @@ export default new Configuration({
     driver: SqliteDriver,
     migrations: false,
     name: "mail-crash-window",
-    pool: {checkoutTimeoutMillis: 100, max: 1},
+    pool: {checkoutTimeoutMillis: 10_000, max: 1},
     poolType: AsyncTrackedMultiConnectionPool,
     type: "sqlite"
   }}},
