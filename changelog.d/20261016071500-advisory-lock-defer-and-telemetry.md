@@ -1,0 +1,1 @@
+feat: add `withAdvisoryLockOrDefer` (non-throwing contended-acquire defer result, identical across tiers) and event-driven advisory-lock slow-acquire / acquire-timeout / slow-hold duration telemetry with per-tier holder attribution on the framework-error channel (STC-261).

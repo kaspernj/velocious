@@ -161,6 +161,7 @@ import { getDatabaseAnnotations } from "../annotations.js"
 import { formatDateForDatabase } from "../datetime-storage.js"
 import isDate from "../../utils/is-date.js"
 import {DEFAULT_ADVISORY_LOCK_ACQUIRE_TIMEOUT_MS} from "../advisory-lock-bound.js"
+import {advisoryLockTelemetryThresholds, emitAdvisoryLockTelemetryReport} from "../advisory-lock-telemetry.js"
 import Logger from "../../logger.js"
 import Query from "../query/index.js"
 import QueryAbortedError from "../query-aborted-error.js"
@@ -328,6 +329,18 @@ export default class VelociousDatabaseDriversBase {
   _failedQueryDiagnostics = new WeakMap()
   /** @type {Map<string, number>} */
   _heldAdvisoryLocks = new Map()
+  /**
+   * When each tracked advisory lock was first acquired, so the final release can
+   * report a hold that outlived `advisoryLockTelemetry.slowHoldMs`.
+   * @type {Map<string, number>}
+   */
+  _advisoryLockAcquiredAtByName = new Map()
+  /**
+   * Stable per-connection holder identity used by advisory-lock telemetry when
+   * the tier can only name local holders.
+   * @type {string | undefined}
+   */
+  _advisoryLockHolderId = undefined
   /**
    * Exclusive operation lease installed by a single-multi-use pool.
    * @type {import("../operation-lease.js").default | undefined}
@@ -2933,9 +2946,24 @@ export default class VelociousDatabaseDriversBase {
    * @returns {Promise<boolean>} - Resolves to true when the lock has been acquired, false if the timeout elapsed.
    */
   async acquireAdvisoryLock(name, args = {}) {
-    const acquired = await this._acquireAdvisoryLock(name, {timeoutMs: this.advisoryLockAcquireTimeoutMs(args)})
+    const timeoutMs = this.advisoryLockAcquireTimeoutMs(args)
+    const startedAt = Date.now()
+    const acquired = await this._acquireAdvisoryLock(name, {timeoutMs})
+    const durationMs = Date.now() - startedAt
 
-    if (acquired) this._trackAdvisoryLock(name)
+    if (acquired) {
+      this._trackAdvisoryLock(name)
+
+      const slowAcquireMs = advisoryLockTelemetryThresholds(this.getArgs()).slowAcquireMs
+
+      if (slowAcquireMs !== null && durationMs > slowAcquireMs) {
+        await this._reportAdvisoryLockTelemetry({event: "advisory-lock-slow-acquire", lockName: name, durationMs, outcome: "acquired", timeoutMs})
+      }
+    } else {
+      // The wait exceeded its bound: attribute the lock to the holder that
+      // blocked it, captured at this moment on this tier.
+      await this._reportAdvisoryLockTelemetry({event: "advisory-lock-acquire-timeout", lockName: name, durationMs, outcome: "timeout", timeoutMs, captureHolder: true})
+    }
 
     return acquired
   }
@@ -3008,6 +3036,21 @@ export default class VelociousDatabaseDriversBase {
       this._heldAdvisoryLocks.delete(name)
     }
 
+    if (!this._heldAdvisoryLocks.has(name)) {
+      const acquiredAt = this._advisoryLockAcquiredAtByName.get(name)
+
+      this._advisoryLockAcquiredAtByName.delete(name)
+
+      if (acquiredAt !== undefined) {
+        const holdDurationMs = Date.now() - acquiredAt
+        const slowHoldMs = advisoryLockTelemetryThresholds(this.getArgs()).slowHoldMs
+
+        if (slowHoldMs !== null && holdDurationMs > slowHoldMs) {
+          await this._reportAdvisoryLockTelemetry({event: "advisory-lock-slow-hold", lockName: name, durationMs: holdDurationMs, outcome: null, timeoutMs: null})
+        }
+      }
+    }
+
     return released
   }
 
@@ -3051,6 +3094,8 @@ export default class VelociousDatabaseDriversBase {
    */
   _trackAdvisoryLock(name) {
     this._heldAdvisoryLocks.set(name, (this._heldAdvisoryLocks.get(name) || 0) + 1)
+
+    if (!this._advisoryLockAcquiredAtByName.has(name)) this._advisoryLockAcquiredAtByName.set(name, Date.now())
   }
 
   /**
@@ -3078,5 +3123,72 @@ export default class VelociousDatabaseDriversBase {
    */
   isAdvisoryLockHeld(name) { // eslint-disable-line no-unused-vars
     throw new Error(`'isAdvisoryLockHeld' not implemented for ${this.constructor.name}`)
+  }
+
+  /**
+   * Which advisory-lock backend tier this connection serves (STC-210 chain
+   * naming). The base driver is the driver-native tier; the SQLite drivers
+   * override to `process-local` / `file`.
+   * @returns {string} - Tier name reported on telemetry payloads.
+   */
+  advisoryLockBackendTier() {
+    return "driver-native"
+  }
+
+  /**
+   * Stable identity of this connection as a lock holder, reported on
+   * telemetry payloads so a slow acquire/hold is attributable to the reporting
+   * connection itself.
+   * @returns {string} - Holder id.
+   */
+  advisoryLockHolderId() {
+    if (!this._advisoryLockHolderId) this._advisoryLockHolderId = `advisory-lock-holder:${new UUID(4).format()}`
+
+    return this._advisoryLockHolderId
+  }
+
+  /**
+   * Best-effort identity of the connection currently holding the named lock,
+   * captured on the tier that served the acquisition. The base driver has no
+   * portable server-side lookup; MySQL/PostgreSQL/SQL Server/Node-SQLite
+   * override with their tier's holder attribution.
+   * @param {string} name - Lock name.
+   * @returns {Promise<string | null>} - Holder connection identity, or null when the tier cannot attribute it.
+   */
+  async advisoryLockHolderConnectionId(name) { // eslint-disable-line no-unused-vars
+    return null
+  }
+
+  /**
+   * Emit one event-driven advisory-lock telemetry report (slow acquire,
+   * acquire timeout with holder attribution, slow hold). The holder lookup is
+   * best-effort: a failed lookup is recorded on the report and never affects
+   * the acquisition that already settled.
+   * @param {{event: "advisory-lock-slow-acquire" | "advisory-lock-acquire-timeout" | "advisory-lock-slow-hold", lockName: string, durationMs: number, outcome: "acquired" | "timeout" | null, timeoutMs: number | null, captureHolder?: boolean}} args - Report args.
+   * @returns {Promise<void>} - Resolves after the report is emitted.
+   */
+  async _reportAdvisoryLockTelemetry(args) {
+    /** @type {import("../advisory-lock-telemetry.js").AdvisoryLockTelemetryReport} */
+    const report = {
+      event: args.event,
+      lockName: args.lockName,
+      backendTier: this.advisoryLockBackendTier(),
+      durationMs: args.durationMs,
+      outcome: args.outcome,
+      timeoutMs: args.timeoutMs,
+      holderId: this.advisoryLockHolderId(),
+      holderConnectionId: null,
+      holderLookupError: null
+    }
+
+    if (args.captureHolder) {
+      try {
+        report.holderConnectionId = await this.advisoryLockHolderConnectionId(args.lockName)
+      } catch (error) {
+        report.holderLookupError = error instanceof Error ? error.message : String(error)
+      }
+    }
+
+    emitAdvisoryLockTelemetryReport(this.configuration, report)
   }
 }
