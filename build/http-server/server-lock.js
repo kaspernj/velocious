@@ -1,11 +1,15 @@
 // @ts-check
 
-import fs from "node:fs/promises"
-import os from "node:os"
+import AdvisoryLockFileBackend from "../database/advisory-lock-file-backend.js"
 import path from "node:path"
 
 /**
- * Directory-based lock that allows only one HTTP server process per app directory.
+ * Directory-based lock that allows only one HTTP server process per app
+ * directory. Thin wrapper over the shared file-lock backend
+ * (`src/database/advisory-lock-file-backend.js` — the STC-210 `file` tier
+ * primitive generalized from this lock's original hand-rolled directory
+ * protocol), so the server lock and the advisory-lock file tier share one
+ * acquisition, owner-metadata, lease-renewal, and staleness implementation.
  */
 export default class VelociousHttpServerLock {
   /**
@@ -20,53 +24,26 @@ export default class VelociousHttpServerLock {
     this.host = host
     this.port = port
     this.lockPath = path.join(configuration.getDirectory(), "tmp", "server.lock")
+    this.backend = new AdvisoryLockFileBackend({
+      directory: path.join(configuration.getDirectory(), "tmp"),
+      extraOwnerFields: {host: this.host, port: this.port},
+      pathStyle: "plain"
+    })
     this.acquired = false
   }
 
   /**
-   * Acquires the app-directory HTTP server lock before startup side effects run.
+   * Acquires the app-directory HTTP server lock before startup side effects
+   * run. A stale lock (dead local owner or expired lease) is reclaimed by the
+   * backend; a live foreign owner fails loudly with the owner details.
    * @returns {Promise<void>} - Resolves after the lock has been acquired.
    */
   async acquire() {
-    await fs.mkdir(path.dirname(this.lockPath), {recursive: true})
+    const acquired = await this.backend.acquire("server", {timeoutMs: 0})
 
-    while (true) {
-      const acquired = await this.tryAcquire()
+    if (!acquired) throw new Error(await this.lockHeldMessage())
 
-      if (acquired) {
-        return
-      }
-
-      if (await this.isStale()) {
-        await fs.rm(this.lockPath, {recursive: true, force: true})
-        continue
-      }
-
-      throw new Error(await this.lockHeldMessage())
-    }
-  }
-
-  /**
-   * Tries to create the lock directory and write owner metadata.
-   * @returns {Promise<boolean>} - Whether the lock was acquired.
-   */
-  async tryAcquire() {
-    try {
-      await fs.mkdir(this.lockPath)
-    } catch (error) {
-      if (/** @type {{code?: string}} */ (error).code === "EEXIST") return false
-      throw error
-    }
-
-    try {
-      await this.writeOwnerMetadata()
-      this.acquired = true
-
-      return true
-    } catch (error) {
-      await fs.rm(this.lockPath, {recursive: true, force: true})
-      throw error
-    }
+    this.acquired = true
   }
 
   /**
@@ -77,86 +54,15 @@ export default class VelociousHttpServerLock {
     if (!this.acquired) return
 
     this.acquired = false
-    await fs.rm(this.lockPath, {recursive: true, force: true})
-  }
-
-  /**
-   * Writes metadata used to explain or reclaim an existing server lock.
-   * @returns {Promise<void>} - Resolves after owner metadata has been written.
-   */
-  async writeOwnerMetadata() {
-    await fs.writeFile(path.join(this.lockPath, "owner.json"), JSON.stringify({
-      acquiredAt: new Date().toISOString(),
-      host: this.host,
-      hostname: os.hostname(),
-      pid: process.pid,
-      port: this.port
-    }))
-  }
-
-  /**
-   * Checks whether the current lock owner is a dead process on this host.
-   * @returns {Promise<boolean>} - Whether the existing lock belongs to a dead process.
-   */
-  async isStale() {
-    const owner = await this.readOwnerMetadata()
-
-    if (!this.isLocalProcessOwner(owner)) return false
-
-    return this.processIsDead(/** @type {{pid: number}} */ (owner).pid)
-  }
-
-  /**
-   * Runs is local process owner.
-   * @param {Record<string, ReturnType<typeof JSON.parse>> | null} owner - Existing lock owner metadata.
-   * @returns {boolean} - Whether owner metadata names a local process.
-   */
-  isLocalProcessOwner(owner) {
-    if (!owner) return false
-    if (typeof owner.pid !== "number") return false
-
-    return this.ownerHostnameMatches(owner)
-  }
-
-  /**
-   * Runs owner hostname matches.
-   * @param {Record<string, ReturnType<typeof JSON.parse>>} owner - Existing lock owner metadata.
-   * @returns {boolean} - Whether the owner hostname is local or absent.
-   */
-  ownerHostnameMatches(owner) {
-    if (!owner.hostname) return true
-    if (owner.hostname === os.hostname()) return true
-
-    return false
-  }
-
-  /**
-   * Runs process is dead.
-   * @param {number} pid - Process id.
-   * @returns {boolean} - Whether the process no longer exists.
-   */
-  processIsDead(pid) {
-    try {
-      process.kill(pid, 0)
-
-      return false
-    } catch (error) {
-      return /** @type {{code?: string}} */ (error).code === "ESRCH"
-    }
+    await this.backend.release("server")
   }
 
   /**
    * Reads owner metadata from an existing server lock directory.
-   * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>> | null>} - Parsed owner metadata, when readable.
+   * @returns {Promise<import("../database/advisory-lock-file-backend.js").AdvisoryLockFileOwner | null>} - Parsed owner metadata, when readable.
    */
   async readOwnerMetadata() {
-    try {
-      const rawOwner = await fs.readFile(path.join(this.lockPath, "owner.json"), "utf8")
-
-      return /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (JSON.parse(rawOwner))
-    } catch {
-      return null
-    }
+    return await this.backend.holderInfo("server")
   }
 
   /**

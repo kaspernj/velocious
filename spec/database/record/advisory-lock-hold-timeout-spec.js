@@ -49,9 +49,14 @@ describe("Record - advisory lock hold timeout", () => {
         events.push(`app try acquire ${name}`)
 
         return true
-      }
+      },
+
+      getType() { return "mysql" }
     }
     const configuration = {
+      getAdvisoryLockFileBackend() { return undefined },
+      getAdvisoryLockPolicy() { return [] },
+      recordAdvisoryLockAcquisition() {},
       getDatabasePool() {
         throw new Error("Should not spawn an advisory-lock connection without holdTimeoutMs")
       }
@@ -126,7 +131,9 @@ describe("Record - advisory lock hold timeout", () => {
         events.push("app acquire")
 
         return true
-      }
+      },
+
+      getType() { return "mysql" }
     }
     const lockConnection = {
       async close() {
@@ -147,7 +154,9 @@ describe("Record - advisory lock hold timeout", () => {
         events.push(`lock acquire ${name}`)
 
         return true
-      }
+      },
+
+      getType() { return "mysql" }
     }
     const lockPool = {
       async spawnConnection() {
@@ -157,6 +166,9 @@ describe("Record - advisory lock hold timeout", () => {
       }
     }
     const configuration = {
+      getAdvisoryLockFileBackend() { return undefined },
+      getAdvisoryLockPolicy() { return [] },
+      recordAdvisoryLockAcquisition() {},
       getDatabasePool(identifier) {
         events.push(`pool ${identifier}`)
 
@@ -211,7 +223,9 @@ describe("Record - advisory lock hold timeout", () => {
         events.push("app acquire")
 
         return true
-      }
+      },
+
+      getType() { return "mysql" }
     }
     const lockConnection = {
       async close() {
@@ -232,7 +246,9 @@ describe("Record - advisory lock hold timeout", () => {
         events.push(`lock acquire ${name}`)
 
         return true
-      }
+      },
+
+      getType() { return "mysql" }
     }
     const lockPool = {
       async spawnConnection() {
@@ -242,6 +258,9 @@ describe("Record - advisory lock hold timeout", () => {
       }
     }
     const configuration = {
+      getAdvisoryLockFileBackend() { return undefined },
+      getAdvisoryLockPolicy() { return [] },
+      recordAdvisoryLockAcquisition() {},
       getDatabasePool(identifier) {
         events.push(`pool ${identifier}`)
 
@@ -309,7 +328,9 @@ describe("Record - advisory lock hold timeout", () => {
         events.push(`lock acquire ${name}`)
 
         return true
-      }
+      },
+
+      getType() { return "mysql" }
     }
     const lockPool = {
       async spawnConnection() {
@@ -319,6 +340,9 @@ describe("Record - advisory lock hold timeout", () => {
       }
     }
     const configuration = {
+      getAdvisoryLockFileBackend() { return undefined },
+      getAdvisoryLockPolicy() { return [] },
+      recordAdvisoryLockAcquisition() {},
       getDatabasePool(identifier) {
         events.push(`pool ${identifier}`)
 
@@ -362,7 +386,9 @@ describe("Record - advisory lock hold timeout", () => {
 
       async tryAcquireAdvisoryLock() {
         throw new Error("App connection must not acquire advisory locks")
-      }
+      },
+
+      getType() { return "mysql" }
     }
     const lockConnection = {
       async close() {
@@ -383,7 +409,9 @@ describe("Record - advisory lock hold timeout", () => {
         events.push(`lock acquire ${name}`)
 
         return true
-      }
+      },
+
+      getType() { return "mysql" }
     }
     const lockPool = {
       async spawnConnection() {
@@ -393,6 +421,9 @@ describe("Record - advisory lock hold timeout", () => {
       }
     }
     const configuration = {
+      getAdvisoryLockFileBackend() { return undefined },
+      getAdvisoryLockPolicy() { return [] },
+      recordAdvisoryLockAcquisition() {},
       getDatabasePool(identifier) {
         events.push(`pool ${identifier}`)
 

@@ -41,6 +41,17 @@ export default class VelociousEnvironmentHandlerNode extends Base {
         databaseIdentifier: string;
     }): typeof import("../database/pool/base.js").default;
     /**
+     * Creates the filesystem-backed advisory-lock backend for the file tier
+     * (STC-213). The Node handler is the only filesystem-capable environment.
+     * @param {{directory: string, leaseMs: number, renewIntervalMs: number}} args - Backend options.
+     * @returns {Promise<import("../database/advisory-lock-file-backend.js").default>} - Resolves with the created backend.
+     */
+    createAdvisoryLockFileBackend(args: {
+        directory: string;
+        leaseMs: number;
+        renewIntervalMs: number;
+    }): Promise<import("../database/advisory-lock-file-backend.js").default>;
+    /**
      * Creates a test-only child proxy when TestRunner supplied an active broker.
      * @param {{DriverClass: typeof import("../database/drivers/base.js").default, config: import("../configuration-types.js").DatabaseConfigurationType, configuration: import("../configuration.js").default, databaseIdentifier: string, reuseKey?: string}} args - Connection details.
      * @returns {Promise<import("../database/drivers/base.js").default | undefined>} - Optional proxy.
