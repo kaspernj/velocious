@@ -1,0 +1,1 @@
+- Test suite: hardened CI-load timing in background-jobs specs — widened guaranteed-completion waits (forked/spawned child exit waits, peer transport message budget, job-completion polls) and a per-test timeout for the multi-child-runner shared transaction broker spec; no assertions weakened.

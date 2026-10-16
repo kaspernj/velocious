@@ -11,7 +11,10 @@ const markerPrefix = `shared-transaction-broker-${process.pid}-${Date.now()}`
 const jobIds = []
 
 describe("Background jobs - shared test transaction broker", {tags: ["dummy"], databaseCleaning: {transaction: true, truncate: false}}, () => {
-  it("shares parent rollback state with forked, reused pooled, and spawned child runners", async () => {
+  // Four child runners (forked, pooled x2, spawned) each boot a full Velocious
+  // app against the configured database; under CI shard load this exceeds the
+  // 60 s default lifecycle timeout even though every child completes.
+  it("shares parent rollback state with forked, reused pooled, and spawned child runners", {timeoutSeconds: 180}, async () => {
     const parentMarker = `${markerPrefix}-parent`
     await Project.create({creatingUserReference: parentMarker})
     const {main, store, worker} = await startBackgroundJobs({workerOptions: {pooledRunnerCount: 1, pooledRunnerMaxJobs: 10}})
