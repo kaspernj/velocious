@@ -95,6 +95,25 @@ const configuration = new Configuration({
         name: "test-db",
         migrations: true
       },
+      mssql: {
+        driver: MssqlDriver,
+        poolType: AsyncTrackedMultiConnection,
+        type: "mssql",
+        database: "velocious_test",
+        useDatabase: "default",
+        migrations: true,
+        sqlConfig: {
+          user: "sa",
+          password: mssqlTestPassword(),
+          database: "velocious_test",
+          server: "mssql",
+          options: {
+            serverName: "mssql",
+            encrypt: true, // for azure
+            trustServerCertificate: true // change to true for local dev / self-signed certs
+          }
+        }
+      }
     }
   },
   cookieSecret: "dummy-cookie-secret",
