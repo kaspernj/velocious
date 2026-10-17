@@ -288,15 +288,17 @@ export default class LocalBackgroundJobsStore {
      * @param {number} [args.startedAtMs] - Epoch ms the job's perform started in the child.
      * @param {string} [args.childInstanceId] - Stable pooled child identity.
      * @param {number} [args.childPid] - Pooled child OS pid.
+     * @param {string} [args.runnerHostname] - Hostname of the machine running the pooled child.
      * @returns {Promise<boolean>} - Whether the lease won.
      */
-    markChildAccepted({ jobId, handoffId, receivedAtMs, startedAtMs, childInstanceId, childPid }: {
+    markChildAccepted({ jobId, handoffId, receivedAtMs, startedAtMs, childInstanceId, childPid, runnerHostname }: {
         jobId: string;
         handoffId?: string;
         receivedAtMs?: number;
         startedAtMs?: number;
         childInstanceId?: string;
         childPid?: number;
+        runnerHostname?: string;
     }): Promise<boolean>;
     /**
      * Applies a fenced reschedule without consuming an attempt.
@@ -343,9 +345,9 @@ export default class LocalBackgroundJobsStore {
     _clearedChildAcceptanceData(): Record<string, ReturnType<typeof JSON.parse>>;
     /**
      * Returns the row-shape counterpart of the cleared acceptance columns.
-     * @returns {Pick<import("./types.js").BackgroundJobRow, "childInstanceId" | "childPid" | "childReceivedAtMs" | "childStartedAtMs">} - Cleared acceptance fields.
+     * @returns {Pick<import("./types.js").BackgroundJobRow, "childInstanceId" | "childPid" | "childReceivedAtMs" | "childStartedAtMs" | "runnerHostname">} - Cleared acceptance fields.
      */
-    _clearedChildAcceptanceRow(): Pick<import("./types.js").BackgroundJobRow, "childInstanceId" | "childPid" | "childReceivedAtMs" | "childStartedAtMs">;
+    _clearedChildAcceptanceRow(): Pick<import("./types.js").BackgroundJobRow, "childInstanceId" | "childPid" | "childReceivedAtMs" | "childStartedAtMs" | "runnerHostname">;
     /**
      * Ensures that a durable concurrency counter exists with the required cap.
      * @param {import("../database/drivers/base.js").default} db - Local SQLite connection.

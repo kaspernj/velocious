@@ -759,6 +759,17 @@
  */
 
 /**
+ * @typedef {object} TestTenantPoolConfiguration
+ * @property {Array<ReturnType<typeof JSON.parse>>} tenants - Pool members: the tenant descriptors whose databases the pool pre-provisions and re-uses. Pool size is the array length.
+ * @property {(args: {configuration: import("./configuration.js").default, databaseIdentifier: string, tenant: ReturnType<typeof JSON.parse>}) => void | Promise<void>} [provisionTenant] - App-owned provisioning override for one member (runs instead of the framework create + structure-load + ledger-baseline default).
+ * @property {(args: {configuration: import("./configuration.js").default, databaseIdentifier: string, tenant: ReturnType<typeof JSON.parse>}) => void | Promise<void>} [resetTenant] - App-owned per-test reset override (runs instead of the framework truncate + ledger-baseline default).
+ */
+
+/**
+ * @typedef {Record<string, TestTenantPoolConfiguration>} TestTenantPoolsConfiguration
+ */
+
+/**
  * @typedef {object} TenantDatabaseProviderType
  * @property {(args: {configuration: import("./configuration.js").default, identifier: string}) => Array<ReturnType<typeof JSON.parse>> | Promise<Array<ReturnType<typeof JSON.parse>>>} listTenants - Lists tenants that should be created, checked, or migrated for this database identifier.
  * @property {(args: {configuration: import("./configuration.js").default, identifier: string}) => ReturnType<typeof JSON.parse> | void | Promise<ReturnType<typeof JSON.parse> | void>} [resolveGenerationTenant] - Resolves one explicit tenant descriptor for schema/base-model generation without enumerating lifecycle tenants.
@@ -818,6 +829,7 @@
  * @property {TenantResolverType} [tenantResolver] - Resolver for creating request-scoped tenant context objects.
  * @property {TenantDatabaseResolverType} [tenantDatabaseResolver] - Resolver for deriving tenant-specific database config overrides.
  * @property {Record<string, TenantDatabaseProviderType>} [tenantDatabaseProviders] - Tenant database lifecycle providers keyed by database identifier.
+ * @property {TestTenantPoolsConfiguration} [testTenantPools] - Opt-in reusable test tenant-database pools keyed by tenant database identifier. Consumed only by the test harness; ordinary runtime ignores it.
  * @property {string} [testing] - Path to the testing configuration file.
  * @property {string | (() => string | undefined)} [timeZone] - Default timezone for timezone-less datetime strings.
  * @property {number | (() => number)} [timezoneOffsetMinutes] - Default timezone offset in minutes.

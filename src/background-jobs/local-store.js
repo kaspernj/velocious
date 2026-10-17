@@ -63,7 +63,8 @@ const EXPECTED_JOB_COLUMNS = [
   "child_received_at_ms",
   "child_started_at_ms",
   "child_instance_id",
-  "child_pid"
+  "child_pid",
+  "runner_hostname"
 ]
 const EXPECTED_CONCURRENCY_COLUMNS = ["concurrency_key", "max_concurrency", "active_count"]
 const EXPECTED_SCHEDULE_KEY_COLUMNS = ["schedule_key", "job_id"]
@@ -333,6 +334,7 @@ export default class LocalBackgroundJobsStore {
     table.bigint("child_started_at_ms", {null: true})
     table.string("child_instance_id", {null: true})
     table.integer("child_pid", {null: true})
+    table.string("runner_hostname", {null: true})
     table.addIndex(new TableIndex(["status", "scheduled_at_ms", "created_at_ms", "id"], {name: LOCAL_BACKGROUND_JOBS_INDEX_NAMES[0]}))
     table.addIndex(new TableIndex(["queue", "status", "created_at_ms"], {name: LOCAL_BACKGROUND_JOBS_INDEX_NAMES[1]}))
     table.addIndex(new TableIndex(["args_digest"], {name: LOCAL_BACKGROUND_JOBS_INDEX_NAMES[2]}))
@@ -1098,9 +1100,10 @@ export default class LocalBackgroundJobsStore {
    * @param {number} [args.startedAtMs] - Epoch ms the job's perform started in the child.
    * @param {string} [args.childInstanceId] - Stable pooled child identity.
    * @param {number} [args.childPid] - Pooled child OS pid.
+   * @param {string} [args.runnerHostname] - Hostname of the machine running the pooled child.
    * @returns {Promise<boolean>} - Whether the lease won.
    */
-  async markChildAccepted({jobId, handoffId, receivedAtMs, startedAtMs, childInstanceId, childPid}) {
+  async markChildAccepted({jobId, handoffId, receivedAtMs, startedAtMs, childInstanceId, childPid, runnerHostname}) {
     await this.ensureReady()
 
     return await this._withDb(async (connection) => await this._mutate(connection, async (db) => {
@@ -1113,6 +1116,7 @@ export default class LocalBackgroundJobsStore {
       if (typeof startedAtMs === "number") data.child_started_at_ms = startedAtMs
       if (typeof childInstanceId === "string") data.child_instance_id = childInstanceId
       if (typeof childPid === "number") data.child_pid = childPid
+      if (typeof runnerHostname === "string") data.runner_hostname = runnerHostname
       if (Object.keys(data).length === 0) return false
 
       const affectedRows = await this._updateAffectedRows(db, {
@@ -1279,15 +1283,15 @@ export default class LocalBackgroundJobsStore {
    * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Cleared acceptance columns.
    */
   _clearedChildAcceptanceData() {
-    return {child_instance_id: null, child_pid: null, child_received_at_ms: null, child_started_at_ms: null}
+    return {child_instance_id: null, child_pid: null, child_received_at_ms: null, child_started_at_ms: null, runner_hostname: null}
   }
 
   /**
    * Returns the row-shape counterpart of the cleared acceptance columns.
-   * @returns {Pick<import("./types.js").BackgroundJobRow, "childInstanceId" | "childPid" | "childReceivedAtMs" | "childStartedAtMs">} - Cleared acceptance fields.
+   * @returns {Pick<import("./types.js").BackgroundJobRow, "childInstanceId" | "childPid" | "childReceivedAtMs" | "childStartedAtMs" | "runnerHostname">} - Cleared acceptance fields.
    */
   _clearedChildAcceptanceRow() {
-    return {childInstanceId: null, childPid: null, childReceivedAtMs: null, childStartedAtMs: null}
+    return {childInstanceId: null, childPid: null, childReceivedAtMs: null, childStartedAtMs: null, runnerHostname: null}
   }
 
   /**
@@ -1583,6 +1587,7 @@ export default class LocalBackgroundJobsStore {
       args: parsedArgs,
       attempts: this._numberOrNull(row.attempts),
       childInstanceId: row.child_instance_id === null || row.child_instance_id === undefined ? null : String(row.child_instance_id),
+      runnerHostname: row.runner_hostname === null || row.runner_hostname === undefined ? null : String(row.runner_hostname),
       childPid: this._numberOrNull(row.child_pid),
       childReceivedAtMs: this._numberOrNull(row.child_received_at_ms),
       childStartedAtMs: this._numberOrNull(row.child_started_at_ms),

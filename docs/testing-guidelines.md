@@ -182,6 +182,13 @@ callbacks fail closed and cannot race a successor attempt. Emergency cleanup obs
 same bounded grace as the lifecycle; a stalled driver cleanup remains quarantined in the
 background, and any eventual cleanup error is reported as a test-runner failure.
 
+Tenant-provisioning tests that pay a full structure load and teardown per example can opt
+into a reusable pool of pre-provisioned tenant databases with `testTenantPools`
+configuration: `testArgs.acquireTestTenant` leases a member (reset = truncate + migration
+ledger baseline at attempt end instead of create + structure load + drop), and
+`testArgs.registerTenantForCleanup` drops app-provisioned tenant databases at attempt end
+without hand-rolled Map/afterEach bookkeeping. See [test tenant pools](test-tenant-pools.md).
+
 Transactional background-job tests use the same isolation for real child runtimes.
 While a test transaction is active, forked, pooled, and spawned runners route their
 physical database operations through a capability-scoped loopback broker owned by

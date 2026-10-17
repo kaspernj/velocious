@@ -2,6 +2,7 @@
 
 import { randomUUID } from "node:crypto"
 import { readFileSync } from "node:fs"
+import os from "node:os"
 import v8 from "node:v8"
 import timeout from "awaitery/build/timeout.js"
 import runJobPayload, { BackgroundJobPerformedFailure } from "./job-runner.js"
@@ -16,6 +17,8 @@ const BASE_PROCESS_TITLE = "velocious background-jobs-runner"
 const SHUTDOWN_OBSERVATION_SEND_TIMEOUT_MS = 100
 /** Stable identity of this pooled child process for the life of the process. */
 const childInstanceId = randomUUID()
+/** Hostname (the container id under Docker) of the machine running this pooled child. */
+const runnerHostname = os.hostname()
 /** Sampling cadence for the memory observation sampler. */
 const MEMORY_OBSERVATION_INTERVAL_MS = 10000
 /** Bound on in-flight job ids carried in a memory observation. */
@@ -167,6 +170,7 @@ function sendChildAcceptance(type, payload, observedAtMs) {
     handedOffAtMs: payload.handedOffAtMs,
     handoffId: payload.handoffId,
     jobId: payload.id,
+    runnerHostname,
     type,
     workerId: payload.workerId,
     ...(type === "job-received" ? {receivedAtMs: observedAtMs} : {startedAtMs: observedAtMs})
@@ -399,4 +403,4 @@ process.on("message", (message) => handleMessage(message))
 process.once("disconnect", () => void shutdownRunner({exitCode: 0, reason: "ipc_disconnect"}))
 process.once("SIGTERM", () => void shutdownRunner({exitCode: 1, reason: "signal_sigterm", signal: "SIGTERM"}))
 process.once("SIGINT", () => void shutdownRunner({exitCode: 1, reason: "signal_sigint", signal: "SIGINT"}))
-if (process.send) process.send({childInstanceId, childPid: process.pid, type: "ready"})
+if (process.send) process.send({childInstanceId, childPid: process.pid, runnerHostname, type: "ready"})

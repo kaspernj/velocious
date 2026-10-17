@@ -380,7 +380,7 @@ export default class VelociousDatabaseDriversMssql extends Base {
      * @param {string} name - Lock name.
      * @returns {Promise<boolean>} - True if any session currently holds the lock.
      */
-    isAdvisoryLockHeld(name: string): Promise<boolean>;
+    _isAdvisoryLockHeldNative(name: string): Promise<boolean>;
     /**
      * Attributes the current holder of the named application lock to its
      * requesting session from `sys.dm_tran_locks`, captured at the telemetry

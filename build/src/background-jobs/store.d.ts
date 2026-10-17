@@ -611,9 +611,10 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
      * @param {number} [args.startedAtMs] - Epoch ms the job's perform started in the child.
      * @param {string} [args.childInstanceId] - Stable pooled child identity.
      * @param {number} [args.childPid] - Pooled child OS pid.
+     * @param {string} [args.runnerHostname] - Hostname of the machine running the pooled child.
      * @returns {Promise<boolean>} - Whether the fenced report was accepted.
      */
-    markChildAccepted({ jobId, handoffId, workerId, handedOffAtMs, receivedAtMs, startedAtMs, childInstanceId, childPid }: {
+    markChildAccepted({ jobId, handoffId, workerId, handedOffAtMs, receivedAtMs, startedAtMs, childInstanceId, childPid, runnerHostname }: {
         jobId: string;
         handoffId?: string;
         workerId?: string;
@@ -622,6 +623,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
         startedAtMs?: number;
         childInstanceId?: string;
         childPid?: number;
+        runnerHostname?: string;
     }): Promise<boolean>;
     /**
      * Returns the database data that clears pooled-child acceptance evidence.
@@ -630,9 +632,9 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
     _clearedChildAcceptanceData(): Record<string, ReturnType<typeof JSON.parse>>;
     /**
      * Returns the row-shape counterpart of the cleared acceptance columns.
-     * @returns {Pick<import("./types.js").BackgroundJobRow, "childInstanceId" | "childPid" | "childReceivedAtMs" | "childStartedAtMs">} - Cleared acceptance fields.
+     * @returns {Pick<import("./types.js").BackgroundJobRow, "childInstanceId" | "childPid" | "childReceivedAtMs" | "childStartedAtMs" | "runnerHostname">} - Cleared acceptance fields.
      */
-    _clearedChildAcceptanceRow(): Pick<import("./types.js").BackgroundJobRow, "childInstanceId" | "childPid" | "childReceivedAtMs" | "childStartedAtMs">;
+    _clearedChildAcceptanceRow(): Pick<import("./types.js").BackgroundJobRow, "childInstanceId" | "childPid" | "childReceivedAtMs" | "childStartedAtMs" | "runnerHostname">;
     /**
      * Returns an active handoff to the queue at a caller-requested future time.
      * This is normal job control flow: it preserves failure attempts and metadata.

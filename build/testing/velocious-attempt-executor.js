@@ -147,6 +147,21 @@ export default class VelociousAttemptExecutor {
     testArgs.registerTransactionalTenant = async (args) => {
       await testRunner.registerTransactionalTenant(args, transactionalTenantRegistrations)
     }
+    /** @type {import("./test-runner.js").TenantCleanupRegistration[]} */
+    const tenantCleanupRegistrations = []
+    /** @type {import("./test-tenant-database-pool.js").TestTenantPoolLease[]} */
+    const testTenantPoolLeases = []
+    testArgs.registerTenantForCleanup = (args) => {
+      testRunner.registerTenantForCleanup(args, tenantCleanupRegistrations)
+    }
+    testArgs.acquireTestTenant = async (args = {}) => {
+      const databaseIdentifier = args.databaseIdentifier ?? testRunner.singleTestTenantPoolIdentifier()
+      const pool = testRunner.getTestTenantPool(databaseIdentifier)
+      const lease = await pool.acquire({tenant: args.tenant})
+      testTenantPoolLeases.push(lease)
+
+      return lease
+    }
     const profiler = testRunner._profiler
     const profileTestData = {
       ...test,
@@ -246,6 +261,20 @@ export default class VelociousAttemptExecutor {
 
             try {
               await testRunner.cleanupTransactionalTenants(transactionalTenantRegistrations)
+            } catch (error) {
+              lifecycleErrors.push(error)
+            }
+
+            try {
+              await testRunner.cleanupTenantRegistrations(tenantCleanupRegistrations)
+            } catch (error) {
+              lifecycleErrors.push(error)
+            }
+
+            try {
+              for (const lease of testTenantPoolLeases) {
+                await testRunner.getTestTenantPool(lease.databaseIdentifier).release(lease)
+              }
             } catch (error) {
               lifecycleErrors.push(error)
             }
@@ -352,6 +381,21 @@ export default class VelociousAttemptExecutor {
         } else if (!emergencyCleanupOutcome.settled) {
           void emergencyCleanup.catch((cleanupError) => {
             testRunner.recordTimeoutCleanupFailure(cleanupError, "transactional tenant", recordedTimeoutCleanupErrors)
+          })
+        }
+
+        const poolRelease = (async () => {
+          for (const lease of testTenantPoolLeases) {
+            await testRunner.getTestTenantPool(lease.databaseIdentifier).release(lease)
+          }
+        })()
+        const poolReleaseOutcome = await awaitSettledOrGrace(poolRelease, effectiveTimeoutMs ?? 60000)
+
+        if (poolReleaseOutcome.settled && poolReleaseOutcome.status === "rejected") {
+          emergencyCleanupErrors.push(poolReleaseOutcome.reason)
+        } else if (!poolReleaseOutcome.settled) {
+          void poolRelease.catch((cleanupError) => {
+            testRunner.recordTimeoutCleanupFailure(cleanupError, "test tenant pool lease release", recordedTimeoutCleanupErrors)
           })
         }
 

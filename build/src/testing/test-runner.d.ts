@@ -7,6 +7,7 @@ import SharedTransactionBroker from "./shared-transaction-broker.js";
 import VelociousAttemptExecutor from "./velocious-attempt-executor.js";
 import VelociousRunnerReporter from "./velocious-runner-reporter.js";
 import VelociousSuiteHookExecutor from "./velocious-suite-hook-executor.js";
+import TestTenantDatabasePool from "./test-tenant-database-pool.js";
 import VelociousTestArguments from "./velocious-test-arguments.js";
 export type PackageTestContext = typeof defaultTestContext;
 export type PackageSuiteDeclaration = (typeof defaultTestContext.registry.suites)[number];
@@ -76,6 +77,31 @@ export type TestArgs = {
         databaseIdentifier: string;
         tenant: object;
     }) => Promise<void>;
+    /**
+     * - Leases one member of the configured test tenant database pool for this attempt (opt-in `testTenantPools` configuration).
+     */
+    acquireTestTenant?: (args?: {
+        databaseIdentifier?: string;
+        tenant?: object;
+    }) => Promise<TestTenantPoolLease>;
+    /**
+     * - Registers one active tenant database for the framework-owned end-of-attempt cleanup (drop + provider hooks) without hand-rolled afterEach bookkeeping.
+     */
+    registerTenantForCleanup?: (args: {
+        databaseIdentifier: string;
+        tenant: object;
+    }) => void;
+};
+export type TestTenantPoolLease = import("./test-tenant-database-pool.js").TestTenantPoolLease;
+export type TenantCleanupRegistration = {
+    /**
+     * - Tenant database identifier to drop at attempt end.
+     */
+    databaseIdentifier: string;
+    /**
+     * - Tenant descriptor whose database must be dropped.
+     */
+    tenant: ReturnType<typeof JSON.parse>;
 };
 export type BrowserDummyConnectionRegistration = {
     /**
@@ -313,6 +339,10 @@ export default class TestRunner {
     _setupFiles: string[];
     _timeoutMs: number | undefined;
     _abortRemainingTests: boolean;
+    /** @type {Map<string, TestTenantDatabasePool>} */
+    _testTenantPools: Map<string, TestTenantDatabasePool>;
+    /** @type {Promise<void> | undefined} */
+    _testTenantPoolTeardownPromise: Promise<void> | undefined;
     _failedTests: number;
     _successfulTests: number;
     _testsCount: number;
@@ -558,6 +588,28 @@ export default class TestRunner {
      */
     application(): Promise<Application>;
     /**
+     * Resolves the pool identifier when exactly one `testTenantPools` entry is
+     * configured, so `acquireTestTenant()` can omit it. Ambiguous or missing
+     * configuration fails loudly instead of guessing.
+     * @returns {string} - The single configured pool identifier.
+     */
+    singleTestTenantPoolIdentifier(): string;
+    /**
+     * Returns the test tenant database pool for one configured `testTenantPools`
+     * identifier, creating it on first use. Throws when the identifier has no pool
+     * configuration — the pool stays strictly opt-in.
+     * @param {string} databaseIdentifier - Tenant database identifier.
+     * @returns {TestTenantDatabasePool} - The runner-owned pool.
+     */
+    getTestTenantPool(databaseIdentifier: string): TestTenantDatabasePool;
+    /**
+     * Tears down every test tenant database pool created during this run, exactly once.
+     * Safe to call from afterAll-style teardown and from the runner's own cleanup; the
+     * same promise is shared by concurrent callers.
+     * @returns {Promise<void>} - Resolves after all pools dropped their databases.
+     */
+    teardownTestTenantPools(): Promise<void>;
+    /**
      * Registers each non-tenant per-test connection as a dynamic candidate for in-process
      * request sharing. The pool evaluates transaction state when each request is dispatched,
      * so a transaction started or ended during a hook callback takes effect immediately.
@@ -604,6 +656,28 @@ export default class TestRunner {
      * @returns {Promise<void>} - Resolves after rollback and release or quarantine.
      */
     cleanupTransactionalTenantRegistration(registration: TransactionalTenantRegistration): Promise<void>;
+    /**
+     * Registers one tenant database for framework-owned end-of-attempt cleanup. The
+     * registration drops the tenant's database through the provider's `dropDatabase`
+     * hook (or the framework default) after the attempt's afterEach hooks and
+     * transactional tenant rollbacks finished, so consuming apps do not hand-roll a
+     * Map/afterEach bookkeeping layer for DDL that a test transaction cannot roll back.
+     * @param {{databaseIdentifier: string, tenant: object}} args - Tenant database identifier and tenant descriptor to drop at attempt end.
+     * @param {TenantCleanupRegistration[]} registrations - Current attempt registrations.
+     * @returns {void} - No return value.
+     */
+    registerTenantForCleanup({ databaseIdentifier, tenant, ...restArgs }: {
+        databaseIdentifier: string;
+        tenant: object;
+    }, registrations: TenantCleanupRegistration[]): void;
+    /**
+     * Drops every tenant database registered for this attempt, in registration order.
+     * Each drop is attempted even when an earlier one failed; failures are surfaced
+     * (single error or AggregateError), never swallowed.
+     * @param {TenantCleanupRegistration[]} registrations - Attempt-owned registrations.
+     * @returns {Promise<void>} - Resolves after all registered tenants were dropped.
+     */
+    cleanupTenantRegistrations(registrations: TenantCleanupRegistration[]): Promise<void>;
     /**
      * Selects the current non-tenant connections eligible for shared transaction work.
      * @param {{transactionsOnly: boolean}} args - Selection options.

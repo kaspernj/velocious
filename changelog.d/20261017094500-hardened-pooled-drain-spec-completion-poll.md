@@ -1,0 +1,1 @@
+- Test suite: hardened the background-jobs pooled-runner drain spec — the durable job status is now polled to completion through the shared helper after a graceful worker stop instead of being asserted immediately, which raced the completion report under shard load. No assertions weakened.
