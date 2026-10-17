@@ -506,6 +506,7 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   }
 
   /**
+  /**
    * Attributes the current holder of the named advisory lock to its backend
    * process id from `pg_locks`, captured at the telemetry event moment
    * (best-effort; the caller guards failures).
@@ -523,11 +524,12 @@ export default class VelociousDatabaseDriversPgsql extends Base{
   }
 
   /**
-   * Runs is advisory lock held.
+   * Driver-native view for the base driver's `isAdvisoryLockHeld`, which
+   * answers from the process-local tier first.
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>} - True if any session currently holds the lock.
    */
-  async isAdvisoryLockHeld(name) {
+  async _isAdvisoryLockHeldNative(name) {
     const key = this.advisoryLockKey(name)
     const rows = await this.query(
       `SELECT EXISTS (SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND ((classid::bigint << 32) | (objid::bigint & 4294967295)) = ${key}) AS velocious_advisory_lock_held`

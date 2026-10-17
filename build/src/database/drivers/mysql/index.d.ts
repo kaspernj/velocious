@@ -374,6 +374,7 @@ export default class VelociousDatabaseDriversMysql extends Base {
      */
     _releaseAdvisoryLock(name: string): Promise<boolean>;
     /**
+    /**
      * Attributes the current holder of the named lock to its physical session
      * connection id via `IS_USED_LOCK(name)`, captured at the telemetry event
      * moment (best-effort; the caller guards failures).
@@ -382,10 +383,11 @@ export default class VelociousDatabaseDriversMysql extends Base {
      */
     advisoryLockHolderConnectionId(name: string): Promise<string | null>;
     /**
-     * Runs is advisory lock held.
+     * Driver-native view for the base driver's `isAdvisoryLockHeld`, which
+     * answers from the process-local tier first.
      * @param {string} name - Lock name.
      * @returns {Promise<boolean>} - True if any session currently holds the lock.
      */
-    isAdvisoryLockHeld(name: string): Promise<boolean>;
+    _isAdvisoryLockHeldNative(name: string): Promise<boolean>;
 }
 //# sourceMappingURL=index.d.ts.map
