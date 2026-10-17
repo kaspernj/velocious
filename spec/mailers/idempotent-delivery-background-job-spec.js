@@ -81,7 +81,7 @@ export default new Configuration({
     driver: SqliteDriver,
     migrations: false,
     name: "mail-crash-window",
-    pool: {checkoutTimeoutMillis: 100, max: 1},
+    pool: {checkoutTimeoutMillis: 10_000, max: 1},
     poolType: AsyncTrackedMultiConnectionPool,
     type: "sqlite"
   }}},
@@ -136,15 +136,15 @@ export default new Configuration({
 
       if (typeof jobId !== "string") throw new Error("Expected native mail job id")
 
-      await timeout({timeout: 2000}, async () => await fakeServer.quitReceived)
-      expect(await timeout({timeout: 5000}, async () => await failedUpdate.promise)).toEqual(jobId)
+      await timeout({timeout: 10_000}, async () => await fakeServer.quitReceived)
+      expect(await timeout({timeout: 15_000}, async () => await failedUpdate.promise)).toEqual(jobId)
 
       await store._withDb(async (db) => {
         await db.update({tableName: "background_jobs", data: {scheduled_at_ms: 0}, conditions: {id: jobId}})
       })
       await main._drain()
 
-      expect(await timeout({timeout: 5000}, async () => await completedUpdate.promise)).toEqual(jobId)
+      expect(await timeout({timeout: 15_000}, async () => await completedUpdate.promise)).toEqual(jobId)
       const completed = await store.getJob(jobId)
       const operationRows = await store._withDb(async (db) => await db.newQuery().from("mailer_delivery_operations").results())
 

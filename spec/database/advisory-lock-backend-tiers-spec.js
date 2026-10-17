@@ -55,6 +55,13 @@ class SqliteEmulationDriver extends GrantingDriver {
    * @returns {string} - Driver type.
    */
   getType() { return "sqlite" }
+
+  /**
+   * Mirrors the real SQLite base driver: the in-process emulation is the
+   * process-local tier of the STC-210 chain.
+   * @returns {string} - Tier name.
+   */
+  advisoryLockBackendTier() { return "process-local" }
 }
 
 /**

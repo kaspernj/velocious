@@ -181,6 +181,60 @@ export default class AdvisoryLockRunner {
   }
 
   /**
+  /**
+   * Runs a callback if the advisory lock can be acquired without waiting;
+   * otherwise returns a `{acquired: false}` defer result instead of throwing.
+   *
+   * This is the non-throwing counterpart of `withAdvisoryLockOrFail` for hot
+   * paths: "holder busy, defer me" is a first-class outcome, so a contended
+   * lock produces zero exception traffic and — because the probe is a single
+   * immediate try-acquire — zero pinned connections. Callers reschedule via
+   * their own event-driven retry machinery. The result form is identical
+   * across tiers: the driver's `tryAcquireAdvisoryLock` maps per-tier (MySQL
+   * `GET_LOCK(name, 0)`, PostgreSQL `pg_try_advisory_lock`, SQL Server
+   * `sp_getapplock @LockTimeout = 0`, SQLite process-local queue, SQLite Node
+   * file lock), so a caller never branches on the backend.
+   * @template T
+   * @param {string} name - Lock name.
+   * @param {(args?: {control?: import("awaitery/build/timeout.js").TimeoutControl, lockBackend: AdvisoryLockBackendProvenance}) => Promise<T>} callback - Callback to invoke while the lock is held.
+   * @param {{holdTimeoutMs?: number | null, dedicatedConnection?: boolean}} [args] - Hold timeout options.
+   * @returns {Promise<{acquired: true, result: T} | {acquired: false, reason: "contended", lockName: string}>} - Either the held-callback result or the defer outcome.
+   */
+  async withAdvisoryLockOrDefer(name, callback, args = {}) {
+    const fileBackend = await this.fileBackendForName(name)
+
+    if (fileBackend) {
+      const acquired = await fileBackend.acquire(name, {timeoutMs: 0})
+
+      if (!acquired) return {acquired: false, reason: "contended", lockName: name}
+
+      const lockBackend = this.fileProvenance(fileBackend, name)
+
+      this.configuration.recordAdvisoryLockAcquisition({backend: lockBackend.backend, fencingSupported: lockBackend.fencingSupported, lockName: name})
+
+      const result = await this.runLockedCallback({callback, holdTimeoutMs: args.holdTimeoutMs, lockBackend, name, release: async () => await fileBackend.release(name)})
+
+      return {acquired: true, result}
+    }
+
+    return await this.withLockConnection(args, async (connection) => {
+      const acquired = await connection.tryAcquireAdvisoryLock(name)
+
+      if (!acquired) return {acquired: false, reason: "contended", lockName: name}
+
+      const lockBackend = this.driverProvenance(connection)
+
+      this.assertDriverTierEligible(name, lockBackend)
+
+      this.configuration.recordAdvisoryLockAcquisition({backend: lockBackend.backend, fencingSupported: lockBackend.fencingSupported, lockName: name})
+
+      const result = await this.runLockedCallback({callback, holdTimeoutMs: args.holdTimeoutMs, lockBackend, name, release: async () => await connection.releaseAdvisoryLock(name)})
+
+      return {acquired: true, result}
+    })
+  }
+
+  /**
    * Runs the lock holder callback and releases the lock from its owning backend.
    * @template T
    * @param {{callback: (args?: {control?: import("awaitery/build/timeout.js").TimeoutControl, lockBackend: AdvisoryLockBackendProvenance}) => Promise<T>, holdTimeoutMs?: number | null, lockBackend: AdvisoryLockBackendProvenance, name: string, release: () => Promise<unknown>}} args - Locked callback args.
@@ -292,12 +346,22 @@ export default class AdvisoryLockRunner {
    * @returns {AdvisoryLockBackendProvenance} - Acquisition provenance.
    */
   driverProvenance(connection) {
-    const driverType = connection.getType()
+    let driverType = null
+
+    try {
+      driverType = connection.getType()
+    } catch {
+      // Test stub drivers may not implement getType(); the tier alone identifies the backend.
+    }
+
+    const tier = typeof connection.advisoryLockBackendTier === "function"
+      ? connection.advisoryLockBackendTier()
+      : (driverType === "sqlite" ? "process-local" : "driver-native")
 
     return {
-      backend: driverType === "sqlite" ? "process-local" : "driver-native",
-      driverType,
-      fencingSupported: driverType !== "sqlite"
+      backend: /** @type {import("./advisory-lock-backend-policy.js").AdvisoryLockTier} */ (tier),
+      driverType: driverType ?? undefined,
+      fencingSupported: tier === "driver-native"
     }
   }
 

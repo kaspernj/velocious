@@ -205,6 +205,39 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
   }
 
   /**
+   * The Node SQLite driver layers the opt-in file tier on top of the
+   * process-local pre-filter, so telemetry reports it as `file`.
+   * @returns {string} - Tier name reported on telemetry payloads.
+   */
+  advisoryLockBackendTier() {
+    return "file"
+  }
+
+  /**
+   * Attribute the named lock to the file-tier owner recorded in
+   * `owner.json` (`pid@hostname`), captured at the telemetry event moment
+   * (best-effort; the caller guards failures). Falls back to the
+   * process-local owner when the filesystem lock is not the holder.
+   * @param {string} name - Lock name.
+   * @returns {Promise<string | null>} - File lock owner identity, or null when no process holds the lock.
+   */
+  async advisoryLockHolderConnectionId(name) {
+    const lockPath = this._advisoryLockPath(name)
+
+    try {
+      const content = await fs.readFile(path.join(lockPath, "owner.json"), "utf8")
+      const owner = JSON.parse(content)
+
+      if (owner && typeof owner.pid === "number" && typeof owner.hostname === "string") return `${owner.pid}@${owner.hostname}`
+    } catch {
+      // No file lock directory or unreadable metadata: fall through to the
+      // in-process owner below.
+    }
+
+    return await super.advisoryLockHolderConnectionId(name)
+  }
+
+  /**
    * Runs resolve advisory lock directory.
    * @returns {string} - The advisory-lock directory.
    */

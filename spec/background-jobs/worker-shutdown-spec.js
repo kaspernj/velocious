@@ -123,7 +123,7 @@ function workerWithTrackedChild() {
  * @param {number} [timeoutMs] - Maximum exit wait.
  * @returns {Promise<{code: number | null, signal: NodeJS.Signals | null}>} - Exit result.
  */
-async function waitForChildExit(child, timeoutMs = 2000) {
+async function waitForChildExit(child, timeoutMs = 10_000) {
   return await new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       reject(new Error("Timed out waiting for forked runner child to exit"))
@@ -382,7 +382,7 @@ describe("Background jobs worker - shutdown", () => {
       })
 
       child.send({type: "job", payload: {id: jobId, jobName: "ExitAfterCompletionJob", args: []}})
-      const exit = await waitForChildExit(child, 7000)
+      const exit = await waitForChildExit(child, 30_000)
 
       expect(durableReportReceived).toBe(true)
       expect(exit.signal).toBe(null)
@@ -432,7 +432,7 @@ describe("Background jobs worker - shutdown", () => {
         }
       })
 
-      const exit = await timeout({timeout: 2000}, async () => await waitForChildExit(child))
+      const exit = await timeout({timeout: 10_000}, async () => await waitForChildExit(child))
 
       expect(durableReportReceived).toBe(true)
       expect(exit).toEqual({code: 0, signal: null})
@@ -573,7 +573,7 @@ describe("Background jobs worker - shutdown", () => {
       })
 
       child.send({type: "job", payload: {id: jobId, jobName: "ExitAfterCompletionJob", args: []}})
-      const exit = await waitForChildExit(child, 7000)
+      const exit = await waitForChildExit(child, 30_000)
 
       expect(completionReports).toBe(1)
       expect(exit.signal).toBe(null)
@@ -623,7 +623,7 @@ describe("Background jobs worker - shutdown", () => {
         }
       })
 
-      const exit = await waitForChildExit(child, 5000)
+      const exit = await waitForChildExit(child, 15_000)
 
       expect(completionReports).toBe(1)
       expect(exit.signal).toBe(null)

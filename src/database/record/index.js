@@ -3034,6 +3034,34 @@ class VelociousDatabaseRecord {
   }
 
   /**
+   * Runs `callback` if the named advisory lock can be acquired immediately;
+   * otherwise resolves with a `{acquired: false, reason: "contended"}` defer
+   * result instead of throwing. This is the non-throwing counterpart of
+   * `withAdvisoryLockOrFail` for hot paths: contention is a normal outcome,
+   * so callers reschedule via their own event-driven retry machinery with zero
+   * exception traffic and zero pinned connections (the probe is a single
+   * immediate try-acquire on the tier's native try primitive). The result form
+   * is identical across tiers.
+   * @template T
+   * @param {string} name - Lock name.
+   * @param {() => Promise<T>} callback - Callback to invoke while the lock is held.
+   * @param {{holdTimeoutMs?: number | null, dedicatedConnection?: boolean}} [args] - `holdTimeoutMs` caps how long the callback may hold the lock; `dedicatedConnection` spawns a separate lock session without enabling a hold timeout.
+   * @returns {Promise<{acquired: true, result: T} | {acquired: false, reason: "contended", lockName: string}>} - Either the held-callback result or the defer outcome.
+   * @throws {AdvisoryLockHoldTimeoutError} - If `holdTimeoutMs` elapses while the callback holds the lock.
+   */
+  static async withAdvisoryLockOrDefer(name, callback, args = {}) {
+    await this.ensureInitialized()
+
+    const runner = new AdvisoryLockRunner({
+      configuration: this._getConfiguration(),
+      connectionProvider: () => this.connection(),
+      databaseIdentifier: this.getDatabaseIdentifier()
+    })
+
+    return await runner.withAdvisoryLockOrDefer(name, callback, args)
+  }
+
+  /**
    * Runs `callback`, rejecting with `AdvisoryLockHoldTimeoutError` if it has
    * not settled within `holdTimeoutMs`. The callback is not cancelled — this is
    * a safety net, not cancellation.
