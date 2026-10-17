@@ -21,12 +21,45 @@ export default class MigrationsLedger {
      */
     static tableExists(db: import("./drivers/base.js").default): Promise<boolean>;
     /**
+     * Whether the error means a concurrent session already created the ledger table.
+     *
+     * Several processes bootstrap the same database at the same time (for example every
+     * CI test shard), and the MSSQL `IF NOT EXISTS (...) BEGIN CREATE TABLE ... END` guard
+     * is NOT atomic: two sessions can both evaluate the check as false and then both
+     * create, so the loser is rejected. Walks the wrapped-error cause chain because
+     * `db.query` re-wraps the driver's `RequestError` in a plain `Error`, and matches the
+     * stable numeric error number instead of the localized message text.
+     * @param {unknown} error - Error thrown while creating the ledger table.
+     * @returns {boolean} - True if the table was created by a concurrent session.
+     */
+    static isConcurrentCreationError(error: unknown): boolean;
+    /**
+     * Whether the error is a transient deadlock that should be retried.
+     *
+     * Concurrent boots also deadlock on the `INFORMATION_SCHEMA` metadata scan that
+     * `getTableByName` performs on SQL Server; the victim transaction rolled back cleanly,
+     * so retrying it is safe. Matched by numeric error number, never by message text.
+     * @param {unknown} error - Error thrown while inspecting or creating the ledger table.
+     * @returns {boolean} - True if the error is a retryable deadlock.
+     */
+    static isDeadlockError(error: unknown): boolean;
+    /**
      * Creates the ledger table if it does not exist. This is the single definition of
      * the `schema_migrations` table shape.
+     *
+     * Safe under concurrency: a session that loses the create race (or deadlocks on the
+     * catalog read) converges on the existing table instead of failing its caller. That
+     * matters because this runs on every boot of a database configured for migrations
+     * (see `Migrator#createMigrationsTableForDatabase` and
+     * `migrateRequireContextForDatabase`), so a crash here takes down a whole test shard
+     * or deployment over a table that provably already exists.
      * @param {import("./drivers/base.js").default} db - Database that should contain the ledger table.
+     * @param {{maxAttempts?: number}} [args] - Retry budget for transient catalog deadlocks.
      * @returns {Promise<void>}
      */
-    static ensureTable(db: import("./drivers/base.js").default): Promise<void>;
+    static ensureTable(db: import("./drivers/base.js").default, { maxAttempts }?: {
+        maxAttempts?: number;
+    }): Promise<void>;
     /**
      * Every applied migration version recorded in the ledger.
      * @param {import("./drivers/base.js").default} db - Database whose applied versions are loaded.
