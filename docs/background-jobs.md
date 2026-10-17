@@ -426,6 +426,45 @@ integer from 0 through Node's maximum timer delay of 2,147,483,647 ms; the main
 constructor throws for invalid values instead of allowing an overflowing timer
 to fire immediately. Its timer is unrefed and is cleared during main shutdown.
 
+## Runner identity and owner liveness
+
+A handed-off job records the process that accepted it, not just the worker that dispatched it. When the pooled child reports `job-received` / `job-started`, the store writes:
+
+- `child_instance_id` — stable identity of that pooled child process (a fresh UUID per child).
+- `child_pid` — the child's OS pid.
+- `runner_hostname` — hostname of the machine, which is the container id under Docker.
+- `child_received_at_ms` / `child_started_at_ms` — when the child picked the job up and when its `perform` started.
+
+These fields are cleared when the job is handed off again, so they always describe the current attempt. `worker_id` identifies the worker generation that owned the handoff.
+
+`BackgroundJobRecord#ownerIsAlive()` answers whether the recorded owner still exists:
+
+```js
+import BackgroundJobRecord from "velocious/build/src/background-jobs/job-record.js"
+
+const job = await BackgroundJobRecord.find(jobId)
+const liveness = job.ownerIsAlive()
+// {status: "alive" | "dead" | "unknown", reason, childInstanceId, childPid, runnerHostname}
+```
+
+Local jobs are answered from `runner_hostname` plus `child_pid` with a `process.kill(pid, 0)` probe. Jobs accepted on another host, or rows recorded before runner hostnames existed, answer `unknown`: remote liveness needs a heartbeat or instance registry, and the helper intentionally does not guess. A pid can be recycled after a process exits, so `alive` means a process with that pid exists now — pair it with `child_started_at_ms` when that distinction matters.
+
+### Releasing claims when an owner dies
+
+Use the existing `background-job-orphaned` event rather than a new timer. Its `context` carries `childInstanceId`, `childPid`, `runnerHostname`, and `workerId`, so a handler can release claims for exactly the dead owner:
+
+```js
+configuration.getErrorEvents().on("background-job-orphaned", ({context}) => {
+  releaseClaims({
+    childPid: context.childPid,
+    jobId: context.jobId,
+    runnerHostname: context.runnerHostname
+  })
+})
+```
+
+For synchronous paths you already run — a requeue, reassignment, or terminal transition — read the same fields from the job row and call `ownerIsAlive()` before reusing or deleting that owner's claims.
+
 ## Process titles
 
 Every velocious process sets a descriptive `process.title`, so `ps`/`top`/`htop` identify it instead of showing a wall of generic `node` entries — essential for seeing which processes and jobs consume CPU/RAM in production:
@@ -533,7 +572,7 @@ configuration.getErrorEvents().on("background-job-orphaned", ({error, context}) 
 })
 ```
 
-The `background-job-orphaned` payload mirrors `background-job-failed`: `error` (the orphan reason as an `Error`) and `context` with `attempts`, `jobArgs`, `jobId`, `jobName`, `maxRetries`, `status`, `terminal`, `willRetry`, and `stage: "background-job-orphaned"`. `willRetry` is `true` when the reclaim returned the job to the queue for another attempt (retries remaining) and `false` when it was exhausted into a terminal `orphaned` state. An orphan sweep has no pooled-child report to attach, so it does not synthesize `runnerFailure` or a shutdown reason. Treat that cause as unknown; child acceptance timestamps/PID alone do not prove OOM, deployment, timeout, signal, or normal retirement.
+The `background-job-orphaned` payload mirrors `background-job-failed`: `error` (the orphan reason as an `Error`) and `context` with `attempts`, `childInstanceId`, `childPid`, `jobArgs`, `jobId`, `jobName`, `maxRetries`, `runnerHostname`, `status`, `terminal`, `willRetry`, `workerId`, and `stage: "background-job-orphaned"`. The runner identity fields name the exact process that owned the job when it died, so a cleanup handler can release only that owner's claims. `willRetry` is `true` when the reclaim returned the job to the queue for another attempt (retries remaining) and `false` when it was exhausted into a terminal `orphaned` state. An orphan sweep has no pooled-child report to attach, so it does not synthesize `runnerFailure` or a shutdown reason. Treat that cause as unknown; child acceptance timestamps/PID alone do not prove OOM, deployment, timeout, signal, or normal retirement.
 
 An unexpected live concurrency-reconciliation failure is emitted as
 `framework-error` and mirrored to `all-error` with

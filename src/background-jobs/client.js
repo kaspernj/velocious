@@ -26,7 +26,7 @@ const BACKGROUND_JOB_NULLABLE_NUMBER_FIELDS = [
   "scheduledAtMs",
   "timeoutMs"
 ]
-const BACKGROUND_JOB_NULLABLE_STRING_FIELDS = ["childInstanceId", "concurrencyKey", "handoffId", "lastError", "scheduleKey", "workerId"]
+const BACKGROUND_JOB_NULLABLE_STRING_FIELDS = ["childInstanceId", "concurrencyKey", "handoffId", "lastError", "runnerHostname", "scheduleKey", "workerId"]
 
 /**
  * Checks a required nullable number from a normalized wire row.
