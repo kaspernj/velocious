@@ -431,6 +431,18 @@ export default class VelociousDatabaseDriversBase {
     /** @type {Map<string, number>} */
     _heldAdvisoryLocks: Map<string, number>;
     /**
+     * When each tracked advisory lock was first acquired, so the final release can
+     * report a hold that outlived `advisoryLockTelemetry.slowHoldMs`.
+     * @type {Map<string, number>}
+     */
+    _advisoryLockAcquiredAtByName: Map<string, number>;
+    /**
+     * Stable per-connection holder identity used by advisory-lock telemetry when
+     * the tier can only name local holders.
+     * @type {string | undefined}
+     */
+    _advisoryLockHolderId: string | undefined;
+    /**
      * Exclusive operation lease installed by a single-multi-use pool.
      * @type {import("../operation-lease.js").default | undefined}
      */
@@ -1681,5 +1693,44 @@ export default class VelociousDatabaseDriversBase {
      * @returns {Promise<boolean>} - Resolves to true if the native tier reports the lock held.
      */
     _isAdvisoryLockHeldNative(name: string): Promise<boolean>;
+    /**
+     * Which advisory-lock backend tier this connection serves (STC-210 chain
+     * naming). The base driver is the driver-native tier; the SQLite drivers
+     * override to `process-local` / `file`.
+     * @returns {string} - Tier name reported on telemetry payloads.
+     */
+    advisoryLockBackendTier(): string;
+    /**
+     * Stable identity of this connection as a lock holder, reported on
+     * telemetry payloads so a slow acquire/hold is attributable to the reporting
+     * connection itself.
+     * @returns {string} - Holder id.
+     */
+    advisoryLockHolderId(): string;
+    /**
+     * Best-effort identity of the connection currently holding the named lock,
+     * captured on the tier that served the acquisition. The base driver has no
+     * portable server-side lookup; MySQL/PostgreSQL/SQL Server/Node-SQLite
+     * override with their tier's holder attribution.
+     * @param {string} name - Lock name.
+     * @returns {Promise<string | null>} - Holder connection identity, or null when the tier cannot attribute it.
+     */
+    advisoryLockHolderConnectionId(name: string): Promise<string | null>;
+    /**
+     * Emit one event-driven advisory-lock telemetry report (slow acquire,
+     * acquire timeout with holder attribution, slow hold). The holder lookup is
+     * best-effort: a failed lookup is recorded on the report and never affects
+     * the acquisition that already settled.
+     * @param {{event: "advisory-lock-slow-acquire" | "advisory-lock-acquire-timeout" | "advisory-lock-slow-hold", lockName: string, durationMs: number, outcome: "acquired" | "timeout" | null, timeoutMs: number | null, captureHolder?: boolean}} args - Report args.
+     * @returns {Promise<void>} - Resolves after the report is emitted.
+     */
+    _reportAdvisoryLockTelemetry(args: {
+        event: "advisory-lock-slow-acquire" | "advisory-lock-acquire-timeout" | "advisory-lock-slow-hold";
+        lockName: string;
+        durationMs: number;
+        outcome: "acquired" | "timeout" | null;
+        timeoutMs: number | null;
+        captureHolder?: boolean;
+    }): Promise<void>;
 }
 //# sourceMappingURL=base.d.ts.map

@@ -408,4 +408,24 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
   supportsReentrantAdvisoryLock() {
     return false
   }
+
+  /**
+   * The SQLite emulation is the process-local tier of the STC-210 chain.
+   * @returns {string} - Tier name reported on telemetry payloads.
+   */
+  advisoryLockBackendTier() {
+    return "process-local"
+  }
+
+  /**
+   * Attribute the named lock to the driver instance that owns it in the
+   * shared in-process registry (best-effort; the caller guards failures).
+   * @param {string} name - Lock name.
+   * @returns {Promise<string | null>} - Owning driver's holder id, or null when no instance holds the lock.
+   */
+  async advisoryLockHolderConnectionId(name) {
+    const owner = VelociousDatabaseDriversSqliteBase._advisoryLockState.ownersByName.get(name)
+
+    return owner ? owner.advisoryLockHolderId() : null
+  }
 }

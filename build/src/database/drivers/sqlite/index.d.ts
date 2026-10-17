@@ -78,6 +78,21 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
      */
     _isAdvisoryLockHeldNative(name: string): Promise<boolean>;
     /**
+     * The Node SQLite driver layers the opt-in file tier on top of the
+     * process-local pre-filter, so telemetry reports it as `file`.
+     * @returns {string} - Tier name reported on telemetry payloads.
+     */
+    advisoryLockBackendTier(): string;
+    /**
+     * Attribute the named lock to the file-tier owner recorded in
+     * `owner.json` (`pid@hostname`), captured at the telemetry event moment
+     * (best-effort; the caller guards failures). Falls back to the
+     * process-local owner when the filesystem lock is not the holder.
+     * @param {string} name - Lock name.
+     * @returns {Promise<string | null>} - File lock owner identity, or null when no process holds the lock.
+     */
+    advisoryLockHolderConnectionId(name: string): Promise<string | null>;
+    /**
      * Runs resolve advisory lock directory.
      * @returns {string} - The advisory-lock directory.
      */

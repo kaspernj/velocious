@@ -219,6 +219,15 @@ export default class VelociousDatabaseDriversPgsql extends Base {
      */
     _releaseAdvisoryLock(name: string): Promise<boolean>;
     /**
+    /**
+     * Attributes the current holder of the named advisory lock to its backend
+     * process id from `pg_locks`, captured at the telemetry event moment
+     * (best-effort; the caller guards failures).
+     * @param {string} name - Lock name.
+     * @returns {Promise<string | null>} - PostgreSQL backend pid of the holder, or null when no session holds the lock.
+     */
+    advisoryLockHolderConnectionId(name: string): Promise<string | null>;
+    /**
      * Driver-native view for the base driver's `isAdvisoryLockHeld`, which
      * answers from the process-local tier first.
      * @param {string} name - Lock name.

@@ -58,6 +58,22 @@ await Account.withAdvisoryLock("sync-account-42", async () => {
   await syncAccount(42)
 }, {dedicatedConnection: true})
 
+// Defer instead of throwing. The non-throwing counterpart of
+// `withAdvisoryLockOrFail` for hot paths: contention is a first-class result,
+// not an exception. A contended lock resolves to `{acquired: false, reason:
+// "contended"}` — zero exception traffic, and because the probe is a single
+// immediate try-acquire, zero pinned connections. Reschedule via your own
+// event-driven retry machinery.
+const outcome = await Account.withAdvisoryLockOrDefer("sync-account-42", async () => {
+  return await syncAccount(42)
+})
+
+if (!outcome.acquired) {
+  // Another process is syncing this account; defer and reschedule this run.
+} else {
+  console.log(outcome.result)
+}
+
 // Introspection. Useful in diagnostics; callers that want to act on the
 // result should prefer `withAdvisoryLockOrFail` to avoid a TOCTOU window.
 const isBusy = await Account.hasAdvisoryLock("sync-account-42")
@@ -84,6 +100,55 @@ A blocking acquisition that passes no `timeoutMs` no longer waits forever. It wa
 ```
 
 Why the bound exists: an unbounded `GET_LOCK` on MySQL/MariaDB waits for one year. When one holder wedged — a killed process, a runner that died while holding the lock, a connection that never returned — every later caller on the same lock name queued behind it, and each waiter parked a pooled connection in the server's `User lock` state. A single wedged name therefore drained the pool and stalled dispatch process-wide while nothing logged. The default sits far above any contention observed in healthy operation, so a legitimate lock handover is never cut off; a wedged holder now surfaces as a named `AdvisoryLockTimeoutError` instead of a silent outage.
+
+## Contended-acquire defer semantics
+
+`withAdvisoryLockOrFail` reports contention by throwing `AdvisoryLockBusyError`. On a hot path — a build fan-out that claims per-child admission locks thousands of times per minute — exception traffic is exactly the wrong shape: constructing and catching an `Error` per contention is expensive, and a caller that forgets the `try`/`catch` turns a busy lock into a crash. `withAdvisoryLockOrDefer` makes "holder busy, defer me" a plain return value:
+
+```js
+const outcome = await Account.withAdvisoryLockOrDefer(name, callback, {holdTimeoutMs})
+// acquired:  {acquired: true, result: <callback result>}
+// contended: {acquired: false, reason: "contended", lockName: name}
+```
+
+The result form is **identical across tiers**: the runner drives the driver's `tryAcquireAdvisoryLock`, which maps per-tier to `GET_LOCK(name, 0)` (MySQL/MariaDB), `pg_try_advisory_lock` (PostgreSQL), `sp_getapplock @LockTimeout = 0` (SQL Server), the process-local waiter queue (SQLite) and the Node file lock. A caller never branches on the backend, and the defer path never acquires anything — no lock is held, no connection is pinned, and no `Error` is constructed. This is the primitive hot paths use instead of choosing between a 15-minute blocking `withAdvisoryLock` wait and a thrown timeout (STC-261, parent epic STC-209; the tier chain is designed in [docs/advisory-lock-backends.md](advisory-lock-backends.md)).
+
+## Duration telemetry
+
+A lock convoy is only fixable when it is attributable. Velocious emits **event-driven** telemetry reports on the acquisition and release events themselves — never from a periodic scanner — on the framework-error channel:
+
+```js
+configuration.getErrorEvents().on("framework-error", (payload) => {
+  if (payload.context === "advisory-lock-telemetry") {
+    // payload: {event, lockName, backendTier, durationMs, outcome, timeoutMs,
+    //           holderId, holderConnectionId, holderLookupError}
+  }
+})
+```
+
+| Event | Fires when | Attribution carried |
+| --- | --- | --- |
+| `advisory-lock-slow-acquire` | an acquire wait **completed** slower than `slowAcquireMs` (default 5 s) | `outcome: "acquired"` plus the wait duration |
+| `advisory-lock-acquire-timeout` | a wait **exceeded its timeout** | `outcome: "timeout"`, the effective `timeoutMs`, and the holder identity available on the tier at that moment |
+| `advisory-lock-slow-hold` | a hold outlived `slowHoldMs` (default 60 s), reported at release | the measured hold duration |
+
+Holder attribution per tier, captured at the event moment (best-effort — a failed lookup is recorded as `holderLookupError` and never changes the acquisition outcome):
+
+- **MySQL/MariaDB**: `IS_USED_LOCK(name)` → the holder's server connection id.
+- **PostgreSQL**: `pg_locks` (advisory, hashed key) → the holder's backend pid.
+- **SQL Server**: `sys.dm_tran_locks` (`APPLICATIONLOCK`) → the holder's request session id.
+- **SQLite (Node)**: the file lock's `owner.json` → `pid@hostname`; falls back to the in-process owner's `holderId`.
+- **SQLite (process-local)**: the owning driver instance's `holderId`.
+
+Thresholds are configured per database; `null` opts out of a report:
+
+```js
+// databaseConfiguration: {
+//   advisoryLockTelemetry: {slowAcquireMs: 2000, slowHoldMs: null}
+// }
+```
+
+When no `framework-error`/`all-error` listener is registered, each report also writes a one-line summary to `stderr` so a convoy is never completely silent. The reports are the framework-side half of the STC-261 acceptance: a contended lock in production is attributable to a concrete holder without SSH forensics.
 
 ## Scope
 
@@ -127,7 +192,7 @@ Web (sql.js) and Expo native inherit the shared in-process implementation unchan
 ## Errors
 
 - `AdvisoryLockTimeoutError` — thrown by `withAdvisoryLock` when a `timeoutMs` elapses before the lock is granted. Exposes `error.lockName`.
-- `AdvisoryLockBusyError` — thrown by `withAdvisoryLockOrFail` when the lock is already held. Exposes `error.lockName`.
+- `AdvisoryLockBusyError` — thrown by `withAdvisoryLockOrFail` when the lock is already held. Exposes `error.lockName`. `withAdvisoryLockOrDefer` reports the same contention as `{acquired: false, reason: "contended"}` instead of throwing.
 - `AdvisoryLockHoldTimeoutError` — thrown by either helper when a `holdTimeoutMs` elapses while the callback is still running. Exposes `error.lockName`.
 
 All three are exported from `velocious/build/src/database/record/index.js` (and the matching source path under `src/`).

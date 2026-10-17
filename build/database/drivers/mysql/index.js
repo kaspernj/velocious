@@ -883,6 +883,21 @@ export default class VelociousDatabaseDriversMysql extends Base{
   }
 
   /**
+  /**
+   * Attributes the current holder of the named lock to its physical session
+   * connection id via `IS_USED_LOCK(name)`, captured at the telemetry event
+   * moment (best-effort; the caller guards failures).
+   * @param {string} name - Lock name.
+   * @returns {Promise<string | null>} - MariaDB/MySQL connection id of the holder, or null when no session holds the lock.
+   */
+  async advisoryLockHolderConnectionId(name) {
+    const rows = await this.query(`SELECT IS_USED_LOCK(${this.quote(name)}) AS velocious_advisory_lock_holder`)
+    const holder = rows?.[0]?.velocious_advisory_lock_holder
+
+    return holder === null || holder === undefined ? null : String(holder)
+  }
+
+  /**
    * Driver-native view for the base driver's `isAdvisoryLockHeld`, which
    * answers from the process-local tier first.
    * @param {string} name - Lock name.

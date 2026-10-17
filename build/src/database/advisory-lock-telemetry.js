@@ -1,0 +1,122 @@
+// @ts-check
+/**
+ * Event-driven advisory-lock duration telemetry (STC-261, parent epic STC-209).
+ *
+ * A lock convoy is only fixable when it is *attributable*: which lock name was
+ * contended, on which backend tier, for how long, and who held it. These reports
+ * fire on the acquisition/release events themselves — never from a periodic
+ * scanner — so a contended lock in production surfaces on the framework-error
+ * channel with the holder identity available on that tier at that moment,
+ * without SSH forensics.
+ *
+ * Three events, each with its own threshold (all configurable per database via
+ * `advisoryLockTelemetry`, see `docs/advisory-locks.md`):
+ *
+ * - `advisory-lock-slow-acquire` — an acquire wait completed slower than
+ *   `slowAcquireMs` (default 5000), including the eventual outcome (`acquired`
+ *   or `timeout`).
+ * - `advisory-lock-acquire-timeout` — a wait exceeded its timeout. The report
+ *   carries the holder identity available on the tier at that moment: the
+ *   driver-native tiers attribute the holder connection (MariaDB
+ *   `IS_USED_LOCK`, PostgreSQL `pg_locks` joined to `pg_stat_activity`, SQL
+ *   Server `sys.dm_tran_locks` request session, SQLite Node file tier
+ *   `owner.json` pid/hostname); the process-local tier reports the owning
+ *   driver's `holderId`.
+ * - `advisory-lock-slow-hold` — a hold lasted longer than `slowHoldMs`
+ *   (default 60000), emitted at release.
+ *
+ * Reports are emitted on `configuration.getErrorEvents()` as `framework-error`
+ * (plus the matching `all-error`) with `{context: "advisory-lock-telemetry",
+ * event, lockName, backendTier, ...}` payloads, matching the repo's "never
+ * swallow" rule so process-level bug reporters capture them.
+ *
+ * Holder lookups are strictly best-effort *after* the acquisition already
+ * settled: a failed lookup never changes the acquisition outcome and never
+ * throws to the caller.
+ */
+/**
+ * One advisory-lock telemetry report.
+ * @typedef {object} AdvisoryLockTelemetryReport
+ * @property {"advisory-lock-slow-acquire" | "advisory-lock-acquire-timeout" | "advisory-lock-slow-hold"} event - Which event fired.
+ * @property {string} lockName - The contended advisory-lock name.
+ * @property {string} backendTier - Tier that served (or refused) the acquisition: `driver-native`, `process-local`, or `file`.
+ * @property {number} durationMs - Measured duration of the acquire wait (or the hold).
+ * @property {"acquired" | "timeout" | null} outcome - For acquire events: whether the wait eventually acquired the lock. Null for hold reports.
+ * @property {number | null} timeoutMs - The effective acquire bound for acquire events. Null for hold reports or an unbounded wait.
+ * @property {string | null} holderId - Process-local holder attribution when the tier can name its local holder.
+ * @property {string | null} holderConnectionId - Driver-native holder attribution captured at the event moment (MariaDB `IS_USED_LOCK` connection id, PostgreSQL pid, SQL Server session id, SQLite file `pid@hostname`).
+ * @property {string | null} holderLookupError - Set when the best-effort holder lookup itself failed; the lookup never affects the acquisition.
+ */
+/**
+ * Resolved per-database telemetry thresholds.
+ * @typedef {object} AdvisoryLockTelemetryThresholds
+ * @property {number | null} slowAcquireMs - Report an acquire wait slower than this; `null` disables slow-acquire reports.
+ * @property {number | null} slowHoldMs - Report a hold longer than this at release; `null` disables hold reports.
+ */
+/** Framework default: report an acquire wait that completed slower than this. */
+export const DEFAULT_ADVISORY_LOCK_SLOW_ACQUIRE_MS = 5000;
+/** Framework default: report a hold that outlives this at release. */
+export const DEFAULT_ADVISORY_LOCK_SLOW_HOLD_MS = 60 * 1000;
+/**
+ * Resolve the telemetry thresholds for one database configuration.
+ * An explicit per-database `advisoryLockTelemetry` value wins; `null` opts out
+ * of that report; only when neither is configured does the framework default
+ * apply.
+ * @param {import("../configuration-types.js").DatabaseConfigurationType} args - Database configuration args.
+ * @returns {AdvisoryLockTelemetryThresholds} - Resolved thresholds.
+ */
+export function advisoryLockTelemetryThresholds(args) {
+    const configured = args?.advisoryLockTelemetry;
+    /** @type {AdvisoryLockTelemetryThresholds} */
+    const thresholds = {
+        slowAcquireMs: DEFAULT_ADVISORY_LOCK_SLOW_ACQUIRE_MS,
+        slowHoldMs: DEFAULT_ADVISORY_LOCK_SLOW_HOLD_MS
+    };
+    if (configured?.slowAcquireMs === null)
+        thresholds.slowAcquireMs = null;
+    else if (typeof configured?.slowAcquireMs === "number" && configured.slowAcquireMs >= 0)
+        thresholds.slowAcquireMs = configured.slowAcquireMs;
+    if (configured?.slowHoldMs === null)
+        thresholds.slowHoldMs = null;
+    else if (typeof configured?.slowHoldMs === "number" && configured.slowHoldMs >= 0)
+        thresholds.slowHoldMs = configured.slowHoldMs;
+    return thresholds;
+}
+/**
+ * Emit one telemetry report on the framework-error channel.
+ *
+ * Mirrors the repo's framework-error emission shape (see `configuration.js`
+ * `_reportBeaconError`): when no listener is attached to `framework-error` or
+ * `all-error`, a one-line summary goes to `stderr` so a convoy is never
+ * completely silent. A listener failure can never break lock handling, so
+ * emissions are guarded.
+ * @param {import("../configuration.js").default} configuration - Configuration instance owning the error channel.
+ * @param {AdvisoryLockTelemetryReport} report - The report payload.
+ * @returns {void} - No return value.
+ */
+export function emitAdvisoryLockTelemetryReport(configuration, report) {
+    /** @type {import("eventemitter3").EventEmitter | undefined} */
+    let errorEvents;
+    try {
+        errorEvents = configuration?.getErrorEvents();
+    }
+    catch {
+        return; // No configuration to report through — never break lock handling.
+    }
+    if (!errorEvents)
+        return;
+    const hasListener = errorEvents.listenerCount("framework-error") > 0
+        || errorEvents.listenerCount("all-error") > 0;
+    const payload = { context: "advisory-lock-telemetry", ...report };
+    try {
+        errorEvents.emit("framework-error", payload);
+        errorEvents.emit("all-error", { ...payload, errorType: "framework-error" });
+    }
+    catch {
+        // A broken listener must never surface as a lock failure.
+    }
+    if (!hasListener) {
+        console.error(`[velocious advisory-lock-telemetry ${report.event}] lock=${JSON.stringify(report.lockName)} tier=${report.backendTier} durationMs=${report.durationMs}${report.outcome ? ` outcome=${report.outcome}` : ""}${report.holderConnectionId ? ` holderConnectionId=${report.holderConnectionId}` : ""}${report.holderId ? ` holderId=${report.holderId}` : ""} — subscribe via configuration.getErrorEvents().on("framework-error", …) to route these reports to your bug reporter`);
+    }
+}
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiYWR2aXNvcnktbG9jay10ZWxlbWV0cnkuanMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuLi8uLi8uLi9zcmMvZGF0YWJhc2UvYWR2aXNvcnktbG9jay10ZWxlbWV0cnkuanMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBQUEsWUFBWTtBQUVaOzs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7O0dBa0NHO0FBRUg7Ozs7Ozs7Ozs7OztHQVlHO0FBRUg7Ozs7O0dBS0c7QUFFSCxpRkFBaUY7QUFDakYsTUFBTSxDQUFDLE1BQU0scUNBQXFDLEdBQUcsSUFBSSxDQUFBO0FBRXpELHNFQUFzRTtBQUN0RSxNQUFNLENBQUMsTUFBTSxrQ0FBa0MsR0FBRyxFQUFFLEdBQUcsSUFBSSxDQUFBO0FBRTNEOzs7Ozs7O0dBT0c7QUFDSCxNQUFNLFVBQVUsK0JBQStCLENBQUMsSUFBSTtJQUNsRCxNQUFNLFVBQVUsR0FBRyxJQUFJLEVBQUUscUJBQXFCLENBQUE7SUFDOUMsOENBQThDO0lBQzlDLE1BQU0sVUFBVSxHQUFHO1FBQ2pCLGFBQWEsRUFBRSxxQ0FBcUM7UUFDcEQsVUFBVSxFQUFFLGtDQUFrQztLQUMvQyxDQUFBO0lBRUQsSUFBSSxVQUFVLEVBQUUsYUFBYSxLQUFLLElBQUk7UUFBRSxVQUFVLENBQUMsYUFBYSxHQUFHLElBQUksQ0FBQTtTQUNsRSxJQUFJLE9BQU8sVUFBVSxFQUFFLGFBQWEsS0FBSyxRQUFRLElBQUksVUFBVSxDQUFDLGFBQWEsSUFBSSxDQUFDO1FBQUUsVUFBVSxDQUFDLGFBQWEsR0FBRyxVQUFVLENBQUMsYUFBYSxDQUFBO0lBRTVJLElBQUksVUFBVSxFQUFFLFVBQVUsS0FBSyxJQUFJO1FBQUUsVUFBVSxDQUFDLFVBQVUsR0FBRyxJQUFJLENBQUE7U0FDNUQsSUFBSSxPQUFPLFVBQVUsRUFBRSxVQUFVLEtBQUssUUFBUSxJQUFJLFVBQVUsQ0FBQyxVQUFVLElBQUksQ0FBQztRQUFFLFVBQVUsQ0FBQyxVQUFVLEdBQUcsVUFBVSxDQUFDLFVBQVUsQ0FBQTtJQUVoSSxPQUFPLFVBQVUsQ0FBQTtBQUNuQixDQUFDO0FBRUQ7Ozs7Ozs7Ozs7O0dBV0c7QUFDSCxNQUFNLFVBQVUsK0JBQStCLENBQUMsYUFBYSxFQUFFLE1BQU07SUFDbkUsK0RBQStEO0lBQy9ELElBQUksV0FBVyxDQUFBO0lBRWYsSUFBSSxDQUFDO1FBQ0gsV0FBVyxHQUFHLGFBQWEsRUFBRSxjQUFjLEVBQUUsQ0FBQTtJQUMvQyxDQUFDO0lBQUMsTUFBTSxDQUFDO1FBQ1AsT0FBTSxDQUFDLGtFQUFrRTtJQUMzRSxDQUFDO0lBRUQsSUFBSSxDQUFDLFdBQVc7UUFBRSxPQUFNO0lBRXhCLE1BQU0sV0FBVyxHQUFHLFdBQVcsQ0FBQyxhQUFhLENBQUMsaUJBQWlCLENBQUMsR0FBRyxDQUFDO1dBQy9ELFdBQVcsQ0FBQyxhQUFhLENBQUMsV0FBVyxDQUFDLEdBQUcsQ0FBQyxDQUFBO0lBQy9DLE1BQU0sT0FBTyxHQUFHLEVBQUMsT0FBTyxFQUFFLHlCQUF5QixFQUFFLEdBQUcsTUFBTSxFQUFDLENBQUE7SUFFL0QsSUFBSSxDQUFDO1FBQ0gsV0FBVyxDQUFDLElBQUksQ0FBQyxpQkFBaUIsRUFBRSxPQUFPLENBQUMsQ0FBQTtRQUM1QyxXQUFXLENBQUMsSUFBSSxDQUFDLFdBQVcsRUFBRSxFQUFDLEdBQUcsT0FBTyxFQUFFLFNBQVMsRUFBRSxpQkFBaUIsRUFBQyxDQUFDLENBQUE7SUFDM0UsQ0FBQztJQUFDLE1BQU0sQ0FBQztRQUNQLDBEQUEwRDtJQUM1RCxDQUFDO0lBRUQsSUFBSSxDQUFDLFdBQVcsRUFBRSxDQUFDO1FBQ2pCLE9BQU8sQ0FBQyxLQUFLLENBQUMsc0NBQXNDLE1BQU0sQ0FBQyxLQUFLLFVBQVUsSUFBSSxDQUFDLFNBQVMsQ0FBQyxNQUFNLENBQUMsUUFBUSxDQUFDLFNBQVMsTUFBTSxDQUFDLFdBQVcsZUFBZSxNQUFNLENBQUMsVUFBVSxHQUFHLE1BQU0sQ0FBQyxPQUFPLENBQUMsQ0FBQyxDQUFDLFlBQVksTUFBTSxDQUFDLE9BQU8sRUFBRSxDQUFDLENBQUMsQ0FBQyxFQUFFLEdBQUcsTUFBTSxDQUFDLGtCQUFrQixDQUFDLENBQUMsQ0FBQyx1QkFBdUIsTUFBTSxDQUFDLGtCQUFrQixFQUFFLENBQUMsQ0FBQyxDQUFDLEVBQUUsR0FBRyxNQUFNLENBQUMsUUFBUSxDQUFDLENBQUMsQ0FBQyxhQUFhLE1BQU0sQ0FBQyxRQUFRLEVBQUUsQ0FBQyxDQUFDLENBQUMsRUFBRSxzSEFBc0gsQ0FBQyxDQUFBO0lBQ2hlLENBQUM7QUFDSCxDQUFDIiwic291cmNlc0NvbnRlbnQiOlsiLy8gQHRzLWNoZWNrXG5cbi8qKlxuICogRXZlbnQtZHJpdmVuIGFkdmlzb3J5LWxvY2sgZHVyYXRpb24gdGVsZW1ldHJ5IChTVEMtMjYxLCBwYXJlbnQgZXBpYyBTVEMtMjA5KS5cbiAqXG4gKiBBIGxvY2sgY29udm95IGlzIG9ubHkgZml4YWJsZSB3aGVuIGl0IGlzICphdHRyaWJ1dGFibGUqOiB3aGljaCBsb2NrIG5hbWUgd2FzXG4gKiBjb250ZW5kZWQsIG9uIHdoaWNoIGJhY2tlbmQgdGllciwgZm9yIGhvdyBsb25nLCBhbmQgd2hvIGhlbGQgaXQuIFRoZXNlIHJlcG9ydHNcbiAqIGZpcmUgb24gdGhlIGFjcXVpc2l0aW9uL3JlbGVhc2UgZXZlbnRzIHRoZW1zZWx2ZXMg4oCUIG5ldmVyIGZyb20gYSBwZXJpb2RpY1xuICogc2Nhbm5lciDigJQgc28gYSBjb250ZW5kZWQgbG9jayBpbiBwcm9kdWN0aW9uIHN1cmZhY2VzIG9uIHRoZSBmcmFtZXdvcmstZXJyb3JcbiAqIGNoYW5uZWwgd2l0aCB0aGUgaG9sZGVyIGlkZW50aXR5IGF2YWlsYWJsZSBvbiB0aGF0IHRpZXIgYXQgdGhhdCBtb21lbnQsXG4gKiB3aXRob3V0IFNTSCBmb3JlbnNpY3MuXG4gKlxuICogVGhyZWUgZXZlbnRzLCBlYWNoIHdpdGggaXRzIG93biB0aHJlc2hvbGQgKGFsbCBjb25maWd1cmFibGUgcGVyIGRhdGFiYXNlIHZpYVxuICogYGFkdmlzb3J5TG9ja1RlbGVtZXRyeWAsIHNlZSBgZG9jcy9hZHZpc29yeS1sb2Nrcy5tZGApOlxuICpcbiAqIC0gYGFkdmlzb3J5LWxvY2stc2xvdy1hY3F1aXJlYCDigJQgYW4gYWNxdWlyZSB3YWl0IGNvbXBsZXRlZCBzbG93ZXIgdGhhblxuICogICBgc2xvd0FjcXVpcmVNc2AgKGRlZmF1bHQgNTAwMCksIGluY2x1ZGluZyB0aGUgZXZlbnR1YWwgb3V0Y29tZSAoYGFjcXVpcmVkYFxuICogICBvciBgdGltZW91dGApLlxuICogLSBgYWR2aXNvcnktbG9jay1hY3F1aXJlLXRpbWVvdXRgIOKAlCBhIHdhaXQgZXhjZWVkZWQgaXRzIHRpbWVvdXQuIFRoZSByZXBvcnRcbiAqICAgY2FycmllcyB0aGUgaG9sZGVyIGlkZW50aXR5IGF2YWlsYWJsZSBvbiB0aGUgdGllciBhdCB0aGF0IG1vbWVudDogdGhlXG4gKiAgIGRyaXZlci1uYXRpdmUgdGllcnMgYXR0cmlidXRlIHRoZSBob2xkZXIgY29ubmVjdGlvbiAoTWFyaWFEQlxuICogICBgSVNfVVNFRF9MT0NLYCwgUG9zdGdyZVNRTCBgcGdfbG9ja3NgIGpvaW5lZCB0byBgcGdfc3RhdF9hY3Rpdml0eWAsIFNRTFxuICogICBTZXJ2ZXIgYHN5cy5kbV90cmFuX2xvY2tzYCByZXF1ZXN0IHNlc3Npb24sIFNRTGl0ZSBOb2RlIGZpbGUgdGllclxuICogICBgb3duZXIuanNvbmAgcGlkL2hvc3RuYW1lKTsgdGhlIHByb2Nlc3MtbG9jYWwgdGllciByZXBvcnRzIHRoZSBvd25pbmdcbiAqICAgZHJpdmVyJ3MgYGhvbGRlcklkYC5cbiAqIC0gYGFkdmlzb3J5LWxvY2stc2xvdy1ob2xkYCDigJQgYSBob2xkIGxhc3RlZCBsb25nZXIgdGhhbiBgc2xvd0hvbGRNc2BcbiAqICAgKGRlZmF1bHQgNjAwMDApLCBlbWl0dGVkIGF0IHJlbGVhc2UuXG4gKlxuICogUmVwb3J0cyBhcmUgZW1pdHRlZCBvbiBgY29uZmlndXJhdGlvbi5nZXRFcnJvckV2ZW50cygpYCBhcyBgZnJhbWV3b3JrLWVycm9yYFxuICogKHBsdXMgdGhlIG1hdGNoaW5nIGBhbGwtZXJyb3JgKSB3aXRoIGB7Y29udGV4dDogXCJhZHZpc29yeS1sb2NrLXRlbGVtZXRyeVwiLFxuICogZXZlbnQsIGxvY2tOYW1lLCBiYWNrZW5kVGllciwgLi4ufWAgcGF5bG9hZHMsIG1hdGNoaW5nIHRoZSByZXBvJ3MgXCJuZXZlclxuICogc3dhbGxvd1wiIHJ1bGUgc28gcHJvY2Vzcy1sZXZlbCBidWcgcmVwb3J0ZXJzIGNhcHR1cmUgdGhlbS5cbiAqXG4gKiBIb2xkZXIgbG9va3VwcyBhcmUgc3RyaWN0bHkgYmVzdC1lZmZvcnQgKmFmdGVyKiB0aGUgYWNxdWlzaXRpb24gYWxyZWFkeVxuICogc2V0dGxlZDogYSBmYWlsZWQgbG9va3VwIG5ldmVyIGNoYW5nZXMgdGhlIGFjcXVpc2l0aW9uIG91dGNvbWUgYW5kIG5ldmVyXG4gKiB0aHJvd3MgdG8gdGhlIGNhbGxlci5cbiAqL1xuXG4vKipcbiAqIE9uZSBhZHZpc29yeS1sb2NrIHRlbGVtZXRyeSByZXBvcnQuXG4gKiBAdHlwZWRlZiB7b2JqZWN0fSBBZHZpc29yeUxvY2tUZWxlbWV0cnlSZXBvcnRcbiAqIEBwcm9wZXJ0eSB7XCJhZHZpc29yeS1sb2NrLXNsb3ctYWNxdWlyZVwiIHwgXCJhZHZpc29yeS1sb2NrLWFjcXVpcmUtdGltZW91dFwiIHwgXCJhZHZpc29yeS1sb2NrLXNsb3ctaG9sZFwifSBldmVudCAtIFdoaWNoIGV2ZW50IGZpcmVkLlxuICogQHByb3BlcnR5IHtzdHJpbmd9IGxvY2tOYW1lIC0gVGhlIGNvbnRlbmRlZCBhZHZpc29yeS1sb2NrIG5hbWUuXG4gKiBAcHJvcGVydHkge3N0cmluZ30gYmFja2VuZFRpZXIgLSBUaWVyIHRoYXQgc2VydmVkIChvciByZWZ1c2VkKSB0aGUgYWNxdWlzaXRpb246IGBkcml2ZXItbmF0aXZlYCwgYHByb2Nlc3MtbG9jYWxgLCBvciBgZmlsZWAuXG4gKiBAcHJvcGVydHkge251bWJlcn0gZHVyYXRpb25NcyAtIE1lYXN1cmVkIGR1cmF0aW9uIG9mIHRoZSBhY3F1aXJlIHdhaXQgKG9yIHRoZSBob2xkKS5cbiAqIEBwcm9wZXJ0eSB7XCJhY3F1aXJlZFwiIHwgXCJ0aW1lb3V0XCIgfCBudWxsfSBvdXRjb21lIC0gRm9yIGFjcXVpcmUgZXZlbnRzOiB3aGV0aGVyIHRoZSB3YWl0IGV2ZW50dWFsbHkgYWNxdWlyZWQgdGhlIGxvY2suIE51bGwgZm9yIGhvbGQgcmVwb3J0cy5cbiAqIEBwcm9wZXJ0eSB7bnVtYmVyIHwgbnVsbH0gdGltZW91dE1zIC0gVGhlIGVmZmVjdGl2ZSBhY3F1aXJlIGJvdW5kIGZvciBhY3F1aXJlIGV2ZW50cy4gTnVsbCBmb3IgaG9sZCByZXBvcnRzIG9yIGFuIHVuYm91bmRlZCB3YWl0LlxuICogQHByb3BlcnR5IHtzdHJpbmcgfCBudWxsfSBob2xkZXJJZCAtIFByb2Nlc3MtbG9jYWwgaG9sZGVyIGF0dHJpYnV0aW9uIHdoZW4gdGhlIHRpZXIgY2FuIG5hbWUgaXRzIGxvY2FsIGhvbGRlci5cbiAqIEBwcm9wZXJ0eSB7c3RyaW5nIHwgbnVsbH0gaG9sZGVyQ29ubmVjdGlvbklkIC0gRHJpdmVyLW5hdGl2ZSBob2xkZXIgYXR0cmlidXRpb24gY2FwdHVyZWQgYXQgdGhlIGV2ZW50IG1vbWVudCAoTWFyaWFEQiBgSVNfVVNFRF9MT0NLYCBjb25uZWN0aW9uIGlkLCBQb3N0Z3JlU1FMIHBpZCwgU1FMIFNlcnZlciBzZXNzaW9uIGlkLCBTUUxpdGUgZmlsZSBgcGlkQGhvc3RuYW1lYCkuXG4gKiBAcHJvcGVydHkge3N0cmluZyB8IG51bGx9IGhvbGRlckxvb2t1cEVycm9yIC0gU2V0IHdoZW4gdGhlIGJlc3QtZWZmb3J0IGhvbGRlciBsb29rdXAgaXRzZWxmIGZhaWxlZDsgdGhlIGxvb2t1cCBuZXZlciBhZmZlY3RzIHRoZSBhY3F1aXNpdGlvbi5cbiAqL1xuXG4vKipcbiAqIFJlc29sdmVkIHBlci1kYXRhYmFzZSB0ZWxlbWV0cnkgdGhyZXNob2xkcy5cbiAqIEB0eXBlZGVmIHtvYmplY3R9IEFkdmlzb3J5TG9ja1RlbGVtZXRyeVRocmVzaG9sZHNcbiAqIEBwcm9wZXJ0eSB7bnVtYmVyIHwgbnVsbH0gc2xvd0FjcXVpcmVNcyAtIFJlcG9ydCBhbiBhY3F1aXJlIHdhaXQgc2xvd2VyIHRoYW4gdGhpczsgYG51bGxgIGRpc2FibGVzIHNsb3ctYWNxdWlyZSByZXBvcnRzLlxuICogQHByb3BlcnR5IHtudW1iZXIgfCBudWxsfSBzbG93SG9sZE1zIC0gUmVwb3J0IGEgaG9sZCBsb25nZXIgdGhhbiB0aGlzIGF0IHJlbGVhc2U7IGBudWxsYCBkaXNhYmxlcyBob2xkIHJlcG9ydHMuXG4gKi9cblxuLyoqIEZyYW1ld29yayBkZWZhdWx0OiByZXBvcnQgYW4gYWNxdWlyZSB3YWl0IHRoYXQgY29tcGxldGVkIHNsb3dlciB0aGFuIHRoaXMuICovXG5leHBvcnQgY29uc3QgREVGQVVMVF9BRFZJU09SWV9MT0NLX1NMT1dfQUNRVUlSRV9NUyA9IDUwMDBcblxuLyoqIEZyYW1ld29yayBkZWZhdWx0OiByZXBvcnQgYSBob2xkIHRoYXQgb3V0bGl2ZXMgdGhpcyBhdCByZWxlYXNlLiAqL1xuZXhwb3J0IGNvbnN0IERFRkFVTFRfQURWSVNPUllfTE9DS19TTE9XX0hPTERfTVMgPSA2MCAqIDEwMDBcblxuLyoqXG4gKiBSZXNvbHZlIHRoZSB0ZWxlbWV0cnkgdGhyZXNob2xkcyBmb3Igb25lIGRhdGFiYXNlIGNvbmZpZ3VyYXRpb24uXG4gKiBBbiBleHBsaWNpdCBwZXItZGF0YWJhc2UgYGFkdmlzb3J5TG9ja1RlbGVtZXRyeWAgdmFsdWUgd2luczsgYG51bGxgIG9wdHMgb3V0XG4gKiBvZiB0aGF0IHJlcG9ydDsgb25seSB3aGVuIG5laXRoZXIgaXMgY29uZmlndXJlZCBkb2VzIHRoZSBmcmFtZXdvcmsgZGVmYXVsdFxuICogYXBwbHkuXG4gKiBAcGFyYW0ge2ltcG9ydChcIi4uL2NvbmZpZ3VyYXRpb24tdHlwZXMuanNcIikuRGF0YWJhc2VDb25maWd1cmF0aW9uVHlwZX0gYXJncyAtIERhdGFiYXNlIGNvbmZpZ3VyYXRpb24gYXJncy5cbiAqIEByZXR1cm5zIHtBZHZpc29yeUxvY2tUZWxlbWV0cnlUaHJlc2hvbGRzfSAtIFJlc29sdmVkIHRocmVzaG9sZHMuXG4gKi9cbmV4cG9ydCBmdW5jdGlvbiBhZHZpc29yeUxvY2tUZWxlbWV0cnlUaHJlc2hvbGRzKGFyZ3MpIHtcbiAgY29uc3QgY29uZmlndXJlZCA9IGFyZ3M/LmFkdmlzb3J5TG9ja1RlbGVtZXRyeVxuICAvKiogQHR5cGUge0Fkdmlzb3J5TG9ja1RlbGVtZXRyeVRocmVzaG9sZHN9ICovXG4gIGNvbnN0IHRocmVzaG9sZHMgPSB7XG4gICAgc2xvd0FjcXVpcmVNczogREVGQVVMVF9BRFZJU09SWV9MT0NLX1NMT1dfQUNRVUlSRV9NUyxcbiAgICBzbG93SG9sZE1zOiBERUZBVUxUX0FEVklTT1JZX0xPQ0tfU0xPV19IT0xEX01TXG4gIH1cblxuICBpZiAoY29uZmlndXJlZD8uc2xvd0FjcXVpcmVNcyA9PT0gbnVsbCkgdGhyZXNob2xkcy5zbG93QWNxdWlyZU1zID0gbnVsbFxuICBlbHNlIGlmICh0eXBlb2YgY29uZmlndXJlZD8uc2xvd0FjcXVpcmVNcyA9PT0gXCJudW1iZXJcIiAmJiBjb25maWd1cmVkLnNsb3dBY3F1aXJlTXMgPj0gMCkgdGhyZXNob2xkcy5zbG93QWNxdWlyZU1zID0gY29uZmlndXJlZC5zbG93QWNxdWlyZU1zXG5cbiAgaWYgKGNvbmZpZ3VyZWQ/LnNsb3dIb2xkTXMgPT09IG51bGwpIHRocmVzaG9sZHMuc2xvd0hvbGRNcyA9IG51bGxcbiAgZWxzZSBpZiAodHlwZW9mIGNvbmZpZ3VyZWQ/LnNsb3dIb2xkTXMgPT09IFwibnVtYmVyXCIgJiYgY29uZmlndXJlZC5zbG93SG9sZE1zID49IDApIHRocmVzaG9sZHMuc2xvd0hvbGRNcyA9IGNvbmZpZ3VyZWQuc2xvd0hvbGRNc1xuXG4gIHJldHVybiB0aHJlc2hvbGRzXG59XG5cbi8qKlxuICogRW1pdCBvbmUgdGVsZW1ldHJ5IHJlcG9ydCBvbiB0aGUgZnJhbWV3b3JrLWVycm9yIGNoYW5uZWwuXG4gKlxuICogTWlycm9ycyB0aGUgcmVwbydzIGZyYW1ld29yay1lcnJvciBlbWlzc2lvbiBzaGFwZSAoc2VlIGBjb25maWd1cmF0aW9uLmpzYFxuICogYF9yZXBvcnRCZWFjb25FcnJvcmApOiB3aGVuIG5vIGxpc3RlbmVyIGlzIGF0dGFjaGVkIHRvIGBmcmFtZXdvcmstZXJyb3JgIG9yXG4gKiBgYWxsLWVycm9yYCwgYSBvbmUtbGluZSBzdW1tYXJ5IGdvZXMgdG8gYHN0ZGVycmAgc28gYSBjb252b3kgaXMgbmV2ZXJcbiAqIGNvbXBsZXRlbHkgc2lsZW50LiBBIGxpc3RlbmVyIGZhaWx1cmUgY2FuIG5ldmVyIGJyZWFrIGxvY2sgaGFuZGxpbmcsIHNvXG4gKiBlbWlzc2lvbnMgYXJlIGd1YXJkZWQuXG4gKiBAcGFyYW0ge2ltcG9ydChcIi4uL2NvbmZpZ3VyYXRpb24uanNcIikuZGVmYXVsdH0gY29uZmlndXJhdGlvbiAtIENvbmZpZ3VyYXRpb24gaW5zdGFuY2Ugb3duaW5nIHRoZSBlcnJvciBjaGFubmVsLlxuICogQHBhcmFtIHtBZHZpc29yeUxvY2tUZWxlbWV0cnlSZXBvcnR9IHJlcG9ydCAtIFRoZSByZXBvcnQgcGF5bG9hZC5cbiAqIEByZXR1cm5zIHt2b2lkfSAtIE5vIHJldHVybiB2YWx1ZS5cbiAqL1xuZXhwb3J0IGZ1bmN0aW9uIGVtaXRBZHZpc29yeUxvY2tUZWxlbWV0cnlSZXBvcnQoY29uZmlndXJhdGlvbiwgcmVwb3J0KSB7XG4gIC8qKiBAdHlwZSB7aW1wb3J0KFwiZXZlbnRlbWl0dGVyM1wiKS5FdmVudEVtaXR0ZXIgfCB1bmRlZmluZWR9ICovXG4gIGxldCBlcnJvckV2ZW50c1xuXG4gIHRyeSB7XG4gICAgZXJyb3JFdmVudHMgPSBjb25maWd1cmF0aW9uPy5nZXRFcnJvckV2ZW50cygpXG4gIH0gY2F0Y2gge1xuICAgIHJldHVybiAvLyBObyBjb25maWd1cmF0aW9uIHRvIHJlcG9ydCB0aHJvdWdoIOKAlCBuZXZlciBicmVhayBsb2NrIGhhbmRsaW5nLlxuICB9XG5cbiAgaWYgKCFlcnJvckV2ZW50cykgcmV0dXJuXG5cbiAgY29uc3QgaGFzTGlzdGVuZXIgPSBlcnJvckV2ZW50cy5saXN0ZW5lckNvdW50KFwiZnJhbWV3b3JrLWVycm9yXCIpID4gMFxuICAgIHx8IGVycm9yRXZlbnRzLmxpc3RlbmVyQ291bnQoXCJhbGwtZXJyb3JcIikgPiAwXG4gIGNvbnN0IHBheWxvYWQgPSB7Y29udGV4dDogXCJhZHZpc29yeS1sb2NrLXRlbGVtZXRyeVwiLCAuLi5yZXBvcnR9XG5cbiAgdHJ5IHtcbiAgICBlcnJvckV2ZW50cy5lbWl0KFwiZnJhbWV3b3JrLWVycm9yXCIsIHBheWxvYWQpXG4gICAgZXJyb3JFdmVudHMuZW1pdChcImFsbC1lcnJvclwiLCB7Li4ucGF5bG9hZCwgZXJyb3JUeXBlOiBcImZyYW1ld29yay1lcnJvclwifSlcbiAgfSBjYXRjaCB7XG4gICAgLy8gQSBicm9rZW4gbGlzdGVuZXIgbXVzdCBuZXZlciBzdXJmYWNlIGFzIGEgbG9jayBmYWlsdXJlLlxuICB9XG5cbiAgaWYgKCFoYXNMaXN0ZW5lcikge1xuICAgIGNvbnNvbGUuZXJyb3IoYFt2ZWxvY2lvdXMgYWR2aXNvcnktbG9jay10ZWxlbWV0cnkgJHtyZXBvcnQuZXZlbnR9XSBsb2NrPSR7SlNPTi5zdHJpbmdpZnkocmVwb3J0LmxvY2tOYW1lKX0gdGllcj0ke3JlcG9ydC5iYWNrZW5kVGllcn0gZHVyYXRpb25Ncz0ke3JlcG9ydC5kdXJhdGlvbk1zfSR7cmVwb3J0Lm91dGNvbWUgPyBgIG91dGNvbWU9JHtyZXBvcnQub3V0Y29tZX1gIDogXCJcIn0ke3JlcG9ydC5ob2xkZXJDb25uZWN0aW9uSWQgPyBgIGhvbGRlckNvbm5lY3Rpb25JZD0ke3JlcG9ydC5ob2xkZXJDb25uZWN0aW9uSWR9YCA6IFwiXCJ9JHtyZXBvcnQuaG9sZGVySWQgPyBgIGhvbGRlcklkPSR7cmVwb3J0LmhvbGRlcklkfWAgOiBcIlwifSDigJQgc3Vic2NyaWJlIHZpYSBjb25maWd1cmF0aW9uLmdldEVycm9yRXZlbnRzKCkub24oXCJmcmFtZXdvcmstZXJyb3JcIiwg4oCmKSB0byByb3V0ZSB0aGVzZSByZXBvcnRzIHRvIHlvdXIgYnVnIHJlcG9ydGVyYClcbiAgfVxufVxuIl19

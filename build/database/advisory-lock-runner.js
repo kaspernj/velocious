@@ -119,6 +119,37 @@ export default class AdvisoryLockRunner {
   }
 
   /**
+   * Runs a callback if the advisory lock can be acquired without waiting;
+   * otherwise returns a `{acquired: false}` defer result instead of throwing.
+   *
+   * This is the non-throwing counterpart of `withAdvisoryLockOrFail` for hot
+   * paths: "holder busy, defer me" is a first-class outcome, so a contended
+   * lock produces zero exception traffic and — because the probe is a single
+   * immediate try-acquire — zero pinned connections. Callers reschedule via
+   * their own event-driven retry machinery. The result form is identical
+   * across tiers: the driver's `tryAcquireAdvisoryLock` maps per-tier (MySQL
+   * `GET_LOCK(name, 0)`, PostgreSQL `pg_try_advisory_lock`, SQL Server
+   * `sp_getapplock @LockTimeout = 0`, SQLite process-local queue, SQLite Node
+   * file lock), so a caller never branches on the backend.
+   * @template T
+   * @param {string} name - Lock name.
+   * @param {(args?: {control: import("awaitery/build/timeout.js").TimeoutControl}) => Promise<T>} callback - Callback to invoke while the lock is held.
+   * @param {{holdTimeoutMs?: number | null, dedicatedConnection?: boolean}} [args] - Hold timeout options.
+   * @returns {Promise<{acquired: true, result: T} | {acquired: false, reason: "contended", lockName: string}>} - Either the held-callback result or the defer outcome.
+   */
+  async withAdvisoryLockOrDefer(name, callback, args = {}) {
+    return await this.withLockConnection(args, async (connection) => {
+      const acquired = await connection.tryAcquireAdvisoryLock(name)
+
+      if (!acquired) return {acquired: false, reason: "contended", lockName: name}
+
+      const result = await this.runLockedCallback({callback, connection, holdTimeoutMs: args.holdTimeoutMs, name})
+
+      return {acquired: true, result}
+    })
+  }
+
+  /**
    * Runs the lock holder callback and releases the lock from its owning connection.
    * @template T
    * @param {{callback: (args?: {control: import("awaitery/build/timeout.js").TimeoutControl}) => Promise<T>, connection: import("./drivers/base.js").default, holdTimeoutMs?: number | null, name: string}} args - Locked callback args.
