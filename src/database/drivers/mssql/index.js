@@ -954,4 +954,20 @@ export default class VelociousDatabaseDriversMssql extends Base{
 
     return testResult === 0
   }
+
+  /**
+   * Attributes the current holder of the named application lock to its
+   * requesting session from `sys.dm_tran_locks`, captured at the telemetry
+   * event moment (best-effort; the caller guards failures).
+   * @param {string} name - Lock name.
+   * @returns {Promise<string | null>} - SQL Server session id of the holder, or null when no session holds the lock.
+   */
+  async advisoryLockHolderConnectionId(name) {
+    const rows = await this.query(
+      `SELECT TOP 1 request_session_id AS velocious_advisory_lock_holder FROM sys.dm_tran_locks WHERE resource_type = 'APPLICATIONLOCK' AND resource_description = ${this.quote(name)}`
+    )
+    const holder = rows?.[0]?.velocious_advisory_lock_holder
+
+    return holder === null || holder === undefined ? null : String(holder)
+  }
 }

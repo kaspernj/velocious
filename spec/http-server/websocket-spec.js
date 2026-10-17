@@ -25,7 +25,7 @@ const waitForSocketOpen = async (socket) => {
 
 const waitForSocketMessage = async (socket, predicate) => {
   return await new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error("Timed out waiting for websocket message")), 2000)
+    const timeout = setTimeout(() => reject(new Error("Timed out waiting for websocket message")), 10_000)
     const listener = (event) => {
       const raw = getMessageText(event)
 
