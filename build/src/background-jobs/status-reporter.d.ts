@@ -67,9 +67,10 @@ export default class BackgroundJobsStatusReporter {
      * @param {number} [args.startedAtMs] - Epoch ms the job's perform started in the child.
      * @param {string} [args.childInstanceId] - Stable pooled child identity.
      * @param {number} [args.childPid] - Pooled child OS pid.
+     * @param {string} [args.runnerHostname] - Hostname of the machine running the pooled child.
      * @returns {Promise<void>} - Resolves when reported.
      */
-    reportChildAccepted({ jobId, handoffId, workerId, handedOffAtMs, receivedAtMs, startedAtMs, childInstanceId, childPid }: {
+    reportChildAccepted({ jobId, handoffId, workerId, handedOffAtMs, receivedAtMs, startedAtMs, childInstanceId, childPid, runnerHostname }: {
         jobId: string;
         handoffId?: string;
         workerId?: string;
@@ -78,6 +79,7 @@ export default class BackgroundJobsStatusReporter {
         startedAtMs?: number;
         childInstanceId?: string;
         childPid?: number;
+        runnerHostname?: string;
     }): Promise<void>;
     /**
      * Runs report child accepted with retry. Acceptance evidence is diagnostic
@@ -92,10 +94,11 @@ export default class BackgroundJobsStatusReporter {
      * @param {number} [args.startedAtMs] - Epoch ms the job's perform started in the child.
      * @param {string} [args.childInstanceId] - Stable pooled child identity.
      * @param {number} [args.childPid] - Pooled child OS pid.
+     * @param {string} [args.runnerHostname] - Hostname of the machine running the pooled child.
      * @param {number} args.maxDurationMs - Max duration for retries.
      * @returns {Promise<void>} - Resolves when reported or the budget elapses.
      */
-    reportChildAcceptedWithRetry({ jobId, handoffId, workerId, handedOffAtMs, receivedAtMs, startedAtMs, childInstanceId, childPid, maxDurationMs }: {
+    reportChildAcceptedWithRetry({ jobId, handoffId, workerId, handedOffAtMs, receivedAtMs, startedAtMs, childInstanceId, childPid, runnerHostname, maxDurationMs }: {
         jobId: string;
         handoffId?: string;
         workerId?: string;
@@ -104,6 +107,7 @@ export default class BackgroundJobsStatusReporter {
         startedAtMs?: number;
         childInstanceId?: string;
         childPid?: number;
+        runnerHostname?: string;
         maxDurationMs: number;
     }): Promise<void>;
     /**

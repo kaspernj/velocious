@@ -163,7 +163,7 @@ export default class LocalBackgroundJobsAdapter extends BackgroundJobsAdapter {
 
   /**
    * Records pooled-child acceptance evidence for a local handoff.
-   * @param {{jobId: string, handoffId?: string, receivedAtMs?: number, startedAtMs?: number, childInstanceId?: string, childPid?: number}} args - Acceptance report.
+   * @param {{jobId: string, handoffId?: string, receivedAtMs?: number, startedAtMs?: number, childInstanceId?: string, childPid?: number, runnerHostname?: string}} args - Acceptance report.
    * @returns {Promise<boolean>} - Whether accepted.
    */
   async markChildAccepted(args) { return await this.store.markChildAccepted(args) }

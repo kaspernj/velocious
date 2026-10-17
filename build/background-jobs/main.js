@@ -1272,6 +1272,7 @@ export default class BackgroundJobsMain {
         handoffId: message.handoffId,
         jobId: message.jobId,
         receivedAtMs: message.receivedAtMs,
+        runnerHostname: message.runnerHostname,
         startedAtMs: message.startedAtMs,
         workerId: message.workerId
       })
@@ -1862,14 +1863,18 @@ export default class BackgroundJobsMain {
     const payload = {
       context: {
         attempts: job.attempts,
+        childInstanceId: job.childInstanceId,
+        childPid: job.childPid,
         jobArgs: job.args,
         jobId: job.id,
         jobName: job.jobName,
         maxRetries: job.maxRetries,
+        runnerHostname: job.runnerHostname,
         stage: "background-job-orphaned",
         status: job.status,
         terminal: job.status === "failed" || job.status === "orphaned",
-        willRetry: job.status === "queued"
+        willRetry: job.status === "queued",
+        workerId: job.workerId
       },
       error: normalizedError
     }
