@@ -15,6 +15,10 @@ const ATTACHMENT_OWNER_INDEX_NAME = "index_velocious_attachments_on_record_type_
 const ATTACHMENT_RECORD_ID_DIGEST_LENGTH = 64
 const ATTACHMENT_RECORD_ID_DIGEST_MIGRATION_BATCH_SIZE = 100
 const ATTACHMENT_SCHEMA_LOCK_NAME = "velocious-attachments-schema"
+/** SQL Server deadlock victim — raised when concurrent sessions deadlock on the same catalog reads. */
+const MSSQL_DEADLOCK_VICTIM_ERROR_NUMBER = 1205
+/** Retry budget for transient catalog deadlocks while bootstrapping attachment schema. */
+const ATTACHMENT_SCHEMA_MAX_ATTEMPTS = 3
 
 /**
  * Stores by configuration.
@@ -181,6 +185,29 @@ function isConcurrentSchemaCreationError(error) {
   return /already exists/i.test(message) || /already an object named/i.test(message) || /duplicate (table|object|key)/i.test(message)
 }
 
+/**
+ * Whether an error is a retryable database deadlock victim.
+ *
+ * Matched by numeric error number, never by message text: SQL Server raises 1205 when a
+ * concurrent session wins the lock and this one is chosen as the victim. The victim's
+ * transaction has already rolled back, so the operation is safe to retry.
+ * @param {unknown} error - Thrown error.
+ * @returns {boolean} - Whether this is a retryable deadlock victim.
+ */
+function isDeadlockVictimError(error) {
+  let current = error
+
+  while (current instanceof Error) {
+    const errorNumber = /** @type {{number?: unknown}} */ (current).number
+
+    if (typeof errorNumber === "number" && errorNumber === MSSQL_DEADLOCK_VICTIM_ERROR_NUMBER) return true
+
+    current = current.cause
+  }
+
+  return false
+}
+
 export default class RecordAttachmentsStore {
   /**
    * Runs constructor.
@@ -260,18 +287,38 @@ export default class RecordAttachmentsStore {
     table.bigint("updated_at_ms", {null: false})
     table.addIndex(new TableIndex(["record_type", "record_id_digest"], {name: ATTACHMENT_OWNER_INDEX_NAME}))
 
-    try {
-      await db.createTable(table)
-    } catch (error) {
-      // A concurrent process may win the create between our tableExists() check and this
-      // call. createTable guards the table with ifNotExists but NOT its indexes, so the
-      // loser fails with a duplicate-object error. Treat that as "someone else bootstrapped
-      // it": reconcile through the upgrade path instead of failing the caller.
-      if (!isConcurrentSchemaCreationError(error)) throw error
+    let attempt = 0
 
-      await this.ensureAttachmentStoreSchema({db})
+    while (true) {
+      attempt++
 
-      return
+      try {
+        await db.createTable(table)
+
+        break
+      } catch (error) {
+        // A concurrent process may win the create between our tableExists() check and this
+        // call. createTable guards the table with ifNotExists but NOT its indexes, so the
+        // loser fails with a duplicate-object error. Treat that as "someone else bootstrapped
+        // it": reconcile through the upgrade path instead of failing the caller.
+        if (isConcurrentSchemaCreationError(error)) {
+          await this.ensureAttachmentStoreSchema({db})
+
+          return
+        }
+
+        // Concurrent boots also deadlock on the INFORMATION_SCHEMA metadata scan that
+        // getTableByName performs on SQL Server. The victim transaction rolled back cleanly,
+        // so retrying it is safe. Without this the loser takes down its caller even though
+        // another process is building the very table it needs.
+        if (isDeadlockVictimError(error) && attempt < ATTACHMENT_SCHEMA_MAX_ATTEMPTS) {
+          db.clearSchemaCache()
+
+          continue
+        }
+
+        throw error
+      }
     }
 
     this._driverColumnsAvailable = true
