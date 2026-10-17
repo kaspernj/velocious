@@ -1437,9 +1437,10 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
    * @param {number} [args.startedAtMs] - Epoch ms the job's perform started in the child.
    * @param {string} [args.childInstanceId] - Stable pooled child identity.
    * @param {number} [args.childPid] - Pooled child OS pid.
+   * @param {string} [args.runnerHostname] - Hostname of the machine running the pooled child.
    * @returns {Promise<boolean>} - Whether the fenced report was accepted.
    */
-  async markChildAccepted({jobId, handoffId, workerId, handedOffAtMs, receivedAtMs, startedAtMs, childInstanceId, childPid}) {
+  async markChildAccepted({jobId, handoffId, workerId, handedOffAtMs, receivedAtMs, startedAtMs, childInstanceId, childPid, runnerHostname}) {
     await this.ensureReady()
 
     return await this._serializedConnectionMutation(async (db) => {
@@ -1453,6 +1454,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       if (typeof startedAtMs === "number") data.child_started_at_ms = startedAtMs
       if (typeof childInstanceId === "string") data.child_instance_id = childInstanceId
       if (typeof childPid === "number") data.child_pid = childPid
+      if (typeof runnerHostname === "string") data.runner_hostname = runnerHostname
       if (Object.keys(data).length === 0) return false
 
       const affectedRows = await this._updateAffectedRows(db, {
@@ -1470,15 +1472,15 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
    * @returns {Record<string, ReturnType<typeof JSON.parse>>} - Cleared acceptance columns.
    */
   _clearedChildAcceptanceData() {
-    return {child_instance_id: null, child_pid: null, child_received_at_ms: null, child_started_at_ms: null}
+    return {child_instance_id: null, child_pid: null, child_received_at_ms: null, child_started_at_ms: null, runner_hostname: null}
   }
 
   /**
    * Returns the row-shape counterpart of the cleared acceptance columns.
-   * @returns {Pick<import("./types.js").BackgroundJobRow, "childInstanceId" | "childPid" | "childReceivedAtMs" | "childStartedAtMs">} - Cleared acceptance fields.
+   * @returns {Pick<import("./types.js").BackgroundJobRow, "childInstanceId" | "childPid" | "childReceivedAtMs" | "childStartedAtMs" | "runnerHostname">} - Cleared acceptance fields.
    */
   _clearedChildAcceptanceRow() {
-    return {childInstanceId: null, childPid: null, childReceivedAtMs: null, childStartedAtMs: null}
+    return {childInstanceId: null, childPid: null, childReceivedAtMs: null, childStartedAtMs: null, runnerHostname: null}
   }
 
   /**
@@ -2275,6 +2277,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
     table.bigint("child_started_at_ms", {null: true})
     table.string("child_instance_id", {null: true})
     table.integer("child_pid", {null: true})
+    table.string("runner_hostname", {null: true})
 
     await db.createTable(table)
   }
@@ -2409,6 +2412,10 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       }
       if (!(await table.getColumnByName("child_pid"))) {
         tableData.integer("child_pid", {null: true})
+        added = true
+      }
+      if (!(await table.getColumnByName("runner_hostname"))) {
+        tableData.string("runner_hostname", {null: true})
         added = true
       }
 
@@ -3219,7 +3226,8 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       childReceivedAtMs: this._normalizeNumber(row.child_received_at_ms),
       childStartedAtMs: this._normalizeNumber(row.child_started_at_ms),
       childInstanceId: row.child_instance_id ? String(row.child_instance_id) : null,
-      childPid: this._normalizeNumber(row.child_pid)
+      childPid: this._normalizeNumber(row.child_pid),
+      runnerHostname: row.runner_hostname ? String(row.runner_hostname) : null
     }
   }
 

@@ -103,9 +103,10 @@ export default class BackgroundJobsStatusReporter {
    * @param {number} [args.startedAtMs] - Epoch ms the job's perform started in the child.
    * @param {string} [args.childInstanceId] - Stable pooled child identity.
    * @param {number} [args.childPid] - Pooled child OS pid.
+   * @param {string} [args.runnerHostname] - Hostname of the machine running the pooled child.
    * @returns {Promise<void>} - Resolves when reported.
    */
-  async reportChildAccepted({jobId, handoffId, workerId, handedOffAtMs, receivedAtMs, startedAtMs, childInstanceId, childPid}) {
+  async reportChildAccepted({jobId, handoffId, workerId, handedOffAtMs, receivedAtMs, startedAtMs, childInstanceId, childPid, runnerHostname}) {
     const config = this.configuration.getBackgroundJobsConfig()
     const host = this.host || config.host
     const port = typeof this.port === "number" ? this.port : config.port
@@ -131,7 +132,8 @@ export default class BackgroundJobsStatusReporter {
             receivedAtMs,
             startedAtMs,
             childInstanceId,
-            childPid
+            childPid,
+            runnerHostname
           })
         },
         onMessage: ({message, resolve, reject}) => {
@@ -161,16 +163,17 @@ export default class BackgroundJobsStatusReporter {
    * @param {number} [args.startedAtMs] - Epoch ms the job's perform started in the child.
    * @param {string} [args.childInstanceId] - Stable pooled child identity.
    * @param {number} [args.childPid] - Pooled child OS pid.
+   * @param {string} [args.runnerHostname] - Hostname of the machine running the pooled child.
    * @param {number} args.maxDurationMs - Max duration for retries.
    * @returns {Promise<void>} - Resolves when reported or the budget elapses.
    */
-  async reportChildAcceptedWithRetry({jobId, handoffId, workerId, handedOffAtMs, receivedAtMs, startedAtMs, childInstanceId, childPid, maxDurationMs}) {
+  async reportChildAcceptedWithRetry({jobId, handoffId, workerId, handedOffAtMs, receivedAtMs, startedAtMs, childInstanceId, childPid, runnerHostname, maxDurationMs}) {
     let attempt = 0
     const startTime = Date.now()
 
     while (true) {
       try {
-        await this.reportChildAccepted({jobId, handoffId, workerId, handedOffAtMs, receivedAtMs, startedAtMs, childInstanceId, childPid})
+        await this.reportChildAccepted({jobId, handoffId, workerId, handedOffAtMs, receivedAtMs, startedAtMs, childInstanceId, childPid, runnerHostname})
         return
       } catch (error) {
         attempt += 1
