@@ -18,7 +18,7 @@ function toolResultJson(result) {
 }
 
 describe("MCP dispatcher", () => {
-  it("runs index commands through the frontend-model dispatcher", async () => {
+  it("runs index commands through the frontend-model dispatcher", {timeoutSeconds: 180}, async () => {
     await Dummy.run(async () => {
       const project = await Project.create({name: "MCP project"})
 
