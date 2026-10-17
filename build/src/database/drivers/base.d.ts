@@ -368,6 +368,30 @@ export default class VelociousDatabaseDriversBase {
     _physicalConnectionMutex: Mutex;
     _connectionCheckedOutAtUnixMs: number | undefined;
     /**
+     * Process-wide state for the **process-local advisory-lock pre-filter
+     * tier** shared by every driver (SQLite, MySQL/MariaDB, PostgreSQL,
+     * MSSQL). It serializes concurrent acquisitions of the same lock name
+     * inside this process through a FIFO waiter queue before any caller
+     * contacts the driver-native tier, so a contended same-process waiter
+     * never parks a pooled database connection in a driver lock state
+     * (MariaDB `User lock`, `sp_getapplock` session hold, ...).
+     *
+     * This tier is a pre-filter, **never the authority**: a grant here only
+     * means "you are next in this process." Cross-process/cross-host
+     * exclusion is confirmed by the driver-native tier (or, once the
+     * STC-210 backend chain lands, the configured cross-host backend)
+     * before the acquisition succeeds.
+     *
+     * `ownersByName` maps each held lock name to the driver instance that
+     * acquired it so `releaseAdvisoryLock` can reject releases from drivers
+     * that do not own the lock.
+     * @type {{ownersByName: Map<string, VelociousDatabaseDriversBase>, waitersByName: Map<string, Array<() => void>>}}
+     */
+    static _advisoryLockState: {
+        ownersByName: Map<string, VelociousDatabaseDriversBase>;
+        waitersByName: Map<string, Array<() => void>>;
+    };
+    /**
      * Id seq.
      * @type {number | undefined} */
     idSeq: number | undefined;
@@ -1478,9 +1502,26 @@ export default class VelociousDatabaseDriversBase {
      * Advisory locks are connection-scoped and do not interact with row or
      * table locks; they are purely cooperative between callers that use the
      * same name and let you serialize functionality without blocking readers
-     * or writers that do not participate in the same lock.
+     * or writers that do not participate in the same named lock.
+     *
+     * Acquisition runs as a two-tier chain:
+     * 1. The **process-local pre-filter tier** (this class' FIFO waiter
+     *    queue) serializes same-process callers for the lock name without
+     *    issuing any driver-native lock query and without parking a
+     *    connection in a driver lock state. A queued caller never reaches
+     *    tier 2 until the in-process holder releases.
+     * 2. The **driver-native tier** (`_acquireAdvisoryLock`: MariaDB
+     *    `GET_LOCK`, PostgreSQL `pg_advisory_lock`, SQL Server
+     *    `sp_getapplock`, SQLite filesystem lock on Node) confirms the
+     *    cross-process/cross-host exclusion.
+     *
+     * The process-local tier is a pre-filter, **never the authority**: a
+     * lock name that other processes or hosts can request is only granted
+     * after the driver-native tier (or, once the STC-210 backend chain
+     * lands, the configured cross-host backend) confirms it. If the native
+     * tier denies or times out, the in-process hold is rolled back.
      * @param {string} name - Lock name.
-     * @param {{timeoutMs?: number | null}} [args] - Optional timeout in milliseconds; `null` blocks forever, and an omitted value uses the database's `advisoryLockAcquireTimeoutMs` or the framework default.
+     * @param {{timeoutMs?: number | null}} [args] - Optional timeout in milliseconds; `null` blocks forever, and an omitted value uses the database's `advisoryLockAcquireTimeoutMs` or the framework default. The bound covers the whole two-tier acquisition.
      * @returns {Promise<boolean>} - Resolves to true when the lock has been acquired, false if the timeout elapsed.
      */
     acquireAdvisoryLock(name: string, args?: {
@@ -1499,7 +1540,66 @@ export default class VelociousDatabaseDriversBase {
         timeoutMs?: number | null;
     }): number | null;
     /**
+     * Whether this driver has a driver-native advisory-lock tier behind the
+     * process-local pre-filter. MariaDB (`GET_LOCK`), PostgreSQL
+     * (`pg_advisory_lock`) and SQL Server (`sp_getapplock`) do; SQLite has
+     * no native primitive (the Node SQLite driver substitutes its
+     * filesystem lock directory, the web/native builds have nothing), so
+     * for plain SQLite the process-local tier IS the whole implementation
+     * and callers must not read it as a cross-process guarantee.
+     * @returns {boolean} - Whether the driver-native tier exists.
+     */
+    supportsDriverNativeAdvisoryLock(): boolean;
+    /**
+     * Whether the driver's native tier is re-entrant within the same
+     * session. `GET_LOCK`, `pg_advisory_lock` and `sp_getapplock` grant the
+     * same session repeatedly, so the process-local tier must let a
+     * re-acquisition by its own owner pass through to the native tier.
+     * SQLite's emulation (including the Node filesystem lock) is not
+     * re-entrant, so the tier keeps treating a re-acquisition as contention
+     * exactly as the SQLite emulation always has.
+     * @returns {boolean} - Whether same-instance re-acquisition is honored.
+     */
+    supportsReentrantAdvisoryLock(): boolean;
+    /**
+     * Process-local pre-filter tier: FIFO waiter queue for one lock name
+     * inside this process. This is the promoted SQLite emulation from
+     * STC-211 — it now runs in front of **every** driver's native tier so a
+     * same-process waiter never issues a driver-native lock query and never
+     * parks a pooled connection in a driver lock state while queued.
+     *
+     * A grant here means only "you are the next caller in this process."
+     * It is never the authority for cross-process/cross-host exclusion; the
+     * caller must still pass the driver-native tier before the lock counts
+     * as held. A re-entrant acquisition by the owning driver instance is
+     * granted immediately, mirroring the session-scoped re-entrancy of
+     * `GET_LOCK` / `pg_advisory_lock` / `sp_getapplock`.
+     * @param {string} name - Lock name.
+     * @param {{timeoutMs?: number | null}} [args] - Optional timeout in milliseconds; `null`, `undefined`, or negative blocks forever.
+     * @returns {Promise<{acquired: boolean, waited: boolean}>} - Whether the tier granted this caller, and whether it had to queue for it.
+     */
+    _acquireProcessLocalAdvisoryLock(name: string, { timeoutMs }?: {
+        timeoutMs?: number | null;
+    }): Promise<{
+        acquired: boolean;
+        waited: boolean;
+    }>;
+    /**
+     * Hands the process-local tier for one lock name to the next FIFO waiter,
+     * but only when **this** driver instance currently owns it. A release by
+     * a non-owner is a no-op, matching the "you can only release locks you
+     * own" contract of `RELEASE_LOCK` / `pg_advisory_unlock`.
+     * @param {string} name - Lock name.
+     * @returns {boolean} - Whether this instance owned the tier and released it.
+     */
+    _releaseProcessLocalAdvisoryLock(name: string): boolean;
+    /**
      * Driver-specific blocking advisory-lock acquisition hook.
+     * This is the **driver-native tier** of the acquisition chain: MariaDB
+     * `GET_LOCK`, PostgreSQL `pg_advisory_lock`, SQL Server `sp_getapplock`,
+     * the Node SQLite filesystem lock. It runs only after the process-local
+     * pre-filter tier has granted this caller its turn, and its result is
+     * what actually confirms cross-process/cross-host exclusion.
      * @abstract
      * @param {string} name - Lock name.
      * @param {{timeoutMs?: number | null}} [_args] - Lock timeout options.
@@ -1510,6 +1610,12 @@ export default class VelociousDatabaseDriversBase {
     }): Promise<boolean>;
     /**
      * Attempts to acquire a named advisory lock without blocking.
+     *
+     * Same two-tier chain as `acquireAdvisoryLock`: the process-local tier
+     * short-circuits contention between callers in this process (a queued
+     * name never reaches the driver-native hook), and the driver-native tier
+     * confirms cross-process/cross-host exclusion. A free in-process tier is
+     * NOT a grant — the native tier still has to agree.
      * @param {string} name - Lock name.
      * @returns {Promise<boolean>} - Resolves to true if the lock was acquired, false if it was already held.
      */
@@ -1523,6 +1629,10 @@ export default class VelociousDatabaseDriversBase {
     _tryAcquireAdvisoryLock(name: string): Promise<boolean>;
     /**
      * Releases a named advisory lock previously acquired on this connection.
+     * The driver-native release runs first; the process-local tier is handed
+     * to the next waiter only once this connection's counted registry no
+     * longer holds the name, so re-entrant acquisitions release one level at
+     * a time exactly like the session-scoped driver locks.
      * @param {string} name - Lock name.
      * @returns {Promise<boolean>} - Resolves to true if the lock was held by this session and has now been released.
      */
@@ -1555,10 +1665,21 @@ export default class VelociousDatabaseDriversBase {
      * Checks whether a named advisory lock is currently held by any session.
      * Intended as an introspection helper; callers who need to act on the
      * result should prefer `tryAcquireAdvisoryLock` to avoid a TOCTOU race.
-     * @abstract
+     *
+     * The process-local tier answers first (a same-process holder is a
+     * holder, full stop); otherwise the question goes to the driver-native
+     * tier's introspection (`IS_USED_LOCK` / `pg_locks` / `APPLOCK_TEST`).
      * @param {string} name - Lock name.
-     * @returns {Promise<boolean>} - Resolves to true if the lock is held by ? session.
+     * @returns {Promise<boolean>} - Resolves to true if the lock is held by any session.
      */
     isAdvisoryLockHeld(name: string): Promise<boolean>;
+    /**
+     * Driver-native advisory-lock introspection hook behind
+     * `isAdvisoryLockHeld`.
+     * @abstract
+     * @param {string} name - Lock name.
+     * @returns {Promise<boolean>} - Resolves to true if the native tier reports the lock held.
+     */
+    _isAdvisoryLockHeldNative(name: string): Promise<boolean>;
 }
 //# sourceMappingURL=base.d.ts.map

@@ -380,6 +380,6 @@ export default class VelociousDatabaseDriversMssql extends Base {
      * @param {string} name - Lock name.
      * @returns {Promise<boolean>} - True if any session currently holds the lock.
      */
-    isAdvisoryLockHeld(name: string): Promise<boolean>;
+    _isAdvisoryLockHeldNative(name: string): Promise<boolean>;
 }
 //# sourceMappingURL=index.d.ts.map

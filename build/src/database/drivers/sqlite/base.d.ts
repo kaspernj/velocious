@@ -4,20 +4,6 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
     _options: Options | undefined;
     version: string | undefined;
     /**
-     * Process-wide state for the SQLite advisory lock emulation. Shared across
-     * every SQLite driver instance (native, web, sql.js) because there is no
-     * concept of "connection" to distinguish them at the SQLite level.
-     *
-     * `ownersByName` maps each held lock name to the driver instance that
-     * acquired it so `releaseAdvisoryLock` can reject releases from drivers
-     * that do not own the lock.
-     * @type {{ownersByName: Map<string, VelociousDatabaseDriversSqliteBase>, waitersByName: Map<string, Array<() => void>>}}
-     */
-    static _advisoryLockState: {
-        ownersByName: Map<string, VelociousDatabaseDriversSqliteBase>;
-        waitersByName: Map<string, Array<() => void>>;
-    };
-    /**
      * Version major.
      * @type {number | undefined} */
     versionMajor: number | undefined;
@@ -174,43 +160,19 @@ export default class VelociousDatabaseDriversSqliteBase extends Base {
      */
     structureSql(): Promise<string | null>;
     /**
-     * Blocks until an in-process advisory lock with the given name is
-     * acquired. SQLite has no built-in advisory lock primitive, so this is
-     * implemented as a process-local waiter queue. Typical SQLite deployments
-     * run inside a single Node process, which is exactly the scope this
-     * emulation covers; multi-process SQLite setups should not rely on this
-     * for cross-process mutual exclusion.
-     *
-     * The owning driver instance is recorded so that `releaseAdvisoryLock`
-     * can refuse to release a lock that was acquired by someone else.
-     * @param {string} name - Lock name.
-     * @param {{timeoutMs?: number | null}} [args] - Optional timeout in milliseconds; `null`, `undefined`, or negative blocks forever.
-     * @returns {Promise<boolean>} - True if the lock was acquired, false if the timeout elapsed.
+     * SQLite has no native advisory-lock primitive, so the shared
+     * process-local pre-filter tier in the base driver is the whole
+     * implementation for the web/sql.js and Expo native builds. The Node
+     * driver layers its filesystem lock on top as the driver-native tier.
+     * @returns {boolean} - Always false for plain SQLite.
      */
-    _acquireAdvisoryLock(name: string, { timeoutMs }?: {
-        timeoutMs?: number | null;
-    }): Promise<boolean>;
+    supportsDriverNativeAdvisoryLock(): boolean;
     /**
-     * Runs try acquire advisory lock.
-     * @param {string} name - Lock name.
-     * @returns {Promise<boolean>} - True if the lock was acquired, false if it was already held.
+     * The SQLite emulation is not re-entrant: a re-acquisition by the same
+     * driver instance is contention, not a grant, exactly as the in-process
+     * queue always behaved.
+     * @returns {boolean} - Always false for SQLite.
      */
-    _tryAcquireAdvisoryLock(name: string): Promise<boolean>;
-    /**
-     * Releases the lock only if **this** driver instance owns it. Calling
-     * release for a lock owned by another driver instance is a no-op that
-     * returns `false`, matching the "you can only release locks you own"
-     * contract of MySQL's `RELEASE_LOCK` and PostgreSQL's
-     * `pg_advisory_unlock`.
-     * @param {string} name - Lock name.
-     * @returns {Promise<boolean>} - True if the lock was held by this driver and has now been released.
-     */
-    _releaseAdvisoryLock(name: string): Promise<boolean>;
-    /**
-     * Runs is advisory lock held.
-     * @param {string} name - Lock name.
-     * @returns {Promise<boolean>} - True if any driver instance currently holds the lock.
-     */
-    isAdvisoryLockHeld(name: string): Promise<boolean>;
+    supportsReentrantAdvisoryLock(): boolean;
 }
 //# sourceMappingURL=base.d.ts.map

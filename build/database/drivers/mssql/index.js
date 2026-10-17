@@ -939,7 +939,7 @@ export default class VelociousDatabaseDriversMssql extends Base{
    * @param {string} name - Lock name.
    * @returns {Promise<boolean>} - True if any session currently holds the lock.
    */
-  async isAdvisoryLockHeld(name) {
+  async _isAdvisoryLockHeldNative(name) {
     const rows = await this.query(
       `SELECT ` +
         `APPLOCK_MODE('public', ${this.quote(name)}, 'Session') AS velocious_advisory_self_mode, ` +

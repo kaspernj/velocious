@@ -219,10 +219,11 @@ export default class VelociousDatabaseDriversPgsql extends Base {
      */
     _releaseAdvisoryLock(name: string): Promise<boolean>;
     /**
-     * Runs is advisory lock held.
+     * Driver-native view for the base driver's `isAdvisoryLockHeld`, which
+     * answers from the process-local tier first.
      * @param {string} name - Lock name.
      * @returns {Promise<boolean>} - True if any session currently holds the lock.
      */
-    isAdvisoryLockHeld(name: string): Promise<boolean>;
+    _isAdvisoryLockHeldNative(name: string): Promise<boolean>;
 }
 //# sourceMappingURL=index.d.ts.map
