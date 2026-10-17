@@ -158,6 +158,29 @@ export function recordAttachmentsStoreForModel(model) {
 /**
  * Attachment persistence store.
  */
+/**
+ * Returns whether an error means a concurrent process created the same schema object.
+ *
+ * Drivers report this differently: SQLite raises "index ... already exists", MSSQL raises
+ * "There is already an object named ..." (2714), PostgreSQL raises DuplicateTable (42P07) or
+ * DuplicateObject (42710). Matching on the message keeps the check driver-agnostic without
+ * hiding unrelated failures.
+ * @param {unknown} error - Thrown error.
+ * @returns {boolean} - Whether this is a concurrent-creation collision.
+ */
+function isConcurrentSchemaCreationError(error) {
+  if (!error) return false
+
+  const code = typeof error === "object" && "number" in error ? Number(error.number) : NaN
+
+  // MSSQL 2714 (duplicate object), 1913 (duplicate index); PostgreSQL 42P07 / 42710.
+  if (code === 2714 || code === 1913 || code === 42) return true
+
+  const message = error instanceof Error ? error.message : String(error)
+
+  return /already exists/i.test(message) || /already an object named/i.test(message) || /duplicate (table|object|key)/i.test(message)
+}
+
 export default class RecordAttachmentsStore {
   /**
    * Runs constructor.
@@ -237,7 +260,20 @@ export default class RecordAttachmentsStore {
     table.bigint("updated_at_ms", {null: false})
     table.addIndex(new TableIndex(["record_type", "record_id_digest"], {name: ATTACHMENT_OWNER_INDEX_NAME}))
 
-    await db.createTable(table)
+    try {
+      await db.createTable(table)
+    } catch (error) {
+      // A concurrent process may win the create between our tableExists() check and this
+      // call. createTable guards the table with ifNotExists but NOT its indexes, so the
+      // loser fails with a duplicate-object error. Treat that as "someone else bootstrapped
+      // it": reconcile through the upgrade path instead of failing the caller.
+      if (!isConcurrentSchemaCreationError(error)) throw error
+
+      await this.ensureAttachmentStoreSchema({db})
+
+      return
+    }
+
     this._driverColumnsAvailable = true
     this._contentBase64Nullable = true
     this._schemaReadyGeneration = this._schemaCacheGeneration(db)

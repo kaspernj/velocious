@@ -1,0 +1,9 @@
+Fixed startup crashes when several test shards or processes bootstrapped the same database at the same moment.
+
+`MigrationsLedger.ensureTable` performed a non-atomic check-then-create, so two sessions could both observe the ledger as missing and both attempt to create it; the loser died with the driver's duplicate-object error, taking the whole process down before any test ran. The ledger bootstrap now converges when another process wins the create race, and retries when the driver reports the session as a deadlock victim.
+
+The migrator now serialises migration application per database with the existing advisory lock, so two processes can no longer apply the same migration concurrently. The applied-version set is also re-read from the database inside that lock: `hasRunMigrationVersion` previously consulted a cache loaded once during `prepare()`, so a process that correctly waited for the lock still decided from a stale snapshot and re-ran migrations another process had already applied. Framework schema bootstrapping after migrations runs under the same lock.
+
+Concurrent attachment schema bootstrapping is now safe as well. The create path took no lock while the upgrade path did, and `ifNotExists` guards the created table but not the indexes declared on it, so a process losing the race failed on `CREATE INDEX` rather than `CREATE TABLE`. When the driver reports a duplicate schema object, the bootstrap now reconciles through the existing upgrade path instead of failing the caller.
+
+This was most visible on MSSQL and could affect any database backend under enough concurrent startup pressure.
