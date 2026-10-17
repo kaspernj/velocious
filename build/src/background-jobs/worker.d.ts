@@ -652,7 +652,7 @@ export default class BackgroundJobsWorker {
      * or outcome that already settled the worker's in-flight entry cannot lose
      * the fencing. A report that never lands degrades phase diagnostics for that
      * job only — it must never block or fail the job itself.
-     * @param {{type: "job-received" | "job-started", jobId: string, handoffId?: string, workerId?: string, handedOffAtMs?: number, receivedAtMs?: number, startedAtMs?: number, childInstanceId?: string, childPid?: number}} message - Validated child acceptance message.
+     * @param {{type: "job-received" | "job-started", jobId: string, handoffId?: string, workerId?: string, handedOffAtMs?: number, receivedAtMs?: number, startedAtMs?: number, childInstanceId?: string, childPid?: number, runnerHostname?: string}} message - Validated child acceptance message.
      * @returns {void}
      */
     _reportChildAccepted(message: {
@@ -665,6 +665,7 @@ export default class BackgroundJobsWorker {
         startedAtMs?: number;
         childInstanceId?: string;
         childPid?: number;
+        runnerHostname?: string;
     }): void;
     /**
      * Handles a pooled child's bounded memory observation. The pooled child's

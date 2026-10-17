@@ -93,7 +93,7 @@ function positiveInteger(value) {
  * one job. The child carries its exact handoff lease so the worker can forward
  * the report without depending on its in-flight entry still existing.
  * @param {ReturnType<typeof JSON.parse>} message - IPC message.
- * @returns {message is {type: "job-received" | "job-started", jobId: string, handoffId?: string, workerId?: string, handedOffAtMs?: number, receivedAtMs?: number, startedAtMs?: number, childInstanceId?: string, childPid?: number}} - Whether this is a valid acceptance message.
+ * @returns {message is {type: "job-received" | "job-started", jobId: string, handoffId?: string, workerId?: string, handedOffAtMs?: number, receivedAtMs?: number, startedAtMs?: number, childInstanceId?: string, childPid?: number, runnerHostname?: string}} - Whether this is a valid acceptance message.
  */
 function isChildAcceptanceMessage(message) {
   if (!message || typeof message !== "object") return false
@@ -108,6 +108,7 @@ function isChildAcceptanceMessage(message) {
     && (record.startedAtMs === undefined || typeof record.startedAtMs === "number")
     && (record.childInstanceId === undefined || typeof record.childInstanceId === "string")
     && (record.childPid === undefined || Number.isInteger(record.childPid))
+    && (record.runnerHostname === undefined || typeof record.runnerHostname === "string")
 }
 
 /**
@@ -1510,7 +1511,7 @@ export default class BackgroundJobsWorker {
    * or outcome that already settled the worker's in-flight entry cannot lose
    * the fencing. A report that never lands degrades phase diagnostics for that
    * job only — it must never block or fail the job itself.
-   * @param {{type: "job-received" | "job-started", jobId: string, handoffId?: string, workerId?: string, handedOffAtMs?: number, receivedAtMs?: number, startedAtMs?: number, childInstanceId?: string, childPid?: number}} message - Validated child acceptance message.
+   * @param {{type: "job-received" | "job-started", jobId: string, handoffId?: string, workerId?: string, handedOffAtMs?: number, receivedAtMs?: number, startedAtMs?: number, childInstanceId?: string, childPid?: number, runnerHostname?: string}} message - Validated child acceptance message.
    * @returns {void}
    */
   _reportChildAccepted(message) {
@@ -1525,6 +1526,7 @@ export default class BackgroundJobsWorker {
       startedAtMs: message.startedAtMs,
       childInstanceId: message.childInstanceId,
       childPid: message.childPid,
+      runnerHostname: message.runnerHostname,
       maxDurationMs: CHILD_ACCEPTANCE_REPORT_MAX_DURATION_MS
     }).catch((error) => {
       console.error("Background job child-acceptance reporting failed:", error)

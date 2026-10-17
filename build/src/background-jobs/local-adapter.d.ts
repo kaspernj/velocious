@@ -141,7 +141,7 @@ export default class LocalBackgroundJobsAdapter extends BackgroundJobsAdapter {
     }): Promise<boolean>;
     /**
      * Records pooled-child acceptance evidence for a local handoff.
-     * @param {{jobId: string, handoffId?: string, receivedAtMs?: number, startedAtMs?: number, childInstanceId?: string, childPid?: number}} args - Acceptance report.
+     * @param {{jobId: string, handoffId?: string, receivedAtMs?: number, startedAtMs?: number, childInstanceId?: string, childPid?: number, runnerHostname?: string}} args - Acceptance report.
      * @returns {Promise<boolean>} - Whether accepted.
      */
     markChildAccepted(args: {
@@ -151,6 +151,7 @@ export default class LocalBackgroundJobsAdapter extends BackgroundJobsAdapter {
         startedAtMs?: number;
         childInstanceId?: string;
         childPid?: number;
+        runnerHostname?: string;
     }): Promise<boolean>;
     /**
      * Acknowledges an explicit local reschedule.

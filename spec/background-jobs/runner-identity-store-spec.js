@@ -12,7 +12,7 @@ async function createClearedStore() {
   return store
 }
 
-describe("Background jobs - runner identity", {databaseCleaning: {truncate: true}}, () => {
+describe("Background jobs - runner identity", {databaseCleaning: {transaction: false, truncate: false}}, () => {
   it("records the accepting runner's hostname, instance id and pid", async () => {
     const store = await createClearedStore()
     const jobId = await store.enqueue({jobName: "TestJob", args: []})
