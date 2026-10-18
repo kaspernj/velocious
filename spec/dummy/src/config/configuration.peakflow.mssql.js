@@ -103,6 +103,7 @@ const configuration = new Configuration({
             serverName: "mssql",
             encrypt: true, // for azure
             trustServerCertificate: true, // change to true for local dev / self-signed certs
+            connectTimeout: 60000, // peak CI load: tenant test-database recovery cycles on the 2 GB MSSQL service exceeded the vendor 15 s connect default
             requestTimeout: 60000 // peak CI load: db:migrate schema introspection exceeded the vendor 15 s default
           }
         }
@@ -123,6 +124,7 @@ const configuration = new Configuration({
             serverName: "mssql",
             encrypt: true, // for azure
             trustServerCertificate: true, // change to true for local dev / self-signed certs
+            connectTimeout: 60000, // peak CI load: tenant test-database recovery cycles on the 2 GB MSSQL service exceeded the vendor 15 s connect default
             requestTimeout: 60000 // peak CI load: db:migrate schema introspection exceeded the vendor 15 s default
           }
         }
