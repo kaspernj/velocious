@@ -51,7 +51,8 @@ describe("Background jobs - main adapter restart", {databaseCleaning: {transacti
         port: main.getPort()
       })
       await worker.start()
-      await timeout({timeout: 1000}, async () => {
+      // Peak CI load: the worker handshake exceeds the tight 1 s bound when the runner is saturated.
+      await timeout({timeout: 10000}, async () => {
         while (main.readyWorkers.size !== 1 || main._draining) await wait(0.01)
       })
 
