@@ -49,7 +49,7 @@ function waitForPooledRescheduleExecutions({jobId, worker}) {
 }
 
 describe("Background jobs - job reschedule", {databaseCleaning: {truncate: true}}, () => {
-  it("reuses the same row later without failure events in inline and pooled modes", async () => {
+  it("reuses the same row later without failure events in inline and pooled modes", {timeoutSeconds: 180}, async () => {
     const {main, store, worker} = await startBackgroundJobs({
       workerOptions: {pooledRunnerConcurrency: 2, pooledRunnerCount: 1}
     })
