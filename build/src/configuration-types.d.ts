@@ -1635,6 +1635,23 @@ export type TenantDatabaseProviderType = {
         tenant: ReturnType<typeof JSON.parse>;
     }) => void | Promise<void>;
 };
+export type AdvisoryLocksConfiguration = {
+    /**
+     * - Backend enablement. `file.enabled` defaults to false; enabling it is the deployment's explicit single-host declaration.
+     */
+    backends?: {
+        file?: {
+            directory?: string;
+            enabled?: boolean;
+            leaseMs?: number;
+            renewIntervalMs?: number;
+        };
+    };
+    /**
+     * - Per-lock-name minimum/allowed/preferred tier rules (design §5).
+     */
+    policy?: import("./database/advisory-lock-backend-policy.js").AdvisoryLockBackendPolicyEntry[];
+};
 export type ConfigurationArgsType = {
     /**
      * - Globally enable auto-batch-preload of relationships on lazy access. Default true.
@@ -1656,6 +1673,10 @@ export type ConfigurationArgsType = {
      * - Resolver for creating request-scoped ability instances.
      */
     abilityResolver?: AbilityResolverType;
+    /**
+     * - Advisory-lock backend chain configuration (backends + per-lock-name tier policy). Defaults to today's driver-native-only behavior.
+     */
+    advisoryLocks?: AdvisoryLocksConfiguration;
     /**
      * - Attachment storage configuration.
      */
@@ -2520,12 +2541,22 @@ export type ConfigurationArgsType = {
  * @property {(args: {configuration: import("./configuration.js").default, databaseConfiguration: DatabaseConfigurationType, identifier: string, migrationsApplied: number, tenant: ReturnType<typeof JSON.parse>}) => void | Promise<void>} [afterMigrateTenant] - Runs app-owned tenant work after generic migrations for one tenant. `migrationsApplied` is how many migrations actually ran (0 when the tenant was already up to date), so the app can skip expensive per-tenant work on no-op deploys.
  */
 /**
+ * Advisory-lock backend chain configuration (STC-210 design §10, file tier
+ * implemented by STC-213). Everything defaults to today's driver-native-only
+ * behavior; the file backend is disabled by default and only selectable by
+ * explicit configuration.
+ * @typedef {object} AdvisoryLocksConfiguration
+ * @property {{file?: {directory?: string, enabled?: boolean, leaseMs?: number, renewIntervalMs?: number}}} [backends] - Backend enablement. `file.enabled` defaults to false; enabling it is the deployment's explicit single-host declaration.
+ * @property {import("./database/advisory-lock-backend-policy.js").AdvisoryLockBackendPolicyEntry[]} [policy] - Per-lock-name minimum/allowed/preferred tier rules (design §5).
+ */
+/**
  * @typedef {object} ConfigurationArgsType
  * @property {boolean} [autoload] - Globally enable auto-batch-preload of relationships on lazy access. Default true.
  * @property {CorsType} [cors] - CORS configuration for the HTTP server.
  * @property {string} [cookieSecret] - Secret for encrypting cookies.
  * @property {AbilityResourceClassType[]} [abilityResources] - Resource classes used to define abilities per model.
  * @property {AbilityResolverType} [abilityResolver] - Resolver for creating request-scoped ability instances.
+ * @property {AdvisoryLocksConfiguration} [advisoryLocks] - Advisory-lock backend chain configuration (backends + per-lock-name tier policy). Defaults to today's driver-native-only behavior.
  * @property {AttachmentsConfiguration} [attachments] - Attachment storage configuration.
  * @property {BackendProjectConfiguration[]} [backendProjects] - Backend project definitions used for frontend model generation.
  * @property {VelociousPackageConfiguration[]} [packages] - External Velocious packages that contribute models, frontend-model resources and migrations.

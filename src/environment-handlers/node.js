@@ -1,6 +1,7 @@
 // @ts-check
 
 import "../database/annotations-async-hooks.js"
+import AdvisoryLockFileBackend from "../database/advisory-lock-file-backend.js"
 import Base from "./base.js"
 import BackgroundJobsClient from "../background-jobs/client.js"
 import SqlBackgroundJobsAdapter from "../background-jobs/sql-adapter.js"
@@ -104,6 +105,16 @@ export default class VelociousEnvironmentHandlerNode extends Base{
     if (!sharedTransactionBrokerConfig(databaseIdentifier)) return configuredPoolType
 
     return AsyncTrackedMultiConnectionPool
+  }
+
+  /**
+   * Creates the filesystem-backed advisory-lock backend for the file tier
+   * (STC-213). The Node handler is the only filesystem-capable environment.
+   * @param {{directory: string, leaseMs: number, renewIntervalMs: number}} args - Backend options.
+   * @returns {Promise<import("../database/advisory-lock-file-backend.js").default>} - Resolves with the created backend.
+   */
+  async createAdvisoryLockFileBackend(args) {
+    return new AdvisoryLockFileBackend(args)
   }
 
   /**

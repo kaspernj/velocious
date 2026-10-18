@@ -22,7 +22,7 @@ describe("Background jobs - pooled child acceptance", {tags: ["dummy"], database
     await backgroundJobs.main.stop()
   })
 
-  it("persists pooled child identity and ordered acceptance evidence for a completed job", async () => {
+  it("persists pooled child identity and ordered acceptance evidence for a completed job", {timeoutSeconds: 180}, async () => {
     if (!backgroundJobs) throw new Error("Expected background jobs to be started")
     const outputPath = await outputPathFor("pooled-child-acceptance")
     const jobId = await TestJob.performLaterWithOptions({

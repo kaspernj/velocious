@@ -45,6 +45,7 @@ import VelociousPackage from "./packages/velocious-package.js"
 import FrontendTenantSqliteLifecycle from "./tenants/frontend-tenant-sqlite-lifecycle.js"
 import { resolveGenerationId, resolveInitialGenerationState, resolveLifecycleSocketPath } from "./background-jobs/generation-identity.js"
 import { runShutdownSteps } from "./utils/shutdown-lifecycle.js"
+import { resolveAdvisoryLockBackendPolicy } from "./database/advisory-lock-backend-policy.js"
 
 export { CurrentConfigurationNotSetError }
 
@@ -245,6 +246,20 @@ export default class VelociousConfiguration {
    * @type {Set<import("./database/drivers/base.js").default>} */
   _advisoryLockConnections = new Set()
 
+  /**
+   * Lazily created file-tier advisory-lock backend (STC-213). Stays `undefined`
+   * unless `advisoryLocks.backends.file.enabled: true` is explicitly configured —
+   * the file tier is never auto-enabled, and a non-Node environment handler
+   * (browser/Expo, no `fs`) cannot create one at all.
+   * @type {import("./database/advisory-lock-file-backend.js").default | undefined} */
+  _advisoryLockFileBackend = undefined
+
+  /**
+   * Most recent advisory-lock acquisition per lock name — the "which backend
+   * served this lock" surface (design §3).
+   * @type {Map<string, {backend: import("./database/advisory-lock-backend-policy.js").AdvisoryLockTier, fencingSupported: boolean, servedAt: string}>} */
+  _advisoryLockAcquisitions = new Map()
+
   /** @type {Map<string, number>} */
   _schemaCacheGenerationsByReuseKey = new Map()
 
@@ -260,11 +275,12 @@ export default class VelociousConfiguration {
    * Runs constructor.
    * @param {import("./configuration-types.js").ConfigurationArgsType} args - Configuration arguments.
    */
-  constructor({abilityResolver, abilityResources, attachments, autoload = true, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug = false, debugEndpoint = false, apiManifest = false, directory, enforceTenantDatabaseScopes = true, environment, environmentHandler, exposeInternalErrorsToClients, frontendTenantSqlite, httpServer, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, mcp = false, packages, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, secureFrontendModelErrors, structureSql, sync, tenantDatabaseProviders, tenantDatabaseResolver, tenantResolver, testTenantPools, testing, timeZone, timezoneOffsetMinutes, trustedProxies, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
+  constructor({abilityResolver, abilityResources, advisoryLocks, attachments, autoload = true, backgroundJobs, backendProjects, beacon, cookieSecret, cors, database, debug = false, debugEndpoint = false, apiManifest = false, directory, enforceTenantDatabaseScopes = true, environment, environmentHandler, exposeInternalErrorsToClients, frontendTenantSqlite, httpServer, initializeModels, initializers, locale, localeFallbacks, locales, logging, mailerBackend, mcp = false, packages, requestTimeoutMs, routeResolverHooks, scheduledBackgroundJobs, secureFrontendModelErrors, structureSql, sync, tenantDatabaseProviders, tenantDatabaseResolver, tenantResolver, testTenantPools, testing, timeZone, timezoneOffsetMinutes, trustedProxies, websocketChannelResolver, websocketMessageHandlerResolver, ...restArgs}) {
     restArgsError(restArgs)
 
     this._abilityResolver = abilityResolver
     this._abilityResources = abilityResources || []
+    this._advisoryLocks = advisoryLocks
     this._autoload = autoload
     this._backgroundJobs = backgroundJobs
     this._beacon = beacon
@@ -4077,6 +4093,102 @@ export default class VelociousConfiguration {
   }
 
   /**
+   * Resolves the `advisoryLocks` configuration block (STC-210 design §10).
+   * Full backward compatibility: an app that configures nothing gets today's
+   * driver-native-only behavior — the file backend is **disabled by default**
+   * and only ever selectable by explicit configuration.
+   * @returns {{backends: {file: {directory?: string, enabled: boolean, leaseMs: number, renewIntervalMs: number}}, policy: import("./database/advisory-lock-backend-policy.js").AdvisoryLockBackendPolicyEntry[]}} - Advisory-lock configuration with defaults applied.
+   */
+  getAdvisoryLockConfig() {
+    const configured = this._advisoryLocks || {}
+    const fileConfigured = configured.backends?.file || {}
+
+    return {
+      backends: {
+        file: {
+          directory: fileConfigured.directory,
+          enabled: fileConfigured.enabled === true,
+          leaseMs: typeof fileConfigured.leaseMs === "number" ? fileConfigured.leaseMs : 30_000,
+          renewIntervalMs: typeof fileConfigured.renewIntervalMs === "number" ? fileConfigured.renewIntervalMs : 10_000
+        }
+      },
+      policy: Array.isArray(configured.policy) ? configured.policy : []
+    }
+  }
+
+  /**
+   * Runs get advisory lock policy.
+   * @returns {import("./database/advisory-lock-backend-policy.js").AdvisoryLockBackendPolicyEntry[]} - Per-lock-name backend policy entries.
+   */
+  getAdvisoryLockPolicy() {
+    return this.getAdvisoryLockConfig().policy
+  }
+
+  /**
+   * Resolves the effective backend policy for one lock name (design §5).
+   * @param {string} lockName - Concrete lock name.
+   * @returns {import("./database/advisory-lock-backend-policy.js").ResolvedAdvisoryLockBackendPolicy} - Resolved policy.
+   */
+  resolveAdvisoryLockPolicy(lockName) {
+    return resolveAdvisoryLockBackendPolicy(lockName, this.getAdvisoryLockPolicy())
+  }
+
+  /**
+   * Returns the file-tier advisory-lock backend when this deployment has
+   * explicitly enabled it (`advisoryLocks.backends.file.enabled: true`),
+   * creating it on first use. Returns `undefined` when the tier is disabled
+   * (the default) — callers must never fall back to it implicitly. Creation
+   * goes through the environment handler so browser/Expo configurations
+   * without `fs` fail loudly instead of half-working.
+   * @returns {Promise<import("./database/advisory-lock-file-backend.js").default | undefined>} - Resolves with the enabled file backend, or undefined.
+   */
+  async getAdvisoryLockFileBackend() {
+    const config = this.getAdvisoryLockConfig()
+
+    if (!config.backends.file.enabled) return undefined
+    if (this._advisoryLockFileBackend) return this._advisoryLockFileBackend
+
+    const directory = config.backends.file.directory || `${this.getDirectory()}/tmp/advisory-locks`
+
+    this._advisoryLockFileBackend = await this.getEnvironmentHandler().createAdvisoryLockFileBackend({
+      directory,
+      leaseMs: config.backends.file.leaseMs,
+      renewIntervalMs: config.backends.file.renewIntervalMs
+    })
+
+    return this._advisoryLockFileBackend
+  }
+
+  /**
+   * Records which backend tier served one advisory-lock acquisition so
+   * `getAdvisoryLockBackendStatus()` can answer "which backend served this
+   * lock" (design §3).
+   * @param {object} args - Acquisition record.
+   * @param {string} args.lockName - Lock name.
+   * @param {import("./database/advisory-lock-backend-policy.js").AdvisoryLockTier} args.backend - Tier that served the acquisition.
+   * @param {boolean} args.fencingSupported - Whether the serving tier carries fencing tokens.
+   * @returns {void}
+   */
+  recordAdvisoryLockAcquisition({lockName, backend, fencingSupported}) {
+    this._advisoryLockAcquisitions.set(lockName, {backend, fencingSupported, servedAt: new Date().toISOString()})
+  }
+
+  /**
+   * The "which backend served this lock" diagnostics surface (design §3):
+   * per lock name, the tier of the most recent acquisition, whether that tier
+   * carries fencing tokens, and the resolved policy (minimum/allowed/preferred
+   * tiers) for the name.
+   * @param {string} lockName - Lock name.
+   * @returns {{acquisition: {backend: import("./database/advisory-lock-backend-policy.js").AdvisoryLockTier, fencingSupported: boolean, servedAt: string} | null, policy: import("./database/advisory-lock-backend-policy.js").ResolvedAdvisoryLockBackendPolicy}} - Backend status for the name.
+   */
+  getAdvisoryLockBackendStatus(lockName) {
+    return {
+      acquisition: this._advisoryLockAcquisitions.get(lockName) ?? null,
+      policy: this.resolveAdvisoryLockPolicy(lockName)
+    }
+  }
+
+  /**
    * Registers a dedicated connection that currently holds an advisory lock, so a
    * shutdown can close it and release the lock. See `_advisoryLockConnections`.
    * @param {import("./database/drivers/base.js").default} connection - The dedicated lock connection.
@@ -4155,6 +4267,15 @@ export default class VelociousConfiguration {
           // leave the rest of the connections open.
           await this._closeAdvisoryLockConnections()
         } finally {
+          try {
+            // Release file-tier advisory-lock holds explicitly (STC-213): the
+            // lease would make them reclaimable anyway, but a clean shutdown
+            // should not leave lock directories behind for the staleness path.
+            await this._advisoryLockFileBackend?.releaseAllHeld()
+          } catch (error) {
+            closeErrors.push(error instanceof Error ? error : new Error(String(error)))
+          }
+
           for (const pool of Object.values(this.databasePools)) {
             if (!pool) continue
 

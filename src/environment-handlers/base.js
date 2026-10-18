@@ -37,6 +37,19 @@ export default class VelociousEnvironmentHandlerBase {
   resolveTestSharedTransactionPoolType({configuredPoolType}) { return configuredPoolType }
 
   /**
+   * Creates the file-tier advisory-lock backend (STC-213). Only filesystem
+   * capable environments (the Node handler) can provide this tier; browser
+   * and Expo configurations have no `fs`, so the default refuses loudly
+   * instead of half-working when a deployment explicitly enables
+   * `advisoryLocks.backends.file.enabled`.
+   * @param {{directory: string, leaseMs: number, renewIntervalMs: number}} _args - Backend options.
+   * @returns {Promise<import("../database/advisory-lock-file-backend.js").default>} - Resolves with the created backend in filesystem-capable handlers.
+   */
+  async createAdvisoryLockFileBackend(_args) {
+    throw new Error("The advisory-lock file tier requires a filesystem-capable environment handler (Node)")
+  }
+
+  /**
    * Node test runtimes may replace a physical child connection with a broker
    * proxy. Other environments never participate in this test-only protocol.
    * @param {{DriverClass: typeof import("../database/drivers/base.js").default, config: import("../configuration-types.js").DatabaseConfigurationType, configuration: import("../configuration.js").default, databaseIdentifier: string, reuseKey?: string}} _args - Connection details.

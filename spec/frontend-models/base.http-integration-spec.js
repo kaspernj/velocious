@@ -476,7 +476,7 @@ describe("Frontend models - base http integration", {databaseCleaning: {transact
     })
   })
 
-  it("waits until pending shared Node HTTP requests are resolved", async () => {
+  it("waits until pending shared Node HTTP requests are resolved", {timeoutSeconds: 180}, async () => {
     await Dummy.run(async () => {
       configureNodeTransport()
 

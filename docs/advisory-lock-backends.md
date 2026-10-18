@@ -1,7 +1,10 @@
 # Advisory-lock backend chain (design)
 
-Status: **design only** (STC-210, parent epic STC-209). No implementation is specified
-beyond contracts; nothing here is merged behavior yet.
+Status: **design** (STC-210, parent epic STC-209). Tier (d), the opt-in file tier, is now
+implemented (STC-213): `src/database/advisory-lock-file-backend.js` behind the runner seam,
+with per-lock-name minimum-tier refusal (`AdvisoryLockMinTierRefusedError`), acquisition
+provenance, and `configuration.getAdvisoryLockBackendStatus(lockName)`. The lock-server tier
+and the full multi-backend chain remain follow-up legs of STC-209.
 
 This document decides the contract for a **pluggable advisory-lock backend chain** that
 prefers a **centralized lock-server process** and falls back to whatever is available,
@@ -118,6 +121,13 @@ A silent downgrade to a weaker tier is therefore impossible to hide: it is in th
 acquisition result, in the framework-error stream, and in the status surface.
 
 ## 4. Safety rule per tier
+
+Implemented (STC-213): the file tier is default-off, only selectable via
+`advisoryLocks.backends.file.enabled: true` plus a per-lock-name policy that declares
+`minTier: "file"` (or a policy whose minimum is cross-host is refused with
+`AdvisoryLockMinTierRefusedError` before any contact with the tier). Holds carry a
+`leaseMs` lease renewed on `renewIntervalMs`; a killed holder is reclaimed via lease expiry
+or local PID liveness. The tier reports `fencingSupported: false` on every acquisition.
 
 - **(a) process-local:** same process only. A pre-filter, never the authority. No
   cross-host lock name may be satisfied by (a) alone.

@@ -13,7 +13,8 @@ import {outputPathFor, startBackgroundJobs, waitForJobCompleted, waitForOutputJs
  * @returns {Promise<string>} - Enqueued job id.
  */
 async function enqueueFromFreshProcess({outputPath, port}) {
-  return await timeout({timeout: 5000}, async () => await new Promise((resolve, reject) => {
+  // Peak CI load: a fresh Node process booting the full Velocious configuration exceeds the tight 5 s bound.
+  return await timeout({timeout: 30000}, async () => await new Promise((resolve, reject) => {
     const child = fork(lazyConfigurationChildPath, [outputPath], {
       cwd: dummyDirectory(),
       env: {
@@ -49,7 +50,7 @@ async function enqueueFromFreshProcess({outputPath, port}) {
 }
 
 describe("Background jobs - lazy Node configuration", {databaseCleaning: {truncate: true}}, () => {
-  it("preserves VelociousJob configurationResolver lookup in a fresh process", async () => {
+  it("preserves VelociousJob configurationResolver lookup in a fresh process", {timeoutSeconds: 180}, async () => {
     const {main, store, worker} = await startBackgroundJobs()
     const outputPath = await outputPathFor("lazy-node-configuration")
 

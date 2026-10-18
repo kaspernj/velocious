@@ -189,6 +189,49 @@ Stale lock recovery: if the metadata names a PID on this host that is no longer 
 
 Web (sql.js) and Expo native inherit the shared in-process implementation unchanged, because they have no `fs` access.
 
+## The opt-in file-lock backend tier
+
+The Node SQLite filesystem layer above is one use of a shared backend primitive
+(`src/database/advisory-lock-file-backend.js`), which implements the `file` tier of the
+[advisory-lock backend chain](advisory-lock-backends.md). The tier is **disabled by default**
+and only selectable by explicit configuration — it is never the primary backend and never
+auto-enabled when other tiers are down:
+
+```js
+new Configuration({
+  advisoryLocks: {
+    backends: {
+      // Off by default. Enabling it is the deployment's explicit single-host declaration.
+      file: {enabled: true, directory: "tmp/advisory-locks", leaseMs: 30_000, renewIntervalMs: 10_000}
+    },
+    policy: [
+      // A name is served by the file tier only when its policy explicitly opts in.
+      {name: "my-single-host-thing", minTier: "file", preferredTier: "file"},
+      // A cross-host-minimum name is refused the file tier, loudly.
+      {name: "cross-host-thing", minTier: "driver-native", preferredTier: "file"}
+    ]
+  }
+})
+```
+
+- **Minimum-tier rule.** A lock name whose declared `minTier` is `driver-native` or
+  `lock-server` can never be served by the file tier. An acquisition that would fall to the
+  file tier for such a name throws `AdvisoryLockMinTierRefusedError` before contacting the
+  backend and emits `advisory-lock-min-tier-refused` on the framework-error channel.
+- **Leases.** Each hold carries a `leaseMs` lease renewed on `renewIntervalMs` while held. A
+  killed holder's lock directory is reclaimed by the next acquirer once its lease expires or
+  its PID is found dead on this host (`kill(pid, 0)` → `ESRCH`), so a crashed holder never
+  leaves a stuck lock.
+- **Limits.** The file tier is same-host only (shared filesystem at best), provides **no
+  fencing tokens** — a partitioned holder cannot be checked against a monotonic authority —
+  and cross-host owners are only reclaimable via lease expiry because PID liveness cannot be
+  probed remotely. Every acquisition from this tier reports `fencingSupported: false` rather
+  than pretending. It consumes no database connection.
+- **Provenance.** Every acquisition reports the tier that served it on the callback's
+  `lockBackend` argument (`{backend, driverType, fencingSupported}`) and on
+  `configuration.getAdvisoryLockBackendStatus(lockName)`, so a fallback to the file tier is
+  visible in logs and diagnostics.
+
 ## Errors
 
 - `AdvisoryLockTimeoutError` — thrown by `withAdvisoryLock` when a `timeoutMs` elapses before the lock is granted. Exposes `error.lockName`.
@@ -196,3 +239,11 @@ Web (sql.js) and Expo native inherit the shared in-process implementation unchan
 - `AdvisoryLockHoldTimeoutError` — thrown by either helper when a `holdTimeoutMs` elapses while the callback is still running. Exposes `error.lockName`.
 
 All three are exported from `velocious/build/src/database/record/index.js` (and the matching source path under `src/`).
+
+Two backend-chain errors join them (see [advisory-lock-backends.md](advisory-lock-backends.md) §9):
+
+- `AdvisoryLockMinTierRefusedError` — thrown when an acquisition would have to be served by a
+  tier below the lock name's declared minimum tier. Exposes `error.lockName`,
+  `error.requestedBackend`, `error.minTier`.
+- `AdvisoryLockBackendUnavailableError` — thrown when no enabled backend satisfies the name's
+  minimum tier. Exposes `error.lockName`, `error.minTier`, `error.reasons`.
