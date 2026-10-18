@@ -24,7 +24,9 @@
     "spec/dummy-package/velocious-package.js",
     "spec/dummy-package/src/models/**/*.js",
     "spec/dummy-package/src/resources/**/*.js",
-    "spec/dummy-package/src/database/migrations/**/*.js"
+    "spec/dummy-package/src/database/migrations/**/*.js",
+    "spec/database/record/drop-attachments.js",
+    "spec/database/record/attachments-concurrent-ready-worker.js"
   ],
   "ignorePatterns": [
     "build/**",
