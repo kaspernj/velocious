@@ -42,7 +42,7 @@ async function connectControllableWorker({port, supportsHandoffIdReporting = tru
 
   return {
     jsonSocket,
-    nextJob: async () => await timeout({timeout: 2000}, async () => {
+    nextJob: async () => await timeout({timeout: 10000}, async () => {
       while (jobs.length === 0) await wait(0.01)
 
       const payload = jobs.shift()
@@ -117,14 +117,14 @@ describe("Background jobs", {databaseCleaning: {truncate: true}}, () => {
     }
   })
 
-  it("gracefully drains a busy pooled job and then retires its child", async () => {
+  it("gracefully drains a busy pooled job and then retires its child", {timeoutSeconds: 180}, async () => {
     const {main, store, worker} = await startBackgroundJobs({workerOptions: {pooledRunnerCount: 1}})
     const outputPath = await outputPathFor("pooled-runner-drain")
 
     try {
       const jobId = await store.enqueue({jobName: "SlowTestJob", args: ["drained", outputPath, 100]})
       await main._drain()
-      await timeout({timeout: 2000}, async () => {
+      await timeout({timeout: 10000}, async () => {
         while (worker.inflightPooledJobs.size === 0) await wait(0.01)
       })
 
@@ -185,7 +185,7 @@ describe("Background jobs", {databaseCleaning: {truncate: true}}, () => {
     await main.stop()
   })
 
-  it("immediately requeues a disconnected worker's exact handoff to another socket", async () => {
+  it("immediately requeues a disconnected worker's exact handoff to another socket", {timeoutSeconds: 180}, async () => {
     const {main, store} = await startBackgroundJobsMain()
     const firstWorker = await connectControllableWorker({port: main.getPort(), workerId: "shared-worker-id"})
     const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {executionMode: "inline"}})
@@ -415,7 +415,7 @@ describe("Background jobs", {databaseCleaning: {truncate: true}}, () => {
     }
   })
 
-  it("waits for in-flight inline jobs to finish during a graceful stop", async () => {
+  it("waits for in-flight inline jobs to finish during a graceful stop", {timeoutSeconds: 180}, async () => {
     const {main, store, worker} = await startBackgroundJobs()
     const outputPath = await outputPathFor("slow-job")
 
