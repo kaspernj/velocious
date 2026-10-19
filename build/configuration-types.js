@@ -329,7 +329,7 @@
  * @property {string} [host] - Hostname to bind the HTTP server to.
  * @property {boolean} [inProcess] - Run HTTP handlers in the main thread instead of worker threads.
  * @property {number} [maxBufferedResponseBodyBytes] - Maximum UTF-8/binary byte length accepted by buffered response bodies. Unbounded when absent; streamed file responses are unaffected.
- * @property {number} [maxRequestBodyBytes] - Maximum decoded request-body bytes accepted before routing. Unbounded when absent.
+ * @property {number} [maxRequestBodyBytes] - Maximum decoded request-body bytes accepted before routing. Unbounded when absent, except the built-in MCP endpoint, which defaults to a 1 MiB cap that this option overrides.
  * @property {HttpRequestBodyPolicyResolver} [requestBodyPolicyResolver] - Optional synchronous header-stage resolver for per-request limits and raw-body handling.
  * @property {number} [maxWorkers] - Backward-compatible alias for workers.
  * @property {number} [port] - Port to bind the HTTP server to.
