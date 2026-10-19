@@ -759,6 +759,17 @@
  */
 
 /**
+ * @typedef {object} TestTenantPoolConfiguration
+ * @property {Array<ReturnType<typeof JSON.parse>>} tenants - Pool members: the tenant descriptors whose databases the pool pre-provisions and re-uses. Pool size is the array length.
+ * @property {(args: {configuration: import("./configuration.js").default, databaseIdentifier: string, tenant: ReturnType<typeof JSON.parse>}) => void | Promise<void>} [provisionTenant] - App-owned provisioning override for one member (runs instead of the framework create + structure-load + ledger-baseline default).
+ * @property {(args: {configuration: import("./configuration.js").default, databaseIdentifier: string, tenant: ReturnType<typeof JSON.parse>}) => void | Promise<void>} [resetTenant] - App-owned per-test reset override (runs instead of the framework truncate + ledger-baseline default).
+ */
+
+/**
+ * @typedef {Record<string, TestTenantPoolConfiguration>} TestTenantPoolsConfiguration
+ */
+
+/**
  * @typedef {object} TenantDatabaseProviderType
  * @property {(args: {configuration: import("./configuration.js").default, identifier: string}) => Array<ReturnType<typeof JSON.parse>> | Promise<Array<ReturnType<typeof JSON.parse>>>} listTenants - Lists tenants that should be created, checked, or migrated for this database identifier.
  * @property {(args: {configuration: import("./configuration.js").default, identifier: string}) => ReturnType<typeof JSON.parse> | void | Promise<ReturnType<typeof JSON.parse> | void>} [resolveGenerationTenant] - Resolves one explicit tenant descriptor for schema/base-model generation without enumerating lifecycle tenants.
@@ -770,12 +781,23 @@
  */
 
 /**
+ * Advisory-lock backend chain configuration (STC-210 design §10, file tier
+ * implemented by STC-213). Everything defaults to today's driver-native-only
+ * behavior; the file backend is disabled by default and only selectable by
+ * explicit configuration.
+ * @typedef {object} AdvisoryLocksConfiguration
+ * @property {{file?: {directory?: string, enabled?: boolean, leaseMs?: number, renewIntervalMs?: number}}} [backends] - Backend enablement. `file.enabled` defaults to false; enabling it is the deployment's explicit single-host declaration.
+ * @property {import("./database/advisory-lock-backend-policy.js").AdvisoryLockBackendPolicyEntry[]} [policy] - Per-lock-name minimum/allowed/preferred tier rules (design §5).
+ */
+
+/**
  * @typedef {object} ConfigurationArgsType
  * @property {boolean} [autoload] - Globally enable auto-batch-preload of relationships on lazy access. Default true.
  * @property {CorsType} [cors] - CORS configuration for the HTTP server.
  * @property {string} [cookieSecret] - Secret for encrypting cookies.
  * @property {AbilityResourceClassType[]} [abilityResources] - Resource classes used to define abilities per model.
  * @property {AbilityResolverType} [abilityResolver] - Resolver for creating request-scoped ability instances.
+ * @property {AdvisoryLocksConfiguration} [advisoryLocks] - Advisory-lock backend chain configuration (backends + per-lock-name tier policy). Defaults to today's driver-native-only behavior.
  * @property {AttachmentsConfiguration} [attachments] - Attachment storage configuration.
  * @property {BackendProjectConfiguration[]} [backendProjects] - Backend project definitions used for frontend model generation.
  * @property {VelociousPackageConfiguration[]} [packages] - External Velocious packages that contribute models, frontend-model resources and migrations.
@@ -807,6 +829,7 @@
  * @property {TenantResolverType} [tenantResolver] - Resolver for creating request-scoped tenant context objects.
  * @property {TenantDatabaseResolverType} [tenantDatabaseResolver] - Resolver for deriving tenant-specific database config overrides.
  * @property {Record<string, TenantDatabaseProviderType>} [tenantDatabaseProviders] - Tenant database lifecycle providers keyed by database identifier.
+ * @property {TestTenantPoolsConfiguration} [testTenantPools] - Opt-in reusable test tenant-database pools keyed by tenant database identifier. Consumed only by the test harness; ordinary runtime ignores it.
  * @property {string} [testing] - Path to the testing configuration file.
  * @property {string | (() => string | undefined)} [timeZone] - Default timezone for timezone-less datetime strings.
  * @property {number | (() => number)} [timezoneOffsetMinutes] - Default timezone offset in minutes.

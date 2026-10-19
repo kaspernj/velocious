@@ -130,6 +130,11 @@ describe("Background jobs", {databaseCleaning: {truncate: true}}, () => {
 
       await worker.stop({timeoutMs: 2000})
 
+      // Graceful stop retires the child once its completion report is in flight; under CI
+      // load the durable store row can still read "queued" for a moment afterwards. Poll the
+      // guaranteed completion through the shared helper (it throws on "failed") instead of
+      // racing the assertion against the status round-trip.
+      await waitForJobCompleted({jobId, store})
       expect((await store.getJob(jobId))?.status).toEqual("completed")
       expect(await waitForOutputJson({outputPath})).toEqual({message: "drained"})
       expect(worker.pooledChildren.size).toEqual(0)

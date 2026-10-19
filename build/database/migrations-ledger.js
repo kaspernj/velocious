@@ -4,6 +4,11 @@ import {digg} from "diggerize"
 import TableData from "./table-data/index.js"
 
 const TABLE_NAME = "schema_migrations"
+/** SQL Server "There is already an object named ..." — raised when two sessions race to create the same table. */
+const MSSQL_OBJECT_ALREADY_EXISTS_ERROR_NUMBER = 2714
+/** SQL Server deadlock victim — raised when concurrent sessions deadlock on the same catalog reads. */
+const MSSQL_DEADLOCK_VICTIM_ERROR_NUMBER = 1205
+
 
 /**
  * Single owner of the `schema_migrations` ledger shape and the only place that reads
@@ -36,23 +41,106 @@ export default class MigrationsLedger {
   }
 
   /**
-   * Creates the ledger table if it does not exist. This is the single definition of
-   * the `schema_migrations` table shape.
-   * @param {import("./drivers/base.js").default} db - Database that should contain the ledger table.
-   * @returns {Promise<void>}
+   * Whether the error means a concurrent session already created the ledger table.
+   *
+   * Several processes bootstrap the same database at the same time (for example every
+   * CI test shard), and the MSSQL `IF NOT EXISTS (...) BEGIN CREATE TABLE ... END` guard
+   * is NOT atomic: two sessions can both evaluate the check as false and then both
+   * create, so the loser is rejected. Walks the wrapped-error cause chain because
+   * `db.query` re-wraps the driver's `RequestError` in a plain `Error`, and matches the
+   * stable numeric error number instead of the localized message text.
+   * @param {unknown} error - Error thrown while creating the ledger table.
+   * @returns {boolean} - True if the table was created by a concurrent session.
    */
-  static async ensureTable(db) {
-    if (await MigrationsLedger.tableExists(db)) return
+  static isConcurrentCreationError(error) {
+    let current = error
 
-    const tableData = new TableData(TABLE_NAME, {ifNotExists: true})
+    while (current instanceof Error) {
+      const errorNumber = /** @type {{number?: unknown}} */ (current).number
 
-    tableData.string("version", {null: false, primaryKey: true})
+      if (typeof errorNumber === "number" && errorNumber === MSSQL_OBJECT_ALREADY_EXISTS_ERROR_NUMBER) return true
 
-    for (const sql of await db.createTableSql(tableData)) {
-      await db.query(sql)
+      current = current.cause
     }
 
-    db.clearSchemaCache()
+    return false
+  }
+
+  /**
+   * Whether the error is a transient deadlock that should be retried.
+   *
+   * Concurrent boots also deadlock on the `INFORMATION_SCHEMA` metadata scan that
+   * `getTableByName` performs on SQL Server; the victim transaction rolled back cleanly,
+   * so retrying it is safe. Matched by numeric error number, never by message text.
+   * @param {unknown} error - Error thrown while inspecting or creating the ledger table.
+   * @returns {boolean} - True if the error is a retryable deadlock.
+   */
+  static isDeadlockError(error) {
+    let current = error
+
+    while (current instanceof Error) {
+      const errorNumber = /** @type {{number?: unknown}} */ (current).number
+
+      if (typeof errorNumber === "number" && errorNumber === MSSQL_DEADLOCK_VICTIM_ERROR_NUMBER) return true
+
+      current = current.cause
+    }
+
+    return false
+  }
+
+  /**
+   * Creates the ledger table if it does not exist. This is the single definition of
+   * the `schema_migrations` table shape.
+   *
+   * Safe under concurrency: a session that loses the create race (or deadlocks on the
+   * catalog read) converges on the existing table instead of failing its caller. That
+   * matters because this runs on every boot of a database configured for migrations
+   * (see `Migrator#createMigrationsTableForDatabase` and
+   * `migrateRequireContextForDatabase`), so a crash here takes down a whole test shard
+   * or deployment over a table that provably already exists.
+   * @param {import("./drivers/base.js").default} db - Database that should contain the ledger table.
+   * @param {{maxAttempts?: number}} [args] - Retry budget for transient catalog deadlocks.
+   * @returns {Promise<void>}
+   */
+  static async ensureTable(db, {maxAttempts = 3} = {}) {
+    let attempt = 0
+
+    while (true) {
+      attempt++
+
+      try {
+        if (await MigrationsLedger.tableExists(db)) return
+
+        const tableData = new TableData(TABLE_NAME, {ifNotExists: true})
+
+        tableData.string("version", {null: false, primaryKey: true})
+
+        for (const sql of await db.createTableSql(tableData)) {
+          await db.query(sql)
+        }
+
+        db.clearSchemaCache()
+
+        return
+      } catch (error) {
+        if (MigrationsLedger.isConcurrentCreationError(error)) {
+          // Another session created the ledger between our check and our create. The
+          // table exists with exactly this shape, so the goal state is already reached.
+          db.clearSchemaCache()
+
+          return
+        }
+
+        if (MigrationsLedger.isDeadlockError(error) && attempt < maxAttempts) {
+          db.clearSchemaCache()
+
+          continue
+        }
+
+        throw error
+      }
+    }
   }
 
   /**

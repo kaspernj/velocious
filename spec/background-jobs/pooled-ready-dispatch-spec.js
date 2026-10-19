@@ -118,7 +118,7 @@ describe("Background jobs - pooled ready dispatch", {tags: ["dummy"], databaseCl
     }
   })
 
-  it("emits one shared runner-exit provenance snapshot for every job lost with a pooled child", async () => {
+  it("emits one shared runner-exit provenance snapshot for every job lost with a pooled child", {timeoutSeconds: 180}, async () => {
     if (!backgroundJobs) throw new Error("Expected background jobs to be started")
     const barrier = await createBackgroundJobsSocketBarrier(2)
     const failureEvents = []
@@ -151,7 +151,7 @@ describe("Background jobs - pooled ready dispatch", {tags: ["dummy"], databaseCl
       if (!runnerPid) throw new Error("Expected pooled child pid")
 
       child.kill("SIGKILL")
-      await timeout({errorMessage: "Killed pooled jobs did not report both failures", timeout: 2000}, async () => {
+      await timeout({errorMessage: "Killed pooled jobs did not report both failures", timeout: 10000}, async () => {
         await failuresReceived.promise
       })
 

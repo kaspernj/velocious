@@ -114,7 +114,8 @@ const configuration = new Configuration({
           options: {
             serverName: "mssql",
             encrypt: true, // for azure
-            trustServerCertificate: true // change to true for local dev / self-signed certs
+            trustServerCertificate: true, // change to true for local dev / self-signed certs
+            connectTimeout: 60000 // peak CI load: tenant test-database recovery cycles on the 2 GB MSSQL service exceeded the vendor 15 s connect default
           }
         }
       }

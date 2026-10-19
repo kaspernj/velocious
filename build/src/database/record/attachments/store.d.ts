@@ -12,9 +12,6 @@ export declare function recordAttachmentsStoreForModelClass(modelClass: typeof i
  * @returns {RecordAttachmentsStore} - Store instance.
  */
 export declare function recordAttachmentsStoreForModel(model: import("../index.js").default): RecordAttachmentsStore;
-/**
- * Attachment persistence store.
- */
 export default class RecordAttachmentsStore {
     configuration: import("../../../configuration.js").default;
     databaseIdentifier: string;

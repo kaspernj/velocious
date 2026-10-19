@@ -27,17 +27,25 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
      */
     _affectedRowsActual(sql: string): Promise<number>;
     /**
-     * Layers a filesystem lock directory on top of the in-process waiter
-     * queue so SQLite deployments with multiple Node processes writing to
-     * the same database file see consistent advisory-lock mutual exclusion
-     * across processes, not just within a single process.
+     * The filesystem lock directory is this driver's driver-native tier on
+     * top of the shared process-local pre-filter tier from the base driver,
+     * so SQLite deployments with multiple Node processes writing to the same
+     * database file see consistent advisory-lock mutual exclusion across
+     * processes, not just within a single process.
+     * @returns {boolean} - Always true for the Node SQLite driver.
+     */
+    supportsDriverNativeAdvisoryLock(): boolean;
+    /**
+     * Filesystem lock directory as the driver-native tier on top of the
+     * shared process-local pre-filter tier from the base driver, so SQLite
+     * deployments with multiple Node processes writing to the same database
+     * file see consistent advisory-lock mutual exclusion across processes,
+     * not just within a single process.
      *
-     * The in-process queue from the shared SQLite base class is still used
-     * for the fast intra-process path (no polling, waiters wake each other
-     * through the `Set<string>` + waiter queue); the filesystem lock is
-     * only checked once the in-process queue has granted the caller, so
-     * typical single-process traffic pays at most two `fs.mkdir` calls
-     * (create and remove) per critical section.
+     * The base driver's process-local tier serializes same-process callers
+     * first (no filesystem round trip for uncontended traffic); this hook
+     * is only reached once the tier has granted the caller its turn, and its
+     * result is what confirms cross-process exclusion for SQLite.
      * @param {string} name - Lock name.
      * @param {{timeoutMs?: number | null}} [args] - Optional timeout in milliseconds; `null`, `undefined`, or negative blocks forever.
      * @returns {Promise<boolean>} - Whether the advisory lock was acquired.
@@ -52,22 +60,23 @@ export default class VelociousDatabaseDriversSqliteNode extends Base {
      */
     _tryAcquireAdvisoryLock(name: string): Promise<boolean>;
     /**
-     * Releases the lock only if **this** driver instance acquired it, both
-     * in the shared in-process owner table and in the on-disk lock
-     * directory. A caller that tries to release a lock it never acquired
-     * (or that was already released by another driver) gets `false` back
-     * and the filesystem state is left alone so we never delete somebody
-     * else's lock directory.
+     * Releases the on-disk lock directory for a lock this driver instance
+     * acquired through the base driver's two-tier chain. A caller that tries
+     * to release a lock it never acquired (or that was already released by
+     * another driver) gets `false` back and the filesystem state is left
+     * alone so we never delete somebody else's lock directory.
      * @param {string} name - Lock name.
      * @returns {Promise<boolean>} - Whether the advisory lock was released.
      */
     _releaseAdvisoryLock(name: string): Promise<boolean>;
     /**
-     * Runs is advisory lock held.
+     * Filesystem-tier view for the base driver's `isAdvisoryLockHeld`, which
+     * answers from the process-local tier first and only asks this hook when
+     * the tier has no owner for the name.
      * @param {string} name - Lock name.
-     * @returns {Promise<boolean>} - Whether the advisory lock is held.
+     * @returns {Promise<boolean>} - Whether the advisory lock file is held.
      */
-    isAdvisoryLockHeld(name: string): Promise<boolean>;
+    _isAdvisoryLockHeldNative(name: string): Promise<boolean>;
     /**
      * The Node SQLite driver layers the opt-in file tier on top of the
      * process-local pre-filter, so telemetry reports it as `file`.

@@ -4,9 +4,23 @@ import {digg} from "diggerize"
 import * as inflection from "inflection"
 import Logger from "../logger.js"
 import MigrationsLedger from "./migrations-ledger.js"
+import AdvisoryLockRunner from "./advisory-lock-runner.js"
 import {NotImplementedError} from "./migration/index.js"
 import { migrationExecutionPhase, migrationRunsInExecutionPhase } from "./migration-execution-phase.js"
 import restArgsError from "../utils/rest-args-error.js"
+
+/**
+ * Builds the advisory-lock name that serialises migrations for one database identifier.
+ *
+ * The name is derived from the database identifier only (not the migration) so that
+ * concurrent processes queue on one lock while applying the pending set, instead of
+ * racing on individual DDL statements.
+ * @param {string} dbIdentifier - Database identifier being migrated.
+ * @returns {string} - Advisory lock name.
+ */
+function migrationsAdvisoryLockName(dbIdentifier) {
+  return `velocious:migrations:${dbIdentifier}`
+}
 
 export default class VelociousDatabaseMigrator {
   /**
@@ -49,8 +63,11 @@ export default class VelociousDatabaseMigrator {
    * @returns {Promise<void>} - Resolves when complete.
    */
   async prepare() {
+    console.error("[MIG-DEBUG] prepare() start")
     await this.createMigrationsTable()
+    console.error("[MIG-DEBUG] createMigrationsTable done")
     await this.loadMigrationsVersions()
+    console.error("[MIG-DEBUG] prepare() done")
   }
 
   /**
@@ -115,6 +132,7 @@ export default class VelociousDatabaseMigrator {
    */
   async migrateFiles(files, importCallback) {
     let appliedCount = 0
+    console.error("[MIG-DEBUG] migrateFiles count=" + files.length)
 
     await this.configuration.ensureConnections({databaseIdentifiers: this.databaseIdentifiers, name: "Database migrator: migrate files"}, async () => {
       for (const migration of files) {
@@ -278,10 +296,29 @@ export default class VelociousDatabaseMigrator {
 
     if (!environmentHandler || Object.keys(filteredDbs).length == 0) return
 
+    // Serialise the framework-schema bootstrap across processes. This creates the attachments
+    // and background-jobs tables, and it runs once per process outside the per-migration loop:
+    // without this lock, two processes bootstrapping one database race on CREATE TABLE /
+    // CREATE INDEX and one dies mid-boot (duplicate object/index).
+    for (const [dbIdentifier, db] of Object.entries(filteredDbs)) {
+      const runner = new AdvisoryLockRunner({
+        configuration: this.configuration,
+        connectionProvider: () => db,
+        databaseIdentifier: dbIdentifier
+      })
+
+      await runner.withAdvisoryLock(
+        migrationsAdvisoryLockName(dbIdentifier),
+        async () => {
+          await environmentHandler.ensureFrameworkSchema({dbs: {[dbIdentifier]: db}})
+        },
+        {dedicatedConnection: true}
+      )
+    }
+
     // Ensure Velocious' own framework schema before the structure dump. The dump is
     // gated to enabled environments, but migration-enabled databases must include
     // framework tables so `db:migrate` and schema:load produce a complete database.
-    await environmentHandler.ensureFrameworkSchema({dbs: filteredDbs})
     await environmentHandler.afterMigrations({dbs: filteredDbs})
   }
 
@@ -487,6 +524,7 @@ export default class VelociousDatabaseMigrator {
    */
   async runMigrationFile({migration, requireMigration, direction = "up"}) {
     if (!this.configuration) throw new Error("No configuration set")
+    console.error("[MIG-DEBUG] runMigrationFile file=" + (migration && migration.file))
     if (!this.configuration.isDatabasePoolInitialized()) await this.configuration.initializeDatabasePool()
     if (!this.migrationsVersions) await this.loadMigrationsVersions()
 
@@ -542,67 +580,99 @@ export default class VelociousDatabaseMigrator {
         continue
       }
 
-      if (direction == "up") {
-        if (this.hasRunMigrationVersion(dbIdentifier, migration.date)) {
-          this.logger.debug(`${dbIdentifier} has already run migration ${migration.file}`)
-          continue
-        }
-      } else if (direction == "down") {
-        if (!this.hasRunMigrationVersion(dbIdentifier, migration.date)) {
-          this.logger.debug(`${dbIdentifier} hasn't run migration ${migration.file}`)
-          continue
-        }
-      } else {
-        throw new Error(`Unknown direction: ${direction}`)
-      }
-
-      this.logger.debug(`Running migration on ${dbIdentifier}: ${migration.file}`, {migrationDatabaseIdentifiers})
-
-      applied = true
       const db = dbs[dbIdentifier]
-      const MigrationClass = migrationClass
-      const migrationInstance = new MigrationClass({
-        configuration: this.configuration,
-        databaseIdentifier: dbIdentifier,
-        db
-      })
       const dateString = `${digg(migration, "date")}`
 
-      if (direction == "up") {
-        try {
-          await migrationInstance.change()
-        } catch (changeError) {
-          if (changeError instanceof NotImplementedError) {
-            try {
-              await migrationInstance.up()
-            } catch (upError) {
-              if (upError instanceof NotImplementedError) {
-                throw new Error(`'change' or 'up' didn't exist on migration: ${migration.file}`, {cause: upError})
-              } else {
-                throw upError
-              }
+      // Serialise the check-then-apply across processes. Without this, two shards can both
+      // observe the migration as unapplied and both execute its DDL; the loser dies with the
+      // driver's duplicate-object error mid-boot.
+      //
+      // The version is re-read *inside* the lock: while this process waited, another process
+      // may already have applied the migration, in which case this one must become a no-op.
+      console.error("[MIG-DEBUG] acquiring lock db=" + dbIdentifier + " file=" + migration.file)
+      const runner = new AdvisoryLockRunner({
+        configuration: this.configuration,
+        connectionProvider: () => db,
+        databaseIdentifier: dbIdentifier
+      })
+
+      const appliedInLock = await runner.withAdvisoryLock(
+        migrationsAdvisoryLockName(dbIdentifier),
+        async () => {
+          // Re-read the applied set from the database while holding the lock. The version
+          // list was loaded during prepare(), before any other process may have finished
+          // applying migrations, so trusting that cached snapshot here would let this
+          // process re-run DDL that another process has already committed.
+          await this.loadMigrationsVersionsForDatabase({dbIdentifier, db})
+
+          if (direction == "up") {
+            if (this.hasRunMigrationVersion(dbIdentifier, migration.date)) {
+              this.logger.debug(`${dbIdentifier} has already run migration ${migration.file}`)
+              return false
+            }
+          } else if (direction == "down") {
+            if (!this.hasRunMigrationVersion(dbIdentifier, migration.date)) {
+              this.logger.debug(`${dbIdentifier} hasn't run migration ${migration.file}`)
+              return false
             }
           } else {
-            throw changeError
+            throw new Error(`Unknown direction: ${direction}`)
           }
-        }
 
-        await MigrationsLedger.recordVersion(db, dateString)
-      } else if (direction == "down") {
-        try {
-          await migrationInstance.down()
-        } catch (downError) {
-          if (downError instanceof NotImplementedError) {
-            throw new Error(`'down' didn't exist on migration: ${migration.file} or migrating down with a change method isn't currently supported`, {cause: downError})
+          this.logger.debug(`Running migration on ${dbIdentifier}: ${migration.file}`, {migrationDatabaseIdentifiers})
+
+          const MigrationClass = migrationClass
+          const migrationInstance = new MigrationClass({
+            configuration: this.configuration,
+            databaseIdentifier: dbIdentifier,
+            db
+          })
+
+          if (direction == "up") {
+            try {
+              await migrationInstance.change()
+            } catch (changeError) {
+              if (changeError instanceof NotImplementedError) {
+                try {
+                  await migrationInstance.up()
+                } catch (upError) {
+                  if (upError instanceof NotImplementedError) {
+                    throw new Error(`'change' or 'up' didn't exist on migration: ${migration.file}`, {cause: upError})
+                  } else {
+                    throw upError
+                  }
+                }
+              } else {
+                throw changeError
+              }
+            }
+
+            await MigrationsLedger.recordVersion(db, dateString)
           } else {
-            throw downError
-          }
-        }
+            try {
+              await migrationInstance.down()
+            } catch (downError) {
+              if (downError instanceof NotImplementedError) {
+                throw new Error(`'down' didn't exist on migration: ${migration.file} or migrating down with a change method isn't currently supported`, {cause: downError})
+              } else {
+                throw downError
+              }
+            }
 
-        await MigrationsLedger.removeVersion(db, dateString)
-      } else {
-        throw new Error(`Unknown direction: ${direction}`)
-      }
+            await MigrationsLedger.removeVersion(db, dateString)
+          }
+
+          return true
+        },
+        // Pin the lock to one physical session: MSSQL/explicit advisory locks are
+        // session-scoped, and a pooled connection can route acquire and release to
+        // different sessions, which would let two processes both "hold" the lock.
+        {dedicatedConnection: true}
+      )
+
+      if (!appliedInLock) continue
+
+      applied = true
     }
 
     return applied

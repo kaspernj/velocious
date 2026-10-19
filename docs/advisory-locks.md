@@ -152,6 +152,13 @@ When no `framework-error`/`all-error` listener is registered, each report also w
 
 ## Scope
 
+Advisory locks run as a **two-tier chain** on every driver:
+
+1. **Process-local pre-filter tier** (shared base driver, `src/database/drivers/base.js`): a process-wide FIFO waiter queue per lock name. Callers inside the same process serialize here before any driver-native lock query is issued, so a contended same-process waiter never parks a pooled connection in a driver lock state (MariaDB `User lock`, `sp_getapplock` session hold). This tier is a **pre-filter, never the authority**: a grant means only "you are next in this process." Cross-process/cross-host exclusion is confirmed by tier 2 (or, once the pluggable backend chain lands, the configured cross-host backend). If the native tier denies or times out, the in-process hold is rolled back and the next waiter is served.
+2. **Driver-native tier** (`GET_LOCK` / `pg_advisory_lock` / `sp_getapplock` / the Node SQLite filesystem lock): the authority that confirms exclusion against other processes and hosts.
+
+The bounded acquisition timeout covers the whole chain: the process-local wait and the native wait share one deadline budget.
+
 Database advisory locks are **per session/connection**. Velocious uses the caller connection for ordinary advisory-lock calls and owns a separate lock connection for calls with a positive `holdTimeoutMs`:
 
 - Without a positive `holdTimeoutMs`, the caller connection acquires and releases the named advisory lock.
@@ -163,10 +170,10 @@ Database advisory locks are **per session/connection**. Velocious uses the calle
 
 | Driver        | Implementation                                                                             |
 | ------------- | ------------------------------------------------------------------------------------------ |
-| MySQL/MariaDB | `GET_LOCK(name, timeout)` / `RELEASE_LOCK(name)` / `IS_USED_LOCK(name)`                    |
-| PostgreSQL    | `pg_advisory_lock($key)` / `pg_try_advisory_lock($key)` / `pg_advisory_unlock($key)` with FNV-1a name hashing |
-| SQL Server    | `sp_getapplock @LockOwner = 'Session'` / `sp_releaseapplock`                               |
-| SQLite        | Process-local emulation: a `Set<string>` of held names plus a per-name waiter queue        |
+| MySQL/MariaDB | process-local pre-filter tier, then `GET_LOCK(name, timeout)` / `RELEASE_LOCK(name)` / `IS_USED_LOCK(name)` |
+| PostgreSQL    | process-local pre-filter tier, then `pg_advisory_lock($key)` / `pg_try_advisory_lock($key)` / `pg_advisory_unlock($key)` with FNV-1a name hashing |
+| SQL Server    | process-local pre-filter tier, then `sp_getapplock @LockOwner = 'Session'` / `sp_releaseapplock` |
+| SQLite        | process-local pre-filter tier (shared base driver); on Node, a filesystem lock directory as the driver-native tier |
 
 ### PostgreSQL name hashing
 
@@ -174,13 +181,56 @@ PostgreSQL advisory locks are keyed by `bigint`, not by string, so the driver ha
 
 ### SQLite emulation
 
-SQLite has no native advisory lock primitive, so the SQLite driver ships a process-local emulation backed by a shared `Set<string>` of held names plus a per-name waiter queue. This is the fast path and handles all intra-process contention; it is also the only implementation available to environments without filesystem access (web/sql.js and Expo native).
+SQLite has no native advisory lock primitive, so SQLite builds rely on the shared process-local pre-filter tier in the base driver: a per-name owner map plus a FIFO waiter queue. This is the fast path and handles all intra-process contention; it is also the only implementation available to environments without filesystem access (web/sql.js and Expo native). Because plain SQLite has no driver-native tier behind it, its locks are **process-local only** — multi-process SQLite setups must not read them as cross-process mutual exclusion.
 
-On **Node**, the Node SQLite driver layers a filesystem lock on top of the in-process queue so multiple Node processes writing to the same SQLite database file see consistent mutual exclusion. Each named lock maps to a directory next to the database file (`<databaseDir>/<databaseName>.velocious-advisory-locks/<safeName>-<hash>.lock/`) created with `fs.mkdir` for atomicity. Inside the directory the driver writes an `owner.json` metadata file with the holder's PID, hostname, and acquisition timestamp.
+On **Node**, the Node SQLite driver layers a filesystem lock directory on top as its driver-native tier, so multiple Node processes writing to the same SQLite database file see consistent mutual exclusion. Each named lock maps to a directory next to the database file (`<databaseDir>/<databaseName>.velocious-advisory-locks/<safeName>-<hash>.lock/`) created with `fs.mkdir` for atomicity. Inside the directory the driver writes an `owner.json` metadata file with the holder's PID, hostname, and acquisition timestamp.
 
 Stale lock recovery: if the metadata names a PID on this host that is no longer running (`kill(pid, 0) → ESRCH`), the directory is treated as stale and removed by the next acquirer. Cross-host ownership is treated as live because the PID cannot be reliably probed on another machine; operators running Node against a network-mounted SQLite file should remove stale lock directories by hand if they linger.
 
 Web (sql.js) and Expo native inherit the shared in-process implementation unchanged, because they have no `fs` access.
+
+## The opt-in file-lock backend tier
+
+The Node SQLite filesystem layer above is one use of a shared backend primitive
+(`src/database/advisory-lock-file-backend.js`), which implements the `file` tier of the
+[advisory-lock backend chain](advisory-lock-backends.md). The tier is **disabled by default**
+and only selectable by explicit configuration — it is never the primary backend and never
+auto-enabled when other tiers are down:
+
+```js
+new Configuration({
+  advisoryLocks: {
+    backends: {
+      // Off by default. Enabling it is the deployment's explicit single-host declaration.
+      file: {enabled: true, directory: "tmp/advisory-locks", leaseMs: 30_000, renewIntervalMs: 10_000}
+    },
+    policy: [
+      // A name is served by the file tier only when its policy explicitly opts in.
+      {name: "my-single-host-thing", minTier: "file", preferredTier: "file"},
+      // A cross-host-minimum name is refused the file tier, loudly.
+      {name: "cross-host-thing", minTier: "driver-native", preferredTier: "file"}
+    ]
+  }
+})
+```
+
+- **Minimum-tier rule.** A lock name whose declared `minTier` is `driver-native` or
+  `lock-server` can never be served by the file tier. An acquisition that would fall to the
+  file tier for such a name throws `AdvisoryLockMinTierRefusedError` before contacting the
+  backend and emits `advisory-lock-min-tier-refused` on the framework-error channel.
+- **Leases.** Each hold carries a `leaseMs` lease renewed on `renewIntervalMs` while held. A
+  killed holder's lock directory is reclaimed by the next acquirer once its lease expires or
+  its PID is found dead on this host (`kill(pid, 0)` → `ESRCH`), so a crashed holder never
+  leaves a stuck lock.
+- **Limits.** The file tier is same-host only (shared filesystem at best), provides **no
+  fencing tokens** — a partitioned holder cannot be checked against a monotonic authority —
+  and cross-host owners are only reclaimable via lease expiry because PID liveness cannot be
+  probed remotely. Every acquisition from this tier reports `fencingSupported: false` rather
+  than pretending. It consumes no database connection.
+- **Provenance.** Every acquisition reports the tier that served it on the callback's
+  `lockBackend` argument (`{backend, driverType, fencingSupported}`) and on
+  `configuration.getAdvisoryLockBackendStatus(lockName)`, so a fallback to the file tier is
+  visible in logs and diagnostics.
 
 ## Errors
 
@@ -189,3 +239,11 @@ Web (sql.js) and Expo native inherit the shared in-process implementation unchan
 - `AdvisoryLockHoldTimeoutError` — thrown by either helper when a `holdTimeoutMs` elapses while the callback is still running. Exposes `error.lockName`.
 
 All three are exported from `velocious/build/src/database/record/index.js` (and the matching source path under `src/`).
+
+Two backend-chain errors join them (see [advisory-lock-backends.md](advisory-lock-backends.md) §9):
+
+- `AdvisoryLockMinTierRefusedError` — thrown when an acquisition would have to be served by a
+  tier below the lock name's declared minimum tier. Exposes `error.lockName`,
+  `error.requestedBackend`, `error.minTier`.
+- `AdvisoryLockBackendUnavailableError` — thrown when no enabled backend satisfies the name's
+  minimum tier. Exposes `error.lockName`, `error.minTier`, `error.reasons`.
