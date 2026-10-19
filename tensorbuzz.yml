@@ -354,5 +354,9 @@ builds:
       - npm run test -- --groups 3 --group-number 3
   expo_build:
     name: Expo Build
+    # `expo export --platform all` bundles web, iOS and Android concurrently and
+    # peaks at the 8g build default, so the container gets OOM-killed (SIGKILL
+    # 137) mid-export. Give this single build explicit headroom.
+    mem_limit: 12g
     script:
       - npm run test:expo
