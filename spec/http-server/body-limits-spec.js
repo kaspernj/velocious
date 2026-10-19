@@ -9,9 +9,10 @@ import {describe, expect, it} from "../../src/testing/test.js"
 
 /**
  * @param {import("../../src/configuration-types.js").HttpServerConfiguration} httpServer - HTTP server configuration.
+ * @param {{mcp?: boolean | import("../../src/configuration-types.js").McpConfiguration}} [options] - Additional configuration options.
  * @returns {Configuration} - Minimal server configuration.
  */
-function buildConfiguration(httpServer) {
+function buildConfiguration(httpServer, options = {}) {
   return new Configuration({
     database: {test: {}},
     directory: process.cwd(),
@@ -22,7 +23,8 @@ function buildConfiguration(httpServer) {
     locale: "en",
     localeFallbacks: {en: ["en"]},
     locales: ["en"],
-    logging: {console: false, file: false}
+    logging: {console: false, file: false},
+    mcp: options.mcp ?? false
   })
 }
 
@@ -249,5 +251,52 @@ describe("HTTP buffered body limits", {databaseCleaning: {transaction: false, tr
       await expect(() => configuration.resolveHttpRequestBodyPolicy({headers: {}, httpMethod: "POST", path: "/"}))
         .toThrow(/httpServer\.requestBodyPolicyResolver/u)
     }
+  })
+
+  describe("built-in MCP request body policy", () => {
+    it("applies the framework default body cap to the MCP endpoint", () => {
+      const configuration = buildConfiguration({}, {mcp: true})
+      const policy = configuration.resolveHttpRequestBodyPolicy({headers: {}, httpMethod: "POST", path: "/mcp"})
+
+      expect(policy.mode).toEqual("parsed")
+      expect(policy.maxRequestBodyBytes).toEqual(1024 * 1024)
+    })
+
+    it("honors an explicit request body limit for the MCP endpoint", () => {
+      const configuration = buildConfiguration({requestBodyPolicyResolver: () => ({maxRequestBodyBytes: 4096})}, {mcp: true})
+      const policy = configuration.resolveHttpRequestBodyPolicy({headers: {}, httpMethod: "POST", path: "/mcp"})
+
+      expect(policy.maxRequestBodyBytes).toEqual(4096)
+    })
+
+    it("rejects raw body mode for the MCP endpoint with an actionable error", () => {
+      const configuration = buildConfiguration({requestBodyPolicyResolver: () => ({mode: "raw"})}, {mcp: true})
+
+      expect(() => configuration.resolveHttpRequestBodyPolicy({headers: {}, httpMethod: "POST", path: "/mcp"}))
+        .toThrow(/built-in MCP endpoint at \/mcp requires parsed request bodies.*raw-mode httpServer\.requestBodyPolicyResolver/u)
+    })
+
+    it("leaves other paths and non-POST requests without an implicit MCP cap", () => {
+      const configuration = buildConfiguration({}, {mcp: {path: "/internal/mcp"}})
+      const otherPath = configuration.resolveHttpRequestBodyPolicy({headers: {}, httpMethod: "POST", path: "/other"})
+      const nonPost = configuration.resolveHttpRequestBodyPolicy({headers: {}, httpMethod: "GET", path: "/internal/mcp"})
+
+      expect(otherPath.maxRequestBodyBytes).toEqual(undefined)
+      expect(nonPost.maxRequestBodyBytes).toEqual(undefined)
+    })
+
+    it("rejects an MCP request body above the framework default cap", () => {
+      const result = parseRequest(buildConfiguration({}, {mcp: true}), [
+        "POST /mcp HTTP/1.1",
+        "Host: localhost",
+        "Content-Length: 1048577",
+        "Connection: close",
+        "",
+        ""
+      ].join("\r\n"))
+
+      expect(result.output).toContain("HTTP/1.1 413 Payload Too Large")
+      expect(result.closed).toEqual(true)
+    })
   })
 })

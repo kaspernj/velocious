@@ -428,6 +428,17 @@ export default class VelociousConfiguration {
      */
     resolveHttpRequestBodyPolicy(args: import("./configuration-types.js").HttpRequestBodyPolicyResolverArgs): import("./configuration-types.js").ResolvedHttpRequestBodyPolicy;
     /**
+     * Enforces the built-in MCP endpoint's body contract without per-app plumbing: the
+     * JSON-RPC envelope is read from parsed params, so raw mode is rejected with an
+     * actionable error, and a framework default byte cap applies when the app configured none.
+     * @param {{args: import("./configuration-types.js").HttpRequestBodyPolicyResolverArgs, policy: import("./configuration-types.js").ResolvedHttpRequestBodyPolicy}} options - Resolution inputs.
+     * @returns {import("./configuration-types.js").ResolvedHttpRequestBodyPolicy} - Effective request policy.
+     */
+    _applyMcpRequestBodyPolicyDefaults({ args, policy }: {
+        args: import("./configuration-types.js").HttpRequestBodyPolicyResolverArgs;
+        policy: import("./configuration-types.js").ResolvedHttpRequestBodyPolicy;
+    }): import("./configuration-types.js").ResolvedHttpRequestBodyPolicy;
+    /**
      * Runs get cookie secret.
      * @returns {string | undefined} - Cookie secret.
      */

@@ -228,6 +228,14 @@ function normalizeHttpCompression(value) {
   }
 }
 
+/**
+ * Default request-body limit for the built-in MCP endpoint. JSON-RPC messages are small,
+ * so the framework caps them instead of making every app that enables `mcp: true` restate
+ * a request-body policy. Explicit `httpServer.maxRequestBodyBytes` or a resolver limit wins.
+ * @type {number}
+ */
+const DEFAULT_MCP_MAX_REQUEST_BODY_BYTES = 1024 * 1024
+
 export default class VelociousConfiguration {
   /**
    * Close database connections promise.
@@ -759,31 +767,58 @@ export default class VelociousConfiguration {
   resolveHttpRequestBodyPolicy(args) {
     const resolver = this.httpServer.requestBodyPolicyResolver
     const configuredPolicy = resolver ? resolver(args) : undefined
+    /** @type {import("./configuration-types.js").ResolvedHttpRequestBodyPolicy} */
+    let resolvedPolicy
 
     if (configuredPolicy === undefined) {
-      return {maxRequestBodyBytes: this.httpServer.maxRequestBodyBytes, mode: "parsed"}
+      resolvedPolicy = {maxRequestBodyBytes: this.httpServer.maxRequestBodyBytes, mode: "parsed"}
+    } else {
+      if (!configuredPolicy || typeof configuredPolicy !== "object" || Array.isArray(configuredPolicy)) {
+        throw new TypeError("httpServer.requestBodyPolicyResolver must return an object or undefined")
+      }
+
+      const {maxRequestBodyBytes, mode = "parsed", ...restPolicy} = configuredPolicy
+      const unknownKeys = Object.keys(restPolicy)
+
+      if (unknownKeys.length > 0) {
+        throw new TypeError(`httpServer.requestBodyPolicyResolver returned unknown keys: ${unknownKeys.join(", ")} (supported: maxRequestBodyBytes, mode)`)
+      }
+      if (mode !== "parsed" && mode !== "raw") {
+        throw new TypeError(`httpServer.requestBodyPolicyResolver mode must be "parsed" or "raw", got: ${String(mode)}`)
+      }
+
+      resolvedPolicy = {
+        maxRequestBodyBytes: maxRequestBodyBytes === undefined
+          ? this.httpServer.maxRequestBodyBytes
+          : optionalPositiveSafeInteger(maxRequestBodyBytes, "httpServer.requestBodyPolicyResolver maxRequestBodyBytes"),
+        mode
+      }
     }
 
-    if (!configuredPolicy || typeof configuredPolicy !== "object" || Array.isArray(configuredPolicy)) {
-      throw new TypeError("httpServer.requestBodyPolicyResolver must return an object or undefined")
+    return this._applyMcpRequestBodyPolicyDefaults({args, policy: resolvedPolicy})
+  }
+
+  /**
+   * Enforces the built-in MCP endpoint's body contract without per-app plumbing: the
+   * JSON-RPC envelope is read from parsed params, so raw mode is rejected with an
+   * actionable error, and a framework default byte cap applies when the app configured none.
+   * @param {{args: import("./configuration-types.js").HttpRequestBodyPolicyResolverArgs, policy: import("./configuration-types.js").ResolvedHttpRequestBodyPolicy}} options - Resolution inputs.
+   * @returns {import("./configuration-types.js").ResolvedHttpRequestBodyPolicy} - Effective request policy.
+   */
+  _applyMcpRequestBodyPolicyDefaults({args, policy}) {
+    if (!this._mcp.enabled) return policy
+    if (args.httpMethod !== "POST") return policy
+    if (args.path.split("?")[0] !== this._mcp.path) return policy
+
+    if (policy.mode === "raw") {
+      throw new TypeError(
+        `The built-in MCP endpoint at ${this._mcp.path} requires parsed request bodies because its JSON-RPC envelope is read from params. Remove the raw-mode httpServer.requestBodyPolicyResolver entry for this path.`
+      )
     }
 
-    const {maxRequestBodyBytes, mode = "parsed", ...restPolicy} = configuredPolicy
-    const unknownKeys = Object.keys(restPolicy)
+    if (policy.maxRequestBodyBytes !== undefined) return policy
 
-    if (unknownKeys.length > 0) {
-      throw new TypeError(`httpServer.requestBodyPolicyResolver returned unknown keys: ${unknownKeys.join(", ")} (supported: maxRequestBodyBytes, mode)`)
-    }
-    if (mode !== "parsed" && mode !== "raw") {
-      throw new TypeError(`httpServer.requestBodyPolicyResolver mode must be "parsed" or "raw", got: ${String(mode)}`)
-    }
-
-    return {
-      maxRequestBodyBytes: maxRequestBodyBytes === undefined
-        ? this.httpServer.maxRequestBodyBytes
-        : optionalPositiveSafeInteger(maxRequestBodyBytes, "httpServer.requestBodyPolicyResolver maxRequestBodyBytes"),
-      mode
-    }
+    return {maxRequestBodyBytes: DEFAULT_MCP_MAX_REQUEST_BODY_BYTES, mode: policy.mode}
   }
 
   /**
