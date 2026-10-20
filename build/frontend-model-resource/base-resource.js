@@ -29,6 +29,7 @@ import VelociousError from "../velocious-error.js"
  *   applyFrontendModelPagination: (args: {pagination: FrontendModelResourcePagination, query: import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>}) => void,
  *   applyFrontendModelSearch: (args: {query: import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>, search: FrontendModelResourceSearch}) => void,
  *   applyFrontendModelSort: (args: {query: import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>, sort: FrontendModelResourceSort}) => void,
+ *   ensureFrontendModelJoinPath: (args: {path: string[], query: import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>}) => void,
  *   frontendModelAbilityAction: (action: FrontendModelResourceAction) => string,
  *   frontendModelAbilityAuthorizedQuery: (action: FrontendModelResourceAction, options?: FrontendModelResourceAuthorizedQueryOptions) => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>,
  *   frontendModelAuthorizedQuery: (action: FrontendModelResourceAction, options?: FrontendModelResourceAuthorizedQueryOptions) => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>,
@@ -195,6 +196,9 @@ export function frontendModelResourceInternalConstructor(ResourceClass) {
   return /** @type {FrontendModelResourceInternalConstructor<typeof import("../database/record/index.js").default, typeof import("../database/record/index.js").default>} */ (/** @type {unknown} */ (ResourceClass))
 }
 
+const QUICK_SEARCH_COLUMN = "quickSearch"
+
+
 /**
  * Base class for backend frontend-model resources.
  * @template {FrontendModelResourceModelClass} [TModelClass=typeof import("../database/record/index.js").default]
@@ -234,6 +238,23 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   static translatedAttributes = undefined
   /** @type {ReturnType<typeof JSON.parse>} */
   static SharedResource = undefined
+
+  /**
+   * Declarative quick-search text columns. When declared, an index search on
+   * the pseudo-column `quickSearch` expands to an OR of LIKE conditions over
+   * these columns instead of hitting the controller default. Each entry is a
+   * root-table column name or a `{path, column}` pair for a joined
+   * relationship path.
+   * @type {Array<import("../configuration-types.js").FrontendModelQuickSearchColumn | string> | null | undefined} */
+  static quickSearchColumns = undefined
+
+  /**
+   * Declarative quick-search numeric columns. When the trimmed quick-search
+   * value is a safe non-negative integer, each declared column also gets an
+   * exact `=` condition ORed into the quick-search predicate. Same entry shape
+   * as {@link FrontendModelBaseResource.quickSearchColumns}.
+   * @type {Array<import("../configuration-types.js").FrontendModelQuickSearchColumn | string> | null | undefined} */
+  static quickSearchNumericColumns = undefined
 
   /**
    * Declarative writable-attribute permit list (camelCase attribute names)
@@ -282,7 +303,7 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   /**
    * Reads a static resource config value from the environment resource first,
    * then from the shared resource.
-   * @param {"abilities" | "attachments" | "attributes" | "builtInCollectionCommands" | "builtInMemberCommands" | "collectionCommands" | "commands" | "memberCommands" | "modelName" | "primaryKey" | "relationships" | "server" | "sync" | "translatedAttributes" | "writableAttributes"} name - Static config property name.
+   * @param {"abilities" | "attachments" | "attributes" | "builtInCollectionCommands" | "builtInMemberCommands" | "collectionCommands" | "commands" | "memberCommands" | "modelName" | "primaryKey" | "quickSearchColumns" | "quickSearchNumericColumns" | "relationships" | "server" | "sync" | "translatedAttributes" | "writableAttributes"} name - Static config property name.
    * @returns {ReturnType<typeof JSON.parse>} - Resolved config value.
    */
   static sharedResourceStaticValue(name) {
@@ -459,6 +480,8 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     const memberCommands = this.sharedResourceStaticValue("memberCommands")
     const modelName = this.sharedResourceStaticValue("modelName")
     const primaryKey = this.sharedResourceStaticValue("primaryKey")
+    const quickSearchColumns = this.sharedResourceStaticValue("quickSearchColumns")
+    const quickSearchNumericColumns = this.sharedResourceStaticValue("quickSearchNumericColumns")
     const relationships = this.sharedResourceStaticValue("relationships")
     const server = this.sharedResourceStaticValue("server")
     const sync = this.sharedResourceStaticValue("sync")
@@ -476,6 +499,8 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
     if (memberCommands) config.memberCommands = /** @type {string[]} */ (memberCommands)
     if (modelName) config.modelName = /** @type {string} */ (modelName)
     if (primaryKey) config.primaryKey = /** @type {string | string[]} */ (primaryKey)
+    if (quickSearchColumns !== undefined) config.quickSearchColumns = /** @type {Array<import("../configuration-types.js").FrontendModelQuickSearchColumn | string>} */ (quickSearchColumns)
+    if (quickSearchNumericColumns !== undefined) config.quickSearchNumericColumns = /** @type {Array<import("../configuration-types.js").FrontendModelQuickSearchColumn | string>} */ (quickSearchNumericColumns)
     if (relationships) config.relationships = /** @type {string[]} */ (relationships)
     if (server) config.server = /** @type {import("../configuration-types.js").FrontendModelResourceServerConfiguration} */ (server)
     if (sync !== undefined) config.sync = /** @type {import("../configuration-types.js").FrontendModelResourceSyncConfiguration | boolean} */ (sync)
@@ -949,7 +974,8 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
   }
 
   /**
-   * Applies frontend-model index search.
+   * Applies frontend-model index searches, expanding a declared quick search
+   * before falling back to the controller default.
    * @param {object} args - Search args.
    * @param {FrontendModelResourceController} args.controller - Controller handling the query.
    * @param {FrontendModelResourceAnyQuery} args.query - Query instance.
@@ -957,7 +983,116 @@ export default class FrontendModelBaseResource extends AuthorizationBaseResource
    * @returns {void}
    */
   applyFrontendModelIndexSearch({controller, query, search}) {
+    if (this.applyQuickSearch({controller, query, search})) return
+
     controller.applyFrontendModelSearch({query, search})
+  }
+
+  /**
+   * Expands a `quickSearch` pseudo-column search into an OR of LIKE conditions
+   * over the declared {@link FrontendModelBaseResource.quickSearchColumns}, plus
+   * exact `=` conditions over {@link FrontendModelBaseResource.quickSearchNumericColumns}
+   * when the trimmed value is a safe non-negative integer.
+   * @param {object} args - Search args.
+   * @param {FrontendModelResourceController} args.controller - Controller handling the query.
+   * @param {FrontendModelResourceAnyQuery} args.query - Query to filter.
+   * @param {FrontendModelResourceSearch} args.search - Search payload.
+   * @returns {boolean} - Whether the search was handled as a quick search.
+   */
+  applyQuickSearch({controller, query, search}) {
+    const quickSearchColumns = this.quickSearchColumnDefinitions()
+
+    if (!quickSearchColumns || quickSearchColumns.length === 0) return false
+    if (search.path.length > 0 || search.column !== QUICK_SEARCH_COLUMN) return false
+
+    if (search.operator !== "like") {
+      throw VelociousError.safe(`${this.quickSearchErrorLabel()} must use the like operator.`, {code: this.quickSearchErrorCode()})
+    }
+
+    if (typeof search.value !== "string") {
+      throw VelociousError.safe(`${this.quickSearchErrorLabel()} must be a string.`, {code: this.quickSearchErrorCode()})
+    }
+
+    const trimmedValue = search.value.trim()
+
+    if (!trimmedValue) return true
+
+    const conditions = quickSearchColumns.map((column) => (
+      `${this.quickSearchColumnSql({column, controller, query})} LIKE ${query.driver.quote(`%${trimmedValue}%`)}`
+    ))
+    const numericSearchValue = quickSearchNumericValue(trimmedValue)
+
+    if (numericSearchValue !== null) {
+      const quickSearchNumericColumns = this.quickSearchNumericColumnDefinitions() || []
+
+      for (const column of quickSearchNumericColumns) {
+        conditions.push(`${this.quickSearchColumnSql({column, controller, query})} = ${query.driver.quote(numericSearchValue)}`)
+      }
+    }
+
+    query.where(`(${conditions.join(" OR ")})`)
+
+    return true
+  }
+
+  /**
+   * Resolves the declared quick-search text columns through the shared resource.
+   * @returns {Array<import("../configuration-types.js").FrontendModelQuickSearchColumn | string> | null | undefined} - Declared columns.
+   */
+  quickSearchColumnDefinitions() {
+    const ResourceClass = /** @type {typeof FrontendModelBaseResource} */ (this.constructor)
+
+    return /** @type {Array<import("../configuration-types.js").FrontendModelQuickSearchColumn | string> | null | undefined} */ (ResourceClass.sharedResourceStaticValue("quickSearchColumns"))
+  }
+
+  /**
+   * Resolves the declared quick-search numeric columns through the shared resource.
+   * @returns {Array<import("../configuration-types.js").FrontendModelQuickSearchColumn | string> | null | undefined} - Declared columns.
+   */
+  quickSearchNumericColumnDefinitions() {
+    const ResourceClass = /** @type {typeof FrontendModelBaseResource} */ (this.constructor)
+
+    return /** @type {Array<import("../configuration-types.js").FrontendModelQuickSearchColumn | string> | null | undefined} */ (ResourceClass.sharedResourceStaticValue("quickSearchNumericColumns"))
+  }
+
+  /**
+   * Builds the quoted SQL reference for one quick-search column, adding the
+   * relationship join when the column sits on a joined path.
+   * @param {object} args - Column args.
+   * @param {import("../configuration-types.js").FrontendModelQuickSearchColumn | string} args.column - Column declaration.
+   * @param {FrontendModelResourceController} args.controller - Controller handling the query.
+   * @param {FrontendModelResourceAnyQuery} args.query - Query being filtered.
+   * @returns {string} - Quoted SQL column reference.
+   */
+  quickSearchColumnSql({column, controller, query}) {
+    const columnConfig = typeof column === "string" ? {column} : column
+    const path = columnConfig.path || []
+
+    if (path.length > 0) {
+      controller.ensureFrontendModelJoinPath({path, query})
+    }
+
+    const tableReference = query.getTableReferenceForJoin(...path)
+
+    return `${query.driver.quoteTable(tableReference)}.${query.driver.quoteColumn(columnConfig.column)}`
+  }
+
+  /**
+   * Human-readable label used in invalid quick-search payload errors. Owners
+   * with an established public error contract may override this.
+   * @returns {string} - Error label.
+   */
+  quickSearchErrorLabel() {
+    return "Quick search"
+  }
+
+  /**
+   * Error code used for invalid quick-search payload errors. Owners with an
+   * established public error contract may override this.
+   * @returns {string} - Error code.
+   */
+  quickSearchErrorCode() {
+    return "invalid-quick-search"
   }
 
   /**
@@ -2124,4 +2259,17 @@ function filterWritableFrontendModelAttributes(
   }
 
   return writableAttributes
+}
+
+/**
+ * Parses a trimmed quick-search value as a safe non-negative integer.
+ * @param {string} searchValue - Trimmed quick-search value.
+ * @returns {number | null} - Numeric search value, or null when not numeric.
+ */
+function quickSearchNumericValue(searchValue) {
+  if (!/^[0-9]+$/u.test(searchValue)) return null
+
+  const numericValue = Number.parseInt(searchValue, 10)
+
+  return Number.isSafeInteger(numericValue) ? numericValue : null
 }

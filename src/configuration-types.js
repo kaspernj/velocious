@@ -477,8 +477,18 @@
  */
 
 /**
+ * One declarative quick-search column. A plain string is a root-table column;
+ * `{path, column}` searches a column on a joined relationship path.
+ * @typedef {object} FrontendModelQuickSearchColumn
+ * @property {string[]} [path] - Relationship path from the root model to the column's table.
+ * @property {string} column - Database column name to search.
+ */
+
+/**
  * @typedef {object} FrontendModelResourceConfiguration
  * @property {Array<string | FrontendModelAttributeConfiguration> | Record<string, FrontendModelAttributeConfiguration | import("./database/drivers/base-column.js").default | boolean>} attributes - Attributes to expose on the frontend model.
+ * @property {Array<FrontendModelQuickSearchColumn | string>} [quickSearchColumns] - Declarative quick-search text columns; an index search on the pseudo-column `quickSearch` expands to an OR of LIKE conditions over these columns.
+ * @property {Array<FrontendModelQuickSearchColumn | string>} [quickSearchNumericColumns] - Declarative quick-search numeric columns; an integer quick-search value also matches these columns exactly.
  * @property {string[]} [abilities] - Additional camelCase ability action names to expose for per-record `record.can(action)` reads. Base CRUD actions (`read`, `create`, `update`, `destroy`) are always included and must not be listed here.
  * @property {Record<string, FrontendModelAttachmentConfiguration>} [attachments] - Attachment helpers keyed by attachment name.
  * @property {string[]} [commands] - Legacy built-in command names (`index`, `find`, `create`, `update`, `destroy`, `attach`, `download`, `url`).
@@ -675,13 +685,15 @@
  */
 
 /**
- * @typedef {Omit<FrontendModelResourceConfiguration, "abilities" | "builtInCollectionCommands" | "builtInMemberCommands" | "collectionCommands" | "commands" | "memberCommands" | "sync"> & {
+ * @typedef {Omit<FrontendModelResourceConfiguration, "abilities" | "builtInCollectionCommands" | "builtInMemberCommands" | "collectionCommands" | "commands" | "memberCommands" | "quickSearchColumns" | "quickSearchNumericColumns" | "sync"> & {
  *   abilities: FrontendModelResourceAbilitiesConfiguration
  *   builtInCollectionCommands: Record<string, string>
  *   builtInMemberCommands: Record<string, string>
  *   collectionCommands: Record<string, string>
  *   commandMetadata: Record<string, {args: Array<{name: string, type: string}>, returnType: string | null}>
  *   memberCommands: Record<string, string>
+ *   quickSearchColumns: FrontendModelQuickSearchColumn[] | null
+ *   quickSearchNumericColumns: FrontendModelQuickSearchColumn[] | null
  *   sync?: NormalizedFrontendModelResourceSyncConfiguration
  * }} NormalizedFrontendModelResourceConfiguration
  */
