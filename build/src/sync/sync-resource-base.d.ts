@@ -18,6 +18,23 @@ export type ChangeDeliverableSyncEntry = Record<string, ReturnType<typeof JSON.p
     resourceType: string;
 };
 /**
+ * Optional client-declared sync scope carried on a changes request.
+ * @typedef {object} SerializedChangesScope
+ * @property {Record<string, ReturnType<typeof JSON.parse>>} conditions - Plain attribute conditions from the client query.
+ * @property {string | null} resourceType - Client resource/model name the scope was declared for, or null for the all-types (user) scope: one scope covering every resource type this resource authorizes for the caller, so a sync authorizes once however many types it serves.
+ * @property {string[] | null} resourceTypes - For the all-types scope, the resource types the client can apply. A cheap delivery/type filter only - it narrows, never widens, what the app's authorization already allows. Null for a type-declared scope.
+ */
+/**
+ * One published sync entry as delivered to the per-delivery access re-check
+ * ({@link SyncResourceBase#changeDeliverable}): the complete broadcast sync
+ * entry — including the immutable sync-row id, actor-specific metadata, and
+ * any other app fields the publisher put on it — with `resourceId` and
+ * `resourceType` normalized to strings. Apps authorizing by exact-row
+ * identity read the extra fields; overrides that only read
+ * `resourceId`/`resourceType` keep working unchanged.
+ * @typedef {Record<string, ReturnType<typeof JSON.parse>> & {resourceId: string, resourceType: string}} ChangeDeliverableSyncEntry
+ */
+/**
  * Base resource for Velocious sync endpoints.
  *
  * Velocious owns the changes/replay orchestration (scope parsing, feed paging,
@@ -36,36 +53,17 @@ export default class SyncResourceBase<TModelClass extends typeof import("../data
      */
     static ReplayServiceClass: typeof import("./sync-envelope-replay-service.js").default | undefined;
     /**
-     * Declarative quick-search text columns. When declared, an index search on
-     * the pseudo-column `quickSearch` expands to an OR of LIKE conditions over
-     * these root-table columns instead of hitting the controller default.
-     * @type {string[] | null} */
-    static quickSearchColumns: string[] | null;
-    /**
-     * Applies frontend-model index searches, expanding declared quick searches.
-     * @param {object} args - Search args.
-     * @param {import("../frontend-model-resource/base-resource.js").FrontendModelResourceController} args.controller - Controller handling the query.
-     * @param {import("../frontend-model-resource/base-resource.js").FrontendModelResourceAnyQuery} args.query - Query instance.
-     * @param {import("../frontend-model-resource/base-resource.js").FrontendModelResourceSearch} args.search - Search params.
-     * @returns {void}
+     * Keeps the sync resource's established public error contract for invalid
+     * quick-search payloads; the quick-search mechanism itself lives on
+     * FrontendModelBaseResource.
+     * @returns {string} - Error label.
      */
-    applyFrontendModelIndexSearch({ controller, query, search }: {
-        controller: import("../frontend-model-resource/base-resource.js").FrontendModelResourceController;
-        query: import("../frontend-model-resource/base-resource.js").FrontendModelResourceAnyQuery;
-        search: import("../frontend-model-resource/base-resource.js").FrontendModelResourceSearch;
-    }): void;
+    quickSearchErrorLabel(): string;
     /**
-     * Expands a `quickSearch` pseudo-column search into an OR of LIKE conditions
-     * over the declared {@link SyncResourceBase.quickSearchColumns}.
-     * @param {object} args - Search args.
-     * @param {import("../frontend-model-resource/base-resource.js").FrontendModelResourceAnyQuery} args.query - Query to filter.
-     * @param {import("../frontend-model-resource/base-resource.js").FrontendModelResourceSearch} args.search - Search payload.
-     * @returns {boolean} Whether the search was handled as a quick search.
+     * Keeps the established public error code for invalid quick-search payloads.
+     * @returns {string} - Error code.
      */
-    applyQuickSearch({ query, search }: {
-        query: import("../frontend-model-resource/base-resource.js").FrontendModelResourceAnyQuery;
-        search: import("../frontend-model-resource/base-resource.js").FrontendModelResourceSearch;
-    }): boolean;
+    quickSearchErrorCode(): string;
     /**
      * Returns a stable change-feed page after app authorization.
      * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>>} Change-feed page result.

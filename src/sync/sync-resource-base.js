@@ -6,7 +6,6 @@ import FrontendModelBaseResource from "../frontend-model-resource/base-resource.
 import SyncEnvelopeReplayService from "./sync-envelope-replay-service.js"
 import SyncModelChangeFeedService from "./sync-model-change-feed-service.js"
 import {syncUpstreamImporterForConfiguration} from "./sync-upstream-importer.js"
-import VelociousError from "../velocious-error.js"
 
 /**
  * Optional client-declared sync scope carried on a changes request.
@@ -26,8 +25,6 @@ import VelociousError from "../velocious-error.js"
  * `resourceId`/`resourceType` keep working unchanged.
  * @typedef {Record<string, ReturnType<typeof JSON.parse>> & {resourceId: string, resourceType: string}} ChangeDeliverableSyncEntry
  */
-const QUICK_SEARCH_COLUMN = "quickSearch"
-
 /**
  * Base resource for Velocious sync endpoints.
  *
@@ -49,61 +46,21 @@ export default class SyncResourceBase extends FrontendModelBaseResource {
   static ReplayServiceClass = undefined
 
   /**
-   * Declarative quick-search text columns. When declared, an index search on
-   * the pseudo-column `quickSearch` expands to an OR of LIKE conditions over
-   * these root-table columns instead of hitting the controller default.
-   * @type {string[] | null} */
-  static quickSearchColumns = null
-
-  /**
-   * Applies frontend-model index searches, expanding declared quick searches.
-   * @param {object} args - Search args.
-   * @param {import("../frontend-model-resource/base-resource.js").FrontendModelResourceController} args.controller - Controller handling the query.
-   * @param {import("../frontend-model-resource/base-resource.js").FrontendModelResourceAnyQuery} args.query - Query instance.
-   * @param {import("../frontend-model-resource/base-resource.js").FrontendModelResourceSearch} args.search - Search params.
-   * @returns {void}
+   * Keeps the sync resource's established public error contract for invalid
+   * quick-search payloads; the quick-search mechanism itself lives on
+   * FrontendModelBaseResource.
+   * @returns {string} - Error label.
    */
-  applyFrontendModelIndexSearch({controller, query, search}) {
-    if (this.applyQuickSearch({query, search})) return
-
-    super.applyFrontendModelIndexSearch({controller, query, search})
+  quickSearchErrorLabel() {
+    return "Sync quick search"
   }
 
   /**
-   * Expands a `quickSearch` pseudo-column search into an OR of LIKE conditions
-   * over the declared {@link SyncResourceBase.quickSearchColumns}.
-   * @param {object} args - Search args.
-   * @param {import("../frontend-model-resource/base-resource.js").FrontendModelResourceAnyQuery} args.query - Query to filter.
-   * @param {import("../frontend-model-resource/base-resource.js").FrontendModelResourceSearch} args.search - Search payload.
-   * @returns {boolean} Whether the search was handled as a quick search.
+   * Keeps the established public error code for invalid quick-search payloads.
+   * @returns {string} - Error code.
    */
-  applyQuickSearch({query, search}) {
-    const quickSearchColumns = /** @type {typeof SyncResourceBase} */ (this.constructor).quickSearchColumns
-
-    if (!quickSearchColumns || quickSearchColumns.length === 0) return false
-    if (search.path.length > 0 || search.column !== QUICK_SEARCH_COLUMN) return false
-
-    if (search.operator !== "like") {
-      throw VelociousError.safe("Sync quick search must use the like operator.", {code: "sync-invalid-quick-search"})
-    }
-
-    if (typeof search.value !== "string") {
-      throw VelociousError.safe("Sync quick search must be a string.", {code: "sync-invalid-quick-search"})
-    }
-
-    const trimmedValue = search.value.trim()
-
-    if (!trimmedValue) return true
-
-    const tableSql = query.driver.quoteTable(query.getTableReferenceForJoin())
-    const likeValue = `%${trimmedValue}%`
-    const conditions = quickSearchColumns.map((columnName) => (
-      `${tableSql}.${query.driver.quoteColumn(columnName)} LIKE ${query.driver.quote(likeValue)}`
-    ))
-
-    query.where(`(${conditions.join(" OR ")})`)
-
-    return true
+  quickSearchErrorCode() {
+    return "sync-invalid-quick-search"
   }
 
   // The declarative `static writableAttributes` permit list lives on
