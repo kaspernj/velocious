@@ -64,6 +64,21 @@ Tenant and ability resolution still happen per command inside
 `FrontendModelController.frontendApi()` — the HTTP transport never bypasses
 them.
 
+#### Request body handling
+
+The HTTP transport reads the JSON-RPC envelope from **parsed** request params, so
+the framework owns body parsing for this endpoint — apps need no MCP-specific
+request-body configuration:
+
+- The MCP path rejects `mode: "raw"` policies with an actionable configuration
+  error. A raw-mode `httpServer.requestBodyPolicyResolver` entry skips JSON
+  parsing, so `params` would be empty and every message would answer
+  `-32600 Invalid Request`. Do not add one.
+- When neither `httpServer.maxRequestBodyBytes` nor a resolver limit applies,
+  MCP request bodies are capped at **1 MiB** by default. Raise
+  `httpServer.maxRequestBodyBytes` if your tool arguments legitimately exceed
+  that; the endpoint still requires parsed mode.
+
 ### Tool naming
 
 Tools are named `<model>_<command>` in snake_case:

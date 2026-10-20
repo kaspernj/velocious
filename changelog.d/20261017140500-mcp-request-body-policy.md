@@ -1,0 +1,1 @@
+- The built-in MCP HTTP endpoint owns its request-body contract: a `mode: "raw"` request-body policy for the MCP path now fails with an actionable configuration error instead of silently answering `-32600 Invalid Request`, and the endpoint applies a 1 MiB default body cap when the app configured no limit.
