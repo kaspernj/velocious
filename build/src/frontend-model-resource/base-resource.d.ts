@@ -24,6 +24,10 @@ export type FrontendModelResourceController = import("../controller.js").default
         query: import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>;
         sort: FrontendModelResourceSort;
     }) => void;
+    ensureFrontendModelJoinPath: (args: {
+        path: string[];
+        query: import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>;
+    }) => void;
     frontendModelAbilityAction: (action: FrontendModelResourceAction) => string;
     frontendModelAbilityAuthorizedQuery: (action: FrontendModelResourceAction, options?: FrontendModelResourceAuthorizedQueryOptions) => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>;
     frontendModelAuthorizedQuery: (action: FrontendModelResourceAction, options?: FrontendModelResourceAuthorizedQueryOptions) => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>;
@@ -266,6 +270,7 @@ export type FrontendModelResourceNestedEntry = FrontendModelResourceAttributePay
  *   applyFrontendModelPagination: (args: {pagination: FrontendModelResourcePagination, query: import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>}) => void,
  *   applyFrontendModelSearch: (args: {query: import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>, search: FrontendModelResourceSearch}) => void,
  *   applyFrontendModelSort: (args: {query: import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>, sort: FrontendModelResourceSort}) => void,
+ *   ensureFrontendModelJoinPath: (args: {path: string[], query: import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>}) => void,
  *   frontendModelAbilityAction: (action: FrontendModelResourceAction) => string,
  *   frontendModelAbilityAuthorizedQuery: (action: FrontendModelResourceAction, options?: FrontendModelResourceAuthorizedQueryOptions) => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>,
  *   frontendModelAuthorizedQuery: (action: FrontendModelResourceAction, options?: FrontendModelResourceAuthorizedQueryOptions) => import("../database/query/model-class-query.js").default<typeof import("../database/record/index.js").default>,
@@ -456,6 +461,21 @@ export default class FrontendModelBaseResource<TModelClass extends FrontendModel
     /** @type {ReturnType<typeof JSON.parse>} */
     static SharedResource: ReturnType<typeof JSON.parse>;
     /**
+     * Declarative quick-search text columns. When declared, an index search on
+     * the pseudo-column `quickSearch` expands to an OR of LIKE conditions over
+     * these columns instead of hitting the controller default. Each entry is a
+     * root-table column name or a `{path, column}` pair for a joined
+     * relationship path.
+     * @type {Array<import("../configuration-types.js").FrontendModelQuickSearchColumn | string> | null | undefined} */
+    static quickSearchColumns: Array<import("../configuration-types.js").FrontendModelQuickSearchColumn | string> | null | undefined;
+    /**
+     * Declarative quick-search numeric columns. When the trimmed quick-search
+     * value is a safe non-negative integer, each declared column also gets an
+     * exact `=` condition ORed into the quick-search predicate. Same entry shape
+     * as {@link FrontendModelBaseResource.quickSearchColumns}.
+     * @type {Array<import("../configuration-types.js").FrontendModelQuickSearchColumn | string> | null | undefined} */
+    static quickSearchNumericColumns: Array<import("../configuration-types.js").FrontendModelQuickSearchColumn | string> | null | undefined;
+    /**
      * Declarative writable-attribute permit list (camelCase attribute names)
      * used as the default {@link FrontendModelBaseResource#permittedParams} and
      * as the routed sync replay permit. Resolved through the shared resource
@@ -477,10 +497,10 @@ export default class FrontendModelBaseResource<TModelClass extends FrontendModel
     /**
      * Reads a static resource config value from the environment resource first,
      * then from the shared resource.
-     * @param {"abilities" | "attachments" | "attributes" | "builtInCollectionCommands" | "builtInMemberCommands" | "collectionCommands" | "commands" | "memberCommands" | "modelName" | "primaryKey" | "relationships" | "server" | "sync" | "translatedAttributes" | "writableAttributes"} name - Static config property name.
+     * @param {"abilities" | "attachments" | "attributes" | "builtInCollectionCommands" | "builtInMemberCommands" | "collectionCommands" | "commands" | "memberCommands" | "modelName" | "primaryKey" | "quickSearchColumns" | "quickSearchNumericColumns" | "relationships" | "server" | "sync" | "translatedAttributes" | "writableAttributes"} name - Static config property name.
      * @returns {ReturnType<typeof JSON.parse>} - Resolved config value.
      */
-    static sharedResourceStaticValue(name: "abilities" | "attachments" | "attributes" | "builtInCollectionCommands" | "builtInMemberCommands" | "collectionCommands" | "commands" | "memberCommands" | "modelName" | "primaryKey" | "relationships" | "server" | "sync" | "translatedAttributes" | "writableAttributes"): ReturnType<typeof JSON.parse>;
+    static sharedResourceStaticValue(name: "abilities" | "attachments" | "attributes" | "builtInCollectionCommands" | "builtInMemberCommands" | "collectionCommands" | "commands" | "memberCommands" | "modelName" | "primaryKey" | "quickSearchColumns" | "quickSearchNumericColumns" | "relationships" | "server" | "sync" | "translatedAttributes" | "writableAttributes"): ReturnType<typeof JSON.parse>;
     /**
      * Resolves translated attributes from environment and shared resources.
      * @returns {string[] | undefined} - Translated attribute names.
@@ -842,7 +862,8 @@ export default class FrontendModelBaseResource<TModelClass extends FrontendModel
         query: FrontendModelResourceAnyQuery;
     }): void;
     /**
-     * Applies frontend-model index search.
+     * Applies frontend-model index searches, expanding a declared quick search
+     * before falling back to the controller default.
      * @param {object} args - Search args.
      * @param {FrontendModelResourceController} args.controller - Controller handling the query.
      * @param {FrontendModelResourceAnyQuery} args.query - Query instance.
@@ -854,6 +875,58 @@ export default class FrontendModelBaseResource<TModelClass extends FrontendModel
         query: FrontendModelResourceAnyQuery;
         search: FrontendModelResourceSearch;
     }): void;
+    /**
+     * Expands a `quickSearch` pseudo-column search into an OR of LIKE conditions
+     * over the declared {@link FrontendModelBaseResource.quickSearchColumns}, plus
+     * exact `=` conditions over {@link FrontendModelBaseResource.quickSearchNumericColumns}
+     * when the trimmed value is a safe non-negative integer.
+     * @param {object} args - Search args.
+     * @param {FrontendModelResourceController} args.controller - Controller handling the query.
+     * @param {FrontendModelResourceAnyQuery} args.query - Query to filter.
+     * @param {FrontendModelResourceSearch} args.search - Search payload.
+     * @returns {boolean} - Whether the search was handled as a quick search.
+     */
+    applyQuickSearch({ controller, query, search }: {
+        controller: FrontendModelResourceController;
+        query: FrontendModelResourceAnyQuery;
+        search: FrontendModelResourceSearch;
+    }): boolean;
+    /**
+     * Resolves the declared quick-search text columns through the shared resource.
+     * @returns {Array<import("../configuration-types.js").FrontendModelQuickSearchColumn | string> | null | undefined} - Declared columns.
+     */
+    quickSearchColumnDefinitions(): Array<import("../configuration-types.js").FrontendModelQuickSearchColumn | string> | null | undefined;
+    /**
+     * Resolves the declared quick-search numeric columns through the shared resource.
+     * @returns {Array<import("../configuration-types.js").FrontendModelQuickSearchColumn | string> | null | undefined} - Declared columns.
+     */
+    quickSearchNumericColumnDefinitions(): Array<import("../configuration-types.js").FrontendModelQuickSearchColumn | string> | null | undefined;
+    /**
+     * Builds the quoted SQL reference for one quick-search column, adding the
+     * relationship join when the column sits on a joined path.
+     * @param {object} args - Column args.
+     * @param {import("../configuration-types.js").FrontendModelQuickSearchColumn | string} args.column - Column declaration.
+     * @param {FrontendModelResourceController} args.controller - Controller handling the query.
+     * @param {FrontendModelResourceAnyQuery} args.query - Query being filtered.
+     * @returns {string} - Quoted SQL column reference.
+     */
+    quickSearchColumnSql({ column, controller, query }: {
+        column: import("../configuration-types.js").FrontendModelQuickSearchColumn | string;
+        controller: FrontendModelResourceController;
+        query: FrontendModelResourceAnyQuery;
+    }): string;
+    /**
+     * Human-readable label used in invalid quick-search payload errors. Owners
+     * with an established public error contract may override this.
+     * @returns {string} - Error label.
+     */
+    quickSearchErrorLabel(): string;
+    /**
+     * Error code used for invalid quick-search payload errors. Owners with an
+     * established public error contract may override this.
+     * @returns {string} - Error code.
+     */
+    quickSearchErrorCode(): string;
     /**
      * Applies frontend-model index sort.
      * @param {object} args - Sort args.

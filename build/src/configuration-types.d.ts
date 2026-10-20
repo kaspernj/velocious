@@ -986,11 +986,29 @@ export type FrontendModelAttachmentConfiguration = {
      */
     type: "hasOne" | "hasMany";
 };
+export type FrontendModelQuickSearchColumn = {
+    /**
+     * - Relationship path from the root model to the column's table.
+     */
+    path?: string[];
+    /**
+     * - Database column name to search.
+     */
+    column: string;
+};
 export type FrontendModelResourceConfiguration = {
     /**
      * - Attributes to expose on the frontend model.
      */
     attributes: Array<string | FrontendModelAttributeConfiguration> | Record<string, FrontendModelAttributeConfiguration | import("./database/drivers/base-column.js").default | boolean>;
+    /**
+     * - Declarative quick-search text columns; an index search on the pseudo-column `quickSearch` expands to an OR of LIKE conditions over these columns.
+     */
+    quickSearchColumns?: Array<FrontendModelQuickSearchColumn | string>;
+    /**
+     * - Declarative quick-search numeric columns; an integer quick-search value also matches these columns exactly.
+     */
+    quickSearchNumericColumns?: Array<FrontendModelQuickSearchColumn | string>;
     /**
      * - Additional camelCase ability action names to expose for per-record `record.can(action)` reads. Base CRUD actions (`read`, `create`, `update`, `destroy`) are always included and must not be listed here.
      */
@@ -1198,6 +1216,10 @@ export type VelociousSyncClientConfiguration = {
      */
     onError?: (error: Error) => void;
     /**
+     * - Long-offline session configuration consumed by `startOfflineSession()`: device identity, enrollment, grant scopes, signed-replay path, and the backend public key for peer import.
+     */
+    offline?: VelociousSyncClientOfflineConfiguration;
+    /**
      * - Realtime push configuration consumed by `subscribeRealtime(...)`.
      */
     realtime?: VelociousSyncClientRealtimeConfiguration;
@@ -1214,15 +1236,88 @@ export type VelociousSyncClientConfiguration = {
      */
     websocketUrl?: string | (() => string | null | undefined);
 };
+export type VelociousSyncClientDeviceIdentityStorage = {
+    /**
+     * - Reads the stored identity (null when the device has none yet).
+     */
+    load: () => import("./sync/sync-offline-session.js").SyncOfflineDeviceIdentity | null | undefined | Promise<import("./sync/sync-offline-session.js").SyncOfflineDeviceIdentity | null | undefined>;
+    /**
+     * - Persists the identity.
+     */
+    save: (identity: import("./sync/sync-offline-session.js").SyncOfflineDeviceIdentity) => Promise<void> | void;
+};
+export type VelociousSyncClientGrantStorage = {
+    /**
+     * - Reads the retained grants.
+     */
+    load: () => Array<import("./sync/offline-grant.js").SignedOfflineGrant> | Promise<Array<import("./sync/offline-grant.js").SignedOfflineGrant>>;
+    /**
+     * - Persists the retained grants.
+     */
+    save: (grants: Array<import("./sync/offline-grant.js").SignedOfflineGrant>) => Promise<void> | void;
+};
+export type VelociousSyncClientOfflineConfiguration = {
+    /**
+     * - App-owned durable device-identity storage adapter.
+     */
+    deviceIdentityStorage: VelociousSyncClientDeviceIdentityStorage;
+    /**
+     * - App-owned enrollment hook: asks the backend to register the device public key and returns the backend-signed certificate.
+     */
+    enrollDevice: (args: {
+        configuration: import("./configuration.js").default;
+        publicKey: import("./sync/device-identity.js").SyncJsonWebKey;
+    }) => import("./sync/device-identity.js").DeviceCertificate | Promise<import("./sync/device-identity.js").DeviceCertificate>;
+    /**
+     * - Resolves the scopes the bootstrap request asks the backend to materialize into the grant.
+     */
+    grantScopes: (args: {
+        configuration: import("./configuration.js").default;
+    }) => Record<string, import("./configuration-types.js").FrontendModelSyncJsonValue> | Promise<Record<string, import("./configuration-types.js").FrontendModelSyncJsonValue>>;
+    /**
+     * - Signed-bootstrap endpoint path. Defaults to "/frontend-models/sync/bootstrap".
+     */
+    bootstrapPath?: string;
+    /**
+     * - Signed-replay endpoint path. Defaults to "/frontend-models/sync/replay".
+     */
+    replayPath?: string;
+    /**
+     * - Backend public key used to verify device certificates and imported peer mutations.
+     */
+    backendPublicKey?: import("./sync/device-identity.js").SyncJsonWebKey;
+    /**
+     * - Optional durable grant retention adapter.
+     */
+    grantStorage?: VelociousSyncClientGrantStorage;
+    /**
+     * - Durable local mutation log the offline session replays and exports. Defaults to the conflict-tracking log declared by the synced models.
+     */
+    mutationLog?: import("./sync/local-mutation-log.js").default;
+    /**
+     * - Session clock. Defaults to the current time.
+     */
+    now?: () => Date;
+};
+export type NormalizedVelociousSyncClientOfflineConfiguration = VelociousSyncClientOfflineConfiguration & {
+    bootstrapPath: string;
+    configuration: import("./configuration.js").default;
+    now: () => Date;
+    replayPath: string;
+};
+export type NormalizedVelociousSyncClientConfiguration = VelociousSyncClientConfiguration & {
+    mountPath: string;
+    offline: NormalizedVelociousSyncClientOfflineConfiguration | undefined;
+};
 export type VelociousSyncConfiguration = {
     /**
      * - Auto-mounts the Velocious sync changes/replay endpoints for this resource class.
      */
     api?: VelociousSyncApiConfiguration;
     /**
-     * - Client-side sync configuration consumed by `SyncClient.fromConfiguration(...)`.
+     * - Normalized client-side sync configuration consumed by `SyncClient.fromConfiguration(...)`.
      */
-    client?: VelociousSyncClientConfiguration;
+    client: NormalizedVelociousSyncClientConfiguration | undefined;
     /**
      * - Public backend key used to verify offline device certificates for sync replay.
      */
@@ -1266,7 +1361,7 @@ export type NormalizedFrontendModelResourceSyncConfiguration = {
      */
     metadata?: Record<string, FrontendModelSyncJsonValue>;
 };
-export type NormalizedFrontendModelResourceConfiguration = Omit<FrontendModelResourceConfiguration, "abilities" | "builtInCollectionCommands" | "builtInMemberCommands" | "collectionCommands" | "commands" | "memberCommands" | "sync"> & {
+export type NormalizedFrontendModelResourceConfiguration = Omit<FrontendModelResourceConfiguration, "abilities" | "builtInCollectionCommands" | "builtInMemberCommands" | "collectionCommands" | "commands" | "memberCommands" | "quickSearchColumns" | "quickSearchNumericColumns" | "sync"> & {
     abilities: FrontendModelResourceAbilitiesConfiguration;
     builtInCollectionCommands: Record<string, string>;
     builtInMemberCommands: Record<string, string>;
@@ -1279,6 +1374,8 @@ export type NormalizedFrontendModelResourceConfiguration = Omit<FrontendModelRes
         returnType: string | null;
     }>;
     memberCommands: Record<string, string>;
+    quickSearchColumns: FrontendModelQuickSearchColumn[] | null;
+    quickSearchNumericColumns: FrontendModelQuickSearchColumn[] | null;
     sync?: NormalizedFrontendModelResourceSyncConfiguration;
 };
 export type UnboundFrontendModelResourceClassType = Omit<typeof import("./frontend-model-resource/base-resource.js").default, "modelClass"> & {
@@ -2279,8 +2376,17 @@ export type ConfigurationArgsType = {
  * @property {"hasOne" | "hasMany"} type - Attachment cardinality.
  */
 /**
+ * One declarative quick-search column. A plain string is a root-table column;
+ * `{path, column}` searches a column on a joined relationship path.
+ * @typedef {object} FrontendModelQuickSearchColumn
+ * @property {string[]} [path] - Relationship path from the root model to the column's table.
+ * @property {string} column - Database column name to search.
+ */
+/**
  * @typedef {object} FrontendModelResourceConfiguration
  * @property {Array<string | FrontendModelAttributeConfiguration> | Record<string, FrontendModelAttributeConfiguration | import("./database/drivers/base-column.js").default | boolean>} attributes - Attributes to expose on the frontend model.
+ * @property {Array<FrontendModelQuickSearchColumn | string>} [quickSearchColumns] - Declarative quick-search text columns; an index search on the pseudo-column `quickSearch` expands to an OR of LIKE conditions over these columns.
+ * @property {Array<FrontendModelQuickSearchColumn | string>} [quickSearchNumericColumns] - Declarative quick-search numeric columns; an integer quick-search value also matches these columns exactly.
  * @property {string[]} [abilities] - Additional camelCase ability action names to expose for per-record `record.can(action)` reads. Base CRUD actions (`read`, `create`, `update`, `destroy`) are always included and must not be listed here.
  * @property {Record<string, FrontendModelAttachmentConfiguration>} [attachments] - Attachment helpers keyed by attachment name.
  * @property {string[]} [commands] - Legacy built-in command names (`index`, `find`, `create`, `update`, `destroy`, `attach`, `download`, `url`).
@@ -2379,16 +2485,69 @@ export type ConfigurationArgsType = {
  * @property {() => boolean | Promise<boolean>} [isOnline] - Connectivity gate for pulls and replays. Defaults to always online.
  * @property {string} [mountPath] - Mount path the server serves the sync endpoints under (match the server's `sync.api.mountPath`). Defaults to "/velocious/sync"; normalization strips trailing slashes and always fills in the default.
  * @property {(error: Error) => void} [onError] - Reports background replay/pull failures. Defaults to rethrowing.
+ * @property {VelociousSyncClientOfflineConfiguration} [offline] - Long-offline session configuration consumed by `startOfflineSession()`: device identity, enrollment, grant scopes, signed-replay path, and the backend public key for peer import.
  * @property {VelociousSyncClientRealtimeConfiguration} [realtime] - Realtime push configuration consumed by `subscribeRealtime(...)`.
  * @property {VelociousSyncClientTransport} transport - Transport posting to the framework sync endpoints (e.g. the frontend-model websocket client).
  * @property {VelociousSyncRealtimeWebsocketClient} [websocketClient] - Shared app-lifetime websocket client (the low-level form) that all sync traffic rides. Provide the same instance the frontend-model transport uses so one connection carries everything. When set, the realtime bridge subscribes channels on it and never owns its lifecycle: unsubscribing closes only channel subscriptions, leaving the socket connected.
  * @property {string | (() => string | null | undefined)} [websocketUrl] - Shared app-lifetime websocket URL. When set (and no `websocketClient` is given), the framework builds and owns one reconnecting `VelociousWebsocketClient` for all sync traffic, connected on first use.
  */
 /**
+ * App-owned durable storage for the device signing identity (the backend-signed
+ * device certificate plus the device private key). Native apps back this with
+ * secure storage; the framework never embeds a storage technology.
+ * @typedef {object} VelociousSyncClientDeviceIdentityStorage
+ * @property {() => import("./sync/sync-offline-session.js").SyncOfflineDeviceIdentity | null | undefined | Promise<import("./sync/sync-offline-session.js").SyncOfflineDeviceIdentity | null | undefined>} load - Reads the stored identity (null when the device has none yet).
+ * @property {(identity: import("./sync/sync-offline-session.js").SyncOfflineDeviceIdentity) => Promise<void> | void} save - Persists the identity.
+ */
+/**
+ * App-owned durable storage for retained offline grants. Pending mutations must
+ * always replay with the grant they were signed under, so a device that
+ * restarts while offline needs its issued grants back.
+ * @typedef {object} VelociousSyncClientGrantStorage
+ * @property {() => Array<import("./sync/offline-grant.js").SignedOfflineGrant> | Promise<Array<import("./sync/offline-grant.js").SignedOfflineGrant>>} load - Reads the retained grants.
+ * @property {(grants: Array<import("./sync/offline-grant.js").SignedOfflineGrant>) => Promise<void> | void} save - Persists the retained grants.
+ */
+/**
+ * Client-side long-offline session configuration consumed by
+ * `SyncClient.startOfflineSession()`. The framework owns the session lifecycle
+ * (identity, grant bootstrap/refresh, signing, signed replay, peer bundles) over
+ * the built-in `/frontend-models/sync/bootstrap` and
+ * `/frontend-models/sync/replay` endpoints; the app only owns durable storage,
+ * the enrollment hook, and the grant scopes.
+ * @typedef {object} VelociousSyncClientOfflineConfiguration
+ * @property {VelociousSyncClientDeviceIdentityStorage} deviceIdentityStorage - App-owned durable device-identity storage adapter.
+ * @property {(args: {configuration: import("./configuration.js").default, publicKey: import("./sync/device-identity.js").SyncJsonWebKey}) => import("./sync/device-identity.js").DeviceCertificate | Promise<import("./sync/device-identity.js").DeviceCertificate>} enrollDevice - App-owned enrollment hook: asks the backend to register the device public key and returns the backend-signed certificate.
+ * @property {(args: {configuration: import("./configuration.js").default}) => Record<string, import("./configuration-types.js").FrontendModelSyncJsonValue> | Promise<Record<string, import("./configuration-types.js").FrontendModelSyncJsonValue>>} grantScopes - Resolves the scopes the bootstrap request asks the backend to materialize into the grant.
+ * @property {string} [bootstrapPath] - Signed-bootstrap endpoint path. Defaults to "/frontend-models/sync/bootstrap".
+ * @property {string} [replayPath] - Signed-replay endpoint path. Defaults to "/frontend-models/sync/replay".
+ * @property {import("./sync/device-identity.js").SyncJsonWebKey} [backendPublicKey] - Backend public key used to verify device certificates and imported peer mutations.
+ * @property {VelociousSyncClientGrantStorage} [grantStorage] - Optional durable grant retention adapter.
+ * @property {import("./sync/local-mutation-log.js").default} [mutationLog] - Durable local mutation log the offline session replays and exports. Defaults to the conflict-tracking log declared by the synced models.
+ * @property {() => Date} [now] - Session clock. Defaults to the current time.
+ */
+/**
+ * Normalized client-side long-offline session configuration. Same shape as
+ * {@link VelociousSyncClientOfflineConfiguration} with the defaults filled in.
+ * @typedef {VelociousSyncClientOfflineConfiguration & {
+ *   bootstrapPath: string,
+ *   configuration: import("./configuration.js").default,
+ *   now: () => Date,
+ *   replayPath: string
+ * }} NormalizedVelociousSyncClientOfflineConfiguration
+ */
+/**
+ * Normalized client-side sync configuration. Same shape as
+ * {@link VelociousSyncClientConfiguration} with the defaults filled in.
+ * @typedef {VelociousSyncClientConfiguration & {
+ *   mountPath: string,
+ *   offline: NormalizedVelociousSyncClientOfflineConfiguration | undefined
+ * }} NormalizedVelociousSyncClientConfiguration
+ */
+/**
  * Velocious sync configuration.
  * @typedef {object} VelociousSyncConfiguration
  * @property {VelociousSyncApiConfiguration} [api] - Auto-mounts the Velocious sync changes/replay endpoints for this resource class.
- * @property {VelociousSyncClientConfiguration} [client] - Client-side sync configuration consumed by `SyncClient.fromConfiguration(...)`.
+ * @property {NormalizedVelociousSyncClientConfiguration | undefined} client - Normalized client-side sync configuration consumed by `SyncClient.fromConfiguration(...)`.
  * @property {import("./sync/device-identity.js").SyncJsonWebKey | null} [deviceCertificateBackendPublicKey] - Public backend key used to verify offline device certificates for sync replay.
  * @property {number} [changeFeedRetentionSize] - Number of accepted server changes retained before clients must refresh from snapshot.
  * @property {Array<import("./sync/offline-grant.js").OfflineGrantSigningKey>} offlineGrantSigningKeys - Signing keys used to issue and verify offline grants. Secrets must never be exposed to clients.
@@ -2405,13 +2564,15 @@ export type ConfigurationArgsType = {
  * @property {Record<string, FrontendModelSyncJsonValue>} [metadata] - Safe frontend-visible metadata.
  */
 /**
- * @typedef {Omit<FrontendModelResourceConfiguration, "abilities" | "builtInCollectionCommands" | "builtInMemberCommands" | "collectionCommands" | "commands" | "memberCommands" | "sync"> & {
+ * @typedef {Omit<FrontendModelResourceConfiguration, "abilities" | "builtInCollectionCommands" | "builtInMemberCommands" | "collectionCommands" | "commands" | "memberCommands" | "quickSearchColumns" | "quickSearchNumericColumns" | "sync"> & {
  *   abilities: FrontendModelResourceAbilitiesConfiguration
  *   builtInCollectionCommands: Record<string, string>
  *   builtInMemberCommands: Record<string, string>
  *   collectionCommands: Record<string, string>
  *   commandMetadata: Record<string, {args: Array<{name: string, type: string}>, returnType: string | null}>
  *   memberCommands: Record<string, string>
+ *   quickSearchColumns: FrontendModelQuickSearchColumn[] | null
+ *   quickSearchNumericColumns: FrontendModelQuickSearchColumn[] | null
  *   sync?: NormalizedFrontendModelResourceSyncConfiguration
  * }} NormalizedFrontendModelResourceConfiguration
  */
