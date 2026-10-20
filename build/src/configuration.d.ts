@@ -175,7 +175,7 @@ export default class VelociousConfiguration {
     _trustedProxies: string | string[] | undefined;
     _requestTimeoutMs: number | (() => number) | undefined;
     _structureSql: import("./configuration-types.js").StructureSqlConfiguration | undefined;
-    _sync: import("./configuration-types.js").VelociousSyncConfiguration;
+    _sync: import("./configuration-types.js").NormalizedVelociousSyncConfiguration;
     _tenantDatabaseProviders: Record<string, import("./configuration-types.js").TenantDatabaseProviderType>;
     _tenantDatabaseResolver: import("./configuration-types.js").TenantDatabaseResolverType | undefined;
     _tenantResolver: import("./configuration-types.js").TenantResolverType | undefined;
@@ -463,9 +463,9 @@ export default class VelociousConfiguration {
     getCookieSecret(): string | undefined;
     /**
      * Runs get sync configuration.
-     * @returns {import("./configuration-types.js").VelociousSyncConfiguration} - Sync configuration.
+     * @returns {import("./configuration-types.js").NormalizedVelociousSyncConfiguration} - Sync configuration.
      */
-    getSyncConfiguration(): import("./configuration-types.js").VelociousSyncConfiguration;
+    getSyncConfiguration(): import("./configuration-types.js").NormalizedVelociousSyncConfiguration;
     /**
      * Runs current offline grant signing key.
      * @returns {import("./sync/offline-grant.js").OfflineGrantSigningKey} - Current signing key.
@@ -474,9 +474,9 @@ export default class VelociousConfiguration {
     /**
      * Normalizes sync configuration.
      * @param {import("./configuration-types.js").VelociousSyncConfiguration | undefined} sync - Sync configuration.
-     * @returns {import("./configuration-types.js").VelociousSyncConfiguration} - Normalized sync configuration.
+     * @returns {import("./configuration-types.js").NormalizedVelociousSyncConfiguration} - Normalized sync configuration.
      */
-    _normalizeSyncConfiguration(sync: import("./configuration-types.js").VelociousSyncConfiguration | undefined): import("./configuration-types.js").VelociousSyncConfiguration;
+    _normalizeSyncConfiguration(sync: import("./configuration-types.js").VelociousSyncConfiguration | undefined): import("./configuration-types.js").NormalizedVelociousSyncConfiguration;
     /**
      * Normalizes client-side sync configuration consumed by `SyncClient.fromConfiguration(...)`.
      * @param {import("./configuration-types.js").VelociousSyncClientConfiguration | undefined} client - Client-side sync configuration.

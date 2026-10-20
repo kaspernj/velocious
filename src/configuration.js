@@ -848,7 +848,7 @@ export default class VelociousConfiguration {
 
   /**
    * Runs get sync configuration.
-   * @returns {import("./configuration-types.js").VelociousSyncConfiguration} - Sync configuration.
+   * @returns {import("./configuration-types.js").NormalizedVelociousSyncConfiguration} - Sync configuration.
    */
   getSyncConfiguration() {
     return this._sync
@@ -867,7 +867,7 @@ export default class VelociousConfiguration {
   /**
    * Normalizes sync configuration.
    * @param {import("./configuration-types.js").VelociousSyncConfiguration | undefined} sync - Sync configuration.
-   * @returns {import("./configuration-types.js").VelociousSyncConfiguration} - Normalized sync configuration.
+   * @returns {import("./configuration-types.js").NormalizedVelociousSyncConfiguration} - Normalized sync configuration.
    */
   _normalizeSyncConfiguration(sync) {
     const api = sync?.api

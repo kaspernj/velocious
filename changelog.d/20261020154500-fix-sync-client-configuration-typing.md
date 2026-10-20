@@ -1,0 +1,1 @@
+Fix the `sync.client` configuration typing regression from 1.0.702: `VelociousSyncConfiguration.client` accepts the raw client configuration an app writes again (the normalized shape moved to the new `NormalizedVelociousSyncConfiguration`, which is what `Configuration.getSyncConfiguration()` returns).
