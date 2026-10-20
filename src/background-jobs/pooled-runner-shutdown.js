@@ -10,6 +10,7 @@ export const POOLED_CHILD_SHUTDOWN_REASONS = Object.freeze([
   "parent_retire_drained",
   "job_timeout",
   "worker_stop",
+  "child_silence",
   "signal_sigterm",
   "signal_sigint",
   "signal_sigkill",
