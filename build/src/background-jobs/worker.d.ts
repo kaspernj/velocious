@@ -128,6 +128,7 @@ export default class BackgroundJobsWorker {
     onGenerationAccepted: (() => void) | undefined;
     onRetireMessage: (() => void) | undefined;
     onPooledRunnerMemoryObservation: ((observation: import("./types.js").PooledChildMemoryObservation) => void | Promise<void>) | undefined;
+    onJobAccepted: ((payload: import("./types.js").BackgroundJobPayload) => void) | undefined;
     /**
      * Constructor override for the inline-job concurrency cap. When unset
      * the cap is read from `configuration.getBackgroundJobsConfig()` in
@@ -287,8 +288,9 @@ export default class BackgroundJobsWorker {
      * @param {() => void} [args.onGenerationAccepted] - Explicit generation-acceptance observation hook.
      * @param {() => void} [args.onRetireMessage] - Explicit retire-message observation hook.
      * @param {(observation: import("./types.js").PooledChildMemoryObservation) => void | Promise<void>} [args.onPooledRunnerMemoryObservation] - Explicit pooled-child memory observation hook. Every validated observation (periodic while a child has in-flight jobs, plus on demand) is forwarded here, in addition to the worker's compact stderr log line, so an application can route memory diagnostics (e.g. to a bug reporter) without parsing logs.
+     * @param {(payload: import("./types.js").BackgroundJobPayload) => void} [args.onJobAccepted] - Explicit job-acceptance observation hook. Fires the moment the worker accepts a dispatched job payload, before execution mode routing, so an observer can wait for the pickup event instead of polling in-flight sets.
      */
-    constructor({ configuration, host, port, generationId, workerInstanceId, maxConcurrentForkedJobs, maxConcurrentInlineJobs, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, runnerMaxOldSpaceSizeMb, runnerMallocArenaMax, forkedChildSigkillGraceMs, heartbeatIntervalMs, generationHandshakeTimeoutMs, reconnectDelayMs, jobTimeoutMs, closeDatabaseConnectionsOnStop, onStopped, onGenerationAccepted, onRetireMessage, onPooledRunnerMemoryObservation }?: {
+    constructor({ configuration, host, port, generationId, workerInstanceId, maxConcurrentForkedJobs, maxConcurrentInlineJobs, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, runnerMaxOldSpaceSizeMb, runnerMallocArenaMax, forkedChildSigkillGraceMs, heartbeatIntervalMs, generationHandshakeTimeoutMs, reconnectDelayMs, jobTimeoutMs, closeDatabaseConnectionsOnStop, onStopped, onGenerationAccepted, onRetireMessage, onPooledRunnerMemoryObservation, onJobAccepted }?: {
         configuration?: import("../configuration.js").default;
         host?: string;
         port?: number;
@@ -313,6 +315,7 @@ export default class BackgroundJobsWorker {
         onGenerationAccepted?: () => void;
         onRetireMessage?: () => void;
         onPooledRunnerMemoryObservation?: (observation: import("./types.js").PooledChildMemoryObservation) => void | Promise<void>;
+        onJobAccepted?: (payload: import("./types.js").BackgroundJobPayload) => void;
     });
     /** Starts the slot-waiter safety poll if it is not already running. */
     _startPooledSlotWaitPoll(): void;
