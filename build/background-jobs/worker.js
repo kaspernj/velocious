@@ -50,11 +50,23 @@ import { POOLED_RUNNER_INFLIGHT_JOB_ID_LIMIT, boundedPooledRunnerInflightJobIds,
  * @property {ReturnType<typeof setTimeout>} [shutdownSignalTimer] - Drained-retirement fallback signal timer.
  * @property {ReturnType<typeof setTimeout> | null} [timeoutSigkillTimer] - Pending timeout SIGKILL timer.
  * @property {string} [timeoutJobId] - Job whose timeout initiated termination.
+ * @property {number} lastActivityAtMs - Last time the worker saw any IPC message from this child, or dispatched to it.
+ * @property {ReturnType<typeof setTimeout>} [silenceTimer] - Armed per-child IPC-silence watchdog timer.
+ * @property {ReturnType<typeof setTimeout>} [silenceSigkillTimer] - Pending SIGKILL for a child the silence watchdog declared wedged.
  */
 /** Grace period after SIGTERM before a lingering process runner is SIGKILLed. */
 const FORKED_CHILD_SIGKILL_GRACE_MS = 5000
 /** Time a drained retirement gives the child IPC request to begin teardown before SIGTERM fallback. */
 const POOLED_RUNNER_SHUTDOWN_REQUEST_GRACE_MS = 250
+/**
+ * Default bound on how long a pooled child with in-flight jobs may stay silent on
+ * its IPC channel before the worker declares it wedged. A healthy child samples its
+ * memory every 10 seconds while jobs run, so silence past this bound means its event
+ * loop cannot run its own timers — the signature of the silent transport wedge. The
+ * bound is deliberately far above a healthy long job's quiet window: it only fires on
+ * a child that cannot prove it is alive, never on a genuinely busy runner.
+ */
+const POOLED_CHILD_SILENCE_TIMEOUT_MS = 120000
 /**
  * Largest delay Node's `setTimeout` accepts without overflowing to a 1ms delay
  * (a 32-bit signed int of ms, ~24.8 days). A `jobTimeoutMs` above this — or a
@@ -198,13 +210,14 @@ export default class BackgroundJobsWorker {
    * @param {number} [args.generationHandshakeTimeoutMs] - Maximum time to wait for generation acknowledgement (default: 4000).
    * @param {number} [args.reconnectDelayMs] - Delay before reconnecting an established worker connection (default: 1000).
    * @param {number} [args.jobTimeoutMs] - Override the wall-clock timeout for forked and pooled jobs from `configuration.getBackgroundJobsConfig()`. `0` disables it.
+   * @param {number} [args.pooledRunnerSilenceTimeoutMs] - Override the per-child IPC-silence bound for pooled children with in-flight jobs from `configuration.getBackgroundJobsConfig()` (default 120000ms). `0` disables the watchdog.
    * @param {boolean} [args.closeDatabaseConnectionsOnStop] - Whether stop owns closing the configuration's database pools (default true).
    * @param {() => void | Promise<void>} [args.onStopped] - Lifecycle hook invoked after the worker finishes stopping.
    * @param {() => void} [args.onGenerationAccepted] - Explicit generation-acceptance observation hook.
    * @param {() => void} [args.onRetireMessage] - Explicit retire-message observation hook.
    * @param {(observation: import("./types.js").PooledChildMemoryObservation) => void | Promise<void>} [args.onPooledRunnerMemoryObservation] - Explicit pooled-child memory observation hook. Every validated observation (periodic while a child has in-flight jobs, plus on demand) is forwarded here, in addition to the worker's compact stderr log line, so an application can route memory diagnostics (e.g. to a bug reporter) without parsing logs.
    */
-  constructor({configuration, host, port, generationId, workerInstanceId, maxConcurrentForkedJobs, maxConcurrentInlineJobs, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, runnerMaxOldSpaceSizeMb, runnerMallocArenaMax, forkedChildSigkillGraceMs, heartbeatIntervalMs, generationHandshakeTimeoutMs = DEFAULT_GENERATION_HANDSHAKE_TIMEOUT_MS, reconnectDelayMs = 1000, jobTimeoutMs, closeDatabaseConnectionsOnStop = true, onStopped, onGenerationAccepted, onRetireMessage, onPooledRunnerMemoryObservation} = {}) {
+  constructor({configuration, host, port, generationId, workerInstanceId, maxConcurrentForkedJobs, maxConcurrentInlineJobs, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, runnerMaxOldSpaceSizeMb, runnerMallocArenaMax, forkedChildSigkillGraceMs, heartbeatIntervalMs, generationHandshakeTimeoutMs = DEFAULT_GENERATION_HANDSHAKE_TIMEOUT_MS, reconnectDelayMs = 1000, jobTimeoutMs, pooledRunnerSilenceTimeoutMs, closeDatabaseConnectionsOnStop = true, onStopped, onGenerationAccepted, onRetireMessage, onPooledRunnerMemoryObservation} = {}) {
     /**
      * Narrows the runtime value to the documented type.
      * @type {Promise<import("../configuration.js").default>} */
@@ -261,6 +274,8 @@ export default class BackgroundJobsWorker {
     this.pooledRunnerMaxJobs = this.pooledRunnerMaxJobsOverride || 100
     this.pooledRunnerMaxRssBytes = this.pooledRunnerMaxRssBytesOverride || 512 * 1024 * 1024
     this.pooledRunnerMaxLifetimeMs = this.pooledRunnerMaxLifetimeMsOverride || 60 * 60 * 1000
+    this.pooledRunnerSilenceTimeoutMsOverride = typeof pooledRunnerSilenceTimeoutMs === "number" ? pooledRunnerSilenceTimeoutMs : undefined
+    this.pooledRunnerSilenceTimeoutMs = this.pooledRunnerSilenceTimeoutMsOverride ?? POOLED_CHILD_SILENCE_TIMEOUT_MS
     this.runnerMaxOldSpaceSizeMb = this.runnerMaxOldSpaceSizeMbOverride || 2048
     this.runnerMallocArenaMax = this.runnerMallocArenaMaxOverride || 4
     /**
@@ -429,6 +444,7 @@ export default class BackgroundJobsWorker {
     if (typeof this.pooledRunnerMaxJobsOverride !== "number") this.pooledRunnerMaxJobs = poolConfig.pooledRunnerMaxJobs
     if (typeof this.pooledRunnerMaxRssBytesOverride !== "number") this.pooledRunnerMaxRssBytes = poolConfig.pooledRunnerMaxRssBytes
     if (typeof this.pooledRunnerMaxLifetimeMsOverride !== "number") this.pooledRunnerMaxLifetimeMs = poolConfig.pooledRunnerMaxLifetimeMs
+    if (typeof this.pooledRunnerSilenceTimeoutMsOverride !== "number" && typeof poolConfig.pooledRunnerSilenceTimeoutMs === "number") this.pooledRunnerSilenceTimeoutMs = poolConfig.pooledRunnerSilenceTimeoutMs
     if (typeof this.runnerMaxOldSpaceSizeMbOverride !== "number" && typeof poolConfig.runnerMaxOldSpaceSizeMb === "number") this.runnerMaxOldSpaceSizeMb = poolConfig.runnerMaxOldSpaceSizeMb
     if (typeof this.runnerMallocArenaMaxOverride !== "number" && typeof poolConfig.runnerMallocArenaMax === "number") this.runnerMallocArenaMax = poolConfig.runnerMallocArenaMax
 
@@ -1279,6 +1295,7 @@ export default class BackgroundJobsWorker {
     const timeoutTimer = this._armPooledJobTimeout({child, payload})
 
     state.inflight.set(payload.id, {payload, resolve: resolvePooledJob, pooledJob, timeoutTimer})
+    this._notePooledChildActivity({child, state})
     try {
       child.send({type: "job", payload, sharedTransactionBroker: this._pooledJobSharedTransactionBrokerConfig()})
     } catch (error) {
@@ -1403,7 +1420,7 @@ export default class BackgroundJobsWorker {
     })
     this.pooledChildren.add(child)
     this.inflightProcessChildren.add(child)
-    this.pooledChildStates.set(child, {createdAtMs: Date.now(), jobsRun: 0, inflight: new Map(), lastDispatchSeq: 0, retiring: false, started: false})
+    this.pooledChildStates.set(child, {createdAtMs: Date.now(), jobsRun: 0, inflight: new Map(), lastDispatchSeq: 0, retiring: false, started: false, lastActivityAtMs: Date.now()})
     child.on("message", (message) => this._handlePooledChildMessage({child, message}))
     child.once("exit", (exitCode, signal) => this._handlePooledChildFailure({
       child,
@@ -1438,6 +1455,7 @@ export default class BackgroundJobsWorker {
     if (!message || typeof message !== "object") return
     const record = /** @type {{type?: ReturnType<typeof JSON.parse>, childInstanceId?: ReturnType<typeof JSON.parse>, jobId?: ReturnType<typeof JSON.parse>, acknowledged?: ReturnType<typeof JSON.parse>, rssBytes?: ReturnType<typeof JSON.parse>, peakRssBytes?: ReturnType<typeof JSON.parse>, error?: ReturnType<typeof JSON.parse>}} */ (message)
     const state = this.pooledChildStates.get(child)
+    this._notePooledChildActivity({child, state})
     if (record.type === "ready") {
       if (state) {
         state.started = true
@@ -1701,6 +1719,112 @@ export default class BackgroundJobsWorker {
   }
 
   /**
+   * Records one pooled child's IPC activity and re-arms its silence watchdog while
+   * that child still owns in-flight jobs. Every message the child sends — readiness,
+   * acceptance, memory observation, shutdown observation, or job outcome — proves its
+   * event loop is running, because a healthy child samples itself every 10 seconds
+   * while jobs are in flight. Silence past the bound therefore means a wedged child
+   * that can no longer prove it is alive, not a busy one.
+   * @param {object} args - Activity details.
+   * @param {import("node:child_process").ChildProcess} args.child - Pooled child.
+   * @param {PooledChildState | undefined} args.state - Child state.
+   * @returns {void}
+   */
+  _notePooledChildActivity({child, state}) {
+    if (!state) return
+    state.lastActivityAtMs = Date.now()
+    if (state.inflight.size > 0 && !state.settling) this._armPooledChildSilenceTimer({child, state})
+  }
+
+  /**
+   * Resolves the effective pooled-child silence bound in ms, or null when disabled.
+   * A non-positive or non-finite value disables the watchdog at whichever level
+   * supplied it, matching the job-timeout contract.
+   * @returns {number | null} - Bound in ms, or null when disabled.
+   */
+  _resolvePooledChildSilenceTimeoutMs() {
+    const raw = this.pooledRunnerSilenceTimeoutMs
+
+    if (typeof raw !== "number" || !Number.isFinite(raw) || raw <= 0) return null
+
+    return Math.min(raw, MAX_FORKED_JOB_TIMEOUT_MS)
+  }
+
+  /**
+   * Re-arms one child's silence watchdog from its last observed activity. Only
+   * children with in-flight jobs are watched: a child with nothing in flight cannot
+   * strand work, and its periodic sampler is inactive then, so silence is not
+   * evidence of a wedge.
+   * @param {object} args - Watchdog details.
+   * @param {import("node:child_process").ChildProcess} args.child - Pooled child.
+   * @param {PooledChildState} args.state - Child state.
+   * @returns {void}
+   */
+  _armPooledChildSilenceTimer({child, state}) {
+    const timeoutMs = this._resolvePooledChildSilenceTimeoutMs()
+    if (!(typeof timeoutMs === "number" && timeoutMs > 0)) return
+
+    if (state.silenceTimer) clearTimeout(state.silenceTimer)
+    state.silenceTimer = setTimeout(() => this._onPooledChildSilence({child, state}), timeoutMs)
+    if (typeof state.silenceTimer.unref === "function") state.silenceTimer.unref()
+  }
+
+  /**
+   * Fired when a pooled child with in-flight jobs stays silent past the bound. A
+   * wedged child keeps its IPC channel open but stops running its own timers, so the
+   * disconnect/exit path never fires and its jobs stay stranded until a human
+   * notices. The worker declares the child dead: it requests shutdown under the exact
+   * `child_silence` reason, reports the whole in-flight set as failed through the
+   * established failure path (so the jobs requeue and capacity is re-advertised), and
+   * signals the wedged process — SIGTERM, then SIGKILL after the existing grace — so
+   * it actually goes away instead of blocking the event loop forever.
+   * @param {object} args - Watchdog details.
+   * @param {import("node:child_process").ChildProcess} args.child - Pooled child.
+   * @param {PooledChildState} args.state - Child state.
+   * @returns {void}
+   */
+  _onPooledChildSilence({child, state}) {
+    state.silenceTimer = undefined
+    if (state.settling || state.shutdownReason) return
+    const silentMs = Date.now() - state.lastActivityAtMs
+    const boundMs = this._resolvePooledChildSilenceTimeoutMs()
+    if (!(typeof boundMs === "number" && silentMs >= boundMs)) return
+
+    const error = new Error(`Pooled background job runner went silent for ${silentMs}ms past the ${boundMs}ms bound — treated as wedged`)
+    this._logPooledSilenceEvent({child, state, silentMs, boundMs})
+    this._requestPooledChildShutdown({child, reason: "child_silence", signal: "SIGTERM"})
+    void this._handlePooledChildFailure({child, error, origin: "child-silence", signal: null})
+    state.silenceSigkillTimer = setTimeout(() => {
+      state.silenceSigkillTimer = undefined
+      this._signalPooledChild({child, signal: "SIGKILL"})
+    }, this.forkedChildSigkillGraceMs)
+    if (typeof state.silenceSigkillTimer.unref === "function") state.silenceSigkillTimer.unref()
+  }
+
+  /**
+   * Logs one compact JSON line naming a child the silence watchdog declared wedged
+   * (the same stderr surface the memory observations use, which reaches the production
+   * log), so the recovery is attributable after the fact instead of looking like a
+   * random runner exit.
+   * @param {object} args - Event details.
+   * @param {import("node:child_process").ChildProcess} args.child - Pooled child.
+   * @param {PooledChildState} args.state - Child state.
+   * @param {number} args.silentMs - Observed silence in ms.
+   * @param {number} args.boundMs - Configured bound in ms.
+   * @returns {void}
+   */
+  _logPooledSilenceEvent({child, state, silentMs, boundMs}) {
+    console.error(JSON.stringify({
+      event: "pooled-child-silence",
+      childInstanceId: state.childInstanceId ?? null,
+      childPid: child.pid ?? null,
+      silentMs,
+      boundMs,
+      jobs: state.inflight.size
+    }))
+  }
+
+  /**
    * Logs one compact pooled-capacity event to the worker's own stderr (the
    * surface that reaches the production log). Used by the bounded liveness
    * replacement in `_ensureNonRetiringChild`: the spawn that keeps dispatch
@@ -1848,6 +1972,8 @@ export default class BackgroundJobsWorker {
       // the SIGKILL grace from a timeout kill, and every armed per-job backstop.
       if (state.timeoutSigkillTimer) clearTimeout(state.timeoutSigkillTimer)
       if (state.shutdownSignalTimer) clearTimeout(state.shutdownSignalTimer)
+      if (state.silenceTimer) clearTimeout(state.silenceTimer)
+      if (state.silenceSigkillTimer) clearTimeout(state.silenceSigkillTimer)
       for (const inflightEntry of state.inflight.values()) {
         if (inflightEntry.timeoutTimer) clearTimeout(inflightEntry.timeoutTimer)
       }
