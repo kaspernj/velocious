@@ -29,13 +29,14 @@ export default class SyncApiClient {
    * @param {string | number | null} args.baseVersion - Authoritative version observed before the local mutation.
    * @param {import("./sync-client-types.js").SyncClientConflictTrackingConfig} args.conflictTracking - Durable tracking configuration.
    * @param {Record<string, unknown>} args.data - Backend-safe mutation attributes.
+   * @param {import("./sync-offline-session.js").default} [args.offlineSession] - Active long-offline session: the mutation identity (actor ids, grant id, policy hash) is supplied by the session and the appended record carries the device-signed envelope.
    * @param {"create" | "update" | "destroy"} args.operation - Local operation.
    * @param {ReturnType<typeof JSON.parse>} args.resource - Local resource.
    * @param {string} args.resourceType - Resource type.
    * @param {string} args.syncType - Wire operation.
    * @returns {Promise<import("./local-mutation-log.js").LocalMutationLogRecord>} Appended intent.
    */
-  static async queueConflictTrackedSync({baseVersion, conflictTracking, data, operation, resource, resourceType, syncType}) {
+  static async queueConflictTrackedSync({baseVersion, conflictTracking, data, offlineSession, operation, resource, resourceType, syncType}) {
     const resourceId = String(scalarModelPrimaryKeyValue(resource.id(), `Conflict-tracked sync for ${resourceType}`))
     const records = await conflictTracking.mutationLog.records()
     const predecessor = records
@@ -46,20 +47,40 @@ export default class SyncApiClient {
     const predecessorTime = predecessor ? new Date(predecessor.mutation.occurredAt).getTime() : Number.NEGATIVE_INFINITY
     const occurredAt = new Date(Math.max(now.getTime(), predecessorTime + 1)).toISOString()
 
-    return await conflictTracking.mutationLog.append({
-      dependencies: predecessor ? [{clientMutationId: predecessor.mutation.clientMutationId, model: resourceType}] : [],
-      mutation: {
-        actorDeviceId: conflictTracking.actorDeviceId,
-        actorUserId: conflictTracking.actorUserId,
-        attributes: /** @type {Record<string, import("../configuration-types.js").FrontendModelSyncJsonValue>} */ (data),
+    const dependencies = predecessor ? [{clientMutationId: predecessor.mutation.clientMutationId, model: resourceType}] : []
+    const attributes = /** @type {Record<string, import("../configuration-types.js").FrontendModelSyncJsonValue>} */ (data)
+
+    if (offlineSession) {
+      // Long-offline queueing: the session supplies the rotating identity
+      // (actor ids, live grant id, current policy hash) and signs the intent
+      // with the device key so it can replay without a live session.
+      const signedMutation = await offlineSession.signMutation({
+        attributes,
         baseVersion,
         clientMutationId,
         model: resourceType,
         occurredAt,
-        offlineGrantId: conflictTracking.offlineGrantId,
+        operation,
+        payload: {resourceId, syncType}
+      })
+
+      return await conflictTracking.mutationLog.append({dependencies, mutation: signedMutation.mutation, signedMutation})
+    }
+
+    return await conflictTracking.mutationLog.append({
+      dependencies,
+      mutation: {
+        actorDeviceId: await resolveConflictTrackingIdentityValue({conflictTracking, key: "actorDeviceId", resourceType}),
+        actorUserId: await resolveConflictTrackingIdentityValue({conflictTracking, key: "actorUserId", resourceType}),
+        attributes,
+        baseVersion,
+        clientMutationId,
+        model: resourceType,
+        occurredAt,
+        offlineGrantId: await resolveConflictTrackingIdentityValue({conflictTracking, key: "offlineGrantId", resourceType}),
         operation,
         payload: {resourceId, syncType},
-        policyHash: conflictTracking.policyHash
+        policyHash: await resolveConflictTrackingIdentityValue({conflictTracking, key: "policyHash", resourceType})
       }
     })
   }
@@ -937,4 +958,29 @@ function throwIfSyncAborted(signal) {
   if (!signal?.aborted) return
 
   throw signal.reason instanceof Error ? signal.reason : new Error("Sync operation aborted")
+}
+
+/**
+ * Resolves one conflict-tracking identity field at queue time: a static string
+ * or a function (sync or async) resolving the current value. Grants and policy
+ * hashes rotate at runtime, so declarations may resolve them per mutation.
+ * @param {{conflictTracking: import("./sync-client-types.js").SyncClientConflictTrackingConfig, key: "actorDeviceId" | "actorUserId" | "offlineGrantId" | "policyHash", resourceType: string}} args - Resolution args.
+ * @returns {Promise<string>} - Resolved non-empty identity value.
+ */
+async function resolveConflictTrackingIdentityValue({conflictTracking, key, resourceType}) {
+  const value = conflictTracking[key]
+
+  if (typeof value === "function") {
+    const resolved = await value()
+
+    if (typeof resolved !== "string" || resolved.length === 0) {
+      throw new Error(`${resourceType} conflictTracking.${key} resolved to an empty value`)
+    }
+
+    return resolved
+  }
+
+  if (typeof value === "string" && value.length > 0) return value
+
+  throw new Error(`${resourceType} conflictTracking.${key} must be a non-empty string or a function resolving one (or start an offline session)`)
 }

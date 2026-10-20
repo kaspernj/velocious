@@ -19,16 +19,18 @@ export default class SyncApiClient {
      * @param {string | number | null} args.baseVersion - Authoritative version observed before the local mutation.
      * @param {import("./sync-client-types.js").SyncClientConflictTrackingConfig} args.conflictTracking - Durable tracking configuration.
      * @param {Record<string, unknown>} args.data - Backend-safe mutation attributes.
+     * @param {import("./sync-offline-session.js").default} [args.offlineSession] - Active long-offline session: the mutation identity (actor ids, grant id, policy hash) is supplied by the session and the appended record carries the device-signed envelope.
      * @param {"create" | "update" | "destroy"} args.operation - Local operation.
      * @param {ReturnType<typeof JSON.parse>} args.resource - Local resource.
      * @param {string} args.resourceType - Resource type.
      * @param {string} args.syncType - Wire operation.
      * @returns {Promise<import("./local-mutation-log.js").LocalMutationLogRecord>} Appended intent.
      */
-    static queueConflictTrackedSync({ baseVersion, conflictTracking, data, operation, resource, resourceType, syncType }: {
+    static queueConflictTrackedSync({ baseVersion, conflictTracking, data, offlineSession, operation, resource, resourceType, syncType }: {
         baseVersion: string | number | null;
         conflictTracking: import("./sync-client-types.js").SyncClientConflictTrackingConfig;
         data: Record<string, unknown>;
+        offlineSession?: import("./sync-offline-session.js").default;
         operation: "create" | "update" | "destroy";
         resource: ReturnType<typeof JSON.parse>;
         resourceType: string;
