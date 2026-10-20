@@ -262,6 +262,22 @@ Replay sends stable client mutation ids and persists structured `conflict`/`fail
 
 When a conflict response includes `serverModel`, the client applies that authoritative state through the same tenant-bound, tracking-suppressed applier used by pull/realtime before preserving the rejected intent as `conflict`. `inspectSyncState()` exposes counts and privacy-safe conflict identifiers/version metadata without copying model payloads. `resolveConflict({recordId, resourceType, resolution})` requires an explicit `keep-server` or `retry-local` decision; retry-local rebases from the persisted authoritative server version. The coordinator exposes the same resolution boundary and refreshes status/replay through its single flight; see [sync coordinator](sync-coordinator.md#conflict-application-and-resolution).
 
+`actorDeviceId`, `actorUserId`, `offlineGrantId`, and `policyHash` accept a plain value **or** an (async) function resolved per queue — grants and policy hashes rotate at runtime, so a long-offline app resolves them from its live session instead of pinning static strings. A declaration with a `sync.client.offline` block may omit them entirely: the offline session supplies and signs them (see below).
+
+### Long-offline sessions (grant lifecycle, signed queue, signed replay, peer API)
+
+Add an `offline` key to the `sync.client` block and the framework owns the long-offline session (`SyncOfflineSession`): device-identity generation/enrollment through the app's storage adapter and enrollment hook, backend-issued offline grants via the built-in `/frontend-models/sync/bootstrap`, signing at queue time, signed replay through `/frontend-models/sync/replay`, and peer bundle export/import. The full configuration shape, session semantics, and grant-retention rules are documented in [offline sync architecture](offline-sync.md#implemented-slice-syncclient-offline-session-grant-lifecycle-signed-queue-signed-replay-peer-api).
+
+```js
+await syncClient().startOfflineSession()      // identity + live grant (idempotent)
+await syncClient().queue({resource, ...})     // signed at queue time into the durable log
+await syncClient().replayOfflinePending()     // signed batch replay, synced/conflict/rejected mapping
+const bundle = await syncClient().exportPeerBundle()
+await otherClient.importPeerBundle({bundle, signedOfflineGrants: [...]})
+```
+
+With the offline block configured, background replay drains conflict-tracked logs through the signed replay path — one owner per durable log, never both the signed and legacy unsigned path.
+
 ## Realtime
 
 `subscribeRealtime()` bridges server websocket pushes into the same derived apply path as pulls — no hand-written websocket apply code and no channel wiring in apps. Every declared pull scope subscribes the framework-owned `velocious-sync` channel automatically: the subscribe params mirror the scope's `{resourceType, conditions}`, and the server authorizes the subscription through the app sync resource's existing `authorizeChanges({params, scope})` — the same authorization pulls already go through. The app footprint shrinks to the callbacks the framework genuinely cannot know (how to build the websocket client, what this device's echo origin is):

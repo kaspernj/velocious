@@ -173,11 +173,17 @@ export default class LocalMutationLog {
 
   /**
    * Replaces the mutation payload of a still-pending record. Used when an
-   * acknowledged predecessor supplies the authoritative base for its successor.
-   * @param {{id: string, mutation: import("./device-identity.js").SyncMutation}} args - Record and replacement mutation.
+   * acknowledged predecessor supplies the authoritative base for its successor
+   * and when an offline session re-signs a pending record under a refreshed
+   * grant (pass the new `signedMutation` envelope together with the mutation).
+   * @param {{id: string, mutation: import("./device-identity.js").SyncMutation, signedMutation?: import("./device-identity.js").SignedSyncMutation}} args - Record and replacement mutation.
    * @returns {Promise<LocalMutationLogRecord>} Updated record.
    */
-  async updateMutation({id, mutation}) {
+  async updateMutation({id, mutation, signedMutation}) {
+    if (signedMutation !== undefined && stableJsonStringify(signedMutation.mutation) !== stableJsonStringify(mutation)) {
+      throw new Error("signedMutation must match the mutation payload it signs")
+    }
+
     return await withStorageKeyLock(this.storageKey, async () => {
       const rawRecord = await this.storage.record(this.storageKey, id)
 
@@ -188,6 +194,7 @@ export default class LocalMutationLog {
       if (!PENDING_STATUSES.has(record.status)) throw new Error(`Cannot update mutation for ${record.status} local mutation '${id}'`)
 
       record.mutation = normalizeMutation(mutation)
+      if (signedMutation !== undefined) record.signedMutation = /** @type {import("./device-identity.js").SignedSyncMutation} */ (JSON.parse(JSON.stringify(signedMutation)))
       record.updatedAt = this.currentTimestamp()
       await this.storage.updateRecord(this.storageKey, cloneRecord(record))
 

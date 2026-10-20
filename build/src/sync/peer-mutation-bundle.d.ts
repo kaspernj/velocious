@@ -12,6 +12,32 @@ export type PeerMutationBundle = {
      */
     mutations: PeerMutationBundleEntry[];
 };
+export type PeerMutationBundleImportResult = {
+    /**
+     * - Entries appended to the local log.
+     */
+    imported: Array<{
+        clientMutationId: string;
+        idempotencyKey: string;
+        localRecordId: string;
+    }>;
+    /**
+     * - Entries that failed verification.
+     */
+    rejected: Array<{
+        errorMessage: string;
+        index: number;
+    }>;
+    /**
+     * - Entries already present by idempotency key.
+     */
+    skipped: Array<{
+        clientMutationId: string;
+        idempotencyKey: string;
+        localRecordId: string;
+        reason: "duplicate";
+    }>;
+};
 export type PeerMutationBundleEntry = {
     /**
      * - Exporting device's local mutation record id.

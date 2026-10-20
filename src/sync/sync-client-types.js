@@ -21,13 +21,13 @@
  * Durable optimistic-version tracking configuration. Identity/grant fields are
  * retained in the shared LocalMutationLog mutation shape used by offline sync.
  * @typedef {object} SyncClientConflictTrackingConfig
- * @property {string} actorDeviceId - Stable device identity.
- * @property {string} actorUserId - Stable user identity.
+ * @property {string | (() => string | Promise<string>)} [actorDeviceId] - Stable device identity, or a function resolving it at queue time. When a `sync.client.offline` session is configured, the session supplies it and the declaration may omit it.
+ * @property {string | (() => string | Promise<string>)} [actorUserId] - Stable user identity, or a function resolving it at queue time. When a `sync.client.offline` session is configured, the session supplies it and the declaration may omit it.
  * @property {() => string} clientMutationId - Durable idempotency-id generator.
  * @property {import("./local-mutation-log.js").default} mutationLog - Existing durable mutation log.
  * @property {() => Date} [now] - Mutation clock.
- * @property {string} offlineGrantId - Grant identifier retained with intent.
- * @property {string} policyHash - Policy hash retained with intent.
+ * @property {string | (() => string | Promise<string>)} [offlineGrantId] - Grant identifier retained with intent, or a function resolving it at queue time (grants rotate at runtime). When a `sync.client.offline` session is configured, the session supplies it and the declaration may omit it.
+ * @property {string | (() => string | Promise<string>)} [policyHash] - Policy hash retained with intent, or a function resolving it at queue time (policy hashes rotate with the server policy). When a `sync.client.offline` session is configured, the session supplies it and the declaration may omit it.
  * @property {string} [versionAttribute] - Authoritative version attribute; defaults to updatedAt when present.
  */
 
@@ -128,6 +128,8 @@
  * @property {(args: {scope: SerializedSyncScope}) => string | null | Promise<string | null>} [legacyCursor] - Seeds a newly declared scope's cursor (e.g. from a pre-scope cursor store) so devices don't re-pull everything.
  * @property {(error: Error) => void} [onError] - Reports background replay/pull failures. Defaults to rethrowing.
  * @property {(payload: import("./sync-api-client-types.js").SyncChangesRequest & {scope: SerializedSyncScope}, options?: {signal?: AbortSignal}) => Promise<import("./sync-api-client-types.js").SyncChangesResponse>} postChanges - Posts one changes request.
+ * @property {import("../configuration-types.js").NormalizedVelociousSyncClientOfflineConfiguration} [offline] - Normalized long-offline session configuration from `sync.client.offline`.
+ * @property {(path: string, payload: Record<string, ReturnType<typeof JSON.parse>>, options?: {signal?: AbortSignal}) => Promise<ReturnType<typeof JSON.parse>>} offlinePost - Path-selecting POSTer over the configured transport for the offline session's bootstrap/replay endpoints.
  * @property {(payload: {authenticationToken: string, syncs: Array<Record<string, ReturnType<typeof JSON.parse>>>}, options?: {signal?: AbortSignal}) => Promise<import("./sync-api-client-types.js").SyncReplayResponse>} postReplay - Posts one replay request.
  * @property {import("../configuration-types.js").VelociousSyncClientRealtimeConfiguration} [realtime] - Realtime push configuration consumed by `subscribeRealtime(...)`.
  * @property {import("../remote-request-context.js").RemoteRequestContext} requestContext - Immutable scalar context captured for this client.

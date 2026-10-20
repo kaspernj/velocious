@@ -10,6 +10,7 @@ import VelociousWebsocketClient from "../http-client/websocket-client.js"
 
 import {serializedScopeFromQuery} from "./query-scope.js"
 import SyncApiClient from "./sync-api-client.js"
+import SyncOfflineSession from "./sync-offline-session.js"
 import SyncRealtimeBridge from "./sync-realtime-bridge.js"
 import SyncScopeStore from "./sync-scope-store.js"
 import {currentSyncClient, setCurrentSyncClient} from "./sync-client-registry.js"
@@ -121,7 +122,7 @@ export default class SyncClient {
       const metadataModelClass = tenantHandle
         ? tenantHandle.metadataModelClass({databaseIdentifier: /** @type {string} */ (databaseIdentifier), modelClass})
         : modelClass
-      const resourceConfig = resourceConfigFromSyncDeclaration({declaration: modelClass.sync, metadataModelClass, modelClass, resourceType})
+      const resourceConfig = resourceConfigFromSyncDeclaration({declaration: modelClass.sync, metadataModelClass, modelClass, offlineConfigured: Boolean(clientConfiguration.offline), resourceType})
 
       if (databaseIdentity && resourceConfig.conflictTracking) {
         resourceConfig.conflictTracking = {
@@ -153,6 +154,8 @@ export default class SyncClient {
       isOnline: clientConfiguration.isOnline,
       legacyCursor,
       onError: clientConfiguration.onError,
+      offline: clientConfiguration.offline,
+      offlinePost: transportPathPoster({requestContext: capturedRequestContext, transport: clientConfiguration.transport}),
       postChanges: transportPoster({path: `${clientConfiguration.mountPath}/changes`, requestContext: capturedRequestContext, transport: clientConfiguration.transport}),
       postReplay: transportPoster({path: `${clientConfiguration.mountPath}/replay`, requestContext: capturedRequestContext, transport: clientConfiguration.transport}),
       realtime: clientConfiguration.realtime,
@@ -170,6 +173,8 @@ export default class SyncClient {
       : null
     /** @type {SyncRealtimeBridge | null} */
     this._realtimeBridge = null
+    /** @type {SyncOfflineSession | null} */
+    this._offlineSession = null
     /** @type {import("./sync-client-types.js").SyncClientSharedConnection | null | undefined} Shared app-lifetime websocket connection (undefined until first resolved, null when none is configured). */
     this._syncConnection = undefined
     /** @type {Promise<void> | null} */
@@ -1089,6 +1094,7 @@ export default class SyncClient {
           baseVersion: baseVersion === undefined ? this.baseVersionFor({operation, record: resource, resourceConfig}) : baseVersion,
           conflictTracking: resourceConfig.conflictTracking,
           data: queuedData,
+          offlineSession: this.config.offline ? this.offlineSession() : undefined,
           operation,
           resource,
           resourceType: resource.constructor.getModelName(),
@@ -1137,19 +1143,28 @@ export default class SyncClient {
 
     await SyncApiClient.singleFlight(`velocious-sync-client-replay-${this._clientNumber}`, async () => await this.withTenantOperation(async (operation) => {
       this._throwIfLifecycleAborted(signal)
-      for (const [resourceType, resourceConfig] of Object.entries(this.config.resources)) {
-        if (!resourceConfig.conflictTracking) continue
 
-        await SyncApiClient.replayConflictTrackedSyncs({
-          applyConflict: async ({record, result}) => await this.applyConflictReplayResult({record, result, resourceType}),
-          authenticationToken: await this.config.authenticationToken(),
-          batchSize: this.config.batchSize,
-          conflictTracking: resourceConfig.conflictTracking,
-          postReplay: this.config.postReplay,
-          remoteGeneration: (identity) => this._remoteGenerations.get(identity) || 0,
-          resourceType,
-          signal
-        })
+      if (this.config.offline) {
+        // Long-offline session configured: the signed offline session owns the
+        // conflict-tracked mutation logs, so the background drain replays them
+        // through the signed replay endpoint instead of the legacy unsigned
+        // one. One owner per log — never both.
+        await this._replayOfflinePending({signal})
+      } else {
+        for (const [resourceType, resourceConfig] of Object.entries(this.config.resources)) {
+          if (!resourceConfig.conflictTracking) continue
+
+          await SyncApiClient.replayConflictTrackedSyncs({
+            applyConflict: async ({record, result}) => await this.applyConflictReplayResult({record, result, resourceType}),
+            authenticationToken: await this.config.authenticationToken(),
+            batchSize: this.config.batchSize,
+            conflictTracking: resourceConfig.conflictTracking,
+            postReplay: this.config.postReplay,
+            remoteGeneration: (identity) => this._remoteGenerations.get(identity) || 0,
+            resourceType,
+            signal
+          })
+        }
       }
 
       this._throwIfLifecycleAborted(signal)
@@ -1253,6 +1268,203 @@ export default class SyncClient {
       if (resolution === "retry-local") this.scheduleReplay()
 
       return record
+    })
+  }
+
+  /**
+   * Returns the framework-owned long-offline session built from
+   * `sync.client.offline`, creating it on first use. Fails when the offline
+   * configuration block is missing.
+   * @returns {SyncOfflineSession} - The client's offline session.
+   */
+  offlineSession() {
+    if (!this.config.offline) {
+      throw new Error("SyncClient has no sync.client.offline configuration - configure deviceIdentityStorage, enrollDevice, and grantScopes to use the long-offline session")
+    }
+
+    if (!this._offlineSession) {
+      this._offlineSession = new SyncOfflineSession({
+        authenticationToken: this.config.authenticationToken,
+        config: this.config.offline,
+        mutationLogs: this.offlineMutationLogs(),
+        post: this.config.offlinePost
+      })
+    }
+
+    return this._offlineSession
+  }
+
+  /**
+   * Collects the durable mutation logs the offline session signs, replays,
+   * re-signs, and exports: the configured `sync.client.offline.mutationLog`
+   * when given, plus every conflict-tracking log declared by the synced models.
+   * @returns {Array<import("./local-mutation-log.js").default>} - Session mutation logs.
+   */
+  offlineMutationLogs() {
+    /** @type {Array<import("./local-mutation-log.js").default>} */
+    const logs = []
+
+    if (this.config.offline?.mutationLog) logs.push(this.config.offline.mutationLog)
+
+    for (const resourceConfig of Object.values(this.config.resources)) {
+      const mutationLog = resourceConfig.conflictTracking?.mutationLog
+
+      if (!mutationLog) continue
+      if (logs.some((log) => log === mutationLog || log.storageKey === mutationLog.storageKey)) continue
+
+      logs.push(mutationLog)
+    }
+
+    if (logs.length === 0) throw new Error("SyncClient offline session found no durable mutation log - declare conflictTracking on a synced model or configure sync.client.offline.mutationLog")
+
+    return logs
+  }
+
+  /**
+   * Starts the long-offline session: resolves the device signing identity
+   * (generating and enrolling a key pair when the app-owned storage has none)
+   * and bootstraps a live offline grant through the built-in
+   * `/frontend-models/sync/bootstrap` endpoint. Idempotent.
+   * @returns {Promise<import("./sync-offline-session.js").SyncOfflineSessionSummary>} - Session summary (actor ids, live grant id, expiry).
+   */
+  async startOfflineSession() {
+    return await this._runLifecycleWork(async (signal) => {
+      this._throwIfLifecycleAborted(signal)
+
+      const summary = await this.offlineSession().start()
+
+      this._throwIfLifecycleAborted(signal)
+
+      return summary
+    })
+  }
+
+  /**
+   * Stops the long-offline session. The device identity and retained grants
+   * stay in the app-owned durable storage; pending mutations stay in the
+   * durable mutation logs and replay with the grant they were signed under.
+   * @returns {Promise<void>} - Resolves after the session is stopped.
+   */
+  async stopOfflineSession() {
+    if (!this._offlineSession) return
+
+    await this._offlineSession.stop()
+  }
+
+  /**
+   * Bootstraps a fresh offline grant and re-signs this device's pending
+   * mutations under it (the replay idempotency key is grant-id-free, so
+   * re-signing never duplicates an intent).
+   * @returns {Promise<import("./sync-offline-session.js").SyncOfflineSessionSummary>} - Refreshed session summary.
+   */
+  async refreshOfflineGrant() {
+    return await this._runLifecycleWork(async (signal) => {
+      this._throwIfLifecycleAborted(signal)
+
+      const summary = await this.offlineSession().refreshGrant()
+
+      this._throwIfLifecycleAborted(signal)
+
+      return summary
+    })
+  }
+
+  /**
+   * Drains the durable mutation logs through the built-in signed replay
+   * endpoint (`/frontend-models/sync/replay`): ensures a live grant (refreshing
+   * an expired one), batches pending signed mutations with the signed grant
+   * each was signed under, and maps per-mutation results back onto the log
+   * records as synced/conflict/rejected. Structured conflicts stay reachable
+   * through the existing conflict contract (`syncResult.conflict` on the record
+   * and `resolveConflict(...)`).
+   * @param {object} [options] - Replay options.
+   * @param {number} [options.batchSize] - Max signed mutations per request.
+   * @returns {Promise<import("./sync-offline-session.js").SyncOfflineReplayResult>} - Mapped replay result.
+   */
+  async replayOfflinePending(options = {}) {
+    return await this._runLifecycleWork(async (signal) => await this._replayOfflinePending({...options, signal}))
+  }
+
+  /**
+   * Signed replay implementation bound to one lifecycle generation.
+   * @param {object} [options] - Replay options.
+   * @param {number} [options.batchSize] - Max signed mutations per request.
+   * @param {AbortSignal} [options.signal] - Lifecycle cancellation signal.
+   * @returns {Promise<import("./sync-offline-session.js").SyncOfflineReplayResult>} - Mapped replay result.
+   */
+  async _replayOfflinePending(options = {}) {
+    const {signal, ...replayOptions} = options
+    const lifecycleSignal = signal ?? this._lifecycleAbortController.signal
+
+    this._throwIfLifecycleAborted(lifecycleSignal)
+
+    const result = await this.offlineSession().replayPending({...replayOptions, signal: lifecycleSignal})
+
+    this._throwIfLifecycleAborted(lifecycleSignal)
+
+    for (const entry of result.results) {
+      if (entry.status !== "conflict" || !entry.serverResult) continue
+
+      await this.applyOfflineConflictReplayResult(entry)
+    }
+
+    return result
+  }
+
+  /**
+   * Applies the authoritative server version carried by a signed replay
+   * conflict result through the same conflict contract the online replay uses.
+   * @param {{mutation: import("./device-identity.js").SyncMutation, serverResult: Record<string, ReturnType<typeof JSON.parse>> | null, status: string}} entry - Mapped replay result.
+   * @returns {Promise<void>} - Resolves after the conflict server version is applied.
+   */
+  async applyOfflineConflictReplayResult(entry) {
+    if (!entry.serverResult) return
+
+    const response = entry.serverResult.response
+
+    if (!response || typeof response !== "object" || Array.isArray(response)) return
+
+    const conflict = /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (response).conflict
+
+    if (!conflict || !Object.hasOwn(conflict, "serverModel")) return
+
+    await this.applyConflictReplayResult({
+      record: /** @type {import("./local-mutation-log.js").LocalMutationLogRecord} */ ({mutation: {payload: entry.mutation.payload}}),
+      resourceType: entry.mutation.model,
+      result: /** @type {import("./sync-api-client-types.js").SyncReplayItem} */ ({conflict})
+    })
+  }
+
+  /**
+   * Exports the durable non-terminal mutations of the offline session's logs
+   * as one signed peer bundle for device-to-device transfer.
+   * @param {object} [options] - Export options.
+   * @param {import("./local-mutation-log.js").LocalMutationStatus[]} [options.statuses] - Statuses to export.
+   * @param {() => Date} [options.now] - Export clock.
+   * @returns {Promise<import("./peer-mutation-bundle.js").PeerMutationBundle>} - Signed peer bundle.
+   */
+  async exportPeerBundle(options = {}) {
+    return await this._runLifecycleWork(async (signal) => {
+      this._throwIfLifecycleAborted(signal)
+
+      return await this.offlineSession().exportBundle(options)
+    })
+  }
+
+  /**
+   * Imports a peer bundle into the local mutation log: every entry is verified
+   * against the configured backend public key before it is appended, and
+   * entries already present by idempotency key are skipped as duplicates.
+   * @param {object} args - Import args.
+   * @param {import("./peer-mutation-bundle.js").PeerMutationBundle} args.bundle - Peer bundle to import.
+   * @param {import("./local-mutation-log.js").default} [args.mutationLog] - Target log. Defaults to the session's first log.
+   * @returns {Promise<import("./peer-mutation-bundle.js").PeerMutationBundleImportResult>} - Import result (imported/rejected/skipped).
+   */
+  async importPeerBundle({bundle, mutationLog}) {
+    return await this._runLifecycleWork(async (signal) => {
+      this._throwIfLifecycleAborted(signal)
+
+      return await this.offlineSession().importBundle({bundle, mutationLog})
     })
   }
 
@@ -1605,10 +1817,10 @@ function safeConflictVersion(value) {
 /**
  * Builds one resource config from a model's `static sync` declaration plus its
  * derived column metadata.
- * @param {{declaration: import("./sync-client-types.js").ModelSyncDeclaration, metadataModelClass: ReturnType<typeof JSON.parse>, modelClass: ReturnType<typeof JSON.parse>, resourceType: string}} args - Declaration args.
+ * @param {{declaration: import("./sync-client-types.js").ModelSyncDeclaration, metadataModelClass: ReturnType<typeof JSON.parse>, modelClass: ReturnType<typeof JSON.parse>, offlineConfigured?: boolean, resourceType: string}} args - Declaration args.
  * @returns {import("./sync-client-types.js").SyncClientResourceConfig} Derived resource config.
  */
-function resourceConfigFromSyncDeclaration({declaration, metadataModelClass, modelClass, resourceType}) {
+function resourceConfigFromSyncDeclaration({declaration, metadataModelClass, modelClass, offlineConfigured = false, resourceType}) {
   const normalizedDeclaration = declaration === true ? {} : declaration
 
   if (!normalizedDeclaration || typeof normalizedDeclaration !== "object" || Array.isArray(normalizedDeclaration)) {
@@ -1632,7 +1844,7 @@ function resourceConfigFromSyncDeclaration({declaration, metadataModelClass, mod
 
   const derived = derivedSyncAttributes({modelClass: metadataModelClass, resourceType})
 
-  if (conflictTracking) validateConflictTracking({conflictTracking, derived, resourceType})
+  if (conflictTracking) validateConflictTracking({conflictTracking, derived, offlineConfigured, resourceType})
 
   return {
     afterApply,
@@ -1656,19 +1868,26 @@ function resourceConfigFromSyncDeclaration({declaration, metadataModelClass, mod
 
 /**
  * Validates one resource's durable conflict-tracking declaration.
- * @param {{conflictTracking: import("./sync-client-types.js").SyncClientConflictTrackingConfig, derived: {booleanAttributes: string[], localOnlyAttributes: string[]}, resourceType: string}} args - Validation args.
+ * @param {{conflictTracking: import("./sync-client-types.js").SyncClientConflictTrackingConfig, derived: {booleanAttributes: string[], localOnlyAttributes: string[]}, offlineConfigured: boolean, resourceType: string}} args - Validation args.
  * @returns {void}
  */
-function validateConflictTracking({conflictTracking, derived, resourceType}) {
-  const requiredStrings = {
+function validateConflictTracking({conflictTracking, derived, offlineConfigured, resourceType}) {
+  const identityFields = {
     actorDeviceId: conflictTracking.actorDeviceId,
     actorUserId: conflictTracking.actorUserId,
     offlineGrantId: conflictTracking.offlineGrantId,
     policyHash: conflictTracking.policyHash
   }
 
-  for (const [key, value] of Object.entries(requiredStrings)) {
-    if (typeof value !== "string" || value.length === 0) throw new Error(`${resourceType} conflictTracking.${key} must be a non-empty string`)
+  for (const [key, value] of Object.entries(identityFields)) {
+    // Grants and policy hashes rotate at runtime: a declaration may provide a
+    // static string, a function resolving the value at queue time, or omit the
+    // key entirely when a `sync.client.offline` session supplies it.
+    if (value === undefined && offlineConfigured) continue
+    if (typeof value === "function") continue
+    if (typeof value !== "string" || value.length === 0) {
+      throw new Error(`${resourceType} conflictTracking.${key} must be a non-empty string, a function resolving one, or omitted when sync.client.offline supplies it`)
+    }
   }
   if (!conflictTracking.mutationLog || typeof conflictTracking.mutationLog.append !== "function") throw new Error(`${resourceType} conflictTracking.mutationLog must be a LocalMutationLog`)
   if (typeof conflictTracking.clientMutationId !== "function") throw new Error(`${resourceType} conflictTracking.clientMutationId must be a function`)
@@ -1742,6 +1961,30 @@ function normalizedTrack(track) {
   if (Array.isArray(track)) return {operations: track}
 
   return track
+}
+
+/**
+ * Builds a framework-owned POSTer over the configured transport for a path
+ * chosen at call time (used by the long-offline session's bootstrap/replay
+ * endpoints, which live outside the sync.api mount path).
+ * @param {{requestContext: import("../remote-request-context.js").RemoteRequestContext, transport: import("../configuration-types.js").VelociousSyncClientTransport}} args - Poster args.
+ * @returns {(path: string, payload: Record<string, ReturnType<typeof JSON.parse>>, options?: {signal?: AbortSignal}) => Promise<ReturnType<typeof JSON.parse>>} Path-selecting sync endpoint POSTer.
+ */
+function transportPathPoster({requestContext, transport}) {
+  return async (path, payload, options = {}) => {
+    const requestPayload = mergeRemoteRequestContext({
+      context: requestContext,
+      label: "Sync client request context",
+      params: payload
+    })
+    const response = await transport.post(path, requestPayload, {signal: options.signal})
+
+    if (!response || typeof response.json !== "function") {
+      throw new Error(`sync.client transport.post must resolve to a response with a json() method for ${path} (like the frontend-model websocket client)`)
+    }
+
+    return await response.json()
+  }
 }
 
 /**
