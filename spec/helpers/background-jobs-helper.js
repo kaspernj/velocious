@@ -25,10 +25,7 @@ const legacyDefaultBackgroundJobsConfig = Object.fromEntries(
 // poll for a job/output that is guaranteed to complete, so a generous default absorbs
 // load-induced slowness without masking a real hang — the poll loop still resolves the
 // moment the condition is met.
-// CI-load precedent: a cold job completion (forked/pooled child boot + durable
-// store round-trip) exceeds 25s on saturated runners; keep the wait above the
-// slowest observed CI completion and below the 180s example bounds.
-const defaultBackgroundJobWaitTimeoutSeconds = 60
+const defaultBackgroundJobWaitTimeoutSeconds = 25
 
 /**
  * Worker socket double that records dispatched job payloads without a real

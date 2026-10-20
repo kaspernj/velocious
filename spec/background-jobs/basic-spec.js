@@ -2,11 +2,10 @@
 
 import net from "net"
 import timeout from "awaitery/build/timeout.js"
-import wait from "awaitery/build/wait.js"
 import JsonSocket from "../../src/background-jobs/json-socket.js"
 import BackgroundJobsMain from "../../src/background-jobs/main.js"
 import BackgroundJobsStatusReporter from "../../src/background-jobs/status-reporter.js"
-import { outputPathFor, startBackgroundJobs, startBackgroundJobsMain, waitForJobCompleted, waitForOutputJson } from "../helpers/background-jobs-helper.js"
+import { createBackgroundJobUpdateObserver, outputPathFor, startBackgroundJobs, startBackgroundJobsMain, waitForJobCompleted, waitForOutputJson } from "../helpers/background-jobs-helper.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import SlowTestJob from "../dummy/src/jobs/slow-test-job.js"
 import TestJob from "../dummy/src/jobs/test-job.js"
@@ -23,9 +22,22 @@ async function connectControllableWorker({port, supportsHandoffIdReporting = tru
   const jsonSocket = new JsonSocket(socket)
   /** @type {import("../../src/background-jobs/types.js").BackgroundJobPayload[]} */
   const jobs = []
+  /** @type {((payload: import("../../src/background-jobs/types.js").BackgroundJobPayload) => void) | undefined} */
+  let nextJobResolver
 
   jsonSocket.on("message", (message) => {
-    if (message?.type === "job") jobs.push(message.payload)
+    if (message?.type !== "job") return
+
+    jobs.push(message.payload)
+
+    // Deliver to a waiting nextJob() directly instead of making the caller poll:
+    // the message event is the producer signal, so the guard timeout below is only
+    // a safety net for a stuck dispatch, not the mechanism the test depends on.
+    if (nextJobResolver) {
+      const resolve = nextJobResolver
+      nextJobResolver = undefined
+      resolve(jobs.shift())
+    }
   })
 
   await new Promise((resolve, reject) => {
@@ -43,9 +55,9 @@ async function connectControllableWorker({port, supportsHandoffIdReporting = tru
   return {
     jsonSocket,
     nextJob: async () => await timeout({timeout: 10000}, async () => {
-      while (jobs.length === 0) await wait(0.01)
+      if (jobs.length > 0) return jobs.shift()
 
-      const payload = jobs.shift()
+      const payload = await new Promise((resolve) => { nextJobResolver = resolve })
 
       if (!payload) throw new Error("Expected a background job payload")
 
@@ -117,24 +129,29 @@ describe("Background jobs", {databaseCleaning: {truncate: true}}, () => {
     }
   })
 
-  it("gracefully drains a busy pooled job and then retires its child", {timeoutSeconds: 180}, async () => {
-    const {main, store, worker} = await startBackgroundJobs({workerOptions: {pooledRunnerCount: 1}})
+  it("gracefully drains a busy pooled job and then retires its child", async () => {
+    /** @type {() => void} */
+    let resolveJobAccepted
+    const jobAccepted = new Promise((resolve) => { resolveJobAccepted = () => resolve() })
+    const {main, store, worker} = await startBackgroundJobs({workerOptions: {pooledRunnerCount: 1, onJobAccepted: () => resolveJobAccepted()}})
     const outputPath = await outputPathFor("pooled-runner-drain")
+    const updates = createBackgroundJobUpdateObserver({store})
+    main.onJobUpdated = updates.onJobUpdated
 
     try {
       const jobId = await store.enqueue({jobName: "SlowTestJob", args: ["drained", outputPath, 100]})
       await main._drain()
-      await timeout({timeout: 10000}, async () => {
-        while (worker.inflightPooledJobs.size === 0) await wait(0.01)
-      })
 
+      // Event-driven pickup: the worker's acceptance hook is the producer signal
+      // that the payload is in inflightPooledJobs, so stop()'s own drain covers
+      // it — no polling Set size in front of a drain that already happens.
+      await jobAccepted
       await worker.stop({timeoutMs: 2000})
 
-      // Graceful stop retires the child once its completion report is in flight; under CI
-      // load the durable store row can still read "queued" for a moment afterwards. Poll the
-      // guaranteed completion through the shared helper (it throws on "failed") instead of
-      // racing the assertion against the status round-trip.
-      await waitForJobCompleted({jobId, store})
+      // Event-driven completion: main emits onJobUpdated when it durably marks the
+      // job completed, so the test waits on that signal instead of polling the
+      // store row (the observer throws with the failure detail on "failed").
+      await updates.waitForUpdate(jobId)
       expect((await store.getJob(jobId))?.status).toEqual("completed")
       expect(await waitForOutputJson({outputPath})).toEqual({message: "drained"})
       expect(worker.pooledChildren.size).toEqual(0)
@@ -185,7 +202,7 @@ describe("Background jobs", {databaseCleaning: {truncate: true}}, () => {
     await main.stop()
   })
 
-  it("immediately requeues a disconnected worker's exact handoff to another socket", {timeoutSeconds: 180}, async () => {
+  it("immediately requeues a disconnected worker's exact handoff to another socket", async () => {
     const {main, store} = await startBackgroundJobsMain()
     const firstWorker = await connectControllableWorker({port: main.getPort(), workerId: "shared-worker-id"})
     const jobId = await store.enqueue({jobName: "TestJob", args: [], options: {executionMode: "inline"}})
@@ -415,8 +432,11 @@ describe("Background jobs", {databaseCleaning: {truncate: true}}, () => {
     }
   })
 
-  it("waits for in-flight inline jobs to finish during a graceful stop", {timeoutSeconds: 180}, async () => {
-    const {main, store, worker} = await startBackgroundJobs()
+  it("waits for in-flight inline jobs to finish during a graceful stop", async () => {
+    /** @type {() => void} */
+    let resolveJobAccepted
+    const jobAccepted = new Promise((resolve) => { resolveJobAccepted = () => resolve() })
+    const {main, store, worker} = await startBackgroundJobs({workerOptions: {onJobAccepted: () => resolveJobAccepted()}})
     const outputPath = await outputPathFor("slow-job")
 
     const jobId = await SlowTestJob.performLaterWithOptions({
@@ -424,13 +444,9 @@ describe("Background jobs", {databaseCleaning: {truncate: true}}, () => {
       options: {executionMode: "inline"}
     })
 
-    // Wait until the worker has actually picked the job up; otherwise
-    // stop() might race ahead before there's anything in flight.
-    await timeout({timeout: 2000}, async () => {
-      while (worker.inflightInlineJobs.size === 0) {
-        await wait(0.01)
-      }
-    })
+    // Event-driven pickup: wait for the worker's job-acceptance signal before
+    // stopping, so stop() cannot race ahead before there's anything in flight.
+    await jobAccepted
 
     const stopStartedAtMs = Date.now()
 

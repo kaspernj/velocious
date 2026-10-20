@@ -1,0 +1,5 @@
+# Background jobs worker job-acceptance hook
+
+`BackgroundJobsWorker` gained an `onJobAccepted` observation hook: it fires the moment the worker accepts a dispatched job payload, before execution-mode routing. Tests (and applications) can now wait for the pickup event instead of polling `inflightInlineJobs`/`inflightPooledJobs` Set sizes behind a timeout — following the repo's "avoid fixed sleeps" testing guideline.
+
+The background-jobs basic specs were rewritten around producer signals: the controllable worker's `nextJob()` resolves directly from the socket message event, the pooled-drain and inline graceful-stop examples wait on `onJobAccepted`, and the drain example waits on the durable `onJobUpdated` completion observer. The `timeoutSeconds: 180` example bounds and the widened polling timeouts from the first CI-hardening pass are removed: idle-runner measurements show these examples complete in 0.2-6s, so the CI failures were runner-load timeouts in front of polls that should not exist at all.
