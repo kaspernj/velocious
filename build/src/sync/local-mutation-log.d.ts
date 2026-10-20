@@ -186,13 +186,16 @@ export default class LocalMutationLog {
     }): Promise<LocalMutationLogRecord>;
     /**
      * Replaces the mutation payload of a still-pending record. Used when an
-     * acknowledged predecessor supplies the authoritative base for its successor.
-     * @param {{id: string, mutation: import("./device-identity.js").SyncMutation}} args - Record and replacement mutation.
+     * acknowledged predecessor supplies the authoritative base for its successor
+     * and when an offline session re-signs a pending record under a refreshed
+     * grant (pass the new `signedMutation` envelope together with the mutation).
+     * @param {{id: string, mutation: import("./device-identity.js").SyncMutation, signedMutation?: import("./device-identity.js").SignedSyncMutation}} args - Record and replacement mutation.
      * @returns {Promise<LocalMutationLogRecord>} Updated record.
      */
-    updateMutation({ id, mutation }: {
+    updateMutation({ id, mutation, signedMutation }: {
         id: string;
         mutation: import("./device-identity.js").SyncMutation;
+        signedMutation?: import("./device-identity.js").SignedSyncMutation;
     }): Promise<LocalMutationLogRecord>;
     /**
      * Resolves a durable conflict explicitly. Keeping the server acknowledges the

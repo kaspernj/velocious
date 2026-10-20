@@ -900,7 +900,7 @@ export default class VelociousConfiguration {
   /**
    * Normalizes client-side sync configuration consumed by `SyncClient.fromConfiguration(...)`.
    * @param {import("./configuration-types.js").VelociousSyncClientConfiguration | undefined} client - Client-side sync configuration.
-   * @returns {import("./configuration-types.js").VelociousSyncClientConfiguration | undefined} - Normalized client-side sync configuration.
+   * @returns {import("./configuration-types.js").NormalizedVelociousSyncClientConfiguration | undefined} - Normalized client-side sync configuration.
    */
   _normalizeSyncClientConfiguration(client) {
     if (client === undefined || client === null) return undefined
@@ -909,11 +909,11 @@ export default class VelociousConfiguration {
       throw new Error("sync.client must be an object with transport and authenticationToken")
     }
 
-    const {authenticationToken, batchSize, isOnline, mountPath, onError, realtime, transport, websocketClient, websocketUrl, ...restClient} = client
+    const {authenticationToken, batchSize, isOnline, mountPath, onError, offline, realtime, transport, websocketClient, websocketUrl, ...restClient} = client
     const restClientKeys = Object.keys(restClient)
 
     if (restClientKeys.length > 0) {
-      throw new Error(`sync.client received unknown keys: ${restClientKeys.join(", ")} (supported: authenticationToken, batchSize, isOnline, mountPath, onError, realtime, transport, websocketClient, websocketUrl)`)
+      throw new Error(`sync.client received unknown keys: ${restClientKeys.join(", ")} (supported: authenticationToken, batchSize, isOnline, mountPath, onError, offline, realtime, transport, websocketClient, websocketUrl)`)
     }
     if (!transport || typeof transport !== "object" || typeof transport.post !== "function") {
       throw new Error("sync.client.transport must be an object with a post(path, body) method (like the frontend-model websocket client)")
@@ -945,11 +945,69 @@ export default class VelociousConfiguration {
       batchSize,
       isOnline,
       mountPath: (mountPath || "/velocious/sync").replace(/\/+$/u, "") || "/",
+      offline: this._normalizeSyncClientOfflineConfiguration(offline),
       onError,
       realtime,
       transport,
       websocketClient,
       websocketUrl
+    }
+  }
+
+  /**
+   * Normalizes the client-side long-offline session configuration consumed by
+   * `SyncClient.startOfflineSession()`. The framework owns the session
+   * lifecycle; the app provides durable identity storage, the enrollment hook,
+   * and the grant scopes callback.
+   * @param {import("./configuration-types.js").VelociousSyncClientOfflineConfiguration | undefined} offline - Offline configuration block.
+   * @returns {import("./configuration-types.js").NormalizedVelociousSyncClientOfflineConfiguration | undefined} - Normalized offline configuration.
+   */
+  _normalizeSyncClientOfflineConfiguration(offline) {
+    if (offline === undefined || offline === null) return undefined
+
+    if (typeof offline !== "object" || Array.isArray(offline)) {
+      throw new Error("sync.client.offline must be an object with deviceIdentityStorage, enrollDevice, and grantScopes")
+    }
+
+    const {backendPublicKey, bootstrapPath, deviceIdentityStorage, enrollDevice, grantScopes, grantStorage, mutationLog, now, replayPath, ...restOffline} = offline
+    const restOfflineKeys = Object.keys(restOffline)
+
+    if (restOfflineKeys.length > 0) {
+      throw new Error(`sync.client.offline received unknown keys: ${restOfflineKeys.join(", ")} (supported: backendPublicKey, bootstrapPath, deviceIdentityStorage, enrollDevice, grantScopes, grantStorage, mutationLog, now, replayPath)`)
+    }
+    if (!deviceIdentityStorage || typeof deviceIdentityStorage !== "object" || Array.isArray(deviceIdentityStorage) || typeof deviceIdentityStorage.load !== "function" || typeof deviceIdentityStorage.save !== "function") {
+      throw new Error("sync.client.offline.deviceIdentityStorage must be an object with load() and save(identity) methods")
+    }
+    if (typeof enrollDevice !== "function") throw new Error("sync.client.offline.enrollDevice must be a function resolving the backend-signed device certificate")
+    if (typeof grantScopes !== "function") throw new Error("sync.client.offline.grantScopes must be a function resolving the bootstrap grant scopes")
+    if (backendPublicKey !== undefined && (typeof backendPublicKey !== "object" || backendPublicKey === null || Array.isArray(backendPublicKey))) {
+      throw new Error("sync.client.offline.backendPublicKey must be a public JSON Web Key object")
+    }
+    if (bootstrapPath !== undefined && (typeof bootstrapPath !== "string" || !bootstrapPath.startsWith("/"))) {
+      throw new Error(`sync.client.offline.bootstrapPath must start with '/', got: ${String(bootstrapPath)}`)
+    }
+    if (replayPath !== undefined && (typeof replayPath !== "string" || !replayPath.startsWith("/"))) {
+      throw new Error(`sync.client.offline.replayPath must start with '/', got: ${String(replayPath)}`)
+    }
+    if (grantStorage !== undefined && (typeof grantStorage !== "object" || grantStorage === null || Array.isArray(grantStorage) || typeof grantStorage.load !== "function" || typeof grantStorage.save !== "function")) {
+      throw new Error("sync.client.offline.grantStorage must be an object with load() and save(grants) methods")
+    }
+    if (mutationLog !== undefined && (typeof mutationLog !== "object" || mutationLog === null || typeof mutationLog.append !== "function")) {
+      throw new Error("sync.client.offline.mutationLog must be a LocalMutationLog")
+    }
+    if (now !== undefined && typeof now !== "function") throw new Error("sync.client.offline.now must be a function resolving the session clock")
+
+    return {
+      backendPublicKey,
+      bootstrapPath: (bootstrapPath || "/frontend-models/sync/bootstrap").replace(/\/+$/u, "") || "/",
+      configuration: this,
+      deviceIdentityStorage,
+      enrollDevice,
+      grantScopes,
+      grantStorage,
+      mutationLog,
+      now: now || (() => new Date()),
+      replayPath: (replayPath || "/frontend-models/sync/replay").replace(/\/+$/u, "") || "/"
     }
   }
 

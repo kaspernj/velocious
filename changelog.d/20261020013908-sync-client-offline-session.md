@@ -1,0 +1,8 @@
+### Added
+
+- **SyncClient long-offline sessions** (`sync.client.offline`): framework-owned `SyncOfflineSession` wiring device identity (generate → app enrollment hook → backend-public-key verification → app-owned durable storage), offline grant bootstrap/refresh through the built-in `/frontend-models/sync/bootstrap`, per-grant retention (pending mutations always replay with the grant they were signed under), signing at queue time into the durable `LocalMutationLog`, signed batch replay through `/frontend-models/sync/replay` with synced/conflict/rejected mapping onto log records and the existing conflict contract, and signed peer bundle export/import (`exportPeerBundle()` / `importPeerBundle({bundle, signedOfflineGrants})`). With the offline block configured, background replay drains conflict-tracked logs through the signed replay path — one owner per durable log. New client API: `startOfflineSession()`, `stopOfflineSession()`, `refreshOfflineGrant()`, `replayOfflinePending()`, `exportPeerBundle()`, `importPeerBundle()`, `offlineSession()`.
+
+### Changed
+
+- `conflictTracking` identity metadata (`actorDeviceId`, `actorUserId`, `offlineGrantId`, `policyHash`) is now runtime-resolvable: each accepts a plain value or an (async) function resolved per queue, and a declaration with a `sync.client.offline` block may omit them entirely because the session supplies and signs them. Static declarations without an offline block keep the previous fail-loud validation.
+- `LocalMutationLog.updateMutation({id, mutation, signedMutation})` accepts the matching new signed envelope when re-signing a pending record under a refreshed grant, and verifies the envelope matches the mutation payload it signs.

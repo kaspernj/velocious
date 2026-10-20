@@ -544,3 +544,45 @@ try {
 ```
 
 `withoutPublishing` suppression is process-wide while its callback runs, so mutations from concurrently running requests are also skipped for that window — prefer `markServerApply(record)` when writes from other flows can interleave.
+
+## Implemented slice: SyncClient offline session (grant lifecycle, signed queue, signed replay, peer API)
+
+`SyncOfflineSession` (`src/sync/sync-offline-session.js`) is the framework-owned long-offline session behind `SyncClient`: it wires the existing primitives (device identity, offline grants, local mutation log, peer bundles, the built-in grant-scoped `/frontend-models/sync/bootstrap|replay` endpoints) into the client so an app only supplies durable storage adapters, the enrollment hook, and the grant scopes callback — no app-side signing or replay plumbing.
+
+The app declares a `sync.client.offline` block:
+
+```js
+sync: {
+  client: {
+    authenticationToken: () => currentUser.token(),
+    offline: {
+      backendPublicKey,                    // verifies device certificates + imported peer mutations
+      deviceIdentityStorage: {             // app-owned durable storage for {certificate, privateKey}
+        load: async () => storedIdentityOrNull,
+        save: async (identity) => persist(identity)
+      },
+      enrollDevice: async ({publicKey}) => await backendEnroll(publicKey), // returns the backend-signed certificate
+      grantScopes: () => ({workspaceId: currentWorkspace.id()}),
+      grantStorage: {load: async () => retainedGrants, save: async (grants) => persist(grants)}, // optional durable retention
+      mutationLog,                         // optional explicit LocalMutationLog (otherwise derived from conflictTracking declarations)
+      now: () => new Date()              // optional session clock
+    },
+    transport
+  }
+}
+```
+
+Client API (all lifecycle-bound, single-flighted):
+
+- `startOfflineSession()` — resolves the device identity: loads it from `deviceIdentityStorage`, or generates a P-256 key pair (`generateSyncSigningKeyPair()`), runs `enrollDevice({publicKey})`, verifies the returned certificate against `backendPublicKey`, and stores the identity. Then bootstraps a live offline grant through `/frontend-models/sync/bootstrap` (with the sync manifest whose per-model `policyHash` values mutations are signed against). Idempotent: a second start reuses the stored identity and live grant.
+- `stopOfflineSession()` — drops the in-memory session; identity, retained grants, and pending mutations stay in the app-owned durable storage.
+- `refreshOfflineGrant()` — bootstraps a new grant and re-signs this device's still-pending records under it. Safe because the replay idempotency key is `actorUserId:actorDeviceId:clientMutationId` and never carries the grant id. Peer-forwarded records keep their original signed envelope and original grant.
+- `replayOfflinePending({batchSize})` — ensures a live grant (refreshing an expired one and re-signing pending records), batches pending signed mutations to `/frontend-models/sync/replay` as `{mutations: [{...signedMutation, signedOfflineGrant}]}`, and maps per-mutation results back onto the log records as `synced`/`conflict`/`rejected`. A record can only replay with a grant the session retains (`grantStorage`/`importPeerBundle` retention); records whose grant is not retained stay pending instead of blocking the batch. Structured conflicts stay reachable through the existing conflict contract (`syncResult.conflict` on the record, `resolveConflict(...)`, authoritative `serverModel` applied through the pull applier).
+- `exportPeerBundle()` / `importPeerBundle({bundle, signedOfflineGrants})` — generic wrappers over `src/sync/peer-mutation-bundle.js`: export signs the durable non-terminal mutations with the device key; import verifies every entry against `backendPublicKey` before appending, skips entries already present by idempotency key as `duplicate`, and retains the signer's grants so imported mutations replay under the grant their signer used.
+- `offlineSession()` — the session instance (`signMutation(...)`, `policyHashFor(model)`, `isActive()`, `sessionSummary()`) for apps that need the primitives directly.
+
+**Signing at queue time:** when the offline block is configured, conflict-tracked `queue()` (including command-style payloads) routes through the session: the session supplies the rotating identity (`actorDeviceId`/`actorUserId` from the certificate, the live `offlineGrantId`, the manifest `policyHash`) and signs the intent with the device key before appending it to the durable `LocalMutationLog` (`record.signedMutation`). Queueing stays possible while offline under the newest retained grant; the replay pass refreshes the grant and re-signs. A model with no manifest policy hash fails loudly at signing.
+
+**One owner per log:** with `sync.client.offline` configured, the client's background replay drains conflict-tracked logs through the signed replay endpoint instead of the legacy unsigned `/changes`-style replay — the same durable log is never replayed through both paths. Without the offline block, the existing static `conflictTracking` behavior is unchanged.
+
+**Runtime-resolvable conflictTracking identity:** `actorDeviceId`, `actorUserId`, `offlineGrantId`, and `policyHash` in a `conflictTracking` declaration now accept a value or a (async) function resolved per queue, because grants and policy hashes rotate at runtime. Declarations without an offline session still fail loudly when a rotating field is missing; declarations with an offline session may omit them entirely — the session supplies them.

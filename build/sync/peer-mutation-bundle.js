@@ -11,6 +11,12 @@ import {createSignedMutation, mutationIdempotencyKey, verifySignedMutation} from
  */
 /**
  * One peer mutation bundle entry.
+ * @typedef {object} PeerMutationBundleImportResult
+ * @property {Array<{clientMutationId: string, idempotencyKey: string, localRecordId: string}>} imported - Entries appended to the local log.
+ * @property {Array<{errorMessage: string, index: number}>} rejected - Entries that failed verification.
+ * @property {Array<{clientMutationId: string, idempotencyKey: string, localRecordId: string, reason: "duplicate"}>} skipped - Entries already present by idempotency key.
+ */
+/**
  * @typedef {object} PeerMutationBundleEntry
  * @property {string} [localRecordId] - Exporting device's local mutation record id.
  * @property {number} [localSequence] - Exporting device's local mutation sequence.

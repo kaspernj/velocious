@@ -1,5 +1,6 @@
 import Configuration from "../configuration.js";
 import Logger from "../logger.js";
+import SyncOfflineSession from "./sync-offline-session.js";
 import SyncRealtimeBridge from "./sync-realtime-bridge.js";
 /** Expected cooperative cancellation raised by a SyncClient lifecycle transition. */
 export declare class SyncClientLifecycleAbortError extends Error {
@@ -29,6 +30,8 @@ export default class SyncClient {
     _tenantSchemaGeneration: string | null | undefined;
     /** @type {SyncRealtimeBridge | null} */
     _realtimeBridge: SyncRealtimeBridge | null;
+    /** @type {SyncOfflineSession | null} */
+    _offlineSession: SyncOfflineSession | null;
     /** @type {import("./sync-client-types.js").SyncClientSharedConnection | null | undefined} Shared app-lifetime websocket connection (undefined until first resolved, null when none is configured). */
     _syncConnection: import("./sync-client-types.js").SyncClientSharedConnection | null | undefined;
     /** @type {Promise<void> | null} */
@@ -507,6 +510,104 @@ export default class SyncClient {
         resolution: "keep-server" | "retry-local";
         resourceType: string;
     }): Promise<import("./local-mutation-log.js").LocalMutationLogRecord>;
+    /**
+     * Returns the framework-owned long-offline session built from
+     * `sync.client.offline`, creating it on first use. Fails when the offline
+     * configuration block is missing.
+     * @returns {SyncOfflineSession} - The client's offline session.
+     */
+    offlineSession(): SyncOfflineSession;
+    /**
+     * Collects the durable mutation logs the offline session signs, replays,
+     * re-signs, and exports: the configured `sync.client.offline.mutationLog`
+     * when given, plus every conflict-tracking log declared by the synced models.
+     * @returns {Array<import("./local-mutation-log.js").default>} - Session mutation logs.
+     */
+    offlineMutationLogs(): Array<import("./local-mutation-log.js").default>;
+    /**
+     * Starts the long-offline session: resolves the device signing identity
+     * (generating and enrolling a key pair when the app-owned storage has none)
+     * and bootstraps a live offline grant through the built-in
+     * `/frontend-models/sync/bootstrap` endpoint. Idempotent.
+     * @returns {Promise<import("./sync-offline-session.js").SyncOfflineSessionSummary>} - Session summary (actor ids, live grant id, expiry).
+     */
+    startOfflineSession(): Promise<import("./sync-offline-session.js").SyncOfflineSessionSummary>;
+    /**
+     * Stops the long-offline session. The device identity and retained grants
+     * stay in the app-owned durable storage; pending mutations stay in the
+     * durable mutation logs and replay with the grant they were signed under.
+     * @returns {Promise<void>} - Resolves after the session is stopped.
+     */
+    stopOfflineSession(): Promise<void>;
+    /**
+     * Bootstraps a fresh offline grant and re-signs this device's pending
+     * mutations under it (the replay idempotency key is grant-id-free, so
+     * re-signing never duplicates an intent).
+     * @returns {Promise<import("./sync-offline-session.js").SyncOfflineSessionSummary>} - Refreshed session summary.
+     */
+    refreshOfflineGrant(): Promise<import("./sync-offline-session.js").SyncOfflineSessionSummary>;
+    /**
+     * Drains the durable mutation logs through the built-in signed replay
+     * endpoint (`/frontend-models/sync/replay`): ensures a live grant (refreshing
+     * an expired one), batches pending signed mutations with the signed grant
+     * each was signed under, and maps per-mutation results back onto the log
+     * records as synced/conflict/rejected. Structured conflicts stay reachable
+     * through the existing conflict contract (`syncResult.conflict` on the record
+     * and `resolveConflict(...)`).
+     * @param {object} [options] - Replay options.
+     * @param {number} [options.batchSize] - Max signed mutations per request.
+     * @returns {Promise<import("./sync-offline-session.js").SyncOfflineReplayResult>} - Mapped replay result.
+     */
+    replayOfflinePending(options?: {
+        batchSize?: number;
+    }): Promise<import("./sync-offline-session.js").SyncOfflineReplayResult>;
+    /**
+     * Signed replay implementation bound to one lifecycle generation.
+     * @param {object} [options] - Replay options.
+     * @param {number} [options.batchSize] - Max signed mutations per request.
+     * @param {AbortSignal} [options.signal] - Lifecycle cancellation signal.
+     * @returns {Promise<import("./sync-offline-session.js").SyncOfflineReplayResult>} - Mapped replay result.
+     */
+    _replayOfflinePending(options?: {
+        batchSize?: number;
+        signal?: AbortSignal;
+    }): Promise<import("./sync-offline-session.js").SyncOfflineReplayResult>;
+    /**
+     * Applies the authoritative server version carried by a signed replay
+     * conflict result through the same conflict contract the online replay uses.
+     * @param {{mutation: import("./device-identity.js").SyncMutation, serverResult: Record<string, ReturnType<typeof JSON.parse>> | null, status: string}} entry - Mapped replay result.
+     * @returns {Promise<void>} - Resolves after the conflict server version is applied.
+     */
+    applyOfflineConflictReplayResult(entry: {
+        mutation: import("./device-identity.js").SyncMutation;
+        serverResult: Record<string, ReturnType<typeof JSON.parse>> | null;
+        status: string;
+    }): Promise<void>;
+    /**
+     * Exports the durable non-terminal mutations of the offline session's logs
+     * as one signed peer bundle for device-to-device transfer.
+     * @param {object} [options] - Export options.
+     * @param {import("./local-mutation-log.js").LocalMutationStatus[]} [options.statuses] - Statuses to export.
+     * @param {() => Date} [options.now] - Export clock.
+     * @returns {Promise<import("./peer-mutation-bundle.js").PeerMutationBundle>} - Signed peer bundle.
+     */
+    exportPeerBundle(options?: {
+        statuses?: import("./local-mutation-log.js").LocalMutationStatus[];
+        now?: () => Date;
+    }): Promise<import("./peer-mutation-bundle.js").PeerMutationBundle>;
+    /**
+     * Imports a peer bundle into the local mutation log: every entry is verified
+     * against the configured backend public key before it is appended, and
+     * entries already present by idempotency key are skipped as duplicates.
+     * @param {object} args - Import args.
+     * @param {import("./peer-mutation-bundle.js").PeerMutationBundle} args.bundle - Peer bundle to import.
+     * @param {import("./local-mutation-log.js").default} [args.mutationLog] - Target log. Defaults to the session's first log.
+     * @returns {Promise<import("./peer-mutation-bundle.js").PeerMutationBundleImportResult>} - Import result (imported/rejected/skipped).
+     */
+    importPeerBundle({ bundle, mutationLog }: {
+        bundle: import("./peer-mutation-bundle.js").PeerMutationBundle;
+        mutationLog?: import("./local-mutation-log.js").default;
+    }): Promise<import("./peer-mutation-bundle.js").PeerMutationBundleImportResult>;
     /**
      * Records an authoritative remote observation so an in-flight acknowledgement
      * cannot rebase a successor across that observation.
