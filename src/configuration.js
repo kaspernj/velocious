@@ -900,7 +900,7 @@ export default class VelociousConfiguration {
   /**
    * Normalizes client-side sync configuration consumed by `SyncClient.fromConfiguration(...)`.
    * @param {import("./configuration-types.js").VelociousSyncClientConfiguration | undefined} client - Client-side sync configuration.
-   * @returns {import("./configuration-types.js").VelociousSyncClientConfiguration | undefined} - Normalized client-side sync configuration.
+   * @returns {import("./configuration-types.js").NormalizedVelociousSyncClientConfiguration | undefined} - Normalized client-side sync configuration.
    */
   _normalizeSyncClientConfiguration(client) {
     if (client === undefined || client === null) return undefined
@@ -909,11 +909,11 @@ export default class VelociousConfiguration {
       throw new Error("sync.client must be an object with transport and authenticationToken")
     }
 
-    const {authenticationToken, batchSize, isOnline, mountPath, onError, realtime, transport, websocketClient, websocketUrl, ...restClient} = client
+    const {authenticationToken, batchSize, isOnline, mountPath, onError, offline, realtime, transport, websocketClient, websocketUrl, ...restClient} = client
     const restClientKeys = Object.keys(restClient)
 
     if (restClientKeys.length > 0) {
-      throw new Error(`sync.client received unknown keys: ${restClientKeys.join(", ")} (supported: authenticationToken, batchSize, isOnline, mountPath, onError, realtime, transport, websocketClient, websocketUrl)`)
+      throw new Error(`sync.client received unknown keys: ${restClientKeys.join(", ")} (supported: authenticationToken, batchSize, isOnline, mountPath, onError, offline, realtime, transport, websocketClient, websocketUrl)`)
     }
     if (!transport || typeof transport !== "object" || typeof transport.post !== "function") {
       throw new Error("sync.client.transport must be an object with a post(path, body) method (like the frontend-model websocket client)")
@@ -945,11 +945,69 @@ export default class VelociousConfiguration {
       batchSize,
       isOnline,
       mountPath: (mountPath || "/velocious/sync").replace(/\/+$/u, "") || "/",
+      offline: this._normalizeSyncClientOfflineConfiguration(offline),
       onError,
       realtime,
       transport,
       websocketClient,
       websocketUrl
+    }
+  }
+
+  /**
+   * Normalizes the client-side long-offline session configuration consumed by
+   * `SyncClient.startOfflineSession()`. The framework owns the session
+   * lifecycle; the app provides durable identity storage, the enrollment hook,
+   * and the grant scopes callback.
+   * @param {import("./configuration-types.js").VelociousSyncClientOfflineConfiguration | undefined} offline - Offline configuration block.
+   * @returns {import("./configuration-types.js").NormalizedVelociousSyncClientOfflineConfiguration | undefined} - Normalized offline configuration.
+   */
+  _normalizeSyncClientOfflineConfiguration(offline) {
+    if (offline === undefined || offline === null) return undefined
+
+    if (typeof offline !== "object" || Array.isArray(offline)) {
+      throw new Error("sync.client.offline must be an object with deviceIdentityStorage, enrollDevice, and grantScopes")
+    }
+
+    const {backendPublicKey, bootstrapPath, deviceIdentityStorage, enrollDevice, grantScopes, grantStorage, mutationLog, now, replayPath, ...restOffline} = offline
+    const restOfflineKeys = Object.keys(restOffline)
+
+    if (restOfflineKeys.length > 0) {
+      throw new Error(`sync.client.offline received unknown keys: ${restOfflineKeys.join(", ")} (supported: backendPublicKey, bootstrapPath, deviceIdentityStorage, enrollDevice, grantScopes, grantStorage, mutationLog, now, replayPath)`)
+    }
+    if (!deviceIdentityStorage || typeof deviceIdentityStorage !== "object" || Array.isArray(deviceIdentityStorage) || typeof deviceIdentityStorage.load !== "function" || typeof deviceIdentityStorage.save !== "function") {
+      throw new Error("sync.client.offline.deviceIdentityStorage must be an object with load() and save(identity) methods")
+    }
+    if (typeof enrollDevice !== "function") throw new Error("sync.client.offline.enrollDevice must be a function resolving the backend-signed device certificate")
+    if (typeof grantScopes !== "function") throw new Error("sync.client.offline.grantScopes must be a function resolving the bootstrap grant scopes")
+    if (backendPublicKey !== undefined && (typeof backendPublicKey !== "object" || backendPublicKey === null || Array.isArray(backendPublicKey))) {
+      throw new Error("sync.client.offline.backendPublicKey must be a public JSON Web Key object")
+    }
+    if (bootstrapPath !== undefined && (typeof bootstrapPath !== "string" || !bootstrapPath.startsWith("/"))) {
+      throw new Error(`sync.client.offline.bootstrapPath must start with '/', got: ${String(bootstrapPath)}`)
+    }
+    if (replayPath !== undefined && (typeof replayPath !== "string" || !replayPath.startsWith("/"))) {
+      throw new Error(`sync.client.offline.replayPath must start with '/', got: ${String(replayPath)}`)
+    }
+    if (grantStorage !== undefined && (typeof grantStorage !== "object" || grantStorage === null || Array.isArray(grantStorage) || typeof grantStorage.load !== "function" || typeof grantStorage.save !== "function")) {
+      throw new Error("sync.client.offline.grantStorage must be an object with load() and save(grants) methods")
+    }
+    if (mutationLog !== undefined && (typeof mutationLog !== "object" || mutationLog === null || typeof mutationLog.append !== "function")) {
+      throw new Error("sync.client.offline.mutationLog must be a LocalMutationLog")
+    }
+    if (now !== undefined && typeof now !== "function") throw new Error("sync.client.offline.now must be a function resolving the session clock")
+
+    return {
+      backendPublicKey,
+      bootstrapPath: (bootstrapPath || "/frontend-models/sync/bootstrap").replace(/\/+$/u, "") || "/",
+      configuration: this,
+      deviceIdentityStorage,
+      enrollDevice,
+      grantScopes,
+      grantStorage,
+      mutationLog,
+      now: now || (() => new Date()),
+      replayPath: (replayPath || "/frontend-models/sync/replay").replace(/\/+$/u, "") || "/"
     }
   }
 
@@ -1762,6 +1820,7 @@ export default class VelociousConfiguration {
     const envPooledRunnerMaxJobsRaw = processEnvironment?.VELOCIOUS_BACKGROUND_JOBS_POOLED_RUNNER_MAX_JOBS
     const envPooledRunnerMaxRssBytesRaw = processEnvironment?.VELOCIOUS_BACKGROUND_JOBS_POOLED_RUNNER_MAX_RSS_BYTES
     const envPooledRunnerMaxLifetimeMsRaw = processEnvironment?.VELOCIOUS_BACKGROUND_JOBS_POOLED_RUNNER_MAX_LIFETIME_MS
+    const envPooledRunnerSilenceTimeoutMsRaw = processEnvironment?.VELOCIOUS_BACKGROUND_JOBS_POOLED_RUNNER_SILENCE_TIMEOUT_MS
     const envRunnerMaxOldSpaceSizeMbRaw = processEnvironment?.VELOCIOUS_BACKGROUND_JOBS_RUNNER_MAX_OLD_SPACE_SIZE_MB
     const envRunnerMallocArenaMaxRaw = processEnvironment?.VELOCIOUS_BACKGROUND_JOBS_RUNNER_MALLOC_ARENA_MAX
     const envDispatchStrategy = processEnvironment?.VELOCIOUS_BACKGROUND_JOBS_DISPATCH_STRATEGY
@@ -1775,6 +1834,7 @@ export default class VelociousConfiguration {
     const envPooledRunnerMaxJobs = envPooledRunnerMaxJobsRaw ? Number(envPooledRunnerMaxJobsRaw) : undefined
     const envPooledRunnerMaxRssBytes = envPooledRunnerMaxRssBytesRaw ? Number(envPooledRunnerMaxRssBytesRaw) : undefined
     const envPooledRunnerMaxLifetimeMs = envPooledRunnerMaxLifetimeMsRaw ? Number(envPooledRunnerMaxLifetimeMsRaw) : undefined
+    const envPooledRunnerSilenceTimeoutMs = envPooledRunnerSilenceTimeoutMsRaw ? Number(envPooledRunnerSilenceTimeoutMsRaw) : undefined
     const envRunnerMaxOldSpaceSizeMb = envRunnerMaxOldSpaceSizeMbRaw ? Number(envRunnerMaxOldSpaceSizeMbRaw) : undefined
     const envRunnerMallocArenaMax = envRunnerMallocArenaMaxRaw ? Number(envRunnerMallocArenaMaxRaw) : undefined
     const envPollInterval = envPollIntervalRaw ? Number(envPollIntervalRaw) : undefined
@@ -1812,6 +1872,9 @@ export default class VelociousConfiguration {
     const pooledRunnerMaxLifetimeMs = typeof configured.pooledRunnerMaxLifetimeMs === "number" && Number.isFinite(configured.pooledRunnerMaxLifetimeMs) && configured.pooledRunnerMaxLifetimeMs >= 1
       ? configured.pooledRunnerMaxLifetimeMs
       : (!("pooledRunnerMaxLifetimeMs" in configured) && typeof envPooledRunnerMaxLifetimeMs === "number" && Number.isFinite(envPooledRunnerMaxLifetimeMs) && envPooledRunnerMaxLifetimeMs >= 1 ? envPooledRunnerMaxLifetimeMs : 60 * 60 * 1000)
+    const pooledRunnerSilenceTimeoutMs = typeof configured.pooledRunnerSilenceTimeoutMs === "number" && Number.isFinite(configured.pooledRunnerSilenceTimeoutMs) && configured.pooledRunnerSilenceTimeoutMs >= 1
+      ? configured.pooledRunnerSilenceTimeoutMs
+      : (!("pooledRunnerSilenceTimeoutMs" in configured) && typeof envPooledRunnerSilenceTimeoutMs === "number" && Number.isFinite(envPooledRunnerSilenceTimeoutMs) && envPooledRunnerSilenceTimeoutMs >= 1 ? envPooledRunnerSilenceTimeoutMs : 120000)
     // Runner children get a hard V8 heap cap and a bounded glibc arena count
     // so one child can never commit multiple GBs of heap or unbounded
     // allocator arenas. The cap stays far above observed runner usage; an
@@ -1872,7 +1935,7 @@ export default class VelociousConfiguration {
 
     const jobClasses = this.getBackgroundJobClasses()
 
-    return {host, port, databaseIdentifier, maxConcurrentForkedJobs, maxConcurrentInlineJobs, mode, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, runnerMaxOldSpaceSizeMb, runnerMallocArenaMax, dispatchStrategy, pollIntervalMs, drainStoreOperationTimeoutMs, scheduledEnqueueTimeoutMs, queues, jobClasses, jobTimeoutMs, retention, generationId, initialGenerationState, lifecycleSocketPath}
+    return {host, port, databaseIdentifier, maxConcurrentForkedJobs, maxConcurrentInlineJobs, mode, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, pooledRunnerSilenceTimeoutMs, runnerMaxOldSpaceSizeMb, runnerMallocArenaMax, dispatchStrategy, pollIntervalMs, drainStoreOperationTimeoutMs, scheduledEnqueueTimeoutMs, queues, jobClasses, jobTimeoutMs, retention, generationId, initialGenerationState, lifecycleSocketPath}
   }
 
   /**

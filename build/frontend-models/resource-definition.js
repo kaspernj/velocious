@@ -27,6 +27,7 @@ const RESOURCE_STATIC_CONFIG_KEYS = new Set([
   "ModelClass",
   "primaryKey",
   "quickSearchColumns",
+  "quickSearchNumericColumns",
   "relationships",
   "ReplayServiceClass",
   "server",
@@ -168,6 +169,8 @@ function normalizeFrontendModelResourceConfiguration(resourceConfiguration) {
     "memberCommands",
     "modelName",
     "primaryKey",
+    "quickSearchColumns",
+    "quickSearchNumericColumns",
     "relationships",
     "server",
     "sync"
@@ -180,6 +183,8 @@ function normalizeFrontendModelResourceConfiguration(resourceConfiguration) {
 
   const normalizedCommands = normalizeFrontendModelResourceCommands(resourceConfiguration)
   const sync = normalizeFrontendModelResourceSync(resourceConfiguration)
+  const quickSearchColumns = normalizeFrontendModelQuickSearchColumns(resourceConfiguration.quickSearchColumns, "quickSearchColumns")
+  const quickSearchNumericColumns = normalizeFrontendModelQuickSearchColumns(resourceConfiguration.quickSearchNumericColumns, "quickSearchNumericColumns")
 
   return {
     ...resourceConfiguration,
@@ -192,6 +197,8 @@ function normalizeFrontendModelResourceConfiguration(resourceConfiguration) {
     // generator uses it to type each custom command method.
     commandMetadata: normalizedCommands.commandMetadata,
     memberCommands: normalizedCommands.memberCommands,
+    quickSearchColumns,
+    quickSearchNumericColumns,
     sync
   }
 }
@@ -516,6 +523,46 @@ function normalizeSyncOperations(operations) {
   })
 
   return [...new Set(normalized)].sort()
+}
+
+/**
+ * Normalizes declarative quick-search column entries into a stable list.
+ * Each entry is a plain column-name string or a `{path, column}` object whose
+ * path is a relationship path from the root model.
+ * @param {unknown} columns - Raw quick-search column declarations.
+ * @param {string} label - Config key label for error messages.
+ * @returns {Array<import("../configuration-types.js").FrontendModelQuickSearchColumn> | null} - Normalized columns, or null when undeclared.
+ */
+function normalizeFrontendModelQuickSearchColumns(columns, label) {
+  if (columns === undefined || columns === null) return null
+
+  if (!Array.isArray(columns)) throw new Error(`Resource ${label} must be an array of column names or {path, column} objects.`)
+
+  return columns.map((entry) => {
+    if (typeof entry === "string") {
+      if (entry.length < 1) throw new Error(`Resource ${label} entries must be non-empty column names.`)
+
+      return {column: entry}
+    }
+
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      throw new Error(`Resource ${label} entries must be column names or {path, column} objects, got: ${JSON.stringify(entry)}`)
+    }
+
+    const entryRecord = /** @type {Record<string, unknown>} */ (entry)
+    const column = entryRecord.column
+    const path = entryRecord.path
+
+    if (typeof column !== "string" || column.length < 1) throw new Error(`Resource ${label} entries require a non-empty column name.`)
+
+    if (path === undefined || path === null) return {column}
+
+    if (!Array.isArray(path) || path.some((pathSegment) => typeof pathSegment !== "string" || pathSegment.length < 1)) {
+      throw new Error(`Resource ${label} entry paths must be arrays of non-empty relationship names.`)
+    }
+
+    return {column, path: [...path]}
+  })
 }
 
 /**

@@ -5,9 +5,9 @@ export type BackgroundJobsGenerationRejectionReason = "missing-generation" | "un
 export type BackgroundJobActiveStatus = "queued" | "handed_off";
 export type BackgroundJobTerminalStatus = "cancelled" | "completed" | "failed" | "orphaned";
 export type BackgroundJobStatus = BackgroundJobActiveStatus | BackgroundJobTerminalStatus;
-export type PooledRunnerFailureOrigin = "exit" | "process-error" | "ipc-send";
+export type PooledRunnerFailureOrigin = "exit" | "process-error" | "ipc-send" | "child-silence";
 export type PooledRunnerLifecycleState = "starting" | "running" | "retiring";
-export type PooledChildShutdownReason = "parent_retire_drained" | "job_timeout" | "worker_stop" | "signal_sigterm" | "signal_sigint" | "signal_sigkill" | "signal_other" | "ipc_disconnect" | "process_error" | "unexpected_exit";
+export type PooledChildShutdownReason = "parent_retire_drained" | "job_timeout" | "worker_stop" | "child_silence" | "signal_sigterm" | "signal_sigint" | "signal_sigkill" | "signal_other" | "ipc_disconnect" | "process_error" | "unexpected_exit";
 export type PooledRunnerTerminationReason = "unexpected" | "job-timeout" | "worker-shutdown-timeout";
 export type BackgroundJobsWorkerLifecycleState = "running" | "retiring" | "stopping";
 export type BackgroundJobProducerProof = {
@@ -881,9 +881,9 @@ export type BackgroundJobSocketMessage = BackgroundJobHelloMessage | BackgroundJ
 /** @typedef {"queued" | "handed_off"} BackgroundJobActiveStatus */
 /** @typedef {"cancelled" | "completed" | "failed" | "orphaned"} BackgroundJobTerminalStatus */
 /** @typedef {BackgroundJobActiveStatus | BackgroundJobTerminalStatus} BackgroundJobStatus */
-/** @typedef {"exit" | "process-error" | "ipc-send"} PooledRunnerFailureOrigin */
+/** @typedef {"exit" | "process-error" | "ipc-send" | "child-silence"} PooledRunnerFailureOrigin */
 /** @typedef {"starting" | "running" | "retiring"} PooledRunnerLifecycleState */
-/** @typedef {"parent_retire_drained" | "job_timeout" | "worker_stop" | "signal_sigterm" | "signal_sigint" | "signal_sigkill" | "signal_other" | "ipc_disconnect" | "process_error" | "unexpected_exit"} PooledChildShutdownReason */
+/** @typedef {"parent_retire_drained" | "job_timeout" | "worker_stop" | "child_silence" | "signal_sigterm" | "signal_sigint" | "signal_sigkill" | "signal_other" | "ipc_disconnect" | "process_error" | "unexpected_exit"} PooledChildShutdownReason */
 /**
  * @deprecated Use PooledChildShutdownReason for exact shutdown provenance.
  * @typedef {"unexpected" | "job-timeout" | "worker-shutdown-timeout"} PooledRunnerTerminationReason

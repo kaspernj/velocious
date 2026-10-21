@@ -17,6 +17,10 @@ class TaskFrontendResource extends FrontendModelBaseResource {
 
     static attributes = ["id", "identifier", "isDone", "name", "nameUppercase", "asyncNameUppercase", "downloadToken", {name: "projectId", selectedByDefault: false}, {name: "createdAt", selectedByDefault: false}, "updatedAt"]
 
+    static quickSearchColumns = ["name", "description"]
+
+    static quickSearchNumericColumns = ["id"]
+
   static sync = {operations: ["index", "find", "create", "update"]}
 
   static builtInCollectionCommands = ["index"]

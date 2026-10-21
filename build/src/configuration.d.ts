@@ -480,9 +480,18 @@ export default class VelociousConfiguration {
     /**
      * Normalizes client-side sync configuration consumed by `SyncClient.fromConfiguration(...)`.
      * @param {import("./configuration-types.js").VelociousSyncClientConfiguration | undefined} client - Client-side sync configuration.
-     * @returns {import("./configuration-types.js").VelociousSyncClientConfiguration | undefined} - Normalized client-side sync configuration.
+     * @returns {import("./configuration-types.js").NormalizedVelociousSyncClientConfiguration | undefined} - Normalized client-side sync configuration.
      */
-    _normalizeSyncClientConfiguration(client: import("./configuration-types.js").VelociousSyncClientConfiguration | undefined): import("./configuration-types.js").VelociousSyncClientConfiguration | undefined;
+    _normalizeSyncClientConfiguration(client: import("./configuration-types.js").VelociousSyncClientConfiguration | undefined): import("./configuration-types.js").NormalizedVelociousSyncClientConfiguration | undefined;
+    /**
+     * Normalizes the client-side long-offline session configuration consumed by
+     * `SyncClient.startOfflineSession()`. The framework owns the session
+     * lifecycle; the app provides durable identity storage, the enrollment hook,
+     * and the grant scopes callback.
+     * @param {import("./configuration-types.js").VelociousSyncClientOfflineConfiguration | undefined} offline - Offline configuration block.
+     * @returns {import("./configuration-types.js").NormalizedVelociousSyncClientOfflineConfiguration | undefined} - Normalized offline configuration.
+     */
+    _normalizeSyncClientOfflineConfiguration(offline: import("./configuration-types.js").VelociousSyncClientOfflineConfiguration | undefined): import("./configuration-types.js").NormalizedVelociousSyncClientOfflineConfiguration | undefined;
     /**
      * Normalizes sync API endpoint configuration.
      * @param {import("./configuration-types.js").VelociousSyncApiConfiguration | undefined} api - Sync API configuration.
