@@ -5,11 +5,10 @@ import net from "net"
 import BackgroundJobsClient from "../../src/background-jobs/client.js"
 import JsonSocket from "../../src/background-jobs/json-socket.js"
 import BackgroundJobsMain from "../../src/background-jobs/main.js"
-import SqlBackgroundJobsAdapter from "../../src/background-jobs/sql-adapter.js"
 import BackgroundJobsWorker from "../../src/background-jobs/worker.js"
 import { createGenerationWorkerId } from "../../src/background-jobs/generation-identity.js"
 import { createBackgroundJobUpdateObserver, outputPathFor } from "../helpers/background-jobs-helper.js"
-import { startGenerationMain } from "../helpers/background-jobs-generation-harness.js"
+import { emptyGenerationStore, startGenerationMain } from "../helpers/background-jobs-generation-harness.js"
 import promiseBarrier from "../helpers/promise-barrier.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 import { describe, expect, it } from "../../src/testing/test.js"
@@ -151,7 +150,7 @@ async function startAcknowledgementProxy(mainPort, {generationAcknowledgementDel
  * @param {object} args - Producer inputs.
  * @param {string} args.generationId - Producer generation.
  * @param {string} args.jobName - Parent job name.
- * @param {SqlBackgroundJobsAdapter} args.store - Real durable store.
+ * @param {import("../../src/background-jobs/sql-adapter.js").default} args.store - Real durable store.
  * @returns {Promise<{jobId: string, proof: import("../../src/background-jobs/types.js").BackgroundJobProducerProof}>} - Owned producer.
  */
 async function createOwnedProducer({generationId, jobName, store}) {
@@ -178,7 +177,7 @@ async function createOwnedProducer({generationId, jobName, store}) {
 describe("BackgroundJobsClient owned enqueue acknowledgement recovery", {databaseCleaning: {transaction: true}}, () => {
   it("recovers the exact durable enqueue after its post-commit acknowledgement is lost", async () => {
     const generationId = "owned-ack-recovery"
-    const store = new SqlBackgroundJobsAdapter({configuration: dummyConfiguration})
+    const store = await emptyGenerationStore()
     const workerReady = promiseBarrier()
     /** @type {ReturnType<typeof createBackgroundJobUpdateObserver> | null} */
     let updates = null
@@ -239,7 +238,7 @@ describe("BackgroundJobsClient owned enqueue acknowledgement recovery", {databas
 
   it("gives the exact owned replay fresh handshake and acknowledgement budgets without duplicating its side effect", async () => {
     const generationId = "owned-ack-delayed-recovery"
-    const store = new SqlBackgroundJobsAdapter({configuration: dummyConfiguration})
+    const store = await emptyGenerationStore()
     const workerReady = promiseBarrier()
     /** @type {ReturnType<typeof createBackgroundJobUpdateObserver> | null} */
     let updates = null
@@ -314,7 +313,7 @@ describe("BackgroundJobsClient owned enqueue acknowledgement recovery", {databas
 
   it("does not replay an explicit stale-ownership rejection", async () => {
     const generationId = "owned-ack-stale"
-    const store = new SqlBackgroundJobsAdapter({configuration: dummyConfiguration})
+    const store = await emptyGenerationStore()
     const {main} = await startGenerationMain({generationId, initialGenerationState: "active", store})
     const proxy = await startAcknowledgementProxy(main.getPort())
 
@@ -341,7 +340,7 @@ describe("BackgroundJobsClient owned enqueue acknowledgement recovery", {databas
 
   it("preserves ordinary idempotency-key enqueue acknowledgement behavior", async () => {
     const generationId = "ordinary-ack-loss"
-    const store = new SqlBackgroundJobsAdapter({configuration: dummyConfiguration})
+    const store = await emptyGenerationStore()
     const {main} = await startGenerationMain({generationId, initialGenerationState: "active", store})
     const proxy = await startAcknowledgementProxy(main.getPort())
 
@@ -366,7 +365,7 @@ describe("BackgroundJobsClient owned enqueue acknowledgement recovery", {databas
 
   it("does not replay a legacy enqueue carrying producer metadata", async () => {
     const generationId = "legacy-owned-ack-loss"
-    const store = new SqlBackgroundJobsAdapter({configuration: dummyConfiguration})
+    const store = await emptyGenerationStore()
     dummyConfiguration.setBackgroundJobsConfig({generationId: undefined, initialGenerationState: undefined, lifecycleSocketPath: undefined})
     const main = new BackgroundJobsMain({closeDatabaseConnectionsOnStop: false, configuration: dummyConfiguration, host: "127.0.0.1", port: 0})
     main.store = store
@@ -396,7 +395,7 @@ describe("BackgroundJobsClient owned enqueue acknowledgement recovery", {databas
 
   it("does not replay when generation fencing rejects before enqueue is sent", async () => {
     const generationId = "owned-ack-fenced"
-    const store = new SqlBackgroundJobsAdapter({configuration: dummyConfiguration})
+    const store = await emptyGenerationStore()
     const {main} = await startGenerationMain({generationId, initialGenerationState: "active", store})
     const proxy = await startAcknowledgementProxy(main.getPort())
 

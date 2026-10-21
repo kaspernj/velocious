@@ -664,10 +664,19 @@
  */
 
 /**
+ * Normalized sync configuration as stored and returned by
+ * `Configuration.getSyncConfiguration()`. Same shape as
+ * {@link VelociousSyncConfiguration} with the defaults filled in.
+ * @typedef {VelociousSyncConfiguration & {
+ *   client: NormalizedVelociousSyncClientConfiguration | undefined
+ * }} NormalizedVelociousSyncConfiguration
+ */
+
+/**
  * Velocious sync configuration.
  * @typedef {object} VelociousSyncConfiguration
  * @property {VelociousSyncApiConfiguration} [api] - Auto-mounts the Velocious sync changes/replay endpoints for this resource class.
- * @property {NormalizedVelociousSyncClientConfiguration | undefined} client - Normalized client-side sync configuration consumed by `SyncClient.fromConfiguration(...)`.
+ * @property {VelociousSyncClientConfiguration} [client] - Client-side sync configuration as written by the app. The framework normalizes it into {@link NormalizedVelociousSyncClientConfiguration} (see {@link NormalizedVelociousSyncConfiguration}).
  * @property {import("./sync/device-identity.js").SyncJsonWebKey | null} [deviceCertificateBackendPublicKey] - Public backend key used to verify offline device certificates for sync replay.
  * @property {number} [changeFeedRetentionSize] - Number of accepted server changes retained before clients must refresh from snapshot.
  * @property {Array<import("./sync/offline-grant.js").OfflineGrantSigningKey>} offlineGrantSigningKeys - Signing keys used to issue and verify offline grants. Secrets must never be exposed to clients.
