@@ -107,6 +107,18 @@ export type PooledChildState = {
      * - Job whose timeout initiated termination.
      */
     timeoutJobId?: string;
+    /**
+     * - Last time the worker saw any IPC message from this child, or dispatched to it.
+     */
+    lastActivityAtMs: number;
+    /**
+     * - Armed per-child IPC-silence watchdog timer.
+     */
+    silenceTimer?: ReturnType<typeof setTimeout>;
+    /**
+     * - Pending SIGKILL for a child the silence watchdog declared wedged.
+     */
+    silenceSigkillTimer?: ReturnType<typeof setTimeout>;
 };
 export default class BackgroundJobsWorker {
     /**
@@ -161,6 +173,8 @@ export default class BackgroundJobsWorker {
     pooledRunnerMaxJobs: number;
     pooledRunnerMaxRssBytes: number;
     pooledRunnerMaxLifetimeMs: number;
+    pooledRunnerSilenceTimeoutMsOverride: number | undefined;
+    pooledRunnerSilenceTimeoutMs: number;
     runnerMaxOldSpaceSizeMb: number;
     runnerMallocArenaMax: number;
     /**
@@ -282,13 +296,14 @@ export default class BackgroundJobsWorker {
      * @param {number} [args.generationHandshakeTimeoutMs] - Maximum time to wait for generation acknowledgement (default: 4000).
      * @param {number} [args.reconnectDelayMs] - Delay before reconnecting an established worker connection (default: 1000).
      * @param {number} [args.jobTimeoutMs] - Override the wall-clock timeout for forked and pooled jobs from `configuration.getBackgroundJobsConfig()`. `0` disables it.
+     * @param {number} [args.pooledRunnerSilenceTimeoutMs] - Override the per-child IPC-silence bound for pooled children with in-flight jobs from `configuration.getBackgroundJobsConfig()` (default 120000ms). `0` disables the watchdog.
      * @param {boolean} [args.closeDatabaseConnectionsOnStop] - Whether stop owns closing the configuration's database pools (default true).
      * @param {() => void | Promise<void>} [args.onStopped] - Lifecycle hook invoked after the worker finishes stopping.
      * @param {() => void} [args.onGenerationAccepted] - Explicit generation-acceptance observation hook.
      * @param {() => void} [args.onRetireMessage] - Explicit retire-message observation hook.
      * @param {(observation: import("./types.js").PooledChildMemoryObservation) => void | Promise<void>} [args.onPooledRunnerMemoryObservation] - Explicit pooled-child memory observation hook. Every validated observation (periodic while a child has in-flight jobs, plus on demand) is forwarded here, in addition to the worker's compact stderr log line, so an application can route memory diagnostics (e.g. to a bug reporter) without parsing logs.
      */
-    constructor({ configuration, host, port, generationId, workerInstanceId, maxConcurrentForkedJobs, maxConcurrentInlineJobs, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, runnerMaxOldSpaceSizeMb, runnerMallocArenaMax, forkedChildSigkillGraceMs, heartbeatIntervalMs, generationHandshakeTimeoutMs, reconnectDelayMs, jobTimeoutMs, closeDatabaseConnectionsOnStop, onStopped, onGenerationAccepted, onRetireMessage, onPooledRunnerMemoryObservation }?: {
+    constructor({ configuration, host, port, generationId, workerInstanceId, maxConcurrentForkedJobs, maxConcurrentInlineJobs, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, runnerMaxOldSpaceSizeMb, runnerMallocArenaMax, forkedChildSigkillGraceMs, heartbeatIntervalMs, generationHandshakeTimeoutMs, reconnectDelayMs, jobTimeoutMs, pooledRunnerSilenceTimeoutMs, closeDatabaseConnectionsOnStop, onStopped, onGenerationAccepted, onRetireMessage, onPooledRunnerMemoryObservation }?: {
         configuration?: import("../configuration.js").default;
         host?: string;
         port?: number;
@@ -308,6 +323,7 @@ export default class BackgroundJobsWorker {
         generationHandshakeTimeoutMs?: number;
         reconnectDelayMs?: number;
         jobTimeoutMs?: number;
+        pooledRunnerSilenceTimeoutMs?: number;
         closeDatabaseConnectionsOnStop?: boolean;
         onStopped?: () => void | Promise<void>;
         onGenerationAccepted?: () => void;
@@ -740,6 +756,79 @@ export default class BackgroundJobsWorker {
      * @returns {boolean} - True when a replacement child was spawned.
      */
     _ensureNonRetiringChild(): boolean;
+    /**
+     * Records one pooled child's IPC activity and re-arms its silence watchdog while
+     * that child still owns in-flight jobs. Every message the child sends — readiness,
+     * acceptance, memory observation, shutdown observation, or job outcome — proves its
+     * event loop is running, because a healthy child samples itself every 10 seconds
+     * while jobs are in flight. Silence past the bound therefore means a wedged child
+     * that can no longer prove it is alive, not a busy one.
+     * @param {object} args - Activity details.
+     * @param {import("node:child_process").ChildProcess} args.child - Pooled child.
+     * @param {PooledChildState | undefined} args.state - Child state.
+     * @returns {void}
+     */
+    _notePooledChildActivity({ child, state }: {
+        child: import("node:child_process").ChildProcess;
+        state: PooledChildState | undefined;
+    }): void;
+    /**
+     * Resolves the effective pooled-child silence bound in ms, or null when disabled.
+     * A non-positive or non-finite value disables the watchdog at whichever level
+     * supplied it, matching the job-timeout contract.
+     * @returns {number | null} - Bound in ms, or null when disabled.
+     */
+    _resolvePooledChildSilenceTimeoutMs(): number | null;
+    /**
+     * Re-arms one child's silence watchdog from its last observed activity. Only
+     * children with in-flight jobs are watched: a child with nothing in flight cannot
+     * strand work, and its periodic sampler is inactive then, so silence is not
+     * evidence of a wedge.
+     * @param {object} args - Watchdog details.
+     * @param {import("node:child_process").ChildProcess} args.child - Pooled child.
+     * @param {PooledChildState} args.state - Child state.
+     * @returns {void}
+     */
+    _armPooledChildSilenceTimer({ child, state }: {
+        child: import("node:child_process").ChildProcess;
+        state: PooledChildState;
+    }): void;
+    /**
+     * Fired when a pooled child with in-flight jobs stays silent past the bound. A
+     * wedged child keeps its IPC channel open but stops running its own timers, so the
+     * disconnect/exit path never fires and its jobs stay stranded until a human
+     * notices. The worker declares the child dead: it requests shutdown under the exact
+     * `child_silence` reason, reports the whole in-flight set as failed through the
+     * established failure path (so the jobs requeue and capacity is re-advertised), and
+     * signals the wedged process — SIGTERM, then SIGKILL after the existing grace — so
+     * it actually goes away instead of blocking the event loop forever.
+     * @param {object} args - Watchdog details.
+     * @param {import("node:child_process").ChildProcess} args.child - Pooled child.
+     * @param {PooledChildState} args.state - Child state.
+     * @returns {void}
+     */
+    _onPooledChildSilence({ child, state }: {
+        child: import("node:child_process").ChildProcess;
+        state: PooledChildState;
+    }): void;
+    /**
+     * Logs one compact JSON line naming a child the silence watchdog declared wedged
+     * (the same stderr surface the memory observations use, which reaches the production
+     * log), so the recovery is attributable after the fact instead of looking like a
+     * random runner exit.
+     * @param {object} args - Event details.
+     * @param {import("node:child_process").ChildProcess} args.child - Pooled child.
+     * @param {PooledChildState} args.state - Child state.
+     * @param {number} args.silentMs - Observed silence in ms.
+     * @param {number} args.boundMs - Configured bound in ms.
+     * @returns {void}
+     */
+    _logPooledSilenceEvent({ child, state, silentMs, boundMs }: {
+        child: import("node:child_process").ChildProcess;
+        state: PooledChildState;
+        silentMs: number;
+        boundMs: number;
+    }): void;
     /**
      * Logs one compact pooled-capacity event to the worker's own stderr (the
      * surface that reaches the production log). Used by the bounded liveness
