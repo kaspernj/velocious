@@ -9,9 +9,9 @@
 /** @typedef {"queued" | "handed_off"} BackgroundJobActiveStatus */
 /** @typedef {"cancelled" | "completed" | "failed" | "orphaned"} BackgroundJobTerminalStatus */
 /** @typedef {BackgroundJobActiveStatus | BackgroundJobTerminalStatus} BackgroundJobStatus */
-/** @typedef {"exit" | "process-error" | "ipc-send"} PooledRunnerFailureOrigin */
+/** @typedef {"exit" | "process-error" | "ipc-send" | "child-silence"} PooledRunnerFailureOrigin */
 /** @typedef {"starting" | "running" | "retiring"} PooledRunnerLifecycleState */
-/** @typedef {"parent_retire_drained" | "job_timeout" | "worker_stop" | "signal_sigterm" | "signal_sigint" | "signal_sigkill" | "signal_other" | "ipc_disconnect" | "process_error" | "unexpected_exit"} PooledChildShutdownReason */
+/** @typedef {"parent_retire_drained" | "job_timeout" | "worker_stop" | "child_silence" | "signal_sigterm" | "signal_sigint" | "signal_sigkill" | "signal_other" | "ipc_disconnect" | "process_error" | "unexpected_exit"} PooledChildShutdownReason */
 /**
  * @deprecated Use PooledChildShutdownReason for exact shutdown provenance.
  * @typedef {"unexpected" | "job-timeout" | "worker-shutdown-timeout"} PooledRunnerTerminationReason
