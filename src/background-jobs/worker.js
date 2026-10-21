@@ -216,8 +216,9 @@ export default class BackgroundJobsWorker {
    * @param {() => void} [args.onGenerationAccepted] - Explicit generation-acceptance observation hook.
    * @param {() => void} [args.onRetireMessage] - Explicit retire-message observation hook.
    * @param {(observation: import("./types.js").PooledChildMemoryObservation) => void | Promise<void>} [args.onPooledRunnerMemoryObservation] - Explicit pooled-child memory observation hook. Every validated observation (periodic while a child has in-flight jobs, plus on demand) is forwarded here, in addition to the worker's compact stderr log line, so an application can route memory diagnostics (e.g. to a bug reporter) without parsing logs.
+   * @param {(payload: import("./types.js").BackgroundJobPayload) => void} [args.onJobAccepted] - Explicit job-acceptance observation hook. Fires the moment the worker accepts a dispatched job payload, before execution mode routing, so an observer can wait for the pickup event instead of polling in-flight sets.
    */
-  constructor({configuration, host, port, generationId, workerInstanceId, maxConcurrentForkedJobs, maxConcurrentInlineJobs, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, runnerMaxOldSpaceSizeMb, runnerMallocArenaMax, forkedChildSigkillGraceMs, heartbeatIntervalMs, generationHandshakeTimeoutMs = DEFAULT_GENERATION_HANDSHAKE_TIMEOUT_MS, reconnectDelayMs = 1000, jobTimeoutMs, pooledRunnerSilenceTimeoutMs, closeDatabaseConnectionsOnStop = true, onStopped, onGenerationAccepted, onRetireMessage, onPooledRunnerMemoryObservation} = {}) {
+  constructor({configuration, host, port, generationId, workerInstanceId, maxConcurrentForkedJobs, maxConcurrentInlineJobs, pooledRunnerCount, pooledRunnerConcurrency, pooledRunnerMaxJobs, pooledRunnerMaxRssBytes, pooledRunnerMaxLifetimeMs, runnerMaxOldSpaceSizeMb, runnerMallocArenaMax, forkedChildSigkillGraceMs, heartbeatIntervalMs, generationHandshakeTimeoutMs = DEFAULT_GENERATION_HANDSHAKE_TIMEOUT_MS, reconnectDelayMs = 1000, jobTimeoutMs, pooledRunnerSilenceTimeoutMs, closeDatabaseConnectionsOnStop = true, onStopped, onGenerationAccepted, onRetireMessage, onPooledRunnerMemoryObservation, onJobAccepted} = {}) {
     /**
      * Narrows the runtime value to the documented type.
      * @type {Promise<import("../configuration.js").default>} */
@@ -237,6 +238,7 @@ export default class BackgroundJobsWorker {
     this.onGenerationAccepted = onGenerationAccepted
     this.onRetireMessage = onRetireMessage
     this.onPooledRunnerMemoryObservation = onPooledRunnerMemoryObservation
+    this.onJobAccepted = onJobAccepted
     /**
      * Constructor override for the inline-job concurrency cap. When unset
      * the cap is read from `configuration.getBackgroundJobsConfig()` in
@@ -899,6 +901,8 @@ export default class BackgroundJobsWorker {
      * Identified payload.
      * @type {import("./types.js").BackgroundJobPayload & {id: string}} */
     const identifiedPayload = /** @type {ReturnType<typeof JSON.parse>} */ (payload)
+
+    this.onJobAccepted?.(identifiedPayload)
 
     const executionMode = this._executionModeForPayload(identifiedPayload)
 

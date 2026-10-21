@@ -196,14 +196,20 @@ describe("BackgroundJobsClient transport", {databaseCleaning: {transaction: fals
 
     try {
       dummyConfiguration.setBackgroundJobsConfig({host: "127.0.0.1", port: proxy.port})
-      const client = new BackgroundJobsClient({configuration: dummyConfiguration, enqueueTimeoutMs: 500})
+      // The first enqueue must keep the DEFAULT acknowledgement timeout, not a
+      // short one: the error this example asserts is the socket-close error the
+      // proxy provokes. A short client timeout wins that race on a loaded CI
+      // runner (main can take >500ms to acknowledge), which surfaces as
+      // "Background job enqueue acknowledgement timed out after 500ms" instead
+      // of the close-before-acknowledgement error the proxy causes.
+      const client = new BackgroundJobsClient({configuration: dummyConfiguration})
       const request = {
         args: [{projectId: "project-7"}],
         jobName: "ProjectedMailJob",
         options: {idempotencyKey: "projected-mail:command-41"}
       }
       const firstError = await rejectionFrom(timeout(
-        {errorMessage: "Dropped acknowledgement did not settle", timeout: 1000},
+        {errorMessage: "Dropped acknowledgement did not settle", timeout: 15000},
         async () => await client.enqueue(request)
       ))
       // The replay enqueue must not inherit the 500ms timeout used to provoke the
