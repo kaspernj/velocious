@@ -8,6 +8,10 @@ export type AdvisoryLockBackendProvenance = {
      */
     driverType?: string;
     /**
+     * - Fencing epoch when the serving tier issues one.
+     */
+    epoch?: number;
+    /**
      * - Whether this tier carries fencing tokens (design §8); the file tier reports false rather than pretending.
      */
     fencingSupported: boolean;
@@ -27,6 +31,7 @@ export type AdvisoryLockBackendProvenance = {
  * @typedef {object} AdvisoryLockBackendProvenance
  * @property {import("./advisory-lock-backend-policy.js").AdvisoryLockTier} backend - Tier that served the acquisition.
  * @property {string} [driverType] - Database driver type when the driver tier served it.
+ * @property {number} [epoch] - Fencing epoch when the serving tier issues one.
  * @property {boolean} fencingSupported - Whether this tier carries fencing tokens (design §8); the file tier reports false rather than pretending.
  * @property {string} [holderId] - Backend holder id for the file tier.
  * @property {string} [lockName] - Lock name this provenance belongs to.
@@ -185,6 +190,68 @@ export default class AdvisoryLockRunner {
         release: () => Promise<unknown>;
     }): Promise<T>;
     /**
+     * Serves one acquisition on the lock-server tier when the lock name prefers
+     * it (design §1/§9), falling *upward* to the driver path when the server is
+     * unreachable and the name's minimum tier permits a DB-native hold.
+     *
+     * `null` means "this tier did not serve the acquisition — continue with the
+     * next eligible tier". A returned value means the lock-server tier answered,
+     * including a definitive busy/timeout outcome.
+     * @template T
+     * @param {{args: {holdTimeoutMs?: number | null, timeoutMs?: number | null}, callback: (args?: {control?: import("awaitery/build/timeout.js").TimeoutControl, lockBackend: AdvisoryLockBackendProvenance}) => Promise<T>, mode: "wait" | "or-fail" | "defer", name: string}} request - Acquisition request.
+     * @returns {Promise<{deferred: {acquired: false, reason: "contended", lockName: string}} | {value: T} | null>} - Result when this tier served it, otherwise null.
+     */
+    attemptLockServer<T>({ args, callback, mode, name }: {
+        args: {
+            holdTimeoutMs?: number | null;
+            timeoutMs?: number | null;
+        };
+        callback: (args?: {
+            control?: import("awaitery/build/timeout.js").TimeoutControl;
+            lockBackend: AdvisoryLockBackendProvenance;
+        }) => Promise<T>;
+        mode: "wait" | "or-fail" | "defer";
+        name: string;
+    }): Promise<{
+        deferred: {
+            acquired: false;
+            reason: "contended";
+            lockName: string;
+        };
+    } | {
+        value: T;
+    } | null>;
+    /**
+     * Runs the critical section under a lock-server lease and surfaces a fenced
+     * lease as `AdvisoryLockLostError` (design §8): the section may have
+     * overlapped another holder, so its outcome must not be trusted as exclusive.
+     * @template T
+     * @param {{backend: import("./advisory-lock-lock-server-backend.js").default, callback: (args?: {control?: import("awaitery/build/timeout.js").TimeoutControl, lockBackend: AdvisoryLockBackendProvenance}) => Promise<T>, holdTimeoutMs?: number | null, lockBackend: AdvisoryLockBackendProvenance, name: string}} args - Hold request.
+     * @returns {Promise<T>} - Callback result.
+     */
+    runLockServerHold<T>({ backend, callback, holdTimeoutMs, lockBackend, name }: {
+        backend: import("./advisory-lock-lock-server-backend.js").default;
+        callback: (args?: {
+            control?: import("awaitery/build/timeout.js").TimeoutControl;
+            lockBackend: AdvisoryLockBackendProvenance;
+        }) => Promise<T>;
+        holdTimeoutMs?: number | null;
+        lockBackend: AdvisoryLockBackendProvenance;
+        name: string;
+    }): Promise<T>;
+    /**
+     * Reports an acquisition served below the lock name's preferred tier
+     * (design §3): every fallback is visible on the framework-error channel, so a
+     * silent downgrade is impossible.
+     * @param {{lockName: string, reason: string, servedBy: import("./advisory-lock-backend-policy.js").AdvisoryLockTier}} args - Fallback details.
+     * @returns {void}
+     */
+    reportAdvisoryLockFallback({ lockName, reason, servedBy }: {
+        lockName: string;
+        reason: string;
+        servedBy: import("./advisory-lock-backend-policy.js").AdvisoryLockTier;
+    }): void;
+    /**
      * Resolves the backend policy for one lock name and returns the file
      * backend when the name explicitly opts into the file tier
      * (`preferredTier: "file"` plus `advisoryLocks.backends.file.enabled: true`).
@@ -216,7 +283,7 @@ export default class AdvisoryLockRunner {
      * @param {{timeoutMs?: number | null}} args - Lock options.
      * @returns {number | null} - Wait bound in milliseconds, or `null` for an indefinite wait.
      */
-    fileAcquireTimeoutMs(args: {
+    acquireTimeoutMs(args: {
         timeoutMs?: number | null;
     }): number | null;
     /**
@@ -285,4 +352,5 @@ export default class AdvisoryLockRunner {
 }
 export { AdvisoryLockBusyError, AdvisoryLockHoldTimeoutError, AdvisoryLockTimeoutError };
 export { AdvisoryLockBackendUnavailableError, AdvisoryLockMinTierRefusedError } from "./advisory-lock-backend-policy.js";
+export { AdvisoryLockLostError, AdvisoryLockServiceUnavailableError } from "./advisory-lock-errors.js";
 //# sourceMappingURL=advisory-lock-runner.d.ts.map

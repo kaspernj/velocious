@@ -261,6 +261,12 @@ export default class VelociousConfiguration {
    * (browser/Expo, no `fs`) cannot create one at all.
    * @type {import("./database/advisory-lock-file-backend.js").default | undefined} */
   _advisoryLockFileBackend = undefined
+  /**
+   * Lazily created lock-server (tier (b)) backend; undefined when the tier is
+   * not configured.
+   * @type {import("./database/advisory-lock-lock-server-backend.js").default | undefined}
+   */
+  _advisoryLockLockServerBackend = undefined
 
   /**
    * Most recent advisory-lock acquisition per lock name — the "which backend
@@ -4205,11 +4211,21 @@ export default class VelociousConfiguration {
    * Full backward compatibility: an app that configures nothing gets today's
    * driver-native-only behavior — the file backend is **disabled by default**
    * and only ever selectable by explicit configuration.
-   * @returns {{backends: {file: {directory?: string, enabled: boolean, leaseMs: number, renewIntervalMs: number}}, policy: import("./database/advisory-lock-backend-policy.js").AdvisoryLockBackendPolicyEntry[]}} - Advisory-lock configuration with defaults applied.
+   * @returns {{backends: {file: {directory?: string, enabled: boolean, leaseMs: number, renewIntervalMs: number}, lockServer: {authToken: string, connectTimeoutMs: number, enabled: boolean, leaseMs: number, reprobeCooldownMs: number, url: string}}, policy: import("./database/advisory-lock-backend-policy.js").AdvisoryLockBackendPolicyEntry[]}} - Advisory-lock configuration with defaults applied.
    */
   getAdvisoryLockConfig() {
     const configured = this._advisoryLocks || {}
     const fileConfigured = configured.backends?.file || {}
+    const lockServerConfigured = configured.backends?.lockServer || {}
+    const envHost = process.env.VELOCIOUS_LOCK_SERVER_HOST
+    const envPortRaw = process.env.VELOCIOUS_LOCK_SERVER_PORT
+    const envPort = envPortRaw ? Number(envPortRaw) : undefined
+    const lockServerHost = lockServerConfigured.host || envHost
+    const lockServerPort = typeof lockServerConfigured.port === "number"
+      ? lockServerConfigured.port
+      : (typeof envPort === "number" && Number.isFinite(envPort) ? envPort : 3006)
+    const lockServerUrl = lockServerConfigured.url
+      || `ws://${lockServerHost || "127.0.0.1"}:${lockServerPort}/websocket`
 
     return {
       backends: {
@@ -4218,6 +4234,18 @@ export default class VelociousConfiguration {
           enabled: fileConfigured.enabled === true,
           leaseMs: typeof fileConfigured.leaseMs === "number" ? fileConfigured.leaseMs : 30_000,
           renewIntervalMs: typeof fileConfigured.renewIntervalMs === "number" ? fileConfigured.renewIntervalMs : 10_000
+        },
+        lockServer: {
+          // Enabled only by explicit configuration or an explicit env pair, so
+          // an app that configures nothing keeps today's driver-native behavior.
+          authToken: typeof lockServerConfigured.authToken === "string" ? lockServerConfigured.authToken : "",
+          connectTimeoutMs: typeof lockServerConfigured.connectTimeoutMs === "number" ? lockServerConfigured.connectTimeoutMs : 3000,
+          enabled: typeof lockServerConfigured.enabled === "boolean"
+            ? lockServerConfigured.enabled
+            : Boolean(lockServerConfigured.url || lockServerConfigured.host || envHost || typeof lockServerConfigured.port === "number" || envPortRaw),
+          leaseMs: typeof lockServerConfigured.leaseMs === "number" ? lockServerConfigured.leaseMs : 30_000,
+          reprobeCooldownMs: typeof lockServerConfigured.reprobeCooldownMs === "number" ? lockServerConfigured.reprobeCooldownMs : 5000,
+          url: lockServerUrl
         }
       },
       policy: Array.isArray(configured.policy) ? configured.policy : []
@@ -4268,6 +4296,39 @@ export default class VelociousConfiguration {
   }
 
   /**
+   * Returns the lock-server advisory-lock backend (tier (b)) when this
+   * deployment configured one, creating it on first use. Returns `undefined`
+   * when the tier is not configured — callers must never invent one.
+   *
+   * The backend keeps a single socket per process; it holds no database
+   * connection while waiting for or holding a lease.
+   * @returns {Promise<import("./database/advisory-lock-lock-server-backend.js").default | undefined>} - Resolves with the configured backend, or undefined.
+   */
+  async getAdvisoryLockLockServerBackend() {
+    const config = this.getAdvisoryLockConfig()
+
+    if (!config.backends.lockServer.enabled) return undefined
+    if (this._advisoryLockLockServerBackend) return this._advisoryLockLockServerBackend
+
+    const {default: AdvisoryLockLockServerBackend} = await import("./database/advisory-lock-lock-server-backend.js")
+    const backend = new AdvisoryLockLockServerBackend({
+      authToken: config.backends.lockServer.authToken,
+      connectTimeoutMs: config.backends.lockServer.connectTimeoutMs,
+      leaseMs: config.backends.lockServer.leaseMs,
+      onError: (error) => {
+        this.getErrorEvents().emit("framework-error", {context: "advisory-lock-lock-server", error})
+        this.getErrorEvents().emit("all-error", {context: "advisory-lock-lock-server", error, errorType: "framework-error"})
+      },
+      reprobeCooldownMs: config.backends.lockServer.reprobeCooldownMs,
+      url: config.backends.lockServer.url
+    })
+
+    this._advisoryLockLockServerBackend = backend
+
+    return backend
+  }
+
+  /**
    * Records which backend tier served one advisory-lock acquisition so
    * `getAdvisoryLockBackendStatus()` can answer "which backend served this
    * lock" (design §3).
@@ -4287,11 +4348,12 @@ export default class VelociousConfiguration {
    * carries fencing tokens, and the resolved policy (minimum/allowed/preferred
    * tiers) for the name.
    * @param {string} lockName - Lock name.
-   * @returns {{acquisition: {backend: import("./database/advisory-lock-backend-policy.js").AdvisoryLockTier, fencingSupported: boolean, servedAt: string} | null, policy: import("./database/advisory-lock-backend-policy.js").ResolvedAdvisoryLockBackendPolicy}} - Backend status for the name.
+   * @returns {{acquisition: {backend: import("./database/advisory-lock-backend-policy.js").AdvisoryLockTier, fencingSupported: boolean, servedAt: string} | null, lockServer: {connected: boolean, lastError: string | null, lastProbeAt: string | null, leasedNames: string[]} | null, policy: import("./database/advisory-lock-backend-policy.js").ResolvedAdvisoryLockBackendPolicy}} - Backend status for the name.
    */
   getAdvisoryLockBackendStatus(lockName) {
     return {
       acquisition: this._advisoryLockAcquisitions.get(lockName) ?? null,
+      lockServer: this._advisoryLockLockServerBackend?.getStatus() ?? null,
       policy: this.resolveAdvisoryLockPolicy(lockName)
     }
   }
@@ -4380,6 +4442,16 @@ export default class VelociousConfiguration {
             // lease would make them reclaimable anyway, but a clean shutdown
             // should not leave lock directories behind for the staleness path.
             await this._advisoryLockFileBackend?.releaseAllHeld()
+          } catch (error) {
+            closeErrors.push(error instanceof Error ? error : new Error(String(error)))
+          }
+
+          try {
+            // Release lock-server leases explicitly first, then drop the socket:
+            // the server reclaims a closed connection anyway, but an explicit
+            // release hands the name to the next waiter without waiting for the
+            // transport teardown.
+            await this._advisoryLockLockServerBackend?.close()
           } catch (error) {
             closeErrors.push(error instanceof Error ? error : new Error(String(error)))
           }

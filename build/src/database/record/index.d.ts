@@ -34,7 +34,7 @@ export type RecordMetadataValue = boolean | null | string | undefined | Promise<
  * Schema metadata cached for one record class and physical database generation.
  * @typedef {boolean | null | string | undefined | Promise<void> | string[] | import("../drivers/base-column.js").default[] | import("../drivers/base-table.js").default | Record<string, string> | Record<string, string | undefined> | Record<string, import("../drivers/base-column.js").default>} RecordMetadataValue
  */
-import { AdvisoryLockBusyError, AdvisoryLockHoldTimeoutError, AdvisoryLockTimeoutError } from "../advisory-lock-runner.js";
+import { AdvisoryLockBusyError, AdvisoryLockHoldTimeoutError, AdvisoryLockLostError, AdvisoryLockServiceUnavailableError, AdvisoryLockTimeoutError } from "../advisory-lock-runner.js";
 import Configuration from "../../configuration.js";
 import RecordAttachmentHandle from "./attachments/handle.js";
 import ModelClassQuery from "../query/model-class-query.js";
@@ -4056,6 +4056,6 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
      */
     update(attributesToAssign: WriteAttributes): Promise<void>;
 }
-export { AdvisoryLockBusyError, AdvisoryLockHoldTimeoutError, AdvisoryLockTimeoutError, TenantDatabaseScopeError, ValidationError };
+export { AdvisoryLockBusyError, AdvisoryLockHoldTimeoutError, AdvisoryLockLostError, AdvisoryLockServiceUnavailableError, AdvisoryLockTimeoutError, TenantDatabaseScopeError, ValidationError };
 export default VelociousDatabaseRecord;
 //# sourceMappingURL=index.d.ts.map

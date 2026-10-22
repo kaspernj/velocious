@@ -1,10 +1,28 @@
 # Advisory-lock backend chain (design)
 
-Status: **design** (STC-210, parent epic STC-209). Tier (d), the opt-in file tier, is now
-implemented (STC-213): `src/database/advisory-lock-file-backend.js` behind the runner seam,
-with per-lock-name minimum-tier refusal (`AdvisoryLockMinTierRefusedError`), acquisition
-provenance, and `configuration.getAdvisoryLockBackendStatus(lockName)`. The lock-server tier
-and the full multi-backend chain remain follow-up legs of STC-209.
+Status: **design, partially implemented** (STC-210, parent epic STC-209).
+
+- Tier (d), the opt-in file tier, is implemented (STC-213):
+  `src/database/advisory-lock-file-backend.js` behind the runner seam, with per-lock-name
+  minimum-tier refusal (`AdvisoryLockMinTierRefusedError`), acquisition provenance, and
+  `configuration.getAdvisoryLockBackendStatus(lockName)`.
+- Tier (b), the lock server, is implemented as the framework **client adapter**
+  (`src/database/advisory-lock-lock-server-backend.js`) speaking the daemon's
+  implemented protocol v2 over its websocket surface. Selection is policy-driven
+  (`preferredTier: "lock-server"`), an unreachable server fails upward to the driver
+  tier with an `advisory-lock-fallback` report, `minTier: "lock-server"` refuses with
+  `AdvisoryLockBackendUnavailableError`, and a fenced lease surfaces as
+  `AdvisoryLockLostError`. The daemon itself already keeps its authority in process
+  memory with leases, FIFO waiters and persisted fencing epochs (STC-212), so this
+  leg did not need to reshape it.
+- Still open (follow-up legs): the Rollbridge `dedicated` service type for the daemon
+  (§11), and per-consumer enablement (TensorBuzz/AwesomeTasks config + policy).
+
+Transport deviation from §6: the daemon was already built and tested on Velocious's
+`/websocket` 1:1 connection role (`connection-open` with `params`, `hello-ack`,
+correlated responses) instead of a new `JsonSocket` role. The client adapter uses that
+implemented surface rather than a second protocol, and the framework keeps the whole
+seam (policy, tier cache, errors, telemetry).
 
 This document decides the contract for a **pluggable advisory-lock backend chain** that
 prefers a **centralized lock-server process** and falls back to whatever is available,
