@@ -1076,9 +1076,12 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
         afterDestroy<R>(this: ModelConstructor<R>, callback: LifecycleCallbackType<R>): void;
         /**
          * Enables automatic create/update/destroy auditing for this model.
+         * @param {{except?: string[]}} [options] - Audit options: `except` lists attribute names that must never be written to the audit trail. Use it for high-frequency telemetry columns (heartbeats, progress counters) whose write volume turns the audit table into a deadlock partner for the parent row.
          * @returns {void}
          */
-        audited(): void;
+        audited(options?: {
+            except?: string[];
+        }): void;
         /**
          * Declares an aasm-style state machine on this model: named states, events
          * (guarded transitions), and enter/exit + before/after transition hooks. See
@@ -2386,9 +2389,12 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
     static afterDestroy<R>(this: ModelConstructor<R>, callback: LifecycleCallbackType<R>): void;
     /**
      * Enables automatic create/update/destroy auditing for this model.
+     * @param {{except?: string[]}} [options] - Audit options: `except` lists attribute names that must never be written to the audit trail. Use it for high-frequency telemetry columns (heartbeats, progress counters) whose write volume turns the audit table into a deadlock partner for the parent row.
      * @returns {void}
      */
-    static audited(): void;
+    static audited(options?: {
+        except?: string[];
+    }): void;
     /**
      * Declares an aasm-style state machine on this model: named states, events
      * (guarded transitions), and enter/exit + before/after transition hooks. See

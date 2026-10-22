@@ -734,10 +734,11 @@ class VelociousDatabaseRecord {
 
   /**
    * Enables automatic create/update/destroy auditing for this model.
+   * @param {{except?: string[]}} [options] - Audit options: `except` lists attribute names that must never be written to the audit trail. Use it for high-frequency telemetry columns (heartbeats, progress counters) whose write volume turns the audit table into a deadlock partner for the parent row.
    * @returns {void}
    */
-  static audited() {
-    registerAuditing(this)
+  static audited(options = {}) {
+    registerAuditing(this, options)
   }
 
   /**

@@ -81,9 +81,12 @@ declare const AuditEvents: AuditEventsType;
  * Table detection and relationship registration happen lazily on first usage.
  * Called synchronously from Model.audited() at module-load time.
  * @param {AuditedModelClass} modelClass - Model class to audit.
+ * @param {{except?: string[]}} [options] - Audit options: `except` lists attribute names never written to the audit trail (e.g. high-frequency telemetry columns).
  * @returns {void}
  */
-declare function registerAuditing(modelClass: AuditedModelClass): void;
+declare function registerAuditing(modelClass: AuditedModelClass, options?: {
+    except?: string[];
+}): void;
 /**
  * Initializes audit metadata for audited model classes.
  * @param {typeof import("./index.js").default} modelClass - Model class to initialize.
