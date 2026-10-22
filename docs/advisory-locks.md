@@ -115,10 +115,10 @@ The result form is **identical across tiers**: the runner drives the driver's `t
 
 ## Duration telemetry
 
-A lock convoy is only fixable when it is attributable. Velocious emits **event-driven** telemetry reports on the acquisition and release events themselves — never from a periodic scanner — on the framework-error channel:
+A lock convoy is only fixable when it is attributable. Velocious emits **event-driven** telemetry reports on the acquisition and release events themselves — never from a periodic scanner — on the telemetry channel:
 
 ```js
-configuration.getErrorEvents().on("framework-error", (payload) => {
+configuration.getTelemetryEvents().on("telemetry", (payload) => {
   if (payload.context === "advisory-lock-telemetry") {
     // payload: {event, lockName, backendTier, durationMs, outcome, timeoutMs,
     //           holderId, holderConnectionId, holderLookupError}
@@ -148,7 +148,9 @@ Thresholds are configured per database; `null` opts out of a report:
 // }
 ```
 
-When no `framework-error`/`all-error` listener is registered, each report also writes a one-line summary to `stderr` so a convoy is never completely silent. The reports are the framework-side half of the STC-261 acceptance: a contended lock in production is attributable to a concrete holder without SSH forensics.
+These reports are **measurements, not failures**, so they stay off the framework-error channel. A bug reporter subscribed to `framework-error` / `all-error` must be able to assume every payload carries a thrown value; delivering contention measurements there turns each event into a bug report, a symbolication job, and a notification instead of a metric. Route them to your metrics/logs from the telemetry channel.
+
+When no `telemetry` listener is registered, each report also writes a one-line summary to `stderr` so a convoy is never completely silent. The reports are the framework-side half of the STC-261 acceptance: a contended lock in production is attributable to a concrete holder without SSH forensics.
 
 ## Scope
 

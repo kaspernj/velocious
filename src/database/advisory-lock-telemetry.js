@@ -26,10 +26,15 @@
  * - `advisory-lock-slow-hold` — a hold lasted longer than `slowHoldMs`
  *   (default 60000), emitted at release.
  *
- * Reports are emitted on `configuration.getErrorEvents()` as `framework-error`
- * (plus the matching `all-error`) with `{context: "advisory-lock-telemetry",
- * event, lockName, backendTier, ...}` payloads, matching the repo's "never
- * swallow" rule so process-level bug reporters capture them.
+ * Reports are emitted on `configuration.getTelemetryEvents()` as `telemetry`
+ * with `{context: "advisory-lock-telemetry", event, lockName, backendTier, ...}`
+ * payloads.
+ *
+ * These are measurements, not failures, so they are deliberately kept off the
+ * framework-error channel: a bug reporter subscribed to `framework-error` /
+ * `all-error` must be able to assume every payload carries a thrown value, and a
+ * contention report delivered there became one bug report (plus its symbolication
+ * and notification work) per event.
  *
  * Holder lookups are strictly best-effort *after* the acquisition already
  * settled: a failed lookup never changes the acquisition outcome and never
@@ -89,41 +94,37 @@ export function advisoryLockTelemetryThresholds(args) {
 }
 
 /**
- * Emit one telemetry report on the framework-error channel.
+ * Emit one telemetry report on the framework-telemetry channel.
  *
- * Mirrors the repo's framework-error emission shape (see `configuration.js`
- * `_reportBeaconError`): when no listener is attached to `framework-error` or
- * `all-error`, a one-line summary goes to `stderr` so a convoy is never
- * completely silent. A listener failure can never break lock handling, so
- * emissions are guarded.
- * @param {import("../configuration.js").default} configuration - Configuration instance owning the error channel.
+ * When no `telemetry` listener is attached, a one-line summary goes to `stderr`
+ * so a convoy is never completely silent. A listener failure can never break
+ * lock handling, so emissions are guarded.
+ * @param {import("../configuration.js").default} configuration - Configuration instance owning the telemetry channel.
  * @param {AdvisoryLockTelemetryReport} report - The report payload.
  * @returns {void} - No return value.
  */
 export function emitAdvisoryLockTelemetryReport(configuration, report) {
   /** @type {import("eventemitter3").EventEmitter | undefined} */
-  let errorEvents
+  let telemetryEvents
 
   try {
-    errorEvents = configuration?.getErrorEvents()
+    telemetryEvents = configuration?.getTelemetryEvents()
   } catch {
     return // No configuration to report through — never break lock handling.
   }
 
-  if (!errorEvents) return
+  if (!telemetryEvents) return
 
-  const hasListener = errorEvents.listenerCount("framework-error") > 0
-    || errorEvents.listenerCount("all-error") > 0
+  const hasListener = telemetryEvents.listenerCount("telemetry") > 0
   const payload = {context: "advisory-lock-telemetry", ...report}
 
   try {
-    errorEvents.emit("framework-error", payload)
-    errorEvents.emit("all-error", {...payload, errorType: "framework-error"})
+    telemetryEvents.emit("telemetry", payload)
   } catch {
     // A broken listener must never surface as a lock failure.
   }
 
   if (!hasListener) {
-    console.error(`[velocious advisory-lock-telemetry ${report.event}] lock=${JSON.stringify(report.lockName)} tier=${report.backendTier} durationMs=${report.durationMs}${report.outcome ? ` outcome=${report.outcome}` : ""}${report.holderConnectionId ? ` holderConnectionId=${report.holderConnectionId}` : ""}${report.holderId ? ` holderId=${report.holderId}` : ""} — subscribe via configuration.getErrorEvents().on("framework-error", …) to route these reports to your bug reporter`)
+    console.error(`[velocious advisory-lock-telemetry ${report.event}] lock=${JSON.stringify(report.lockName)} tier=${report.backendTier} durationMs=${report.durationMs}${report.outcome ? ` outcome=${report.outcome}` : ""}${report.holderConnectionId ? ` holderConnectionId=${report.holderConnectionId}` : ""}${report.holderId ? ` holderId=${report.holderId}` : ""} — subscribe via configuration.getTelemetryEvents().on("telemetry", …) to route these measurements to your metrics`)
   }
 }
