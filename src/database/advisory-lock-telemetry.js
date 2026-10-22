@@ -6,9 +6,9 @@
  * A lock convoy is only fixable when it is *attributable*: which lock name was
  * contended, on which backend tier, for how long, and who held it. These reports
  * fire on the acquisition/release events themselves — never from a periodic
- * scanner — so a contended lock in production surfaces on the framework-error
- * channel with the holder identity available on that tier at that moment,
- * without SSH forensics.
+ * scanner — so a contended lock in production surfaces on the telemetry channel
+ * with the holder identity available on that tier at that moment, without SSH
+ * forensics.
  *
  * Three events, each with its own threshold (all configurable per database via
  * `advisoryLockTelemetry`, see `docs/advisory-locks.md`):
@@ -126,5 +126,41 @@ export function emitAdvisoryLockTelemetryReport(configuration, report) {
 
   if (!hasListener) {
     console.error(`[velocious advisory-lock-telemetry ${report.event}] lock=${JSON.stringify(report.lockName)} tier=${report.backendTier} durationMs=${report.durationMs}${report.outcome ? ` outcome=${report.outcome}` : ""}${report.holderConnectionId ? ` holderConnectionId=${report.holderConnectionId}` : ""}${report.holderId ? ` holderId=${report.holderId}` : ""} — subscribe via configuration.getTelemetryEvents().on("telemetry", …) to route these measurements to your metrics`)
+  }
+}
+
+/**
+ * Reports one acquisition served below the lock name's preferred tier
+ * (design §3): the caller wanted the lock server and got the database, so the
+ * downgrade must be visible without being mistaken for a failure. Fallbacks are
+ * measurements, not errors, so they stay off `framework-error` and its bug
+ * reporters (same contract as the duration telemetry).
+ * @param {import("../configuration.js").default} configuration - Owning configuration.
+ * @param {{lockName: string, preferredTier: string, reason: string, servedBy: string}} report - Fallback details.
+ * @returns {void}
+ */
+export function emitAdvisoryLockFallbackReport(configuration, report) {
+  /** @type {import("eventemitter3").EventEmitter | undefined} */
+  let telemetryEvents
+
+  try {
+    telemetryEvents = configuration?.getTelemetryEvents()
+  } catch {
+    return // No configuration to report through — never break lock handling.
+  }
+
+  if (!telemetryEvents) return
+
+  const payload = {context: "advisory-lock-fallback", ...report}
+  const hasListener = telemetryEvents.listenerCount("telemetry") > 0
+
+  try {
+    telemetryEvents.emit("telemetry", payload)
+  } catch {
+    // A broken listener must never surface as a lock failure.
+  }
+
+  if (!hasListener) {
+    console.error(`[velocious advisory-lock-fallback] lock=${JSON.stringify(report.lockName)} preferredTier=${report.preferredTier} servedBy=${report.servedBy} reason=${report.reason}`)
   }
 }

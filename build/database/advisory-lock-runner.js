@@ -12,6 +12,7 @@ import {
   AdvisoryLockServiceUnavailableError,
   advisoryLockBackendUnavailable
 } from "./advisory-lock-errors.js"
+import {emitAdvisoryLockFallbackReport} from "./advisory-lock-telemetry.js"
 
 /**
  * Provenance of one advisory-lock acquisition (STC-210 design §3): every
@@ -407,17 +408,12 @@ export default class AdvisoryLockRunner {
    */
   reportAdvisoryLockFallback({lockName, reason, servedBy}) {
     const policy = resolveAdvisoryLockBackendPolicy(lockName, this.configuration.getAdvisoryLockPolicy())
-    const payload = {
-      context: "advisory-lock-fallback",
+    emitAdvisoryLockFallbackReport(this.configuration, {
       lockName,
       preferredTier: policy.preferredTier,
       reason,
       servedBy
-    }
-    const errorEvents = this.configuration.getErrorEvents()
-
-    errorEvents.emit("framework-error", payload)
-    errorEvents.emit("all-error", {...payload, errorType: "framework-error"})
+    })
   }
 
   /**
