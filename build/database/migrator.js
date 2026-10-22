@@ -162,10 +162,28 @@ export default class VelociousDatabaseMigrator {
 
   /**
    * Runs migrate files from require context.
+   *
+   * Application migrations belong to the schema-owning lifecycle. HTTP worker
+   * threads (`processContext.type === "worker-handler"`) each run the
+   * application's `initializeModels` hook, so an app that migrates from that hook
+   * would apply the pending set (and write the structure dump) once per worker.
+   * The server process and deploy migration tasks migrate before workers start,
+   * so workers skip here instead of repeating that work.
    * @param {import("./migrator/types.js").RequireMigrationContextType} requireContext - Require context.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async migrateFilesFromRequireContext(requireContext) {
+    const processContext = this.configuration.getApplicationProcessContext()
+
+    if (processContext?.type === "worker-handler") {
+      await this.logger.debug("Skipping application migrations in an HTTP worker thread - the schema-owning process migrates before workers start", {
+        instanceId: processContext.instanceId,
+        processType: processContext.type
+      })
+
+      return
+    }
+
     const files = this.migrationsFromRequireContext(requireContext)
 
     await this.configuration.ensureConnections({databaseIdentifiers: this.databaseIdentifiers, name: "Database migrator: migrate require-context files"}, async () => {

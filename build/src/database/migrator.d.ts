@@ -63,6 +63,13 @@ export default class VelociousDatabaseMigrator {
     migrateFiles(files: import("./migrator/types.js").MigrationObjectType[], importCallback: import("./migrator/types.js").ImportFullpathCallbackType): Promise<number>;
     /**
      * Runs migrate files from require context.
+     *
+     * Application migrations belong to the schema-owning lifecycle. HTTP worker
+     * threads (`processContext.type === "worker-handler"`) each run the
+     * application's `initializeModels` hook, so an app that migrates from that hook
+     * would apply the pending set (and write the structure dump) once per worker.
+     * The server process and deploy migration tasks migrate before workers start,
+     * so workers skip here instead of repeating that work.
      * @param {import("./migrator/types.js").RequireMigrationContextType} requireContext - Require context.
      * @returns {Promise<void>} - Resolves when complete.
      */

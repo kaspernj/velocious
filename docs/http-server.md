@@ -13,6 +13,11 @@ Each threaded request worker owns a separate configuration lifecycle with type
 `worker-handler`; in-process handlers share the server lifecycle. SIGTERM and
 SIGINT ownership is installed before the CLI announces readiness.
 
+Only the `server` lifecycle owns the application schema. Worker lifecycles load
+model metadata but never apply application migrations or rewrite the structure
+dump, even when an `initializeModels` hook runs migrations; see
+[database migrations](database-migrations.md#which-process-migrates).
+
 Graceful stop drains the HTTP server and worker handlers, invokes initializer
 teardown once for each owned lifecycle, then disconnects Beacon and closes
 database connections. Application teardown precedes framework cleanup, but every

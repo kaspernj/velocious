@@ -49,6 +49,41 @@ Features that need framework-owned tables, such as record auditing, should
 still be declared through normal application migrations. See
 [record auditing](auditing.md#schema) for the shared `audits` table layout.
 
+## Which process migrates
+
+Application migrations belong to the schema-owning process. `velocious server`,
+the deploy migration task, and CLI migration commands own the schema; HTTP
+worker threads do not. Each worker thread runs the application's
+`initializeModels` hook against its own configuration lifecycle, so an app that
+migrates from that hook would apply the pending set (and rewrite the structure
+dump) once per worker — with the default worker count that multiplies every
+migration check by the number of worker threads.
+
+`Migrator#migrateFilesFromRequireContext` therefore skips the application
+migration set when the configuration's process context is
+`{type: "worker-handler"}`. The skip happens before connections are opened, so a
+worker never applies migrations, and the skip is logged at debug level. Frontend
+tenant migrations (`migrateRequireContextForDatabase`) are unaffected: tenant
+SQLite databases migrate through their own captured handle.
+
+Apps do not need to guard this themselves. If a hook wants to distinguish
+processes for other schema-owning work, `initializeModels` receives both `type`
+and the frozen framework-owned `processContext`:
+
+```js
+initializeModels: async ({configuration, processContext, type}) => {
+  const ownsSchema = processContext?.type !== "worker-handler"
+
+  if (ownsSchema) await migrate(configuration)
+  await loadModels(configuration)
+}
+```
+
+`processContext` is `{instanceId, type}` (see
+[application process lifecycle](application-process-lifecycle.md)) and is the
+same value `configuration.getApplicationProcessContext()` returns. Process types
+are listed in [HTTP server](http-server.md#application-lifecycle-ownership).
+
 ## Frontend tenant databases
 
 For a tenant-only SQLite identifier, run frontend migrations through the

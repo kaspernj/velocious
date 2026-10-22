@@ -103,6 +103,7 @@ export default class VelociousConfiguration {
     _directory: string | undefined;
     _initializeModels: (args: {
         configuration: import("./configuration.js").default;
+        processContext: import("./configuration-types.js").ApplicationProcessContext | undefined;
         type: string;
     }) => void;
     /** @type {VelociousPackage[]} */
@@ -1107,6 +1108,15 @@ export default class VelociousConfiguration {
      * @returns {boolean} - Whether initialized.
      */
     isInitialized(): boolean;
+    /**
+     * Returns the framework-owned process context for this configuration's
+     * lifecycle. It is undefined until `initialize()` starts, and it carries the
+     * process `type` (`server`, `worker-handler`, background-jobs types, or an
+     * application-defined string) so hooks and framework services can tell which
+     * process they are running in.
+     * @returns {import("./configuration-types.js").ApplicationProcessContext | undefined} - Process context, when initialization has started.
+     */
+    getApplicationProcessContext(): import("./configuration-types.js").ApplicationProcessContext | undefined;
     /**
      * Runs initialize models.
      * @param {object} args - Options object.

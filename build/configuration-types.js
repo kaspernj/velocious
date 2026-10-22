@@ -5,7 +5,7 @@
  */
 
 /**
- * Immutable identity shared by application initializers for one process lifecycle.
+ * Immutable identity shared by application hooks and initializers for one process lifecycle.
  * @typedef {object} ApplicationProcessContext
  * @property {string} type - Generic process type supplied to `configuration.initialize()`.
  * @property {string} instanceId - Opaque identity unique to this lifecycle.
@@ -899,7 +899,7 @@
  * @property {BeaconConfiguration} [beacon] - Beacon broadcast bus configuration.
  * @property {ScheduledBackgroundJobsConfiguration | ScheduledBackgroundJobsLoaderType} [scheduledBackgroundJobs] - Scheduled background jobs configuration.
  * @property {MailerBackend} [mailerBackend] - Mail delivery backend.
- * @property {(args: {configuration: import("./configuration.js").default, type: string}) => void} initializeModels - Hook to register models for a given initialization type.
+ * @property {(args: {configuration: import("./configuration.js").default, processContext: ApplicationProcessContext | undefined, type: string}) => void} initializeModels - Hook to register models for a given initialization type.
  * @property {InitializersType} [initializers] - Initializer loader for environment bootstrapping.
  * @property {string | (() => string)} locale - Default locale or locale resolver.
  * @property {string[]} locales - Supported locales.
