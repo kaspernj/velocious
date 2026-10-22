@@ -125,14 +125,37 @@ export default class VelociousDatabaseMigrator {
   }
 
   /**
+   * Application migrations belong to the schema-owning lifecycle. HTTP worker
+   * threads (`processContext.type === "worker-handler"`) each run the
+   * application's `initializeModels` hook, so an app that migrates from that hook
+   * would apply the pending set (and write the structure dump) once per worker.
+   * The server process and deploy migration tasks migrate before workers start,
+   * so workers skip here instead of repeating that work.
+   * @returns {Promise<boolean>} - Whether this lifecycle must skip application migrations.
+   */
+  async _skipApplicationMigrationsInWorkerLifecycle() {
+    const processContext = this.configuration.getApplicationProcessContext()
+
+    if (processContext?.type !== "worker-handler") return false
+
+    await this.logger.debug("Skipping application migrations in an HTTP worker thread - the schema-owning process migrates before workers start", {
+      instanceId: processContext.instanceId,
+      processType: processContext.type
+    })
+
+    return true
+  }
+
+  /**
    * Runs migrate files.
    * @param {import("./migrator/types.js").MigrationObjectType[]} files - Files.
    * @param {import("./migrator/types.js").ImportFullpathCallbackType} importCallback - Import callback.
    * @returns {Promise<number>} - Number of migrations actually applied (not skipped as already-run).
    */
   async migrateFiles(files, importCallback) {
+    if (await this._skipApplicationMigrationsInWorkerLifecycle()) return 0
+
     let appliedCount = 0
-    console.error("[MIG-DEBUG] migrateFiles count=" + files.length)
 
     await this.configuration.ensureConnections({databaseIdentifiers: this.databaseIdentifiers, name: "Database migrator: migrate files"}, async () => {
       for (const migration of files) {
@@ -163,26 +186,13 @@ export default class VelociousDatabaseMigrator {
   /**
    * Runs migrate files from require context.
    *
-   * Application migrations belong to the schema-owning lifecycle. HTTP worker
-   * threads (`processContext.type === "worker-handler"`) each run the
-   * application's `initializeModels` hook, so an app that migrates from that hook
-   * would apply the pending set (and write the structure dump) once per worker.
-   * The server process and deploy migration tasks migrate before workers start,
-   * so workers skip here instead of repeating that work.
+   * Application migrations belong to the schema-owning lifecycle; see
+   * {@link VelociousDatabaseMigrator#_skipApplicationMigrationsInWorkerLifecycle}.
    * @param {import("./migrator/types.js").RequireMigrationContextType} requireContext - Require context.
    * @returns {Promise<void>} - Resolves when complete.
    */
   async migrateFilesFromRequireContext(requireContext) {
-    const processContext = this.configuration.getApplicationProcessContext()
-
-    if (processContext?.type === "worker-handler") {
-      await this.logger.debug("Skipping application migrations in an HTTP worker thread - the schema-owning process migrates before workers start", {
-        instanceId: processContext.instanceId,
-        processType: processContext.type
-      })
-
-      return
-    }
+    if (await this._skipApplicationMigrationsInWorkerLifecycle()) return
 
     const files = this.migrationsFromRequireContext(requireContext)
 

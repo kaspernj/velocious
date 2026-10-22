@@ -55,6 +55,16 @@ export default class VelociousDatabaseMigrator {
      */
     hasRunMigrationVersion(dbIdentifier: string, version: number): boolean;
     /**
+     * Application migrations belong to the schema-owning lifecycle. HTTP worker
+     * threads (`processContext.type === "worker-handler"`) each run the
+     * application's `initializeModels` hook, so an app that migrates from that hook
+     * would apply the pending set (and write the structure dump) once per worker.
+     * The server process and deploy migration tasks migrate before workers start,
+     * so workers skip here instead of repeating that work.
+     * @returns {Promise<boolean>} - Whether this lifecycle must skip application migrations.
+     */
+    _skipApplicationMigrationsInWorkerLifecycle(): Promise<boolean>;
+    /**
      * Runs migrate files.
      * @param {import("./migrator/types.js").MigrationObjectType[]} files - Files.
      * @param {import("./migrator/types.js").ImportFullpathCallbackType} importCallback - Import callback.
@@ -64,12 +74,8 @@ export default class VelociousDatabaseMigrator {
     /**
      * Runs migrate files from require context.
      *
-     * Application migrations belong to the schema-owning lifecycle. HTTP worker
-     * threads (`processContext.type === "worker-handler"`) each run the
-     * application's `initializeModels` hook, so an app that migrates from that hook
-     * would apply the pending set (and write the structure dump) once per worker.
-     * The server process and deploy migration tasks migrate before workers start,
-     * so workers skip here instead of repeating that work.
+     * Application migrations belong to the schema-owning lifecycle; see
+     * {@link VelociousDatabaseMigrator#_skipApplicationMigrationsInWorkerLifecycle}.
      * @param {import("./migrator/types.js").RequireMigrationContextType} requireContext - Require context.
      * @returns {Promise<void>} - Resolves when complete.
      */

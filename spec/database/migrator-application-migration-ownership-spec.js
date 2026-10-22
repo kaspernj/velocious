@@ -69,8 +69,19 @@ describe("Database migrator application migration ownership", () => {
         await this.execute("CREATE TABLE worker_guard_items(id integer PRIMARY KEY)")
       }
     }
+    class CreateWorkerGuardSecondTable extends Migration {
+      async change() {
+        await this.execute("CREATE TABLE worker_guard_second_items(id integer PRIMARY KEY)")
+      }
+    }
 
     const migrations = buildRequireContext(CreateWorkerGuardTable)
+    const files = [{
+      date: 20260902000200,
+      file: "20260902000200-create-worker-guard-second-table.js",
+      fullPath: "/create-worker-guard-second-table.js",
+      migrationClassName: "CreateWorkerGuardSecondTable"
+    }]
 
     try {
       await configuration.initialize({type: "worker-handler"})
@@ -81,7 +92,11 @@ describe("Database migrator application migration ownership", () => {
         await migrator.prepare()
         await migrator.migrateFilesFromRequireContext(migrations)
 
+        const appliedByFileList = await migrator.migrateFiles(files, async () => ({default: CreateWorkerGuardSecondTable}))
+
+        expect(appliedByFileList).toEqual(0)
         expect(await dbs.default.tableExists("worker_guard_items")).toEqual(false)
+        expect(await dbs.default.tableExists("worker_guard_second_items")).toEqual(false)
         expect(await dbs.default.query("SELECT version FROM schema_migrations")).toEqual([])
       })
     } finally {
