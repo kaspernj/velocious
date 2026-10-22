@@ -108,3 +108,30 @@ const unsubscribe = Task.onAudit("create", async ({auditId, record}) => {
 The callback runs after the audit row is inserted. If the callback throws during
 a lifecycle audit, the surrounding save/destroy operation fails with that error,
 so use it for required follow-up work rather than best-effort logging.
+
+## Excluding high-frequency attributes
+
+`audited()` accepts an optional `except` list naming attributes that must never be
+written to the audit trail:
+
+```js
+Build.audited({
+  except: [
+    "executorHeartbeatAt",
+    "executorProgressAt",
+    "executorProgressEvent",
+    "executorProgressSequence",
+    "executorOutputByteCount"
+  ]
+})
+```
+
+Use this for telemetry columns. Every audited update inserts into `audit_actions`
+inside the same transaction that holds the business row's X lock, so a column
+written every few seconds per running record makes the audit table a deadlock
+partner for the row it audits: two such transactions can cycle on `<table>` and
+`audit_actions.index_on_action`, and InnoDB rolls one of them back - taking
+whatever unrelated work shared that transaction with it.
+
+Excluded attributes are matched by attribute name or column name. Business
+attributes are still audited; create and destroy audits are unaffected.
