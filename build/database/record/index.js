@@ -3375,7 +3375,6 @@ class VelociousDatabaseRecord {
     restArgsError(restArgs)
     const operation = givenOperation || this._recordMetadataOperation
     const driver = givenDriver || (operation ? operation.connection() : () => this.connection())
-    this._assertHasBeenInitialized()
     const handler = new Handler()
     const query = new ModelClassQuery({
       driver,

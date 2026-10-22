@@ -124,6 +124,12 @@ export default class VelociousDatabaseQueryModelClassQuery<MC extends typeof imp
      */
     getModelClass(): MC;
     /**
+     * Ensures the model table metadata is loaded before an operation that needs it.
+     * Query builders stay synchronous and metadata-free; execution initializes lazily.
+     * @returns {Promise<void>} - Resolves when the model is initialized.
+     */
+    _ensureInitialized(): Promise<void>;
+    /**
      * Binds a relationship target to this query's physical database generation.
      * @param {typeof import("../record/index.js").default} modelClass - Canonical relationship target.
      * @returns {typeof import("../record/index.js").default} - Query-bound relationship target.
