@@ -320,6 +320,8 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
    * @returns {Promise<number>} - Resolves with the count.
    */
   async count() {
+    await this._ensureInitialized()
+
     // A model without a single primary-key column — setPrimaryKey(null) or a composite
     // setPrimaryKey([...]) on legacy tables — has no column COUNT can reference (an array primary key
     // cannot be quoted as a single COUNT(column), and primaryKey() falls back to "id" for the no-pk
@@ -506,6 +508,15 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     if (!this.modelClass) throw new Error("modelClass not set")
 
     return this.modelClass
+  }
+
+  /**
+   * Ensures the model table metadata is loaded before an operation that needs it.
+   * Query builders stay synchronous and metadata-free; execution initializes lazily.
+   * @returns {Promise<void>} - Resolves when the model is initialized.
+   */
+  async _ensureInitialized() {
+    await this.getModelClass().ensureInitialized()
   }
 
   /**
@@ -789,6 +800,8 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
    * @returns {Promise<void>} - Resolves when the update completes.
    */
   async updateAll(data) {
+    await this._ensureInitialized()
+
     const driver = this.driver
     const tableName = this.getModelClass().tableName()
     const entries = Object.entries(data)
@@ -827,6 +840,8 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
    * @returns {Promise<InstanceType<MC>>} - Resolves with the find.
    */
   async find(recordId) {
+    await this._ensureInitialized()
+
     /**
      * Conditions.
      * @type {{[key: string]: number | string}} */
@@ -853,6 +868,8 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
    * @returns {Promise<InstanceType<MC> | null>} - Resolves with the by.
    */
   async findBy(conditions) {
+    await this._ensureInitialized()
+
     const newQuery = /** @type {VelociousDatabaseQueryModelClassQuery<MC>} */ (this.clone())
 
     newQuery.where(conditions)
@@ -931,6 +948,8 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
    * @returns {Promise<InstanceType<MC>>} - Created record.
    */
   async create(attributes = {}) {
+    await this._ensureInitialized()
+
     const record = this.build(attributes)
 
     await record.save()
@@ -1013,6 +1032,8 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
    * @returns {Promise<Array<InstanceType<MC>>>} - Resolves with the array.
    */
   async load() {
+    await this._ensureInitialized()
+
     const models = []
     const results = await this.results()
     const selectedAttributeAliases = new Set()
@@ -1081,6 +1102,8 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
    * @returns {Promise<Array<ReturnType<typeof JSON.parse>>>} - Resolves with the pluck.
    */
   async pluck(...columns) {
+    await this._ensureInitialized()
+
     const flatColumns = columns.flat()
 
     if (flatColumns.length === 0) throw new Error("No columns given to pluck")
