@@ -519,6 +519,7 @@ export default class VelociousConfiguration {
      * @type {WeakSet<object>} */
     this._appliedRouteMounts = new WeakSet()
     this._errorEvents = new EventEmitter()
+    this._telemetryEvents = new EventEmitter()
 
     /**
      * Stores the database pools value.
@@ -3857,6 +3858,19 @@ export default class VelociousConfiguration {
    */
   getErrorEvents() {
     return this._errorEvents
+  }
+
+  /**
+   * Framework telemetry emitter. Telemetry reports measurements — lock contention,
+   * slow queries, queue depth — that are worth observing but are not failures. It is
+   * deliberately separate from `getErrorEvents()`: a bug reporter subscribes to the
+   * error channel on the promise that every payload there carries a thrown value, and
+   * a contention measurement emitted as `framework-error` turns into a bug report on
+   * every occurrence instead of a metric.
+   * @returns {import("eventemitter3").EventEmitter} - Framework telemetry events emitter.
+   */
+  getTelemetryEvents() {
+    return this._telemetryEvents
   }
 
   /**
