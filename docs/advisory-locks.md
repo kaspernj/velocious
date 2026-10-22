@@ -232,6 +232,50 @@ new Configuration({
   `configuration.getAdvisoryLockBackendStatus(lockName)`, so a fallback to the file tier is
   visible in logs and diagnostics.
 
+## Central lock server (tier (b))
+
+Set `advisoryLocks.backends.lockServer` and prefer the tier per lock name to stop a
+held lock from pinning a pooled connection:
+
+```js
+new Configuration({
+  advisoryLocks: {
+    backends: {
+      lockServer: {
+        enabled: true,           // defaults to true when host/port/url (or the env pair) is set
+        host: "127.0.0.1",       // VELOCIOUS_LOCK_SERVER_HOST
+        port: 3006,              // VELOCIOUS_LOCK_SERVER_PORT
+        authToken: "...",        // must match CONSENS_LOCK_AUTH_TOKEN on the daemon
+      },
+    },
+    policy: [
+      {name: "my-app-build-start-*", minTier: "driver-native", preferredTier: "lock-server"},
+    ],
+  },
+})
+```
+
+- **Selection is policy-driven, never automatic.** Only a lock name whose resolved policy
+  declares `preferredTier: "lock-server"` uses the tier; undeclared names keep today's
+  driver-native behavior.
+- **Leases + fencing.** The server grants a lease renewed every third of `leaseMs`
+  (30s by default; the daemon advertises its own value in `hello-ack`). A lease the
+  server fences is reported as `AdvisoryLockLostError` once the critical section settles,
+  carrying `epoch` and `currentEpoch`, so a caller can tell that its exclusivity was
+  compromised. The callback also receives the granted `epoch` on `lockBackend`.
+- **Unavailability fails upward, loudly.** When the daemon cannot be reached (bounded
+  connect timeout, then a `reprobeCooldownMs` cache) an acquisition for a name whose
+  `minTier` permits `driver-native` continues on the driver tier and emits
+  `advisory-lock-fallback {lockName, preferredTier, servedBy, reason}` on the
+  framework-error channel. `minTier: "lock-server"` throws
+  `AdvisoryLockBackendUnavailableError` instead — never a silent downgrade.
+- **No database connection while waiting or holding.** The tier keeps one socket per
+  process; `dedicatedConnection` and `holdTimeoutMs` still work but no longer spawn a
+  dedicated database session on this tier.
+- **Diagnostics.** `configuration.getAdvisoryLockBackendStatus(lockName)` reports
+  `lockServer: {connected, lastError, lastProbeAt, leasedNames}` alongside the
+  acquisition provenance and resolved policy.
+
 ## Errors
 
 - `AdvisoryLockTimeoutError` — thrown by `withAdvisoryLock` when a `timeoutMs` elapses before the lock is granted. Exposes `error.lockName`.

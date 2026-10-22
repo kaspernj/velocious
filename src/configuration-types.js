@@ -1,6 +1,22 @@
 // @ts-check
 
 /**
+ * Resolved lock-service configuration after environment and Beacon defaults.
+ * @typedef {object} LockServiceResolvedConfigType
+ * @property {string} [authToken] - Shared secret enforced by the host, when configured.
+ * @property {number} connectBackoffMs - Base backoff between connection retries.
+ * @property {number} connectRetries - Bounded connection retries before giving up.
+ * @property {number} connectTimeoutMs - Handshake timeout.
+ * @property {"database" | "none"} fallback - What to do when the service is unreachable.
+ * @property {string} host - Lock-service host.
+ * @property {number} leaseMs - Lease duration advertised to clients.
+ * @property {"beacon" | "in-process" | "off"} mode - Where the authority lives.
+ * @property {string} namespace - Prefix applied to every lock name.
+ * @property {number} port - Lock-service port.
+ * @property {string | null} statePath - Durable mirror for epochs and holders.
+ */
+
+/**
  * @module types
  */
 
@@ -866,7 +882,7 @@
  * behavior; the file backend is disabled by default and only selectable by
  * explicit configuration.
  * @typedef {object} AdvisoryLocksConfiguration
- * @property {{file?: {directory?: string, enabled?: boolean, leaseMs?: number, renewIntervalMs?: number}}} [backends] - Backend enablement. `file.enabled` defaults to false; enabling it is the deployment's explicit single-host declaration.
+ * @property {{file?: {directory?: string, enabled?: boolean, leaseMs?: number, renewIntervalMs?: number}, lockServer?: {authToken?: string, connectTimeoutMs?: number, enabled?: boolean, host?: string, leaseMs?: number, port?: number, reprobeCooldownMs?: number, url?: string}}} [backends] - Backend enablement. `file.enabled` defaults to false; enabling it is the deployment's explicit single-host declaration. `lockServer` defaults to enabled when a host/port/url or the `VELOCIOUS_LOCK_SERVER_HOST`/`_PORT` env pair is configured.
  * @property {import("./database/advisory-lock-backend-policy.js").AdvisoryLockBackendPolicyEntry[]} [policy] - Per-lock-name minimum/allowed/preferred tier rules (design §5).
  */
 

@@ -29,7 +29,13 @@
  * @typedef {boolean | null | string | undefined | Promise<void> | string[] | import("../drivers/base-column.js").default[] | import("../drivers/base-table.js").default | Record<string, string> | Record<string, string | undefined> | Record<string, import("../drivers/base-column.js").default>} RecordMetadataValue
  */
 
-import AdvisoryLockRunner, {AdvisoryLockBusyError, AdvisoryLockHoldTimeoutError, AdvisoryLockTimeoutError} from "../advisory-lock-runner.js"
+import AdvisoryLockRunner, {
+  AdvisoryLockBusyError,
+  AdvisoryLockHoldTimeoutError,
+  AdvisoryLockLostError,
+  AdvisoryLockServiceUnavailableError,
+  AdvisoryLockTimeoutError
+} from "../advisory-lock-runner.js"
 import BelongsToInstanceRelationship from "./instance-relationships/belongs-to.js"
 import BelongsToRelationship from "./relationships/belongs-to.js"
 import Configuration from "../../configuration.js"
@@ -5049,5 +5055,13 @@ VelociousDatabaseRecord.registerValidatorType("length", ValidatorsLength)
 VelociousDatabaseRecord.registerValidatorType("presence", ValidatorsPresence)
 VelociousDatabaseRecord.registerValidatorType("uniqueness", ValidatorsUniqueness)
 
-export {AdvisoryLockBusyError, AdvisoryLockHoldTimeoutError, AdvisoryLockTimeoutError, TenantDatabaseScopeError, ValidationError}
+export {
+  AdvisoryLockBusyError,
+  AdvisoryLockHoldTimeoutError,
+  AdvisoryLockLostError,
+  AdvisoryLockServiceUnavailableError,
+  AdvisoryLockTimeoutError,
+  TenantDatabaseScopeError,
+  ValidationError
+}
 export default VelociousDatabaseRecord

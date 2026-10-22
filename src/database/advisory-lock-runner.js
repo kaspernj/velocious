@@ -7,6 +7,11 @@ import {
   resolveAdvisoryLockBackendPolicy,
   refuseAdvisoryLockTierBelowMinimum
 } from "./advisory-lock-backend-policy.js"
+import {
+  AdvisoryLockLostError,
+  AdvisoryLockServiceUnavailableError,
+  advisoryLockBackendUnavailable
+} from "./advisory-lock-errors.js"
 
 /**
  * Provenance of one advisory-lock acquisition (STC-210 design §3): every
@@ -15,6 +20,7 @@ import {
  * @typedef {object} AdvisoryLockBackendProvenance
  * @property {import("./advisory-lock-backend-policy.js").AdvisoryLockTier} backend - Tier that served the acquisition.
  * @property {string} [driverType] - Database driver type when the driver tier served it.
+ * @property {number} [epoch] - Fencing epoch when the serving tier issues one.
  * @property {boolean} fencingSupported - Whether this tier carries fencing tokens (design §8); the file tier reports false rather than pretending.
  * @property {string} [holderId] - Backend holder id for the file tier.
  * @property {string} [lockName] - Lock name this provenance belongs to.
@@ -100,10 +106,15 @@ export default class AdvisoryLockRunner {
    * @returns {Promise<T>} - Resolves with the callback result.
    */
   async withAdvisoryLock(name, callback, args = {}) {
+    const lockServerResult = await this.attemptLockServer({args, callback, mode: "wait", name})
+
+    // The wait mode never returns a deferred outcome, so the value member is present.
+    if (lockServerResult) return /** @type {{value: T}} */ (lockServerResult).value
+
     const fileBackend = await this.fileBackendForName(name)
 
     if (fileBackend) {
-      const acquired = await fileBackend.acquire(name, {timeoutMs: this.fileAcquireTimeoutMs(args)})
+      const acquired = await fileBackend.acquire(name, {timeoutMs: this.acquireTimeoutMs(args)})
 
       if (!acquired) {
         throw new AdvisoryLockTimeoutError(`Timed out waiting for advisory lock ${JSON.stringify(name)} on the file tier`, {name})
@@ -147,6 +158,11 @@ export default class AdvisoryLockRunner {
    * @returns {Promise<T>} - Resolves with the callback result.
    */
   async withAdvisoryLockOrFail(name, callback, args = {}) {
+    const lockServerResult = await this.attemptLockServer({args, callback, mode: "or-fail", name})
+
+    // The or-fail mode throws on contention, so the value member is present.
+    if (lockServerResult) return /** @type {{value: T}} */ (lockServerResult).value
+
     const fileBackend = await this.fileBackendForName(name)
 
     if (fileBackend) {
@@ -201,6 +217,14 @@ export default class AdvisoryLockRunner {
    * @returns {Promise<{acquired: true, result: T} | {acquired: false, reason: "contended", lockName: string}>} - Either the held-callback result or the defer outcome.
    */
   async withAdvisoryLockOrDefer(name, callback, args = {}) {
+    const lockServerResult = await this.attemptLockServer({args, callback, mode: "defer", name})
+
+    if (lockServerResult) {
+      if ("deferred" in lockServerResult) return lockServerResult.deferred
+
+      return {acquired: true, result: /** @type {{value: T}} */ (lockServerResult).value}
+    }
+
     const fileBackend = await this.fileBackendForName(name)
 
     if (fileBackend) {
@@ -246,6 +270,154 @@ export default class AdvisoryLockRunner {
     } finally {
       await release()
     }
+  }
+
+  /**
+   * Serves one acquisition on the lock-server tier when the lock name prefers
+   * it (design §1/§9), falling *upward* to the driver path when the server is
+   * unreachable and the name's minimum tier permits a DB-native hold.
+   *
+   * `null` means "this tier did not serve the acquisition — continue with the
+   * next eligible tier". A returned value means the lock-server tier answered,
+   * including a definitive busy/timeout outcome.
+   * @template T
+   * @param {{args: {holdTimeoutMs?: number | null, timeoutMs?: number | null}, callback: (args?: {control?: import("awaitery/build/timeout.js").TimeoutControl, lockBackend: AdvisoryLockBackendProvenance}) => Promise<T>, mode: "wait" | "or-fail" | "defer", name: string}} request - Acquisition request.
+   * @returns {Promise<{deferred: {acquired: false, reason: "contended", lockName: string}} | {value: T} | null>} - Result when this tier served it, otherwise null.
+   */
+  async attemptLockServer({args, callback, mode, name}) {
+    const policy = resolveAdvisoryLockBackendPolicy(name, this.configuration.getAdvisoryLockPolicy())
+
+    if (policy.preferredTier !== "lock-server") return null
+    if (!policy.allowedTiers.includes("lock-server")) return null
+
+    const backend = await this.configuration.getAdvisoryLockLockServerBackend()
+
+    if (!backend) {
+      this.reportAdvisoryLockFallback({reason: "lock-server tier is not enabled in configuration", servedBy: "driver-native", lockName: name})
+
+      return null
+    }
+
+    /** @type {boolean} */
+    let acquired
+
+    try {
+      if (mode === "wait") {
+        acquired = await backend.acquire(name, {timeoutMs: this.acquireTimeoutMs(args)})
+      } else {
+        acquired = await backend.tryAcquire(name)
+      }
+    } catch (error) {
+      if (!(error instanceof AdvisoryLockServiceUnavailableError)) throw error
+
+      if (policy.minTier === "lock-server") {
+        throw advisoryLockBackendUnavailable({
+          lockName: name,
+          minTier: policy.minTier,
+          reasons: [`lock-server unavailable: ${error.message}`]
+        })
+      }
+
+      this.reportAdvisoryLockFallback({reason: error.message, servedBy: "driver-native", lockName: name})
+
+      return null
+    }
+
+    if (!acquired) {
+      if (mode === "defer") return {deferred: {acquired: false, reason: "contended", lockName: name}}
+      if (mode === "or-fail") throw new AdvisoryLockBusyError(`Advisory lock ${JSON.stringify(name)} is already held`, {name})
+
+      throw new AdvisoryLockTimeoutError(`Timed out waiting for advisory lock ${JSON.stringify(name)}`, {name})
+    }
+
+    const epoch = backend.getHoldEpoch(name)
+    const lockBackend = /** @type {AdvisoryLockBackendProvenance} */ ({
+      backend: "lock-server",
+      epoch: epoch ?? undefined,
+      fencingSupported: true,
+      lockName: name
+    })
+
+    this.configuration.recordAdvisoryLockAcquisition({backend: "lock-server", fencingSupported: true, lockName: name})
+
+        const value = await this.runLockServerHold({
+      backend,
+      callback,
+      holdTimeoutMs: args.holdTimeoutMs,
+      lockBackend,
+      name
+    })
+
+    return {value}
+  }
+
+  /**
+   * Runs the critical section under a lock-server lease and surfaces a fenced
+   * lease as `AdvisoryLockLostError` (design §8): the section may have
+   * overlapped another holder, so its outcome must not be trusted as exclusive.
+   * @template T
+   * @param {{backend: import("./advisory-lock-lock-server-backend.js").default, callback: (args?: {control?: import("awaitery/build/timeout.js").TimeoutControl, lockBackend: AdvisoryLockBackendProvenance}) => Promise<T>, holdTimeoutMs?: number | null, lockBackend: AdvisoryLockBackendProvenance, name: string}} args - Hold request.
+   * @returns {Promise<T>} - Callback result.
+   */
+  async runLockServerHold({backend, callback, holdTimeoutMs, lockBackend, name}) {
+    /** @type {T | undefined} */
+    let value
+    /** @type {unknown} */
+    let callbackError
+    let failed = false
+
+    try {
+      value = await this.runLockedCallback({
+        callback,
+        holdTimeoutMs,
+        lockBackend,
+        name,
+        release: async () => await backend.release(name)
+      })
+    } catch (error) {
+      failed = true
+      callbackError = error
+    }
+
+    const loss = backend.takeLoss(name, lockBackend.epoch ?? null)
+
+    if (loss) {
+      throw new AdvisoryLockLostError(
+        `Lost the lease for advisory lock ${JSON.stringify(name)} while the critical section was running`,
+        {
+          cause: callbackError instanceof Error ? callbackError : undefined,
+          currentEpoch: loss.currentEpoch,
+          epoch: lockBackend.epoch ?? null,
+          lockName: name
+        }
+      )
+    }
+
+    if (failed) throw callbackError
+
+    return /** @type {T} */ (value)
+  }
+
+  /**
+   * Reports an acquisition served below the lock name's preferred tier
+   * (design §3): every fallback is visible on the framework-error channel, so a
+   * silent downgrade is impossible.
+   * @param {{lockName: string, reason: string, servedBy: import("./advisory-lock-backend-policy.js").AdvisoryLockTier}} args - Fallback details.
+   * @returns {void}
+   */
+  reportAdvisoryLockFallback({lockName, reason, servedBy}) {
+    const policy = resolveAdvisoryLockBackendPolicy(lockName, this.configuration.getAdvisoryLockPolicy())
+    const payload = {
+      context: "advisory-lock-fallback",
+      lockName,
+      preferredTier: policy.preferredTier,
+      reason,
+      servedBy
+    }
+    const errorEvents = this.configuration.getErrorEvents()
+
+    errorEvents.emit("framework-error", payload)
+    errorEvents.emit("all-error", {...payload, errorType: "framework-error"})
   }
 
   /**
@@ -320,7 +492,7 @@ export default class AdvisoryLockRunner {
    * @param {{timeoutMs?: number | null}} args - Lock options.
    * @returns {number | null} - Wait bound in milliseconds, or `null` for an indefinite wait.
    */
-  fileAcquireTimeoutMs(args) {
+  acquireTimeoutMs(args) {
     if (args.timeoutMs !== undefined) return args.timeoutMs
 
     return DEFAULT_ADVISORY_LOCK_ACQUIRE_TIMEOUT_MS
@@ -474,3 +646,4 @@ function advisoryLockPolicyAllowsFileTier(policy) {
 
 export {AdvisoryLockBusyError, AdvisoryLockHoldTimeoutError, AdvisoryLockTimeoutError}
 export {AdvisoryLockBackendUnavailableError, AdvisoryLockMinTierRefusedError} from "./advisory-lock-backend-policy.js"
+export {AdvisoryLockLostError, AdvisoryLockServiceUnavailableError} from "./advisory-lock-errors.js"

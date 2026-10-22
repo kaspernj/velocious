@@ -305,6 +305,12 @@ export default class VelociousConfiguration {
      * @type {import("./database/advisory-lock-file-backend.js").default | undefined} */
     _advisoryLockFileBackend: import("./database/advisory-lock-file-backend.js").default | undefined;
     /**
+     * Lazily created lock-server (tier (b)) backend; undefined when the tier is
+     * not configured.
+     * @type {import("./database/advisory-lock-lock-server-backend.js").default | undefined}
+     */
+    _advisoryLockLockServerBackend: import("./database/advisory-lock-lock-server-backend.js").default | undefined;
+    /**
      * Most recent advisory-lock acquisition per lock name — the "which backend
      * served this lock" surface (design §3).
      * @type {Map<string, {backend: import("./database/advisory-lock-backend-policy.js").AdvisoryLockTier, fencingSupported: boolean, servedAt: string}>} */
@@ -1766,7 +1772,7 @@ export default class VelociousConfiguration {
      * Full backward compatibility: an app that configures nothing gets today's
      * driver-native-only behavior — the file backend is **disabled by default**
      * and only ever selectable by explicit configuration.
-     * @returns {{backends: {file: {directory?: string, enabled: boolean, leaseMs: number, renewIntervalMs: number}}, policy: import("./database/advisory-lock-backend-policy.js").AdvisoryLockBackendPolicyEntry[]}} - Advisory-lock configuration with defaults applied.
+     * @returns {{backends: {file: {directory?: string, enabled: boolean, leaseMs: number, renewIntervalMs: number}, lockServer: {authToken: string, connectTimeoutMs: number, enabled: boolean, leaseMs: number, reprobeCooldownMs: number, url: string}}, policy: import("./database/advisory-lock-backend-policy.js").AdvisoryLockBackendPolicyEntry[]}} - Advisory-lock configuration with defaults applied.
      */
     getAdvisoryLockConfig(): {
         backends: {
@@ -1775,6 +1781,14 @@ export default class VelociousConfiguration {
                 enabled: boolean;
                 leaseMs: number;
                 renewIntervalMs: number;
+            };
+            lockServer: {
+                authToken: string;
+                connectTimeoutMs: number;
+                enabled: boolean;
+                leaseMs: number;
+                reprobeCooldownMs: number;
+                url: string;
             };
         };
         policy: import("./database/advisory-lock-backend-policy.js").AdvisoryLockBackendPolicyEntry[];
@@ -1801,6 +1815,16 @@ export default class VelociousConfiguration {
      */
     getAdvisoryLockFileBackend(): Promise<import("./database/advisory-lock-file-backend.js").default | undefined>;
     /**
+     * Returns the lock-server advisory-lock backend (tier (b)) when this
+     * deployment configured one, creating it on first use. Returns `undefined`
+     * when the tier is not configured — callers must never invent one.
+     *
+     * The backend keeps a single socket per process; it holds no database
+     * connection while waiting for or holding a lease.
+     * @returns {Promise<import("./database/advisory-lock-lock-server-backend.js").default | undefined>} - Resolves with the configured backend, or undefined.
+     */
+    getAdvisoryLockLockServerBackend(): Promise<import("./database/advisory-lock-lock-server-backend.js").default | undefined>;
+    /**
      * Records which backend tier served one advisory-lock acquisition so
      * `getAdvisoryLockBackendStatus()` can answer "which backend served this
      * lock" (design §3).
@@ -1821,13 +1845,19 @@ export default class VelociousConfiguration {
      * carries fencing tokens, and the resolved policy (minimum/allowed/preferred
      * tiers) for the name.
      * @param {string} lockName - Lock name.
-     * @returns {{acquisition: {backend: import("./database/advisory-lock-backend-policy.js").AdvisoryLockTier, fencingSupported: boolean, servedAt: string} | null, policy: import("./database/advisory-lock-backend-policy.js").ResolvedAdvisoryLockBackendPolicy}} - Backend status for the name.
+     * @returns {{acquisition: {backend: import("./database/advisory-lock-backend-policy.js").AdvisoryLockTier, fencingSupported: boolean, servedAt: string} | null, lockServer: {connected: boolean, lastError: string | null, lastProbeAt: string | null, leasedNames: string[]} | null, policy: import("./database/advisory-lock-backend-policy.js").ResolvedAdvisoryLockBackendPolicy}} - Backend status for the name.
      */
     getAdvisoryLockBackendStatus(lockName: string): {
         acquisition: {
             backend: import("./database/advisory-lock-backend-policy.js").AdvisoryLockTier;
             fencingSupported: boolean;
             servedAt: string;
+        } | null;
+        lockServer: {
+            connected: boolean;
+            lastError: string | null;
+            lastProbeAt: string | null;
+            leasedNames: string[];
         } | null;
         policy: import("./database/advisory-lock-backend-policy.js").ResolvedAdvisoryLockBackendPolicy;
     };
