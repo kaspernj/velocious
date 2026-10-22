@@ -1,16 +1,13 @@
-import Mutex from "epic-locks/build/mutex.js";
 import Base from "./base.js";
 export default class VelociousDatabaseDriversSqliteNative extends Base {
     connection: any;
-    /**
-     * Serializes native queries so concurrent `getAllAsync` calls never race
-     * `expo-sqlite`'s shared `NativeStatement` objects (a single connection
-     * prepares/executes/finalizes one statement at a time).
-     * @type {Mutex}
-     */
-    _queryMutex: Mutex;
     connect(): Promise<void>;
     connectArgs(): Record<string, any>;
+    /**
+     * Returns the configured SQLite database name.
+     * @returns {string} - Database name.
+     */
+    _databaseName(): string;
     _close(): Promise<void>;
     deleteDatabaseStorage(): Promise<void>;
     /**
