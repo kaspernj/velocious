@@ -1,0 +1,2 @@
+- Skip application migrations in HTTP worker threads: `Migrator#migrateFilesFromRequireContext` now returns before opening connections when the configuration's process context is `worker-handler`, so an app that migrates from `initializeModels` no longer replays the pending set (and structure dump) once per worker.
+- Hand the framework-owned `processContext` (`{instanceId, type}`) to the `initializeModels` hook, and expose it through `configuration.getApplicationProcessContext()`, so hooks can detect the process they run in without importing `node:worker_threads`.
