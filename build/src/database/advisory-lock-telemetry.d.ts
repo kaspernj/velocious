@@ -72,10 +72,15 @@ export type AdvisoryLockTelemetryThresholds = {
  * - `advisory-lock-slow-hold` — a hold lasted longer than `slowHoldMs`
  *   (default 60000), emitted at release.
  *
- * Reports are emitted on `configuration.getErrorEvents()` as `framework-error`
- * (plus the matching `all-error`) with `{context: "advisory-lock-telemetry",
- * event, lockName, backendTier, ...}` payloads, matching the repo's "never
- * swallow" rule so process-level bug reporters capture them.
+ * Reports are emitted on `configuration.getTelemetryEvents()` as `telemetry`
+ * with `{context: "advisory-lock-telemetry", event, lockName, backendTier, ...}`
+ * payloads.
+ *
+ * These are measurements, not failures, so they are deliberately kept off the
+ * framework-error channel: a bug reporter subscribed to `framework-error` /
+ * `all-error` must be able to assume every payload carries a thrown value, and a
+ * contention report delivered there became one bug report (plus its symbolication
+ * and notification work) per event.
  *
  * Holder lookups are strictly best-effort *after* the acquisition already
  * settled: a failed lookup never changes the acquisition outcome and never
@@ -114,14 +119,12 @@ export declare const DEFAULT_ADVISORY_LOCK_SLOW_HOLD_MS: number;
  */
 export declare function advisoryLockTelemetryThresholds(args: import("../configuration-types.js").DatabaseConfigurationType): AdvisoryLockTelemetryThresholds;
 /**
- * Emit one telemetry report on the framework-error channel.
+ * Emit one telemetry report on the framework-telemetry channel.
  *
- * Mirrors the repo's framework-error emission shape (see `configuration.js`
- * `_reportBeaconError`): when no listener is attached to `framework-error` or
- * `all-error`, a one-line summary goes to `stderr` so a convoy is never
- * completely silent. A listener failure can never break lock handling, so
- * emissions are guarded.
- * @param {import("../configuration.js").default} configuration - Configuration instance owning the error channel.
+ * When no `telemetry` listener is attached, a one-line summary goes to `stderr`
+ * so a convoy is never completely silent. A listener failure can never break
+ * lock handling, so emissions are guarded.
+ * @param {import("../configuration.js").default} configuration - Configuration instance owning the telemetry channel.
  * @param {AdvisoryLockTelemetryReport} report - The report payload.
  * @returns {void} - No return value.
  */

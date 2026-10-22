@@ -9,7 +9,7 @@ import {describe, expect, it} from "../../src/testing/test.js"
 
 /**
  * @param {Record<string, unknown>} databaseArgs - Database configuration args.
- * @returns {{configuration: Configuration, reports: Array<Record<string, unknown>>}} - Configuration plus captured framework-error payloads.
+ * @returns {{configuration: Configuration, reports: Array<Record<string, unknown>>, errorReports: Array<Record<string, unknown>>}} - Configuration plus captured telemetry and framework-error payloads.
  */
 function testConfigurationWithReports(databaseArgs) {
   const configuration = new Configuration({
@@ -22,15 +22,19 @@ function testConfigurationWithReports(databaseArgs) {
   })
   /** @type {Array<Record<string, unknown>>} */
   const reports = []
+  /** @type {Array<Record<string, unknown>>} */
+  const errorReports = []
 
-  configuration.getErrorEvents().on("framework-error", (payload) => reports.push(payload))
+  configuration.getTelemetryEvents().on("telemetry", (payload) => reports.push(payload))
+  configuration.getErrorEvents().on("framework-error", (payload) => errorReports.push(payload))
+  configuration.getErrorEvents().on("all-error", (payload) => errorReports.push(payload))
 
-  return {configuration, reports}
+  return {configuration, reports, errorReports}
 }
 
 describe("Advisory lock duration telemetry", () => {
-  it("reports a slow acquire wait with the eventual outcome on the framework-error channel", async () => {
-    const {configuration, reports} = testConfigurationWithReports({type: "mysql", advisoryLockTelemetry: {slowAcquireMs: 5}})
+  it("reports a slow acquire wait with the eventual outcome on the telemetry channel and never on the error channel", async () => {
+    const {configuration, reports, errorReports} = testConfigurationWithReports({type: "mysql", advisoryLockTelemetry: {slowAcquireMs: 5}})
     const driver = new AdvisoryLockTelemetryStubDriver(/** @type {import("../../src/configuration-types.js").DatabaseConfigurationType} */ (configuration.getDatabaseConfiguration().default), configuration, {acquireDelayMs: 10})
     const runner = new AdvisoryLockRunner({configuration, connectionProvider: () => driver, databaseIdentifier: "default"})
 
@@ -45,6 +49,8 @@ describe("Advisory lock duration telemetry", () => {
     expect(reports[0].outcome).toBe("acquired")
     expect(Number(reports[0].durationMs) >= 5).toBe(true)
     expect(typeof reports[0].holderId).toBe("string")
+    // A measurement must never reach a bug reporter subscribed to the error channel.
+    expect(errorReports.length).toBe(0)
   })
 
   it("reports an acquire timeout with the holder identity captured at the event moment", async () => {

@@ -268,6 +268,7 @@ export default class VelociousConfiguration {
      * @type {WeakSet<object>} */
     _appliedRouteMounts: WeakSet<object>;
     _errorEvents: import("eventemitter3").EventEmitter<string | symbol, any>;
+    _telemetryEvents: import("eventemitter3").EventEmitter<string | symbol, any>;
     /**
      * Stores the database pools value.
      * @type {{[key: string]: import("./database/pool/base.js").default}} */
@@ -1646,6 +1647,16 @@ export default class VelociousConfiguration {
      * @returns {import("eventemitter3").EventEmitter} - Framework error events emitter.
      */
     getErrorEvents(): import("eventemitter3").EventEmitter;
+    /**
+     * Framework telemetry emitter. Telemetry reports measurements — lock contention,
+     * slow queries, queue depth — that are worth observing but are not failures. It is
+     * deliberately separate from `getErrorEvents()`: a bug reporter subscribes to the
+     * error channel on the promise that every payload there carries a thrown value, and
+     * a contention measurement emitted as `framework-error` turns into a bug report on
+     * every occurrence instead of a metric.
+     * @returns {import("eventemitter3").EventEmitter} - Framework telemetry events emitter.
+     */
+    getTelemetryEvents(): import("eventemitter3").EventEmitter;
     /**
      * Registers a reporter that can add client-safe metadata to frontend-model error payloads.
      * @param {import("./configuration-types.js").ClientErrorPayloadReporterType} reporter - Reporter callback.
