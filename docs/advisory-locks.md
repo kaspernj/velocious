@@ -276,6 +276,12 @@ new Configuration({
 - **No database connection while waiting or holding.** The tier keeps one socket per
   process; `dedicatedConnection` and `holdTimeoutMs` still work but no longer spawn a
   dedicated database session on this tier.
+- **Node-only tier.** The transport needs the Node `ws` package, which browser and Expo
+  bundlers cannot resolve (Metro fails on `ws`'s Node core `stream` dependency), so the
+  backend is created through the Node environment handler and never reaches a browser
+  bundle. A browser/Expo configuration that enables the tier fails loudly with
+  "The advisory-lock lock-server tier requires the Node environment handler" instead of
+  breaking the bundle.
 - **Diagnostics.** `configuration.getAdvisoryLockBackendStatus(lockName)` reports
   `lockServer: {connected, lastError, lastProbeAt, leasedNames}` alongside the
   acquisition provenance and resolved policy.
