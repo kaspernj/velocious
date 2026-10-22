@@ -7,29 +7,17 @@ import query from "./query"
 // @ts-expect-error
 import * as SQLite from "expo-sqlite"
 
-import Mutex from "epic-locks/build/mutex.js"
-
 import Base from "./base.js"
+import {nativeDatabaseMutex, runNativeOperation} from "./native-query-gate.js"
 
 export default class VelociousDatabaseDriversSqliteNative extends Base {
-  /**
-   * Serializes native queries so concurrent `getAllAsync` calls never race
-   * `expo-sqlite`'s shared `NativeStatement` objects (a single connection
-   * prepares/executes/finalizes one statement at a time).
-   * @type {Mutex}
-   */
-  _queryMutex = new Mutex()
-
   async connect() {
     const {isBrowser, isNative, isServer} = envSense()
 
     if (!isNative) throw new Error(`SQLite native driver running inside non-native environment: ${JSON.stringify({isBrowser, isNative, isServer})}`)
 
     const args = this.getArgs()
-
-    if (!args.name) throw new Error("No name given for SQLite Native")
-
-    const databaseName = args.name
+    const databaseName = this._databaseName()
 
     if (args.reset) {
       try {
@@ -43,7 +31,9 @@ export default class VelociousDatabaseDriversSqliteNative extends Base {
       }
     }
 
-    this.connection = await SQLite.openDatabaseAsync(databaseName)
+    // expo-sqlite caches native databases by name. A shared cache means closing
+    // one driver's handle closes every other driver's handle for that database.
+    this.connection = await SQLite.openDatabaseAsync(databaseName, {useNewConnection: true})
     await this.registerVersion()
   }
 
@@ -64,14 +54,31 @@ export default class VelociousDatabaseDriversSqliteNative extends Base {
     return connectArgs
   }
 
+  /**
+   * Returns the configured SQLite database name.
+   * @returns {string} - Database name.
+   */
+  _databaseName() {
+    const databaseName = this.getArgs().name
+
+    if (!databaseName) throw new Error("No name given for SQLite Native")
+
+    return databaseName
+  }
+
   async _close() {
-    await this.connection.closeAsync()
-    this.connection = undefined
+    const databaseName = this._databaseName()
+
+    await nativeDatabaseMutex(databaseName).sync(async () => {
+      const connection = this.connection
+
+      this.connection = undefined
+      await connection?.closeAsync()
+    })
   }
 
   async deleteDatabaseStorage() {
-    const databaseName = this.getArgs().name
-    if (!databaseName) throw new Error("No name given for SQLite Native")
+    const databaseName = this._databaseName()
     try {
       await SQLite.deleteDatabaseAsync(databaseName)
     } catch (error) {
@@ -86,15 +93,24 @@ export default class VelociousDatabaseDriversSqliteNative extends Base {
    * @returns {Promise<Record<string, ReturnType<typeof JSON.parse>>[]>} - Query result rows.
    */
   async _queryActual(sql, options = {}) {
-    return await this._queryMutex.sync(async () => {
-      if (!this.connection) throw new Error("Not connected yet")
+    const databaseName = this._databaseName()
 
-      if (options.sqliteScript) {
-        await this.connection.execAsync(sql)
-        return []
+    return await runNativeOperation({
+      databaseName,
+      getConnection: () => this.connection,
+      reopenConnection: async () => {
+        this.connection = await SQLite.openDatabaseAsync(databaseName, {useNewConnection: true})
+
+        return this.connection
+      },
+      operation: async (connection) => {
+        if (options.sqliteScript) {
+          await connection.execAsync(sql)
+          return []
+        }
+
+        return await query(connection, sql)
       }
-
-      return await query(this.connection, sql)
     })
   }
 
@@ -104,10 +120,21 @@ export default class VelociousDatabaseDriversSqliteNative extends Base {
    * @returns {Promise<number>} - Affected row count.
    */
   async _affectedRowsActual(sql) {
-    return await this._queryMutex.sync(async () => {
-      if (!this.connection) throw new Error("Not connected yet")
-      const result = await this.connection.runAsync(sql)
-      return result.changes
+    const databaseName = this._databaseName()
+
+    return await runNativeOperation({
+      databaseName,
+      getConnection: () => this.connection,
+      reopenConnection: async () => {
+        this.connection = await SQLite.openDatabaseAsync(databaseName, {useNewConnection: true})
+
+        return this.connection
+      },
+      operation: async (connection) => {
+        const result = await connection.runAsync(sql)
+
+        return result.changes
+      }
     })
   }
 }
