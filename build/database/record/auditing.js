@@ -420,14 +420,18 @@ function modelParamKey(modelClass) {
  * Table detection and relationship registration happen lazily on first usage.
  * Called synchronously from Model.audited() at module-load time.
  * @param {AuditedModelClass} modelClass - Model class to audit.
+ * @param {{except?: string[]}} [options] - Audit options: `except` lists attribute names never written to the audit trail (e.g. high-frequency telemetry columns).
  * @returns {void}
  */
-function registerAuditing(modelClass) {
+function registerAuditing(modelClass, options = {}) {
   if (Object.prototype.hasOwnProperty.call(modelClass, "_auditLifecycleCallbacksRegistered") && modelClass._auditLifecycleCallbacksRegistered) {
     return
   }
 
-  modelClass._auditLifecycleCallbacksRegistered = true
+  const auditableModelClass = /** @type {AuditedModelClass & {_auditExcludedAttributes?: Set<string>}} */ (modelClass)
+
+  auditableModelClass._auditLifecycleCallbacksRegistered = true
+  auditableModelClass._auditExcludedAttributes = new Set(options.except || [])
   registerAuditRelationship(modelClass)
   modelClass.beforeCreate("captureCreateAuditChanges")
   modelClass.afterCreate("createCreateAudit")
@@ -801,10 +805,18 @@ function auditChangesForCurrentChanges(record) {
   const changes = record.changes()
   /** @type {AuditChanges} */
   const auditedChanges = {}
-  const columnNameToAttributeName = record.getModelClass().getColumnNameToAttributeNameMap()
+  const modelClass = /** @type {AuditedModelClass & {_auditExcludedAttributes?: Set<string>}} */ (record.getModelClass())
+  const columnNameToAttributeName = modelClass.getColumnNameToAttributeNameMap()
+  const excludedAttributes = modelClass._auditExcludedAttributes
 
   for (const [attributeName, change] of Object.entries(changes)) {
-    auditedChanges[columnNameToAttributeName[attributeName] || attributeName] = change[1]
+    const auditedAttributeName = columnNameToAttributeName[attributeName] || attributeName
+
+    if (excludedAttributes && (excludedAttributes.has(auditedAttributeName) || excludedAttributes.has(attributeName))) {
+      continue
+    }
+
+    auditedChanges[auditedAttributeName] = change[1]
   }
 
   return auditedChanges
