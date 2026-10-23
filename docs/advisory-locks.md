@@ -269,7 +269,9 @@ new Configuration({
   connect timeout, then a `reprobeCooldownMs` cache) an acquisition for a name whose
   `minTier` permits `driver-native` continues on the driver tier and emits
   `advisory-lock-fallback {lockName, preferredTier, servedBy, reason}` on the
-  framework-error channel. `minTier: "lock-server"` throws
+  telemetry channel (`configuration.getTelemetryEvents().on("telemetry", …)`), so a
+  downgrade is visible to metrics without being mistaken for a failure by bug
+  reporters. `minTier: "lock-server"` throws
   `AdvisoryLockBackendUnavailableError` instead — never a silent downgrade.
 - **No database connection while waiting or holding.** The tier keeps one socket per
   process; `dedicatedConnection` and `holdTimeoutMs` still work but no longer spawn a

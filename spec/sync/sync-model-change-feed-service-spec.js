@@ -159,4 +159,87 @@ describe("sync model change-feed service - total pending count", {databaseCleani
     expect(result.total).toEqual(0)
     expect(result.upToCursor).toEqual(null)
   })
+
+  it("answers a caught-up sequence cursor without reading the page or running the count", async () => {
+    const entries = await createSyncEntries(3)
+    const latestSequence = entries[2].serverSequence()
+
+    if (latestSequence === null) throw new Error("Expected a server sequence to be assigned on create")
+
+    const service = new CountingFeedService({modelClass: SyncEntry, params: {afterServerSequence: latestSequence}})
+    const result = await service.changes()
+
+    expect(result.total).toEqual(0)
+    expect(result.syncs).toEqual([])
+    expect(service.countCalls).toEqual(0)
+    expect(service.pageCalls).toEqual(0)
+  })
+
+  it("answers a cursor past the scope's snapshot bound without querying", async () => {
+    const entries = await createSyncEntries(2)
+    const latestSequence = entries[1].serverSequence()
+
+    if (latestSequence === null) throw new Error("Expected a server sequence to be assigned on create")
+
+    // A multi-scope client sends its global cursor to every scope, so a scope
+    // whose own sequences are behind that cursor gets an impossible sequence range.
+    const service = new CountingFeedService({modelClass: SyncEntry, params: {afterServerSequence: latestSequence + 1000}})
+    const result = await service.changes()
+
+    expect(result.total).toEqual(0)
+    expect(result.syncs).toEqual([])
+    expect(service.countCalls).toEqual(0)
+    expect(service.pageCalls).toEqual(0)
+  })
+
+  it("skips the count when a sequence-cursor page is short of the limit", async () => {
+    const entries = await createSyncEntries(3)
+    const firstSequence = entries[0].serverSequence()
+
+    if (firstSequence === null) throw new Error("Expected a server sequence to be assigned on create")
+
+    const service = new CountingFeedService({modelClass: SyncEntry, params: {afterServerSequence: firstSequence}})
+    const result = await service.changes()
+
+    expect(result.total).toEqual(2)
+    expect(result.syncs.length).toEqual(2)
+    expect(service.countCalls).toEqual(0)
+    expect(service.pageCalls).toEqual(1)
+  })
+
+  it("counts when a sequence-cursor page fills the limit", async () => {
+    const entries = await createSyncEntries(3)
+    const firstSequence = entries[0].serverSequence()
+
+    if (firstSequence === null) throw new Error("Expected a server sequence to be assigned on create")
+
+    const service = new CountingFeedService({modelClass: SyncEntry, params: {afterServerSequence: firstSequence, limit: 1}})
+    const result = await service.changes()
+
+    expect(result.total).toEqual(2)
+    expect(result.syncs.length).toEqual(1)
+    expect(service.countCalls).toEqual(1)
+    expect(service.pageCalls).toEqual(1)
+  })
 })
+
+/**
+ * Change-feed service that records how often it reaches the page and count
+ * queries, so a spec can prove an answer needed neither.
+ */
+class CountingFeedService extends SyncModelChangeFeedService {
+  countCalls = 0
+  pageCalls = 0
+
+  async totalPendingChanges(args) {
+    this.countCalls += 1
+
+    return await super.totalPendingChanges(args)
+  }
+
+  pageQuery(args) {
+    this.pageCalls += 1
+
+    return super.pageQuery(args)
+  }
+}

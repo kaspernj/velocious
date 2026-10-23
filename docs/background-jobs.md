@@ -231,6 +231,44 @@ The method is resolved before admission/persistence and its result uses the exis
 
 Limits are enforced by durable database reservations shared by every main/worker process. Saturated keys do not prevent unrelated queued jobs from being dispatched. Reservations are released when work completes, fails terminally, is requeued for retry, is cancelled, or is recovered as orphaned. Startup reconciliation rebuilds reservation counts after an unclean scheduler stop, and the active main rechecks them on its one-minute maintenance cadence so drift cannot keep work queued until another restart. Healthy checks use two aggregate reads and no counter writes; suspected mismatches are re-counted under their per-key locks in fresh transactions, and actual repairs emit a structured warning with a bounded key sample before dispatch is retried.
 
+## Per-job-class wall-clock timeouts
+
+A job class can carry its own wall-clock bound with `static timeoutMs`, so each job type
+declares the bound its work actually needs instead of every job in the system sharing one
+worker-level value:
+
+```js
+export default class RunBuildJob extends VelociousJob {
+  // Builds legitimately run for hours; the bound only catches a genuinely
+  // wedged runner, not a slow one.
+  static timeoutMs = 6 * 60 * 60 * 1000
+}
+
+export default class RunQueuedBuildsJob extends VelociousJob {
+  // Planning passes are bounded by their own workload constants (seconds).
+  static timeoutMs = 5 * 60 * 1000
+}
+```
+
+Precedence, highest first:
+
+1. A per-enqueue `{timeoutMs}` option — the caller's explicit override.
+2. The job class's `static timeoutMs`.
+3. The worker-level `backgroundJobs.jobTimeoutMs` (or the worker constructor override).
+4. No bound.
+
+A non-positive finite value at either level disables the bound for that job or class, which
+preserves the prior unbounded behavior for anything that declares nothing. A class that
+declares no `static timeoutMs` leaves the option absent, so the worker-level value applies
+exactly as before.
+
+The bound is enforced by the worker, not by the job: a forked or pooled job still running
+after the resolved timeout is terminated (SIGTERM, then SIGKILL after the reaping grace) and
+reported failed so the work requeues. Because a job that declares a bound is killed rather
+than allowed to continue, set each class's value well above that job type's longest
+legitimate run — a build runner that legitimately takes hours needs an hours-scale bound,
+not a minutes-scale one.
+
 ## Queues (per-queue concurrency caps)
 
 Give a job class a queue with `static queue = "..."` (or pass `{queue}` in job options — the option wins). A job with no queue runs on `"default"`. Configure a cluster-wide cap per queue under `backgroundJobs.queues`:

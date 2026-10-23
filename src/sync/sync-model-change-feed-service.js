@@ -34,9 +34,10 @@ export default class SyncModelChangeFeedService {
 
   /**
    * Builds a stable change-feed page. The additive `total` is the scope's pending
-   * change count from the request cursor to the snapshot bound (a COUNT, not a
-   * materialized read), so a client can render a "synced of total" progress bar;
-   * older clients ignore it.
+   * change count from the request cursor to the snapshot bound, so a client can
+   * render a "synced of total" progress bar; older clients ignore it. The count
+   * query only runs when the page read cannot answer it: a sequence cursor whose
+   * page is short of the limit has already materialized the whole remaining set.
    * @returns {Promise<{status: string, nextCursor: {id: string, serverSequence: number, updatedAt: string} | null, syncs: Array<Record<string, unknown>>, total: number, upToCursor: {id: string, serverSequence: number, updatedAt: string} | null}>} Change-feed page result.
    */
   async changes() {
@@ -45,10 +46,22 @@ export default class SyncModelChangeFeedService {
 
     if (!upToCursor) return {status: "success", nextCursor: null, syncs: [], total: 0, upToCursor: null}
 
-    const total = await this.totalPendingChanges({upToCursor})
-    const query = this.pageQuery({limit, upToCursor})
-    const records = await query.toArray()
+    const afterServerSequence = this.optionalPositiveIntegerParam(this.params.afterServerSequence, "afterServerSequence")
+
+    // A cursor at or past the scope's snapshot bound cannot have pending rows.
+    // Answering here skips both the page read and the count, which would otherwise
+    // run against an empty sequence range on every caught-up poll. A multi-scope
+    // client sends its global cursor to each scope, so a scope whose own sequences
+    // are behind that cursor lands here on nearly every request.
+    if (afterServerSequence !== null && afterServerSequence >= upToCursor.serverSequence) {
+      return {status: "success", nextCursor: upToCursor, syncs: [], total: 0, upToCursor}
+    }
+
+    const records = await this.pageQuery({limit, upToCursor}).toArray()
     const nextCursor = records.length > 0 ? this.cursorForRecord(records[records.length - 1]) : upToCursor
+    const total = afterServerSequence !== null && records.length < limit
+      ? records.length
+      : await this.totalPendingChanges({upToCursor})
 
     return {
       status: "success",

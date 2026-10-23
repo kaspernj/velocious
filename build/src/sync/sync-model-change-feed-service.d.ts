@@ -36,9 +36,10 @@ export default class SyncModelChangeFeedService {
     });
     /**
      * Builds a stable change-feed page. The additive `total` is the scope's pending
-     * change count from the request cursor to the snapshot bound (a COUNT, not a
-     * materialized read), so a client can render a "synced of total" progress bar;
-     * older clients ignore it.
+     * change count from the request cursor to the snapshot bound, so a client can
+     * render a "synced of total" progress bar; older clients ignore it. The count
+     * query only runs when the page read cannot answer it: a sequence cursor whose
+     * page is short of the limit has already materialized the whole remaining set.
      * @returns {Promise<{status: string, nextCursor: {id: string, serverSequence: number, updatedAt: string} | null, syncs: Array<Record<string, unknown>>, total: number, upToCursor: {id: string, serverSequence: number, updatedAt: string} | null}>} Change-feed page result.
      */
     changes(): Promise<{

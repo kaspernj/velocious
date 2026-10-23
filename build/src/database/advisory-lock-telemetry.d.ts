@@ -52,9 +52,9 @@ export type AdvisoryLockTelemetryThresholds = {
  * A lock convoy is only fixable when it is *attributable*: which lock name was
  * contended, on which backend tier, for how long, and who held it. These reports
  * fire on the acquisition/release events themselves — never from a periodic
- * scanner — so a contended lock in production surfaces on the framework-error
- * channel with the holder identity available on that tier at that moment,
- * without SSH forensics.
+ * scanner — so a contended lock in production surfaces on the telemetry channel
+ * with the holder identity available on that tier at that moment, without SSH
+ * forensics.
  *
  * Three events, each with its own threshold (all configurable per database via
  * `advisoryLockTelemetry`, see `docs/advisory-locks.md`):
@@ -129,4 +129,20 @@ export declare function advisoryLockTelemetryThresholds(args: import("../configu
  * @returns {void} - No return value.
  */
 export declare function emitAdvisoryLockTelemetryReport(configuration: import("../configuration.js").default, report: AdvisoryLockTelemetryReport): void;
+/**
+ * Reports one acquisition served below the lock name's preferred tier
+ * (design §3): the caller wanted the lock server and got the database, so the
+ * downgrade must be visible without being mistaken for a failure. Fallbacks are
+ * measurements, not errors, so they stay off `framework-error` and its bug
+ * reporters (same contract as the duration telemetry).
+ * @param {import("../configuration.js").default} configuration - Owning configuration.
+ * @param {{lockName: string, preferredTier: string, reason: string, servedBy: string}} report - Fallback details.
+ * @returns {void}
+ */
+export declare function emitAdvisoryLockFallbackReport(configuration: import("../configuration.js").default, report: {
+    lockName: string;
+    preferredTier: string;
+    reason: string;
+    servedBy: string;
+}): void;
 //# sourceMappingURL=advisory-lock-telemetry.d.ts.map

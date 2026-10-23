@@ -10,7 +10,7 @@ Status: **design, partially implemented** (STC-210, parent epic STC-209).
   (`src/database/advisory-lock-lock-server-backend.js`) speaking the daemon's
   implemented protocol v2 over its websocket surface. Selection is policy-driven
   (`preferredTier: "lock-server"`), an unreachable server fails upward to the driver
-  tier with an `advisory-lock-fallback` report, `minTier: "lock-server"` refuses with
+  tier with an `advisory-lock-fallback` telemetry report, `minTier: "lock-server"` refuses with
   `AdvisoryLockBackendUnavailableError`, and a fenced lease surfaces as
   `AdvisoryLockLostError`. The daemon itself already keeps its authority in process
   memory with leases, FIFO waiters and persisted fencing epochs (STC-212), so this
@@ -132,7 +132,7 @@ Detection is **probe once, cache, re-probe on failure** — never a per-acquisit
 Every acquisition carries its provenance:
 
 - **On the result:** the runner records `{backend: "lock-server" | "driver-native" | "file" | "process-local", epoch, fallbackFrom?}` for the held lock. `withAdvisoryLock` passes it to the callback as `args.lockBackend` (additive; existing callbacks ignore it).
-- **On fallback:** whenever an acquisition is served by a tier **below the lock name's declared preferred tier**, the runner emits on the framework-error channel — `configuration.getErrorEvents().emit("framework-error", {context: "advisory-lock-fallback", lockName, servedBy, preferredBy, reason})` — matching the repo's "never swallow" rule, so bug reporters see every downgrade. Sustained outage reporting follows the Beacon `unreachableReportMs` grace shape: a single blip that recovers within the grace window is logged, not escalated.
+- **On fallback:** whenever an acquisition is served by a tier **below the lock name's declared preferred tier**, the runner reports it on the telemetry channel — `configuration.getTelemetryEvents().on("telemetry", …)` with `{context: "advisory-lock-fallback", lockName, preferredTier, servedBy, reason}` — as a measurement, not an error, so bug reporters never turn a downgrade into a report. Without a subscriber the report degrades to one `stderr` line, so a downgrade is never silent.
 - **Queryable surface:** `configuration.getAdvisoryLockBackendStatus()` returns, per backend, the cached availability, last probe result, current in-use count, and last fallback event; for the lock-server tier it proxies the server's `list`/`who-holds` response (live holders with name, holder id, epoch, lease expiry). This is the "which backend served this lock" surface for diagnostics and system tests.
 
 A silent downgrade to a weaker tier is therefore impossible to hide: it is in the

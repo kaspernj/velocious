@@ -56,6 +56,17 @@ export default class VelociousJob {
   static processTitle = undefined
 
   /**
+   * Wall-clock bound this job class runs under, in ms. Set e.g.
+   * `static timeoutMs = 60 * 60 * 1000` on a job whose work legitimately takes
+   * hours so its type carries its own bound instead of relying on one global
+   * `backgroundJobs.jobTimeoutMs` tuned for the slowest job in the system. The
+   * `{timeoutMs}` enqueue option overrides it. A non-positive value disables the
+   * bound for this class. Left undefined, the worker-level value applies.
+   * @type {number | undefined}
+   */
+  static timeoutMs = undefined
+
+  /**
    * Stops this performance and reschedules the same logical job row. This is
    * normal control flow: it does not count as a failure or consume a retry.
    * @param {number} delayMs - Non-negative safe-integer delay in milliseconds.
@@ -94,6 +105,25 @@ export default class VelociousJob {
   }
 
   /**
+   * Folds this job class's static `timeoutMs` into the enqueue options unless the
+   * caller already specified one, so a job type carries its own wall-clock bound
+   * instead of every job sharing one worker-level value. A class that declares
+   * nothing leaves the option absent, and the worker falls back to its own
+   * default — the prior behavior.
+   * @param {import("./types.js").BackgroundJobOptions | undefined} options - Job options.
+   * @returns {import("./types.js").BackgroundJobOptions} - Options including the resolved timeout.
+   */
+  static _withTimeout(options) {
+    const merged = options ? {...options} : {}
+
+    if (merged.timeoutMs === undefined && typeof this.timeoutMs === "number") {
+      merged.timeoutMs = this.timeoutMs
+    }
+
+    return merged
+  }
+
+  /**
    * Resolves class-derived enqueue options on a hydrated job instance. Explicit
    * per-enqueue options take precedence over the instance concurrency key.
    * @param {object} args - Job context.
@@ -102,7 +132,7 @@ export default class VelociousJob {
    * @returns {import("./types.js").BackgroundJobOptions} - Resolved job options.
    */
   static _withJobContext({jobArgs, jobOptions}) {
-    const options = this._withQueue(jobOptions)
+    const options = this._withTimeout(this._withQueue(jobOptions))
 
     if (options.concurrencyKey !== undefined) return options
 

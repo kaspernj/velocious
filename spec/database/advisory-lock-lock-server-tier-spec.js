@@ -28,6 +28,33 @@ class FakeErrorEvents {
   }
 }
 
+/** Minimal telemetry emitter double (EventEmitter surface the reporter uses). */
+class FakeTelemetryEvents {
+  constructor() {
+    /** @type {{payload: Record<string, unknown>, type: string}[]} */
+    this.events = []
+  }
+
+  /**
+   * @param {string} type - Event name.
+   * @returns {number} - Listener count (always one: the double records everything).
+   */
+  listenerCount(type) {
+    void type
+
+    return 1
+  }
+
+  /**
+   * @param {string} type - Event name.
+   * @param {Record<string, unknown>} payload - Event payload.
+   * @returns {void}
+   */
+  emit(type, payload) {
+    this.events.push({payload, type})
+  }
+}
+
 /** Configuration double exposing exactly the advisory-lock surface the runner uses. */
 class FakeConfiguration {
   /**
@@ -37,6 +64,7 @@ class FakeConfiguration {
     this.backend = backend
     this.policy = policy
     this.errorEvents = new FakeErrorEvents()
+    this.telemetryEvents = new FakeTelemetryEvents()
     /** @type {{backend: string, fencingSupported: boolean, lockName: string}[]} */
     this.acquisitions = []
   }
@@ -44,6 +72,11 @@ class FakeConfiguration {
   /** @returns {FakeErrorEvents} */
   getErrorEvents() {
     return this.errorEvents
+  }
+
+  /** @returns {FakeTelemetryEvents} */
+  getTelemetryEvents() {
+    return this.telemetryEvents
   }
 
   /** @returns {import("../../src/database/advisory-lock-backend-policy.js").AdvisoryLockBackendPolicyEntry[]} */
@@ -212,10 +245,14 @@ describe("AdvisoryLockRunner - lock-server tier", () => {
     expect(events).toEqual(["driver acquire unit-pref-b", "driver release unit-pref-b"])
     expect(configuration.acquisitions).toEqual([{backend: "driver-native", fencingSupported: true, lockName: "unit-pref-b"}])
 
-    const fallback = configuration.errorEvents.events.find((event) => event.payload.context === "advisory-lock-fallback")
+    const fallback = configuration.telemetryEvents.events.find((event) => event.payload.context === "advisory-lock-fallback")
 
     expect(fallback).toBeTruthy()
+    expect(fallback?.type).toEqual("telemetry")
     expect(fallback?.payload).toMatchObject({lockName: "unit-pref-b", preferredTier: "lock-server", servedBy: "driver-native"})
+    // A fallback is a measurement, not a failure: it must never reach the
+    // framework-error channel and its bug reporters.
+    expect(configuration.errorEvents.events).toEqual([])
   })
 
   it("refuses loudly when the name requires the lock-server tier and the server is down", async () => {
