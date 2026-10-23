@@ -54,6 +54,10 @@ describe("Database query AbortSignal", () => {
       }
     }
     class TestModel {
+      // Query execution initializes the model before it reads metadata. This fake has no
+      // metadata to load, but it still has to honor the required static contract.
+      static async ensureInitialized() {}
+
       static primaryKey() {
         return "id"
       }
