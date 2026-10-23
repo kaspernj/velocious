@@ -29,7 +29,7 @@ describe("Advisory lock lock-server environment handler", {databaseCleaning: {tr
     const handler = new VelociousEnvironmentHandlerBrowser({})
 
     await expect(handler.createAdvisoryLockLockServerBackend({url: "ws://127.0.0.1:3006/websocket"})).rejects.toThrow(
-      "The advisory-lock lock-server tier requires the Node environment handler"
+      "The advisory-lock lock-server tier requires a Node environment handler"
     )
   })
 })
