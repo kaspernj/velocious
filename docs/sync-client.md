@@ -235,6 +235,21 @@ Automatic tracking covers ordinary creates/updates, so most models never call `q
 
 `queue()` persists a pending row on the derived `Sync` model (stripping local-only attributes, coercing booleans) and schedules an immediate background replay. Replays are single-flighted and online-gated; rows are marked successful only after the backend acknowledges them, so offline or rejected changes stay pending for the next attempt. Background failures go to the `sync.client.onError` hook (rethrown when none is configured). `waitForScheduledReplay()` awaits the last scheduled attempt (useful in tests and shutdown flows).
 
+The scheduled replay lives only as long as the JavaScript runtime, so a mutation written while the app is backgrounding or closing can stay pending until some later code path happens to replay it. Browser/Expo apps that need the replay to survive that boundary can enqueue the framework's `SyncReplayJob` instead of awaiting `replayPending()` on the interaction path:
+
+```js
+import SyncReplayJob from "velocious/build/src/background-jobs/sync-replay-job.js"
+
+// Register it with the app's other local jobs.
+backgroundJobs: {mode: "background", jobClasses: [EventResyncJob, SyncReplayJob]}
+
+// After a local mutation (for example a ticket scan decision):
+await syncClient().queue({resource: ticketScan, syncType: "scanAttempt"})
+await SyncReplayJob.enqueue()
+```
+
+`SyncReplayJob.enqueue()` resolves after the durable enqueue, not after the replay, and overlapping enqueues collapse onto one queued job (`deduplicateWhileQueued`, `concurrencyKey: "sync-replay"`, `maxConcurrency: 1`). `perform()` replays through the app's registered client and treats a missing client, an offline device, or a failed replay as a no-op with logging: pending rows stay queued and the next enqueue retries them. Use it for interaction paths where an awaited network round-trip is unacceptable (scanning, saving); keep awaiting `replayPending()` only where the caller genuinely needs the server acknowledgement before continuing.
+
 When a `SyncCoordinator` is attached, mutation and realtime-reconnect scheduling route through its one replay → subscribe → pull cycle instead of starting independent replay/pull work. `activateUserScope()` declares the server-enumerated user scope without subscribing or pulling, making it suitable for the coordinator's `prepare` hook; the older `subscribeUserScope()` remains the combined convenience for clients without a coordinator.
 
 ### Durable base-version conflicts

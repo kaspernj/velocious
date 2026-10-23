@@ -28,3 +28,15 @@ export function currentSyncClient() {
 
   return currentClient
 }
+
+/**
+ * Returns the current sync client when one is registered.
+ *
+ * Background jobs that replay the sync queue can legitimately run before an app has
+ * registered its client, or after it cleared it on sign-out. They need a non-throwing
+ * lookup so that state is a no-op instead of a failed job.
+ * @returns {ReturnType<typeof JSON.parse> | null} Current sync client, or null.
+ */
+export function currentSyncClientOrNull() {
+  return currentClient
+}
