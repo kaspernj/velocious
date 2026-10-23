@@ -3468,12 +3468,13 @@ class VelociousDatabaseRecord {
 
   /**
    * Runs count.
+   * @param {string | null} [column] - Attribute or column to count. Defaults to the primary key.
    * @returns {Promise<number>} - Resolves with the count.
    */
-  static async count() {
+  static async count(column = null) {
     await this.ensureInitialized()
 
-    return await this._newQuery().count()
+    return await this._newQuery().count(column)
   }
 
   /**

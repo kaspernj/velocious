@@ -10,7 +10,7 @@ describe("Record - query builder lazy initialization", {tags: ["dummy"]}, () => 
 
     expect(LazyQueryProject.isInitialized()).toEqual(false)
 
-    const projects = await LazyQueryProject.where({id: "00000000-0000-0000-0000-000000000000"}).toArray()
+    const projects = await LazyQueryProject.where({id: 0}).toArray()
 
     expect(Array.isArray(projects)).toEqual(true)
     expect(LazyQueryProject.isInitialized()).toEqual(true)

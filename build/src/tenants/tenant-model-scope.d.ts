@@ -43,9 +43,10 @@ export default class TenantModelScope<MC extends typeof import("../database/reco
     create(attributes?: Record<string, ReturnType<typeof JSON.parse>>): Promise<InstanceType<MC>>;
     /**
      * Counts records on the captured tenant.
+     * @param {string | null} [column] - Attribute or column to count. Defaults to the primary key.
      * @returns {Promise<number>} - Count on the captured tenant.
      */
-    count(): Promise<number>;
+    count(column?: string | null): Promise<number>;
     /**
      * Finds a record by primary key on the captured tenant.
      * @param {string | number} recordId - Record identifier.

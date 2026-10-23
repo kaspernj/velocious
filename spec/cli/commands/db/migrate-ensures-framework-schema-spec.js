@@ -76,7 +76,10 @@ describe("Cli - Commands - db:migrate framework schema", () => {
         await dbs.default.dropTable("velocious_attachments", {cascade: true, ifExists: true})
       })
 
-      await handler.ensureFrameworkSchema({dbs: {projectTenant: dbs.default}})
+      // Deliberately not a configured database identifier: migrations can pass an
+      // already-checked-out tenant connection under a logical key, and the
+      // attachment schema must use the connection's own pool identity.
+      await handler.ensureFrameworkSchema({dbs: {unconfiguredTenantDatabase: dbs.default}})
 
       expect(await dbs.default.tableExists("background_jobs")).toEqual(false)
       expect(await dbs.default.tableExists("velocious_attachments")).toEqual(true)

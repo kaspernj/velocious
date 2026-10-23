@@ -44,4 +44,33 @@ describe("Configuration browser bundle", {databaseCleaning: {transaction: true}}
       expect(source).not.toContain("async_hooks")
     }
   })
+
+  it("keeps Node-only advisory-lock transports out of browser bundles", async () => {
+    const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
+
+    const result = await build({
+      bundle: true,
+      format: "esm",
+      logLevel: "silent",
+      metafile: true,
+      platform: "browser",
+      stdin: {
+        contents: `
+          import Configuration from "./src/configuration.js"
+          import BrowserEnvironmentHandler from "./src/environment-handlers/browser.js"
+          globalThis.VelociousConfiguration = Configuration
+          globalThis.VelociousBrowserEnvironmentHandler = BrowserEnvironmentHandler
+        `,
+        loader: "js",
+        resolveDir: repoRoot,
+        sourcefile: "configuration-browser-advisory-lock-bundle-entry.js"
+      },
+      write: false
+    })
+
+    const inputs = Object.keys(result.metafile.inputs)
+
+    expect(inputs.some((filePath) => filePath.includes("advisory-lock-lock-server-backend"))).toBeFalse()
+    expect(inputs.some((filePath) => filePath.includes("node_modules/ws/"))).toBeFalse()
+  })
 })
