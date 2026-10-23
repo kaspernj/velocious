@@ -40,6 +40,8 @@ export default class SyncClient {
     _userScopeState: "subscribed" | "subscribing" | "unsubscribed";
     /** @type {import("./sync-scope-store.js").default | null} */
     _scopeStore: import("./sync-scope-store.js").default | null;
+    /** @type {import("./sync-applied-sequence-store.js").default | null} */
+    _appliedSequenceStore: import("./sync-applied-sequence-store.js").default | null;
     /** @type {Promise<void> | null} */
     _scheduledReplay: Promise<void> | null;
     /** @type {((reason: "mutation" | "realtime") => Promise<void>) | null} */
@@ -337,6 +339,13 @@ export default class SyncClient {
      * applies through the declared resource configs, registers each written record
      * for echo suppression (tracked resources do not re-queue applied changes), and
      * fails loudly instead of silently skipping unconfigured resources.
+     *
+     * Applies are idempotent per record: the feed is at-least-once (a realtime push
+     * does not advance the pull cursor, so the same `serverSequence` arrives again
+     * on the next pull). A change whose sequence is not greater than the newest one
+     * already applied to that record is skipped, so a duplicate cannot overwrite
+     * newer local state. Sources without a sequence (e.g. legacy broadcasts) keep
+     * applying unchanged.
      * @param {{source?: string}} [args] - Error context describing where the change came from.
      * @returns {(sync: import("./sync-api-client-types.js").SyncChangeEnvelope) => Promise<import("./sync-api-client-types.js").SyncChangeApplyResult>} Loud remote-change applier.
      */
@@ -678,6 +687,12 @@ export default class SyncClient {
      * @returns {import("./sync-scope-store.js").default} Scope store.
      */
     scopeStore(): import("./sync-scope-store.js").default;
+    /**
+     * Returns the per-record applied-sequence store that keeps remote applies
+     * idempotent across pull/realtime duplication.
+     * @returns {import("./sync-applied-sequence-store.js").default} Applied-sequence store.
+     */
+    appliedSequenceStore(): import("./sync-applied-sequence-store.js").default;
     /**
      * Resolves the declared resource config for a local record.
      * @param {ReturnType<typeof JSON.parse>} resource - Local model record.

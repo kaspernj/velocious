@@ -243,6 +243,12 @@ export default class SyncApiClient {
      */
     static syncEnvelopeFromPayload(payload: ReturnType<typeof JSON.parse>): SyncChangeEnvelope;
     /**
+     * Normalizes a raw server sequence into a positive safe integer.
+     * @param {unknown} value - Raw sequence.
+     * @returns {number | null} Normalized sequence, or null when absent/invalid.
+     */
+    static normalizedServerSequence(value: unknown): number | null;
+    /**
      * Builds an app-configured resource applier for pulled sync rows. The sync
      * mechanics stay here; apps only declare which models/attributes/hooks are
      * allowed for each resource type.

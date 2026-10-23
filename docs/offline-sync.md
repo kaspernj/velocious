@@ -168,6 +168,8 @@ A change should include:
 - scope data needed for subscribers
 - server timestamp
 
+Delivery is at least once (realtime pushes do not advance the pull cursor), so clients must apply changes idempotently. `SyncClient` records the highest applied `serverSequence` per record and skips duplicate or older rows; see [idempotent remote applies](sync-client.md#idempotent-remote-applies).
+
 If a client is too far behind for retained changes, the server returns `snapshot_required`. The client then refreshes a scoped snapshot and resumes from the snapshot's sequence.
 
 ### Peer-to-peer transfer

@@ -19,6 +19,24 @@ describe("Database - query - model class query", {databaseCleaning: {transaction
     expect(distinctCount).toEqual(1)
   })
 
+  it("counts a named column and distinct column values", async () => {
+    const project1 = await Project.create({nameEn: "Column count 1", nameDe: "Spaltenanzahl 1"})
+    const project2 = await Project.create({nameEn: "Column count 2", nameDe: "Spaltenanzahl 2"})
+
+    await Task.create({name: "Column count task 1", project: project1})
+    await Task.create({name: "Column count task 2", project: project1})
+    await Task.create({name: "Column count task 3", project: project2})
+
+    expect(await Task.count("project_id")).toEqual(3)
+    expect(await Task.count("projectId")).toEqual(3)
+    expect(await Task.distinct().count("project_id")).toEqual(2)
+    expect(await Task.distinct().count("projectId")).toEqual(2)
+  })
+
+  it("rejects an unknown count column", async () => {
+    await expect(async () => await Task.count("not_a_task_column")).toThrow(/Unknown count column "not_a_task_column" for Task/u)
+  })
+
   it("replaces accumulated selects with reselect", async () => {
     const project = await Project.create({nameEn: "Reselect project", nameDe: "Auswahl-Projekt"})
     await Task.create({name: "Reselect task", project})

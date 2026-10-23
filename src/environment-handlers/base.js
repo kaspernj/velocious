@@ -50,6 +50,17 @@ export default class VelociousEnvironmentHandlerBase {
   }
 
   /**
+   * Creates the lock-server advisory-lock backend. Only Node environments can
+   * provide this tier's websocket transport; browser and Expo bundles must never
+   * pull the Node-only transport into their graph.
+   * @param {object} _args - Backend options.
+   * @returns {Promise<import("../database/advisory-lock-lock-server-backend.js").default>} - Resolves with the created backend in Node handlers.
+   */
+  async createAdvisoryLockLockServerBackend(_args) {
+    throw new Error("The advisory-lock lock-server tier requires a Node environment handler")
+  }
+
+  /**
    * Node test runtimes may replace a physical child connection with a broker
    * proxy. Other environments never participate in this test-only protocol.
    * @param {{DriverClass: typeof import("../database/drivers/base.js").default, config: import("../configuration-types.js").DatabaseConfigurationType, configuration: import("../configuration.js").default, databaseIdentifier: string, reuseKey?: string}} _args - Connection details.

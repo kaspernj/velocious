@@ -293,6 +293,14 @@ await otherClient.importPeerBundle({bundle, signedOfflineGrants: [...]})
 
 With the offline block configured, background replay drains conflict-tracked logs through the signed replay path — one owner per durable log, never both the signed and legacy unsigned path.
 
+### Idempotent remote applies
+
+Remote changes are applied at least once: a realtime push does not advance a pull cursor, so the next pull re-delivers the same change row, and a resumed pull page can repeat a row already seen. `SyncClient` therefore records the highest `serverSequence` applied to each `{resourceType, resourceId}` in the framework-owned `velocious_sync_applied_sequences` table (auto-created; process-local memory when no database is configured). An incoming change at or below that watermark is skipped before the resource `attributes`/`afterApply` hooks run, while any higher sequence still applies.
+
+This makes re-delivery safe for models that write optimistic local state between a server change and its duplicate: an already-applied `inside` change cannot overwrite a newer provisional `scanned-out` write. Changes from sources without a `serverSequence` (for example legacy realtime broadcasts) keep applying unchanged, so app-level monotonic guards still belong in `attributes` for payloads that carry no sequence.
+
+`SyncChangeEnvelope` exposes `serverSequence()` and `updatedAt()` alongside `data`, `id`, `resourceId`, `resourceType`, and `syncType`, so an `attributes` hook can also order by the exact server sequence instead of a timestamp.
+
 ## Realtime
 
 `subscribeRealtime()` bridges server websocket pushes into the same derived apply path as pulls — no hand-written websocket apply code and no channel wiring in apps. Every declared pull scope subscribes the framework-owned `velocious-sync` channel automatically: the subscribe params mirror the scope's `{resourceType, conditions}`, and the server authorizes the subscription through the app sync resource's existing `authorizeChanges({params, scope})` — the same authorization pulls already go through. The app footprint shrinks to the callbacks the framework genuinely cannot know (how to build the websocket client, what this device's echo origin is):
