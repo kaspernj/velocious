@@ -69,9 +69,6 @@ describe("Database query AbortSignal", () => {
       static tableName() {
         return "test_models"
       }
-
-      /** @returns {Promise<void>} - Query execution initializes model metadata first. */
-      static async ensureInitialized() {}
     }
     const signal = new AbortController().signal
     const query = new ModelClassQuery({

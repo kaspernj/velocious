@@ -10,6 +10,7 @@ import VelociousWebsocketClient from "../http-client/websocket-client.js"
 
 import {serializedScopeFromQuery} from "./query-scope.js"
 import SyncApiClient from "./sync-api-client.js"
+import SyncAppliedSequenceStore from "./sync-applied-sequence-store.js"
 import SyncOfflineSession from "./sync-offline-session.js"
 import SyncRealtimeBridge from "./sync-realtime-bridge.js"
 import SyncScopeStore from "./sync-scope-store.js"
@@ -183,6 +184,8 @@ export default class SyncClient {
     this._userScopeState = "unsubscribed"
     /** @type {import("./sync-scope-store.js").default | null} */
     this._scopeStore = scopeStore || null
+    /** @type {import("./sync-applied-sequence-store.js").default | null} */
+    this._appliedSequenceStore = null
     /** @type {Promise<void> | null} */
     this._scheduledReplay = null
     /** @type {((reason: "mutation" | "realtime") => Promise<void>) | null} */
@@ -832,6 +835,13 @@ export default class SyncClient {
    * applies through the declared resource configs, registers each written record
    * for echo suppression (tracked resources do not re-queue applied changes), and
    * fails loudly instead of silently skipping unconfigured resources.
+   *
+   * Applies are idempotent per record: the feed is at-least-once (a realtime push
+   * does not advance the pull cursor, so the same `serverSequence` arrives again
+   * on the next pull). A change whose sequence is not greater than the newest one
+   * already applied to that record is skipped, so a duplicate cannot overwrite
+   * newer local state. Sources without a sequence (e.g. legacy broadcasts) keep
+   * applying unchanged.
    * @param {{source?: string}} [args] - Error context describing where the change came from.
    * @returns {(sync: import("./sync-api-client-types.js").SyncChangeEnvelope) => Promise<import("./sync-api-client-types.js").SyncChangeApplyResult>} Loud remote-change applier.
    */
@@ -846,6 +856,18 @@ export default class SyncClient {
 
       return await this.withTenantOperation(async (operation) => {
         const data = sync.data()
+        const resourceId = String(sync.resourceId())
+        const serverSequence = sync.serverSequence()
+        const appliedSequences = this.appliedSequenceStore()
+
+        if (serverSequence !== null) {
+          const lastAppliedSequence = await appliedSequences.lastAppliedSequence({resourceId, resourceType})
+
+          if (lastAppliedSequence !== null && serverSequence <= lastAppliedSequence) {
+            return {changed: false, resourceType}
+          }
+        }
+
         const versionAttribute = this.config.resources[resourceType].conflictTracking?.versionAttribute
 
         if (versionAttribute) {
@@ -853,7 +875,7 @@ export default class SyncClient {
             ? /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (data)
             : {}
 
-          this.noteRemoteVersion({resourceId: String(sync.resourceId()), resourceType, version: dataAttributes[versionAttribute]})
+          this.noteRemoteVersion({resourceId, resourceType, version: dataAttributes[versionAttribute]})
         }
 
         const pullResourceConfigs = this.pullResourceConfigs(operation)
@@ -863,7 +885,13 @@ export default class SyncClient {
           return this.markRemoteApply(record)
         })
 
-        return await applier(sync)
+        const result = await applier(sync)
+
+        if (serverSequence !== null) {
+          await appliedSequences.recordAppliedSequence({resourceId, resourceType, serverSequence})
+        }
+
+        return result
       })
     }
   }
@@ -1618,6 +1646,27 @@ export default class SyncClient {
     })
 
     return this._scopeStore
+  }
+
+  /**
+   * Returns the per-record applied-sequence store that keeps remote applies
+   * idempotent across pull/realtime duplication.
+   * @returns {import("./sync-applied-sequence-store.js").default} Applied-sequence store.
+   */
+  appliedSequenceStore() {
+    this.assertTenantReady()
+
+    if (this._appliedSequenceStore && this._databaseIdentity && this._appliedSequenceStore.storeIdentity !== this._databaseIdentity) {
+      throw new Error("SyncClient applied-sequence store belongs to another or unresolved physical tenant database")
+    }
+
+    this._appliedSequenceStore ||= new SyncAppliedSequenceStore({
+      configuration: this.config.configuration,
+      databaseIdentifier: this.config.databaseIdentifier,
+      tenantHandle: this.config.tenantHandle
+    })
+
+    return this._appliedSequenceStore
   }
 
   /**

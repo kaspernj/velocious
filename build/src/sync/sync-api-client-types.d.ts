@@ -21,9 +21,17 @@ export type SyncChangeEnvelope = {
      */
     resourceType: () => string | null;
     /**
+     * - Monotonic server change sequence, when the source provided one.
+     */
+    serverSequence: () => number | null;
+    /**
      * - Sync operation type.
      */
     syncType: () => string;
+    /**
+     * - Server change timestamp, when the source provided one.
+     */
+    updatedAt: () => string | null;
 };
 export type SyncChangeApplyResult = {
     /**
@@ -227,7 +235,9 @@ export type SyncReplayResponse = {
  * @property {() => unknown} id - Sync row identifier.
  * @property {() => unknown} resourceId - Resource identifier.
  * @property {() => string | null} resourceType - Resource type name.
+ * @property {() => number | null} serverSequence - Monotonic server change sequence, when the source provided one.
  * @property {() => string} syncType - Sync operation type.
+ * @property {() => string | null} updatedAt - Server change timestamp, when the source provided one.
  */
 /**
  * @typedef {object} SyncChangeApplyResult

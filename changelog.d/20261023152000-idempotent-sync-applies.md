@@ -1,0 +1,1 @@
+- Make sync remote applies idempotent per record: `SyncClient` now records the highest applied `serverSequence` per `{resourceType, resourceId}` in the auto-created `velocious_sync_applied_sequences` store and skips duplicate/older feed rows, and `SyncChangeEnvelope` exposes `serverSequence()`/`updatedAt()` to apply hooks.

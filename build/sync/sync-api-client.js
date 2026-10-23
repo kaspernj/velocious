@@ -527,8 +527,25 @@ export default class SyncApiClient {
       id: () => syncPayload.id,
       resourceId: () => syncPayload.resourceId,
       resourceType: () => syncPayload.resourceType === null || syncPayload.resourceType === undefined ? null : String(syncPayload.resourceType),
-      syncType: () => syncPayload.syncType === null || syncPayload.syncType === undefined ? "" : String(syncPayload.syncType)
+      serverSequence: () => this.normalizedServerSequence(syncPayload.serverSequence),
+      syncType: () => syncPayload.syncType === null || syncPayload.syncType === undefined ? "" : String(syncPayload.syncType),
+      updatedAt: () => syncPayload.updatedAt === null || syncPayload.updatedAt === undefined ? null : String(syncPayload.updatedAt)
     }
+  }
+
+  /**
+   * Normalizes a raw server sequence into a positive safe integer.
+   * @param {unknown} value - Raw sequence.
+   * @returns {number | null} Normalized sequence, or null when absent/invalid.
+   */
+  static normalizedServerSequence(value) {
+    if (value === null || value === undefined || value === "") return null
+
+    const sequence = Number(value)
+
+    if (!Number.isSafeInteger(sequence) || sequence <= 0) return null
+
+    return sequence
   }
 
   /**
