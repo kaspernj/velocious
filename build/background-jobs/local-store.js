@@ -1598,6 +1598,9 @@ export default class LocalBackgroundJobsStore {
       failedAtMs: this._numberOrNull(row.failed_at_ms),
       handedOffAtMs: this._numberOrNull(row.handed_off_at_ms),
       handoffId: row.handoff_id === null || row.handoff_id === undefined ? null : String(row.handoff_id),
+      // Local (browser/Expo) dispatch is strictly FIFO and has no priority column,
+      // so every row reports the default priority.
+      priority: 0,
       id: String(row.id),
       jobName: String(row.job_name),
       lastError: row.last_error === null || row.last_error === undefined ? null : String(row.last_error),

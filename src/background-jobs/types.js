@@ -169,6 +169,7 @@
  * @typedef {object} BackgroundJobOptions
  * @property {BackgroundJobExecutionMode} [executionMode] - How the job should run. Node defaults to `"pooled"` (a warm, reused local runner process). Browser/Expo local dispatch defaults to and only accepts `"inline"`. `"forked"` runs a Node job in a fresh `child_process.fork()` child, and `"spawned"` in a detached CLI runner.
  * @property {number} [maxRetries] - Max retries for a failed job before it is marked failed.
+ * @property {number} [priority] - Dispatch priority within the queue: higher runs first, default `0`, retries always run last.
  * @property {string} [queue] - Queue name. Defaults to `"default"`. When the queue has a configured cap in `backgroundJobs.queues`, that cap is enforced cluster-wide.
  * @property {string} [concurrencyKey] - Opaque non-empty key used to share a concurrency cap. Overrides any queue-derived cap.
  * @property {number} [maxConcurrency] - Positive integer cap; must be paired with `concurrencyKey`.
@@ -207,6 +208,7 @@
  * @property {BackgroundJobStatus} status - Current job status.
  * @property {number | null} attempts - Failure attempts count.
  * @property {number | null} maxRetries - Max retry attempts.
+ * @property {number} priority - Dispatch priority; `-1` means retried and therefore queued last.
  * @property {number | null} scheduledAtMs - Next scheduled time in ms.
  * @property {number | null} createdAtMs - Creation time in ms.
  * @property {number | null} handedOffAtMs - Time handed to worker in ms.

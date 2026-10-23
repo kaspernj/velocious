@@ -1,0 +1,1 @@
+Background jobs can now take a per-job `priority` (default `0`, non-negative), which orders jobs inside their queue after the queue ranking. A job that is re-queued after a failed attempt is always demoted to the lowest priority (`-1`), so retries never overtake work that has not had its first chance yet — a failing destination can no longer starve healthy jobs of the same queue.

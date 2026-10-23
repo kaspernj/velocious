@@ -41,6 +41,7 @@ import {
  * @property {string} jobId - New job id.
  * @property {string} jobName - Job name.
  * @property {number} maxRetries - Retry cap.
+ * @property {number} priority - Dispatch priority within the queue.
  * @property {string} queue - Queue name.
  * @property {number} scheduledAtMs - Eligibility timestamp.
  * @property {number | null} timeoutMs - Per-job timeout override, or null when omitted.
@@ -137,7 +138,21 @@ export const BACKGROUND_JOB_COUNT_BUCKETS = ["all", "queued", "handed_off", "com
 const COUNTED_JOB_STATUSES = BACKGROUND_JOB_COUNT_BUCKETS.slice(1)
 const MAX_JOB_TIMEOUT_MS = 2_147_483_647
 const JOB_TIMEOUT_VALIDATION_MESSAGE = `background job timeoutMs must be a finite non-positive number or an integer between 1 and ${MAX_JOB_TIMEOUT_MS}`
+const BACKGROUND_JOB_PRIORITY_VALIDATION_MESSAGE = "background job priority must be a non-negative integer"
 const ORPHANED_AFTER_MS = 2 * 60 * 60 * 1000
+
+/**
+ * Priority a job is demoted to when it is re-queued after a failed attempt.
+ * A retry has already consumed capacity and time, so it must never overtake
+ * work that has not had its first chance yet. Enqueue priorities are validated
+ * to be non-negative integers, which makes `-1` the lowest reachable priority.
+ */
+export const RETRY_BACKGROUND_JOB_PRIORITY = -1
+
+/**
+ * Priority a job gets when the producer does not ask for one.
+ */
+export const DEFAULT_BACKGROUND_JOB_PRIORITY = 0
 
 /**
  * Columns the dashboard is allowed to sort job listings by, mapped to their
@@ -1159,6 +1174,12 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       const priorityOrder = this._queuePriorityOrderSql(db)
 
       if (priorityOrder) query = query.order(`${priorityOrder} DESC`)
+
+      // Job-level priority applies inside the queue ranking above. A retry is
+      // stored at RETRY_BACKGROUND_JOB_PRIORITY (-1), so it sorts behind every
+      // first attempt without delaying itself further than the backoff already
+      // does. COALESCE covers rows written before the column existed.
+      query = query.order(`COALESCE(${db.quoteColumn("priority")}, ${DEFAULT_BACKGROUND_JOB_PRIORITY}) DESC`)
     }
 
     query = query
@@ -1965,10 +1986,31 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       jobId: randomUUID(),
       jobName,
       maxRetries: this._normalizeMaxRetries(options?.maxRetries),
+      priority: this._normalizeJobPriority(options),
       queue,
       scheduledAtMs: this._normalizeScheduledAtMs(options?.scheduledAtMs, createdAtMs),
       timeoutMs: this._normalizeJobTimeoutMs(options)
     }
+  }
+
+  /**
+   * Normalizes a requested dispatch priority. Priorities order jobs within their
+   * queue on the dispatch path only: higher goes first, and the default keeps
+   * FIFO order. Negative priorities are rejected because the store reserves them
+   * for {@link RETRY_BACKGROUND_JOB_PRIORITY}, which must stay the lowest.
+   * @param {import("./types.js").BackgroundJobOptions | undefined} options - Job options.
+   * @returns {number} - Priority.
+   */
+  _normalizeJobPriority(options) {
+    const priority = options?.priority
+
+    if (priority === undefined) return DEFAULT_BACKGROUND_JOB_PRIORITY
+
+    if (typeof priority !== "number" || !Number.isInteger(priority) || priority < 0) {
+      throw VelociousError.safe(BACKGROUND_JOB_PRIORITY_VALIDATION_MESSAGE)
+    }
+
+    return priority
   }
 
   /**
@@ -2024,6 +2066,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
         execution_mode: preparedJob.executionMode,
         queue: preparedJob.queue,
         max_retries: preparedJob.maxRetries,
+        priority: preparedJob.priority,
         attempts: 0,
         status: "queued",
         scheduled_at_ms: preparedJob.scheduledAtMs,
@@ -2332,6 +2375,30 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       } finally {
         await db.releaseAdvisoryLock(lockName)
       }
+    }
+
+    const priorityLockName = `${MIGRATION_SCOPE}:priority_column`
+    const priorityLockAcquired = await db.acquireAdvisoryLock(priorityLockName)
+
+    if (!priorityLockAcquired) throw new Error("Failed to acquire background jobs priority schema lock")
+
+    try {
+      db.clearSchemaCache()
+      const priorityTable = await db.getTableByNameOrFail(JOBS_TABLE)
+
+      if (!(await priorityTable.getColumnByName("priority"))) {
+        const tableData = new TableData(JOBS_TABLE)
+        tableData.bigint("priority", {null: true})
+        const sqls = await db.alterTableSQLs(tableData)
+
+        for (const sql of sqls) {
+          await db.query(sql)
+        }
+
+        db.clearSchemaCache()
+      }
+    } finally {
+      await db.releaseAdvisoryLock(priorityLockName)
     }
 
     await this._backfillExecutionModesOnce(db)
@@ -3109,6 +3176,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
 
     if (markOrphaned) transitionedJob.orphanedAtMs = now
     if (shouldRetry) {
+      transitionedJob.priority = RETRY_BACKGROUND_JOB_PRIORITY
       transitionedJob.scheduledAtMs = scheduledAt
     } else if (!markOrphaned) {
       transitionedJob.failedAtMs = now
@@ -3142,7 +3210,14 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
     // A retry starts a fresh handoff with a possibly different runner, so the
     // previous child's acceptance evidence must not leak into the next attempt.
     // Terminal failures keep it as historical evidence for the lost attempt.
-    if (shouldRetry) Object.assign(update, this._clearedChildAcceptanceData())
+    if (shouldRetry) {
+      Object.assign(update, this._clearedChildAcceptanceData())
+
+      // Retried work goes to the back of the dispatch order. It has already had
+      // a turn, and letting it overtake first attempts is how a failing producer
+      // starves healthy jobs of the same queue.
+      update.priority = RETRY_BACKGROUND_JOB_PRIORITY
+    }
 
     this._applyOrphanedFailureUpdate({markOrphaned, now, update})
     this._applyFailureStatusUpdate({markOrphaned, now, scheduledAt, shouldRetry, update})
@@ -3211,6 +3286,7 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
       status: normalizeBackgroundJobStatus(row.status ? String(row.status) : "queued"),
       attempts: this._normalizeNumber(row.attempts),
       maxRetries: this._normalizeNumber(row.max_retries),
+      priority: this._normalizeNumber(row.priority) ?? DEFAULT_BACKGROUND_JOB_PRIORITY,
       scheduledAtMs: this._normalizeNumber(row.scheduled_at_ms),
       createdAtMs: this._normalizeNumber(row.created_at_ms),
       handedOffAtMs: this._normalizeNumber(row.handed_off_at_ms),
