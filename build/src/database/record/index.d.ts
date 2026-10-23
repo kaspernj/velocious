@@ -1928,9 +1928,10 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
         accessibleBy<MC extends typeof VelociousDatabaseRecord>(this: MC, ability: import("../../authorization/ability.js").default): ModelClassQuery<MC>;
         /**
          * Runs count.
+         * @param {string | null} [column] - Attribute or column to count. Defaults to the primary key.
          * @returns {Promise<number>} - Resolves with the count.
          */
-        count(): Promise<number>;
+        count(column?: string | null): Promise<number>;
         /**
          * Runs group.
          * @template {typeof VelociousDatabaseRecord} MC
@@ -3451,9 +3452,10 @@ declare class VelociousDatabaseRecord<WriteAttributes extends Record<string, Ret
     static accessibleBy<MC extends typeof VelociousDatabaseRecord>(this: MC, ability: import("../../authorization/ability.js").default): ModelClassQuery<MC>;
     /**
      * Runs count.
+     * @param {string | null} [column] - Attribute or column to count. Defaults to the primary key.
      * @returns {Promise<number>} - Resolves with the count.
      */
-    static count(): Promise<number>;
+    static count(column?: string | null): Promise<number>;
     /**
      * Runs group.
      * @template {typeof VelociousDatabaseRecord} MC

@@ -11,6 +11,9 @@ cannot silently shadow a real column of the same name (e.g. a
 Available on both `ModelClassQuery` (backend) and
 `FrontendModelQuery` (frontend); the API is identical.
 
+For base-query row counts and distinct column counts, see
+[query-count.md](query-count.md).
+
 ## Shapes
 
 Shorthand: a single relationship name.

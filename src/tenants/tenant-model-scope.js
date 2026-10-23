@@ -73,10 +73,11 @@ export default class TenantModelScope {
 
   /**
    * Counts records on the captured tenant.
+   * @param {string | null} [column] - Attribute or column to count. Defaults to the primary key.
    * @returns {Promise<number>} - Count on the captured tenant.
    */
-  async count() {
-    return await this.databaseOperation(async (query) => await query.count())
+  async count(column = null) {
+    return await this.databaseOperation(async (query) => await query.count(column))
   }
 
   /**
