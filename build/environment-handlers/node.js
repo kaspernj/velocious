@@ -2,6 +2,7 @@
 
 import "../database/annotations-async-hooks.js"
 import AdvisoryLockFileBackend from "../database/advisory-lock-file-backend.js"
+import AdvisoryLockLockServerBackend from "../database/advisory-lock-lock-server-backend.js"
 import Base from "./base.js"
 import BackgroundJobsClient from "../background-jobs/client.js"
 import SqlBackgroundJobsAdapter from "../background-jobs/sql-adapter.js"
@@ -118,16 +119,11 @@ export default class VelociousEnvironmentHandlerNode extends Base{
   }
 
   /**
-   * Creates the centralized lock-server advisory-lock backend (tier (b)). The
-   * `import()` lives here rather than in `Configuration` so the backend's Node-only
-   * `ws` transport stays off the browser/Expo bundle path — browser-bundled apps
-   * never reach `environment-handlers/node.js`.
-   * @param {{authToken: string, connectTimeoutMs: number, leaseMs: number, onError: (error: Error) => void, reprobeCooldownMs: number, url: string}} args - Backend options.
-   * @returns {Promise<import("../database/advisory-lock-lock-server-backend.js").default>} - Resolves with the created backend.
+   * Creates the lock-server advisory-lock backend over the Node websocket transport.
+   * @param {ConstructorParameters<typeof AdvisoryLockLockServerBackend>[0]} args - Backend options.
+   * @returns {Promise<import("../database/advisory-lock-lock-server-backend.js").default>} - Created backend.
    */
   async createAdvisoryLockLockServerBackend(args) {
-    const {default: AdvisoryLockLockServerBackend} = await import("../database/advisory-lock-lock-server-backend.js")
-
     return new AdvisoryLockLockServerBackend(args)
   }
 

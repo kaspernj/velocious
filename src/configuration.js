@@ -4324,17 +4324,11 @@ export default class VelociousConfiguration {
     if (!config.backends.lockServer.enabled) return undefined
     if (this._advisoryLockLockServerBackend) return this._advisoryLockLockServerBackend
 
-    // Creation goes through the environment handler, mirroring the Beacon client
-    // indirection: the backend's Node-only `ws` transport must not be reachable
-    // from a browser/Expo bundle, and a literal `import("./database/advisory-lock-
-    // lock-server-backend.js")` here would drag `ws` into the bundle through the
-    // bundler's static analysis of dynamic imports. Browser/Expo handlers refuse
-    // the tier loudly instead.
     const backend = await this.getEnvironmentHandler().createAdvisoryLockLockServerBackend({
       authToken: config.backends.lockServer.authToken,
       connectTimeoutMs: config.backends.lockServer.connectTimeoutMs,
       leaseMs: config.backends.lockServer.leaseMs,
-      onError: (error) => {
+      onError: (/** @type {Error} */ error) => {
         this.getErrorEvents().emit("framework-error", {context: "advisory-lock-lock-server", error})
         this.getErrorEvents().emit("all-error", {context: "advisory-lock-lock-server", error, errorType: "framework-error"})
       },

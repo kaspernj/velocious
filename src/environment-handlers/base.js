@@ -50,18 +50,14 @@ export default class VelociousEnvironmentHandlerBase {
   }
 
   /**
-   * Creates the centralized lock-server advisory-lock backend (tier (b)). Only
-   * the Node environment handler provides it: the backend's websocket transport
-   * depends on the Node-only `ws` package, which browser/Expo bundlers cannot
-   * resolve (Metro fails on `ws`'s Node core `stream` dependency), so the module
-   * must never be statically reachable from a browser bundle. A browser/Expo
-   * configuration that enables the tier fails loudly here instead of breaking
-   * the bundle.
-   * @param {{authToken: string, connectTimeoutMs: number, leaseMs: number, onError: (error: Error) => void, reprobeCooldownMs: number, url: string}} _args - Backend options.
-   * @returns {Promise<import("../database/advisory-lock-lock-server-backend.js").default>} - Resolves with the created backend in Node-capable handlers.
+   * Creates the lock-server advisory-lock backend. Only Node environments can
+   * provide this tier's websocket transport; browser and Expo bundles must never
+   * pull the Node-only transport into their graph.
+   * @param {object} _args - Backend options.
+   * @returns {Promise<import("../database/advisory-lock-lock-server-backend.js").default>} - Resolves with the created backend in Node handlers.
    */
   async createAdvisoryLockLockServerBackend(_args) {
-    throw new Error("The advisory-lock lock-server tier requires the Node environment handler")
+    throw new Error("The advisory-lock lock-server tier requires a Node environment handler")
   }
 
   /**

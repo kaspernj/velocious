@@ -93,24 +93,13 @@ export default class VelociousEnvironmentHandlerBase {
         renewIntervalMs: number;
     }): Promise<import("../database/advisory-lock-file-backend.js").default>;
     /**
-     * Creates the centralized lock-server advisory-lock backend (tier (b)). Only
-     * the Node environment handler provides it: the backend's websocket transport
-     * depends on the Node-only `ws` package, which browser/Expo bundlers cannot
-     * resolve (Metro fails on `ws`'s Node core `stream` dependency), so the module
-     * must never be statically reachable from a browser bundle. A browser/Expo
-     * configuration that enables the tier fails loudly here instead of breaking
-     * the bundle.
-     * @param {{authToken: string, connectTimeoutMs: number, leaseMs: number, onError: (error: Error) => void, reprobeCooldownMs: number, url: string}} _args - Backend options.
-     * @returns {Promise<import("../database/advisory-lock-lock-server-backend.js").default>} - Resolves with the created backend in Node-capable handlers.
+     * Creates the lock-server advisory-lock backend. Only Node environments can
+     * provide this tier's websocket transport; browser and Expo bundles must never
+     * pull the Node-only transport into their graph.
+     * @param {object} _args - Backend options.
+     * @returns {Promise<import("../database/advisory-lock-lock-server-backend.js").default>} - Resolves with the created backend in Node handlers.
      */
-    createAdvisoryLockLockServerBackend(_args: {
-        authToken: string;
-        connectTimeoutMs: number;
-        leaseMs: number;
-        onError: (error: Error) => void;
-        reprobeCooldownMs: number;
-        url: string;
-    }): Promise<import("../database/advisory-lock-lock-server-backend.js").default>;
+    createAdvisoryLockLockServerBackend(_args: object): Promise<import("../database/advisory-lock-lock-server-backend.js").default>;
     /**
      * Node test runtimes may replace a physical child connection with a broker
      * proxy. Other environments never participate in this test-only protocol.

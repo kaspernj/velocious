@@ -80,15 +80,25 @@ export default class VelociousDatabaseQueryModelClassQuery<MC extends typeof imp
      */
     tableNameFor(...path: string[]): string;
     /**
-     * Runs count.
+     * Runs count. Without a column it counts records like `Model.count()`; with a
+     * column it counts non-null values of that attribute/column, and combined with
+     * `.distinct()` it counts distinct non-null values.
+     * @param {string | null} [column] - Attribute or column to count. Defaults to the primary key.
      * @returns {Promise<number>} - Resolves with the count.
      */
-    count(): Promise<number>;
+    count(column?: string | null): Promise<number>;
+    /**
+     * Resolves an attribute or physical column name for count().
+     * @param {string} column - Attribute or column name.
+     * @returns {string} Physical column name.
+     */
+    _countColumnName(column: string): string;
     /**
      * Runs paginated count.
+     * @param {string | null} [column] - Physical column to count instead of rows.
      * @returns {Promise<number>} - Resolves with the count after pagination is applied.
      */
-    paginatedCount(): Promise<number>;
+    paginatedCount(column?: string | null): Promise<number>;
     /**
      * Runs select.
      * @param {import("./index.js").SelectArgumentType} select - Select.

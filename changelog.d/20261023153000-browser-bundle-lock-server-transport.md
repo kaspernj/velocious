@@ -1,0 +1,1 @@
+Browser and Expo bundles no longer include the Node-only lock-server advisory-lock transport. The lock-server backend is now created through the environment handler (like the file-tier backend), so Metro no longer bundles `ws`/Node's `stream` through `configuration.js`, and enabling that tier in a browser environment fails loudly instead of breaking the bundle.

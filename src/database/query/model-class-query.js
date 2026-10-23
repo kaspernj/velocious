@@ -316,11 +316,16 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
-   * Runs count.
+   * Runs count. Without a column it counts records like `Model.count()`; with a
+   * column it counts non-null values of that attribute/column, and combined with
+   * `.distinct()` it counts distinct non-null values.
+   * @param {string | null} [column] - Attribute or column to count. Defaults to the primary key.
    * @returns {Promise<number>} - Resolves with the count.
    */
-  async count() {
+  async count(column = null) {
     await this._ensureInitialized()
+
+    const countColumn = column === null || column === undefined ? null : this._countColumnName(column)
 
     // A model without a single primary-key column — setPrimaryKey(null) or a composite
     // setPrimaryKey([...]) on legacy tables — has no column COUNT can reference (an array primary key
@@ -329,23 +334,31 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
     const primaryKey = this.getModelClass().primaryKey()
     const hasSingleColumnPrimaryKey = this.getModelClass().hasPrimaryKey() && !Array.isArray(primaryKey)
 
-    // Pagination, or an ungrouped query on a model with no single primary-key column, counts via the
-    // subquery form. It references no primary-key column and preserves DISTINCT over joins — which a
-    // bare COUNT(*) would not (it would count joined duplicate rows instead of distinct root rows).
-    // A grouped query stays on the per-group flow below, because the subquery form would count one
-    // row per group instead of summing each group's row count.
-    if (this._limit !== null || this._offset !== null || (!hasSingleColumnPrimaryKey && this._groups.length == 0)) {
+    // Pagination always uses the subquery form so limit/offset apply. An explicit column is counted
+    // on the subquery instead of its rows.
+    if (this._limit !== null || this._offset !== null) {
+      return await this.paginatedCount(countColumn)
+    }
+
+    // An ungrouped query on a model with no single primary-key column counts via the subquery form.
+    // It references no primary-key column and preserves DISTINCT over joins — which a bare COUNT(*)
+    // would not (it would count joined duplicate rows instead of distinct root rows). A grouped query
+    // stays on the per-group flow below, because the subquery form would count one row per group
+    // instead of summing each group's row count.
+    if (!countColumn && !hasSingleColumnPrimaryKey && this._groups.length == 0) {
       return await this.paginatedCount()
     }
 
-    if (!hasSingleColumnPrimaryKey && this._distinct) {
+    if (!countColumn && !hasSingleColumnPrimaryKey && this._distinct) {
       throw new Error(`Can't count a grouped distinct query on ${this.getModelClass().name} because it has no single primary-key column to count distinct values of`)
     }
 
     const distinctPrefix = this._distinct ? "DISTINCT " : ""
-    const countExpression = hasSingleColumnPrimaryKey
-      ? `${this.driver.quoteTable(this.getModelClass().tableName())}.${this.driver.quoteColumn(/** @type {string} */ (primaryKey))}`
-      : "*"
+    const countExpression = countColumn
+      ? `${this.driver.quoteTable(this.getModelClass().tableName())}.${this.driver.quoteColumn(countColumn)}`
+      : hasSingleColumnPrimaryKey
+        ? `${this.driver.quoteTable(this.getModelClass().tableName())}.${this.driver.quoteColumn(/** @type {string} */ (primaryKey))}`
+        : "*"
     let sql = `COUNT(${distinctPrefix}${countExpression})`
 
     if (this.driver.getType() == "pgsql") sql += "::int"
@@ -383,12 +396,34 @@ export default class VelociousDatabaseQueryModelClassQuery extends DatabaseQuery
   }
 
   /**
+   * Resolves an attribute or physical column name for count().
+   * @param {string} column - Attribute or column name.
+   * @returns {string} Physical column name.
+   */
+  _countColumnName(column) {
+    const modelClass = this.getModelClass()
+    const attributeMap = modelClass.getAttributeNameToColumnNameMap()
+    const columnName = attributeMap[column] || column
+
+    if (!Object.values(attributeMap).includes(columnName)) {
+      throw new Error(`Unknown count column "${column}" for ${modelClass.name}`)
+    }
+
+    return columnName
+  }
+
+  /**
    * Runs paginated count.
+   * @param {string | null} [column] - Physical column to count instead of rows.
    * @returns {Promise<number>} - Resolves with the count after pagination is applied.
    */
-  async paginatedCount() {
+  async paginatedCount(column = null) {
     const countQuery = this.clone()
-    const countSql = this.driver.getType() == "pgsql" ? "COUNT(*)::int" : "COUNT(*)"
+    const distinctPrefix = column && this._distinct ? "DISTINCT " : ""
+    const countExpression = column
+      ? `COUNT(${distinctPrefix}${this.driver.quoteTable("paginated_count_rows")}.${this.driver.quoteColumn(column)})`
+      : "COUNT(*)"
+    const countSql = this.driver.getType() == "pgsql" ? `${countExpression}::int` : countExpression
     const sql = [
       `SELECT ${countSql} AS ${this.driver.quoteColumn("count")}`,
       `FROM (${countQuery.toSql()}) AS ${this.driver.quoteTable("paginated_count_rows")}`
