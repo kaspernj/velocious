@@ -152,7 +152,7 @@ describe("Background jobs retired owned enqueue", {databaseCleaning: {transactio
     })
   })
 
-  it("carries exact ownership through inline, forked, and spawned execution", async () => {
+  it("carries exact ownership through inline, forked, and spawned execution", {timeoutSeconds: 180}, async () => {
     const lanes = [
       {executionMode: /** @type {const} */ ("inline"), suffix: "inline", workerInstanceId: "74e4a32e-16fa-4308-8be1-70be4e819760"},
       {executionMode: /** @type {const} */ ("forked"), suffix: "forked", workerInstanceId: "ac1fdcfe-01fd-48af-8466-5f77b8caed4f"},

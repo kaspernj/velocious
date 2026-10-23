@@ -3,6 +3,7 @@
 import UUID from "pure-uuid"
 import TableData from "../../table-data/index.js"
 import TableIndex from "../../table-data/table-index.js"
+import {POOL_CONFIGURATION_KEY} from "../../pool/base.js"
 import {modelPrimaryKeyCacheKey} from "../../../utils/model-primary-key.js"
 import sha256Hex from "../../../utils/sha256-hex.js"
 import normalizeRecordAttachmentInput from "./normalize-input.js"
@@ -564,8 +565,18 @@ export default class RecordAttachmentsStore {
    * @returns {number} - Current schema-cache generation.
    */
   _schemaCacheGeneration(db) {
-    const pool = this.configuration.getDatabasePool(this.databaseIdentifier)
-    const reuseKey = pool.getConnectionConfigurationReuseKey(db)
+    const connectionWithPoolKey = /** @type {import("../../drivers/base.js").default & {[POOL_CONFIGURATION_KEY]?: string}} */ (db)
+    let reuseKey = connectionWithPoolKey[POOL_CONFIGURATION_KEY]
+
+    if (!reuseKey) {
+      // Migrations can pass an already-checked-out connection under a logical key
+      // that is not a configured database identifier (for example a tenant key in
+      // ensureFrameworkSchema). Prefer the pool-stamped key, and only resolve the
+      // identifier for connections that bypassed a pool.
+      const pool = this.configuration.getDatabasePool(this.databaseIdentifier)
+
+      reuseKey = pool.getConnectionConfigurationReuseKey(db)
+    }
 
     return this.configuration.schemaCacheGenerationForReuseKey(reuseKey)
   }
