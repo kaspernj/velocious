@@ -24,6 +24,20 @@ discovery, and application-initializer phases to settle before retrying the
 complete bootstrap. This keeps side-effecting phases serialized while ensuring
 the new generation cannot resolve with uninitialized models.
 
+## Batched schema prefetch
+
+Before initializing the model classes, the require-context initializer loads
+column metadata for all of their tables — plus each translated model's
+`<table>_translations` table — in one pass per database
+(`SchemaMetadataPrefetcher`). The prefetch seeds the driver's per-table schema
+cache, so model initialization itself issues no catalog queries, and the
+initialization loop runs with bounded concurrency because it is CPU-bound
+attribute mapping at that point.
+
+Drivers that cannot describe several tables in one statement fall back to
+bounded-concurrency per-table reads. See
+[`schema-metadata-cache.md`](schema-metadata-cache.md) for the driver contract.
+
 ## Lazy record APIs
 
 Async class methods such as `create`, `count`, `find`, `findBy`, `first`,

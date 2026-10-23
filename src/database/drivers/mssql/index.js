@@ -2,6 +2,7 @@
 
 import AlterTable from "./sql/alter-table.js"
 import Base from "../base.js"
+import Column from "./column.js"
 import CreateDatabase from "./sql/create-database.js"
 import CreateIndex from "./sql/create-index.js"
 import CreateTable from "./sql/create-table.js"
@@ -514,6 +515,64 @@ export default class VelociousDatabaseDriversMssql extends Base{
 
       return tables
     })
+  }
+
+  /**
+   * Reads column metadata for many tables in one query. The per-table read of the
+   * same three-way `INFORMATION_SCHEMA` join is one of the slowest things a boot
+   * does against the legacy SQL Server, so it is worth combining regardless of the
+   * number of tables.
+   * @param {Array<import("../base-table.js").default>} tables - Tables to load columns for.
+   * @returns {Promise<Map<string, Array<import("../base-column.js").default>>>} - Columns keyed by table name.
+   */
+  async batchTableColumns(tables) {
+    /** @type {Map<string, Array<import("../base-column.js").default>>} */
+    const columnsByTable = new Map()
+
+    if (tables.length === 0) return columnsByTable
+
+    const schema = this.getArgs()?.schema || this.getArgs()?.sqlConfig?.options?.schema
+    const schemaClause = schema
+      ? ` AND columns.[TABLE_SCHEMA] = ${this.quote(schema)}`
+      : " AND columns.[TABLE_SCHEMA] = SCHEMA_NAME()"
+    const tablesByName = new Map(tables.map((table) => [table.getName(), table]))
+    const tableNamesSql = [...tablesByName.keys()].map((tableName) => this.quote(tableName)).join(", ")
+    const rows = await this.query(`
+      SELECT
+        columns.*,
+        COLUMNPROPERTY(object_id(columns.TABLE_SCHEMA + '.' + columns.TABLE_NAME), columns.COLUMN_NAME, 'IsIdentity') AS isIdentity,
+        CASE WHEN keyColumnUsage.COLUMN_NAME IS NOT NULL THEN 1 ELSE 0 END AS isPrimaryKey
+      FROM [INFORMATION_SCHEMA].[COLUMNS] AS columns
+      LEFT JOIN [INFORMATION_SCHEMA].[TABLE_CONSTRAINTS] AS tableConstraints ON
+        tableConstraints.CONSTRAINT_TYPE = 'PRIMARY KEY' AND
+        tableConstraints.TABLE_CATALOG = columns.TABLE_CATALOG AND
+        tableConstraints.TABLE_SCHEMA = columns.TABLE_SCHEMA AND
+        tableConstraints.TABLE_NAME = columns.TABLE_NAME
+      LEFT JOIN [INFORMATION_SCHEMA].[KEY_COLUMN_USAGE] AS keyColumnUsage ON
+        keyColumnUsage.CONSTRAINT_CATALOG = tableConstraints.CONSTRAINT_CATALOG AND
+        keyColumnUsage.CONSTRAINT_SCHEMA = tableConstraints.CONSTRAINT_SCHEMA AND
+        keyColumnUsage.CONSTRAINT_NAME = tableConstraints.CONSTRAINT_NAME AND
+        keyColumnUsage.TABLE_CATALOG = columns.TABLE_CATALOG AND
+        keyColumnUsage.TABLE_SCHEMA = columns.TABLE_SCHEMA AND
+        keyColumnUsage.TABLE_NAME = columns.TABLE_NAME AND
+        keyColumnUsage.COLUMN_NAME = columns.COLUMN_NAME
+      WHERE columns.TABLE_NAME IN (${tableNamesSql})${schemaClause}
+      ORDER BY columns.TABLE_NAME, columns.ORDINAL_POSITION
+    `)
+
+    for (const row of rows) {
+      const tableName = /** @type {string} */ (row.TABLE_NAME)
+      const table = tablesByName.get(tableName)
+
+      if (!table) continue
+
+      const columns = columnsByTable.get(tableName) || []
+
+      columns.push(new Column(table, /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (row)))
+      columnsByTable.set(tableName, columns)
+    }
+
+    return columnsByTable
   }
 
   /**

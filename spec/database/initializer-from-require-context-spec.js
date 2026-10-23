@@ -98,9 +98,20 @@ describe("Database - initializer from require context", {databaseCleaning: {tran
     class PresentLazyMetadataRecord extends DatabaseRecord {
       static initializeRecordCalls = 0
 
-      /** @returns {{getTableByName: () => Promise<object>}} - Connection whose table exists. */
+      /** @returns {object} - Connection whose table exists. */
       static connection() {
-        return /** @type {any} */ ({getTableByName: async () => ({})})
+        /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
+        const driver = {
+          getTableByName: async (tableName) => tableName === this.tableName() ? table : undefined,
+          prefetchTableColumns: async () => {}
+        }
+        /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
+        const table = {
+          getDriver: () => driver,
+          getName: () => this.tableName()
+        }
+
+        return driver
       }
 
       /**
@@ -135,9 +146,20 @@ describe("Database - initializer from require context", {databaseCleaning: {tran
 
   it("keeps an opted-out model deferred when startup metadata initialization fails", async () => {
     class TranslatedLazyMetadataRecord extends DatabaseRecord {
-      /** @returns {{getTableByName: () => Promise<object>}} - Connection whose base table exists. */
+      /** @returns {object} - Connection whose base table exists. */
       static connection() {
-        return /** @type {any} */ ({getTableByName: async () => ({})})
+        /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
+        const driver = {
+          getTableByName: async (tableName) => tableName === this.tableName() ? table : undefined,
+          prefetchTableColumns: async () => {}
+        }
+        /** @type {Record<string, ReturnType<typeof JSON.parse>>} */
+        const table = {
+          getDriver: () => driver,
+          getName: () => this.tableName()
+        }
+
+        return driver
       }
 
       /**

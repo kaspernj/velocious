@@ -732,6 +732,35 @@ export default class VelociousDatabaseDriversBase {
      */
     _cachedTableSchemaMetadata<T>(tableName: string, metadataName: string, callback: () => Promise<T>): Promise<T>;
     /**
+     * Seeds schema metadata that was loaded in one batch for many tables, so a later
+     * per-table read resolves from the cache instead of issuing its own query.
+     * @template T
+     * @param {string} tableName - Table name.
+     * @param {string} metadataName - Metadata name.
+     * @param {T} value - Already-resolved metadata.
+     * @returns {void}
+     */
+    seedTableSchemaMetadata<T>(tableName: string, metadataName: string, value: T): void;
+    /**
+     * Loads column metadata for several tables, combining the reads into one query
+     * when the driver can answer for all of them at once and seeding the per-table
+     * cache so the models that follow initialize without querying.
+     * @param {Array<import("./base-table.js").default>} tables - Tables to load columns for.
+     * @param {{concurrency?: number}} [args] - Concurrency for drivers that can only read per table.
+     * @returns {Promise<void>}
+     */
+    prefetchTableColumns(tables: Array<import("./base-table.js").default>, { concurrency }?: {
+        concurrency?: number;
+    }): Promise<void>;
+    /**
+     * Batched column metadata for many tables at once. Drivers whose engine cannot
+     * answer for several tables in one statement return null, leaving the caller to
+     * read them per table.
+     * @param {Array<import("./base-table.js").default>} tables - Tables to load columns for.
+     * @returns {Promise<Map<string, Array<import("./base-column.js").default>> | null>} - Columns keyed by table name, or null when unsupported.
+     */
+    batchTableColumns(tables: Array<import("./base-table.js").default>): Promise<Map<string, Array<import("./base-column.js").default>> | null>;
+    /**
      * Runs schema cache return value.
      * @param {ReturnType<typeof JSON.parse>} value - Cached value.
      * @returns {ReturnType<typeof JSON.parse>} - Value returned to callers.

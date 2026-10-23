@@ -157,6 +157,7 @@
  */
 
 import BacktraceCleaner from "../../utils/backtrace-cleaner.js"
+import BoundedTaskRunner from "../../utils/bounded-task-runner.js"
 import { getDatabaseAnnotations } from "../annotations.js"
 import { formatDateForDatabase } from "../datetime-storage.js"
 import isDate from "../../utils/is-date.js"
@@ -909,6 +910,65 @@ export default class VelociousDatabaseDriversBase {
    */
   async _cachedTableSchemaMetadata(tableName, metadataName, callback) {
     return await this._cachedSchemaMetadata(`table:${tableName}:${metadataName}`, callback)
+  }
+
+  /**
+   * Seeds schema metadata that was loaded in one batch for many tables, so a later
+   * per-table read resolves from the cache instead of issuing its own query.
+   * @template T
+   * @param {string} tableName - Table name.
+   * @param {string} metadataName - Metadata name.
+   * @param {T} value - Already-resolved metadata.
+   * @returns {void}
+   */
+  seedTableSchemaMetadata(tableName, metadataName, value) {
+    if (!this._schemaCacheEnabled()) return
+
+    this._schemaCache.set(`table:${tableName}:${metadataName}`, Promise.resolve(value))
+  }
+
+  /**
+   * Loads column metadata for several tables, combining the reads into one query
+   * when the driver can answer for all of them at once and seeding the per-table
+   * cache so the models that follow initialize without querying.
+   * @param {Array<import("./base-table.js").default>} tables - Tables to load columns for.
+   * @param {{concurrency?: number}} [args] - Concurrency for drivers that can only read per table.
+   * @returns {Promise<void>}
+   */
+  async prefetchTableColumns(tables, {concurrency = 8} = {}) {
+    if (!this._schemaCacheEnabled()) return
+    if (tables.length === 0) return
+
+    const batchedColumns = await this.batchTableColumns(tables)
+
+    if (batchedColumns) {
+      for (const [tableName, columns] of batchedColumns) {
+        this.seedTableSchemaMetadata(tableName, "columns", columns)
+      }
+
+      return
+    }
+
+    await BoundedTaskRunner.run({
+      concurrency,
+      items: tables,
+      worker: async (table) => {
+        await table.getColumns()
+      }
+    })
+  }
+
+  /**
+   * Batched column metadata for many tables at once. Drivers whose engine cannot
+   * answer for several tables in one statement return null, leaving the caller to
+   * read them per table.
+   * @param {Array<import("./base-table.js").default>} tables - Tables to load columns for.
+   * @returns {Promise<Map<string, Array<import("./base-column.js").default>> | null>} - Columns keyed by table name, or null when unsupported.
+   */
+  async batchTableColumns(tables) {
+    void tables
+
+    return null
   }
 
   /**

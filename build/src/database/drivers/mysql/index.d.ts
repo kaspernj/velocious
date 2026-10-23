@@ -310,6 +310,19 @@ export default class VelociousDatabaseDriversMysql extends Base {
      */
     getTables(): Promise<Array<import("../base-table.js").default>>;
     /**
+     * Reads column metadata for many tables in one query. `SHOW FULL COLUMNS` only
+     * describes a single table, but `information_schema.COLUMNS` carries the same
+     * fields, so the result is aliased to the shape `Column` already reads.
+     *
+     * `NULLIF(COLUMN_DEFAULT, 'NULL')` compensates for MariaDB reporting a SQL NULL
+     * default as the literal string 'NULL', where `SHOW FULL COLUMNS` reports NULL.
+     * Verified column-for-column against `SHOW FULL COLUMNS` on a 44-table MariaDB
+     * schema; the only divergence was that sentinel.
+     * @param {Array<import("../base-table.js").default>} tables - Tables to load columns for.
+     * @returns {Promise<Map<string, Array<import("../base-column.js").default>>>} - Columns keyed by table name.
+     */
+    batchTableColumns(tables: Array<import("../base-table.js").default>): Promise<Map<string, Array<import("../base-column.js").default>>>;
+    /**
      * Runs structure sql.
      * @returns {Promise<string | null>} - Resolves with SQL string.
      */

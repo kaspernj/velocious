@@ -210,6 +210,15 @@ export default class VelociousDatabaseDriversMssql extends Base {
      */
     getTables(): Promise<Array<import("../base-table.js").default>>;
     /**
+     * Reads column metadata for many tables in one query. The per-table read of the
+     * same three-way `INFORMATION_SCHEMA` join is one of the slowest things a boot
+     * does against the legacy SQL Server, so it is worth combining regardless of the
+     * number of tables.
+     * @param {Array<import("../base-table.js").default>} tables - Tables to load columns for.
+     * @returns {Promise<Map<string, Array<import("../base-column.js").default>>>} - Columns keyed by table name.
+     */
+    batchTableColumns(tables: Array<import("../base-table.js").default>): Promise<Map<string, Array<import("../base-column.js").default>>>;
+    /**
      * Keeps constraint toggles and cleanup inside each physical SQL Server
      * request so a pool cannot split lifecycle ownership across sessions.
      * @protected

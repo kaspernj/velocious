@@ -4,6 +4,34 @@ Velocious caches schema metadata on each database driver instance. This avoids r
 
 The cache is in-process only. It is not written to disk and is discarded when the driver instance is closed.
 
+## Batched column prefetch
+
+Model initialization would otherwise read each table's columns on its own, which
+turns a boot into one catalog query per model — and an application that runs N
+HTTP worker processes pays it N times over.
+
+Drivers that can describe several tables in one statement implement
+`batchTableColumns(tables)`, returning columns keyed by table name:
+
+- MySQL and MariaDB read `information_schema.COLUMNS` aliased to the
+  `SHOW FULL COLUMNS` shape (`NULLIF(COLUMN_DEFAULT, 'NULL')` compensates for
+  MariaDB reporting a SQL NULL default as the literal string `'NULL'`).
+- PostgreSQL reads `information_schema.columns` once for the requested tables.
+- MSSQL drops the per-table filter from its three-way `INFORMATION_SCHEMA` join.
+- SQLite cannot describe several tables in one statement, so it returns `null`.
+
+`driver.prefetchTableColumns(tables)` uses the batch when the driver supports it
+and falls back to bounded-concurrency per-table reads otherwise. Either way the
+result is seeded into the per-table cache via `seedTableSchemaMetadata`, so the
+model initialization that follows resolves without querying.
+
+`SchemaMetadataPrefetcher` groups the application's model classes by database,
+includes each translated model's `<table>_translations` table, and runs the
+prefetch once per database before `InitializerFromRequireContext` initializes the
+models. On a 71-model schema spread over three databases this took a worker boot
+from ~74 catalog queries (33 `SHOW FULL COLUMNS` plus 38 MSSQL joins) to five:
+one table list and one column query per database.
+
 ## Rolling schema compatibility
 
 An initialized model keeps its physical column-to-attribute map for the life of

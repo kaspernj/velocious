@@ -3,6 +3,7 @@
 import AlterTable from "./sql/alter-table.js"
 import wait from "awaitery/build/wait.js"
 import Base from "../base.js"
+import Column from "./column.js"
 import { Client, types as pgTypes } from "pg"
 import CreateDatabase from "./sql/create-database.js"
 import CreateIndex from "./sql/create-index.js"
@@ -329,6 +330,10 @@ export default class VelociousDatabaseDriversPgsql extends Base{
     return insert.toSql()
   }
 
+  /**
+   * Runs get tables.
+   * @returns {Promise<Array<import("../base-table.js").default>>} - Resolves with the tables.
+   */
   async getTables() {
     return await this._cachedSchemaMetadata("tables", async () => {
       const result = await this.query("SELECT * FROM information_schema.tables WHERE table_catalog = CURRENT_DATABASE() AND table_schema = 'public'")
@@ -342,6 +347,62 @@ export default class VelociousDatabaseDriversPgsql extends Base{
 
       return tables
     })
+  }
+
+  /**
+   * Reads column metadata for many tables in one query instead of one catalog
+   * join per table.
+   * @param {Array<import("../base-table.js").default>} tables - Tables to load columns for.
+   * @returns {Promise<Map<string, Array<import("../base-column.js").default>>>} - Columns keyed by table name.
+   */
+  async batchTableColumns(tables) {
+    /** @type {Map<string, Array<import("../base-column.js").default>>} */
+    const columnsByTable = new Map()
+
+    if (tables.length === 0) return columnsByTable
+
+    const tablesByName = new Map(tables.map((table) => [table.getName(), table]))
+    const tableNamesSql = [...tablesByName.keys()].map((tableName) => this.quote(tableName)).join(", ")
+    const rows = await this.query(`
+      SELECT
+        columns.*,
+        CASE WHEN key_column_usage.column_name IS NOT NULL THEN 1 ELSE 0 END AS is_primary_key,
+        col_description((columns.table_schema || '.' || columns.table_name)::regclass, columns.ordinal_position) AS column_comment
+
+      FROM
+        information_schema.columns AS columns
+
+      LEFT JOIN information_schema.table_constraints AS table_constraints ON
+        table_constraints.table_name = columns.table_name AND
+        table_constraints.table_schema = columns.table_schema AND
+        table_constraints.constraint_type = 'PRIMARY KEY'
+
+      LEFT JOIN information_schema.key_column_usage AS key_column_usage ON
+        key_column_usage.constraint_name = table_constraints.constraint_name AND
+        key_column_usage.table_schema = table_constraints.table_schema AND
+        key_column_usage.table_name = columns.table_name AND
+        key_column_usage.column_name = columns.column_name
+
+      WHERE
+        columns.table_catalog = CURRENT_DATABASE() AND
+        columns.table_schema = 'public' AND
+        columns.table_name IN (${tableNamesSql})
+      ORDER BY columns.table_name, columns.ordinal_position
+    `)
+
+    for (const row of rows) {
+      const tableName = /** @type {string} */ (row.table_name)
+      const table = tablesByName.get(tableName)
+
+      if (!table) continue
+
+      const columns = columnsByTable.get(tableName) || []
+
+      columns.push(new Column(table, /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (row)))
+      columnsByTable.set(tableName, columns)
+    }
+
+    return columnsByTable
   }
 
   /**

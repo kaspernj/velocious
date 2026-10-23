@@ -1,7 +1,6 @@
 import Base from "../base.js";
 import { Client } from "pg";
 import Options from "./options.js";
-import Table from "./table.js";
 export default class VelociousDatabaseDriversPgsql extends Base {
     connection: Client | undefined;
     _options: Options | undefined;
@@ -141,7 +140,18 @@ export default class VelociousDatabaseDriversPgsql extends Base {
      * @returns {string} - SQL string.
      */
     insertSql(args: import("../base.js").InsertSqlArgsType): string;
-    getTables(): Promise<Table[]>;
+    /**
+     * Runs get tables.
+     * @returns {Promise<Array<import("../base-table.js").default>>} - Resolves with the tables.
+     */
+    getTables(): Promise<Array<import("../base-table.js").default>>;
+    /**
+     * Reads column metadata for many tables in one query instead of one catalog
+     * join per table.
+     * @param {Array<import("../base-table.js").default>} tables - Tables to load columns for.
+     * @returns {Promise<Map<string, Array<import("../base-column.js").default>>>} - Columns keyed by table name.
+     */
+    batchTableColumns(tables: Array<import("../base-table.js").default>): Promise<Map<string, Array<import("../base-column.js").default>>>;
     /**
      * Truncates all eligible tables in one PostgreSQL request.
      * @param {Array<import("../base-table.js").default>} tables - Eligible tables.

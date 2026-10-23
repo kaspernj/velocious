@@ -10,7 +10,15 @@
  */
 
 import Logger from "../logger.js"
+import BoundedTaskRunner from "../utils/bounded-task-runner.js"
 import restArgsError from "../utils/rest-args-error.js"
+import SchemaMetadataPrefetcher from "./schema-metadata-prefetcher.js"
+
+/**
+ * How many model classes initialize at once. Metadata comes from the prefetched
+ * schema cache, so this is CPU-bound attribute mapping rather than database work.
+ */
+const MODEL_INITIALIZATION_CONCURRENCY = 8
 
 export default class VelociousDatabaseInitializerFromRequireContext {
   /**
@@ -34,6 +42,9 @@ export default class VelociousDatabaseInitializerFromRequireContext {
   async initialize({configuration, ...restArgs}) {
     restArgsError(restArgs)
 
+    /** @type {Array<typeof import("./record/index.js").default>} */
+    const modelClasses = []
+
     for (const fileName of this.requireContext.keys()) {
       const modelClassImport = this.requireContext(fileName)
 
@@ -50,14 +61,27 @@ export default class VelociousDatabaseInitializerFromRequireContext {
         continue
       }
 
-      if (!modelClass.getEagerLoadRecordMetadata()) {
-        modelClass.registerRecordClass({configuration})
-        await this._bestEffortInitializeDeferredModel({configuration, modelClass})
-        continue
-      }
-
-      await this._initializeModelRecord({configuration, modelClass})
+      modelClass.registerRecordClass({configuration})
+      modelClasses.push(modelClass)
     }
+
+    // One catalog read per database instead of one per model, shared by every
+    // model initialized below through the driver's schema cache.
+    await new SchemaMetadataPrefetcher({configuration, logger: this.logger}).prefetch({modelClasses})
+
+    await BoundedTaskRunner.run({
+      concurrency: MODEL_INITIALIZATION_CONCURRENCY,
+      items: modelClasses,
+      worker: async (modelClass) => {
+        if (!modelClass.getEagerLoadRecordMetadata()) {
+          await this._bestEffortInitializeDeferredModel({configuration, modelClass})
+
+          return
+        }
+
+        await this._initializeModelRecord({configuration, modelClass})
+      }
+    })
   }
 
   /**

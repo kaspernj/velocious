@@ -2,6 +2,7 @@
 
 import AlterTable from "./sql/alter-table.js"
 import Base from "../base.js"
+import Column from "./column.js"
 import CreateDatabase from "./sql/create-database.js"
 import CreateIndex from "./sql/create-index.js"
 import CreateTable from "./sql/create-table.js"
@@ -763,6 +764,56 @@ export default class VelociousDatabaseDriversMysql extends Base{
 
       return tables
     })
+  }
+
+  /**
+   * Reads column metadata for many tables in one query. `SHOW FULL COLUMNS` only
+   * describes a single table, but `information_schema.COLUMNS` carries the same
+   * fields, so the result is aliased to the shape `Column` already reads.
+   *
+   * `NULLIF(COLUMN_DEFAULT, 'NULL')` compensates for MariaDB reporting a SQL NULL
+   * default as the literal string 'NULL', where `SHOW FULL COLUMNS` reports NULL.
+   * Verified column-for-column against `SHOW FULL COLUMNS` on a 44-table MariaDB
+   * schema; the only divergence was that sentinel.
+   * @param {Array<import("../base-table.js").default>} tables - Tables to load columns for.
+   * @returns {Promise<Map<string, Array<import("../base-column.js").default>>>} - Columns keyed by table name.
+   */
+  async batchTableColumns(tables) {
+    /** @type {Map<string, Array<import("../base-column.js").default>>} */
+    const columnsByTable = new Map()
+
+    if (tables.length === 0) return columnsByTable
+
+    const tablesByName = new Map(tables.map((table) => [table.getName(), table]))
+    const tableNamesSql = [...tablesByName.keys()].map((tableName) => this.quote(tableName)).join(", ")
+    const rows = await this.query(`
+      SELECT
+        TABLE_NAME AS tableName,
+        COLUMN_NAME AS Field,
+        COLUMN_TYPE AS Type,
+        IS_NULLABLE AS \`Null\`,
+        COLUMN_KEY AS \`Key\`,
+        NULLIF(COLUMN_DEFAULT, 'NULL') AS \`Default\`,
+        EXTRA AS Extra,
+        COLUMN_COMMENT AS Comment
+      FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN (${tableNamesSql})
+      ORDER BY TABLE_NAME, ORDINAL_POSITION
+    `)
+
+    for (const row of rows) {
+      const tableName = /** @type {string} */ (row.tableName)
+      const table = tablesByName.get(tableName)
+
+      if (!table) continue
+
+      const columns = columnsByTable.get(tableName) || []
+
+      columns.push(new Column(table, /** @type {Record<string, ReturnType<typeof JSON.parse>>} */ (row)))
+      columnsByTable.set(tableName, columns)
+    }
+
+    return columnsByTable
   }
 
   /**
