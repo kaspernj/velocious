@@ -4324,12 +4324,11 @@ export default class VelociousConfiguration {
     if (!config.backends.lockServer.enabled) return undefined
     if (this._advisoryLockLockServerBackend) return this._advisoryLockLockServerBackend
 
-    const {default: AdvisoryLockLockServerBackend} = await import("./database/advisory-lock-lock-server-backend.js")
-    const backend = new AdvisoryLockLockServerBackend({
+    const backend = await this.getEnvironmentHandler().createAdvisoryLockLockServerBackend({
       authToken: config.backends.lockServer.authToken,
       connectTimeoutMs: config.backends.lockServer.connectTimeoutMs,
       leaseMs: config.backends.lockServer.leaseMs,
-      onError: (error) => {
+      onError: (/** @type {Error} */ error) => {
         this.getErrorEvents().emit("framework-error", {context: "advisory-lock-lock-server", error})
         this.getErrorEvents().emit("all-error", {context: "advisory-lock-lock-server", error, errorType: "framework-error"})
       },
