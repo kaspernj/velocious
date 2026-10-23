@@ -34,6 +34,10 @@ export type PreparedBackgroundJob = {
      */
     maxRetries: number;
     /**
+     * - Dispatch priority within the queue.
+     */
+    priority: number;
+    /**
      * - Queue name.
      */
     queue: string;
@@ -105,6 +109,17 @@ export type BackgroundJobQueuedConcurrency = {
 };
 export declare const BACKGROUND_JOB_COUNTS_CHANNEL = "velocious-background-job-counts";
 export declare const BACKGROUND_JOB_COUNT_BUCKETS: string[];
+/**
+ * Priority a job is demoted to when it is re-queued after a failed attempt.
+ * A retry has already consumed capacity and time, so it must never overtake
+ * work that has not had its first chance yet. Enqueue priorities are validated
+ * to be non-negative integers, which makes `-1` the lowest reachable priority.
+ */
+export declare const RETRY_BACKGROUND_JOB_PRIORITY = -1;
+/**
+ * Priority a job gets when the producer does not ask for one.
+ */
+export declare const DEFAULT_BACKGROUND_JOB_PRIORITY = 0;
 export default class BackgroundJobsStore extends BackgroundJobsAdapter {
     configuration: import("../configuration.js").default;
     databaseIdentifier: string | undefined;
@@ -814,6 +829,15 @@ export default class BackgroundJobsStore extends BackgroundJobsAdapter {
         jobName: string;
         options?: import("./types.js").BackgroundJobOptions;
     }): PreparedBackgroundJob;
+    /**
+     * Normalizes a requested dispatch priority. Priorities order jobs within their
+     * queue on the dispatch path only: higher goes first, and the default keeps
+     * FIFO order. Negative priorities are rejected because the store reserves them
+     * for {@link RETRY_BACKGROUND_JOB_PRIORITY}, which must stay the lowest.
+     * @param {import("./types.js").BackgroundJobOptions | undefined} options - Job options.
+     * @returns {number} - Priority.
+     */
+    _normalizeJobPriority(options: import("./types.js").BackgroundJobOptions | undefined): number;
     /**
      * Normalizes a per-job timeout while preserving omitted (worker fallback)
      * separately from explicitly disabled.

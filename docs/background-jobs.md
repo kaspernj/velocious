@@ -297,6 +297,18 @@ Each capped queue is enforced through the same durable per-key concurrency mecha
 
 Unlike Sidekiq's strict queue ordering, priority **composes with the per-queue caps**: a higher-priority queue that is already at its `maxConcurrent` is skipped, and dispatch falls through to the next eligible lower-priority job. So a busy high-priority queue can't block everything behind it — it only wins while it has spare capacity. Priorities may be any number (negative sinks a queue below the default), and jobs within the same priority keep FIFO (`scheduled_at`, then `created_at`) order. Priority ordering applies only to the dispatch decision; it does not reorder future-scheduled jobs, which stay strictly time-ordered.
 
+### Job priority and retries
+
+A job can also carry its own `priority` (default `0`, non-negative integer). Job priority orders jobs *inside* their queue after the queue ranking above, so a queue with a mix of urgent and routine work no longer has to be split in two:
+
+```js
+await MyJob.performLater({options: {priority: 10}}) // jumps ahead of priority 0
+```
+
+**A retried job always has the lowest priority.** When an attempt fails and the job is re-queued, the store rewrites its priority to `-1` (below every enqueueable value). A retry has already consumed a worker slot and time; letting it keep its original priority is how one failing producer starves the healthy jobs behind it — exactly what happened with webhook deliveries, where retries crowded out first attempts for as long as the destination kept failing. Retries still respect the retry backoff and the queue cap, and the demotion is sticky: a job that succeeds and is re-enqueued starts fresh at its normal priority.
+
+Job priority applies only to the dispatch decision, like queue priority. It never reorders future-scheduled jobs.
+
 The cap-fallthrough guarantee is a property of the **queue-derived** cap. A job that supplies its own explicit `concurrencyKey`/`maxConcurrency` bypasses the queue cap entirely — an explicit key always wins (see above) — so it is bounded only by that explicit key, not by `queues[name].maxConcurrent`. Such a job is therefore never held back by the queue's cap; priority just orders it normally against the rest. If you want a job to be bounded by both a queue cap and a finer-grained key, model the finer-grained limit as its own queue rather than an explicit `concurrencyKey`.
 
 ## Enqueue deduplication

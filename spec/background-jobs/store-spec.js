@@ -1,6 +1,6 @@
 // @ts-check
 
-import BackgroundJobsStore from "../../src/background-jobs/store.js"
+import BackgroundJobsStore, {RETRY_BACKGROUND_JOB_PRIORITY} from "../../src/background-jobs/store.js"
 import TableData from "../../src/database/table-data/index.js"
 import dummyConfiguration from "../dummy/src/config/configuration.js"
 
@@ -546,6 +546,70 @@ describe("Background jobs - store", {databaseCleaning: {truncate: true}}, () => 
     } finally {
       dummyConfiguration.setBackgroundJobsConfig({queues: {}})
     }
+  })
+
+  it("dispatches a higher job priority before an earlier enqueue in the same queue", async () => {
+    const store = await createClearedStore()
+    const firstId = await store.enqueue({jobName: "TestJob", args: ["first"], options: {queue: "builds"}})
+    const urgentId = await store.enqueue({jobName: "TestJob", args: ["urgent"], options: {queue: "builds", priority: 5}})
+
+    // FIFO would pick `firstId`; the explicit priority must win.
+    expect((await store.nextAvailableJob())?.id).toEqual(urgentId)
+
+    const claim = await store.markHandedOff({jobId: urgentId, workerId: "w1"})
+    if (!claim) throw new Error("Expected the higher-priority job to claim")
+
+    expect((await store.nextAvailableJob())?.id).toEqual(firstId)
+  })
+
+  it("rejects a negative job priority", async () => {
+    const store = await createClearedStore()
+    let error = /** @type {Error | null} */ (null)
+
+    try {
+      await store.enqueue({jobName: "TestJob", args: [], options: {queue: "builds", priority: -1}})
+    } catch (newError) {
+      error = /** @type {Error} */ (newError)
+    }
+
+    expect(error).toBeTruthy()
+    expect(error?.message).toContain("non-negative integer")
+  })
+
+  it("requeues a failed attempt at the lowest priority so first attempts dispatch first", async () => {
+    const clock = {now: () => Date.now()}
+    dummyConfiguration.setCurrent()
+
+    const store = new BackgroundJobsStore({configuration: dummyConfiguration, clock})
+
+    await store.clearAll()
+
+    const failingId = await store.enqueue({jobName: "TestJob", args: ["failing"], options: {queue: "builds", maxRetries: 1}})
+    const firstAttempt = await store.markHandedOff({jobId: failingId, workerId: "w1"})
+
+    if (!firstAttempt) throw new Error("Expected the job to claim")
+
+    const failedJob = await store.markFailed({jobId: failingId, workerId: "w1", ...firstAttempt, error: new Error("boom")})
+
+    // The retry keeps its queue and slot, but is demoted below every first attempt.
+    expect(failedJob?.status).toEqual("queued")
+    expect(failedJob?.priority).toEqual(RETRY_BACKGROUND_JOB_PRIORITY)
+    expect((await getJobOrFail({jobId: failingId, store})).priority).toEqual(RETRY_BACKGROUND_JOB_PRIORITY)
+
+    // Move past the retry backoff so the retried job is eligible again.
+    const retryReadyAt = failedJob?.scheduledAtMs ?? 0
+
+    clock.now = () => retryReadyAt + 1
+
+    const freshId = await store.enqueue({jobName: "TestJob", args: ["fresh"], options: {queue: "builds"}})
+
+    // Both are due; the fresh job must go first even though the retry is older.
+    expect((await store.nextAvailableJob())?.id).toEqual(freshId)
+
+    const freshClaim = await store.markHandedOff({jobId: freshId, workerId: "w1"})
+    if (!freshClaim) throw new Error("Expected the fresh job to claim")
+
+    expect((await store.nextAvailableJob())?.id).toEqual(failingId)
   })
 
   it("defaults an unspecified queue to \"default\"", async () => {
