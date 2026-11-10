@@ -479,6 +479,41 @@ describe("Record - auditing", {tags: ["dummy"]}, () => {
     })
   })
 
+  it("uses the snake-case model foreign key for multi-word dedicated audit tables", {databaseCleaning: {transaction: false, truncate: true}}, async () => {
+    await Configuration.current().ensureConnections(async (dbs) => {
+      const configuration = Configuration.current()
+      const driver = dbs.default
+      const migration = new Migration({configuration, databaseIdentifier: "default", db: driver})
+
+      class DockerServer extends DatabaseRecord {
+        /** @returns {string} - Table name. */
+        static tableName() { return "docker_servers" }
+      }
+
+      try {
+        await driver.dropTable("docker_server_audits", {cascade: true, ifExists: true})
+        await driver.dropTable("docker_servers", {cascade: true, ifExists: true})
+        await migration.createTable("docker_servers", (table) => {
+          table.string("name")
+          table.timestamps()
+        })
+        await migration.createDedicatedAuditTable("docker_servers")
+
+        DockerServer.audited()
+        await DockerServer.initializeRecord({configuration})
+        const server = await DockerServer.create({name: "Multi-word audit server"})
+        const rows = await driver.query(
+          "SELECT " + driver.quoteColumn("docker_server_id") + " FROM " + driver.quoteTable("docker_server_audits")
+        )
+
+        expect(rows).toEqual([{docker_server_id: server.id()}])
+      } finally {
+        await driver.dropTable("docker_server_audits", {cascade: true, ifExists: true})
+        await driver.dropTable("docker_servers", {cascade: true, ifExists: true})
+      }
+    })
+  })
+
   it("calls global audit events on audit creation", {databaseCleaning: {transaction: false, truncate: true}}, async () => {
     await withAuditScratchTables(async ({SharedAuditWidget}) => {
       let called = false

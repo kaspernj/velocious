@@ -1,0 +1,1 @@
+Dedicated audit tables now derive audited-model foreign-key columns with the same snake-case conversion used by record relationships, so multi-word models such as `DockerServer` persist audits to `docker_server_id` instead of the invalid `dockerServer_id` column.

@@ -1,6 +1,7 @@
 // @ts-check
 
 import UUID from "pure-uuid"
+import * as inflection from "inflection"
 import HasManyRelationship from "./relationships/has-many.js"
 import {scalarModelPrimaryKey, scalarModelPrimaryKeyValue} from "../../utils/model-primary-key.js"
 
@@ -207,12 +208,12 @@ async function buildAuditTableData(modelClass, connection, databaseIdentity) {
 
   if (dedicatedExists) {
     const auditClass = dedicatedAuditClass(modelClass, dedicatedTable)
-    const modelKey = modelParamKey(modelClass)
+    const foreignKey = modelForeignKey(modelClass)
 
     return {
       auditClass,
       dedicated: true,
-      foreignKey: `${modelKey}_id`,
+      foreignKey,
       tableName: dedicatedTable
     }
   }
@@ -409,6 +410,15 @@ function modelParamKey(modelClass) {
   const name = modelClass.getModelName()
 
   return name.charAt(0).toLowerCase() + name.slice(1)
+}
+
+/**
+ * Returns the database foreign-key column for a model class.
+ * @param {AuditedModelClass} modelClass - Audited model class.
+ * @returns {string} e.g. "project_id" for "Project".
+ */
+function modelForeignKey(modelClass) {
+  return `${inflection.underscore(modelClass.getModelName())}_id`
 }
 
 // ---------------------------------------------------------------------------
@@ -666,14 +676,14 @@ async function createAuditWithCurrentConnection(record, args, modelClass) {
   const auditId = new UUID(4).format()
 
   if (tableData.dedicated) {
-    const modelKey = modelParamKey(modelClass)
+    const foreignKey = modelForeignKey(modelClass)
 
     await db.query(db.insertSql({
       returnLastInsertedColumnNames: ["id"],
       tableName: tableData.tableName,
       data: {
         id: auditId,
-        [`${modelKey}_id`]: recordId,
+        [foreignKey]: recordId,
         audit_action_id: auditActionId,
         audited_changes: auditedChanges,
         params,
@@ -856,10 +866,10 @@ function withoutAudit(modelClass, action) {
   const auditActionsActionSql = `${auditActionsTableSql}.${db.quoteColumn("action")}`
 
   if (tableData?.dedicated) {
-    const modelKey = modelParamKey(modelClass)
+    const foreignKey = modelForeignKey(modelClass)
     const auditsTableSql = db.quoteTable(tableData.tableName)
     const auditActionIdSql = `${auditsTableSql}.${db.quoteColumn("audit_action_id")}`
-    const modelIdSql = `${auditsTableSql}.${db.quoteColumn(`${modelKey}_id`)}`
+    const modelIdSql = `${auditsTableSql}.${db.quoteColumn(foreignKey)}`
 
     return modelClass
       .all()
